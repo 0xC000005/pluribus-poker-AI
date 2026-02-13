@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pluribus-poker-ai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.3.5",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+    "scipy>=1.14.0",
+    "scikit-learn>=1.5.0",
+    "matplotlib>=3.9.0",
+    "pytest>=8.0.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.66.0",
+    "blessed>=1.20.0",
+    "enlighten>=1.12.0",
+    "ipdb>=0.13.0",
+    "dill>=0.3.8",
+    "torch>=2.0.0",
+    "joblib>=1.3.0",
+]
