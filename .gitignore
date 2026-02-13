@@ -4,6 +4,16 @@ tags/
 *.pkl
 *.gz
 
+# Claude Code
+CLAUDE.md
+
+# Local data / caches
+test_data/
+test_tiny/
+models/
+uv.lock
+future_ideas
+
 ### WEB STUFF
 
 # Logs
