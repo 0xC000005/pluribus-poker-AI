@@ -89,5 +89,25 @@ class ReservoirBuffer:
         self.size = 0
         self._n_seen = 0
 
+    def merge(
+        self,
+        features: np.ndarray,
+        iterations: np.ndarray,
+        advantages: np.ndarray,
+        size: int,
+    ):
+        """Merge worker results into this buffer via reservoir sampling.
+
+        Parameters
+        ----------
+        features : ndarray of shape (size, N_FEATURES)
+        iterations : ndarray of shape (size,)
+        advantages : ndarray of shape (size, N_ACTIONS)
+        size : int
+            Number of valid samples in the arrays.
+        """
+        for i in range(size):
+            self.add(features[i], int(iterations[i]), advantages[i])
+
     def __len__(self) -> int:
         return self.size
