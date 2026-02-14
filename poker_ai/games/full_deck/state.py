@@ -162,9 +162,8 @@ class PokerState:
         elif action_str == "fold":
             new_state.current_player.fold()
         elif action_str == "raise":
-            bet_n_chips = new_state.big_blind
-            if new_state._betting_stage in {"turn", "river"}:
-                bet_n_chips *= 2
+            # Pot-sized raise (min 1 BB).
+            bet_n_chips = max(new_state._table.pot.total, new_state.big_blind)
             biggest_bet = max(p.n_bet_chips for p in new_state.players)
             n_chips_to_call = biggest_bet - new_state.current_player.n_bet_chips
             raise_n_chips = bet_n_chips + n_chips_to_call

@@ -139,6 +139,8 @@ def traverse(
             idx = ACTION_TO_INDEX[action]
             regrets[idx] = action_values[action] - state_value
 
+        # Normalize regrets to [-1, 1] range for stable NN training.
+        regrets /= 10000.0
         # Add sample to buffer.
         buffer.add(features, iteration, regrets)
         return state_value

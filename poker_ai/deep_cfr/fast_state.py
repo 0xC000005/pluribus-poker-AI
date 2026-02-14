@@ -256,9 +256,8 @@ class FastPokerState:
                 self.bets[pi] += to_call
                 self.pot_total += to_call
         elif action == 2:  # raise
-            bet_amount = self.big_blind
-            if self.stage in (self.TURN, self.RIVER):
-                bet_amount *= 2
+            # Pot-sized raise (min 1 BB).
+            bet_amount = max(self.pot_total, self.big_blind)
             biggest = int(self.bets.max())
             to_call = biggest - int(self.bets[pi])
             raise_chips = bet_amount + to_call

@@ -81,6 +81,8 @@ def traverse_coroutine(
         for a in legal_actions:
             regrets[a] = action_values[a] - state_value
 
+        # Normalize regrets to [-1, 1] range for stable NN training.
+        regrets /= state.initial_chips
         buffer.add(features, iteration, regrets)
         return state_value
 
