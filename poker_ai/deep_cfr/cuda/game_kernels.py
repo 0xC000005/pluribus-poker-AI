@@ -26,7 +26,7 @@ SHOWDOWN = 4
 TERMINAL = 5
 
 N_FEATURES = 126
-N_ACTIONS = 3
+N_ACTIONS = 9
 
 # Precomputed C(7,5) index pairs for 7-card evaluation.
 # 21 combos of 5 from 7.
@@ -193,10 +193,11 @@ def apply_action_kernel(
     deck_cursor, stage, n_raises, player_i_index,
     n_actions, pot_total, history, n_players_started_round,
     # Inputs.
-    actions,  # (N,) int8: 0=fold, 1=call, 2=raise, -1=skip(inactive)
+    actions,  # (N,) int8: 0=fold, 1=call, 2-7=frac raise, 8=all-in, -1=skip
     # Constants.
     n_games, n_players,
     preflop_order, postflop_order,
+    raise_fractions,  # (6,) float32 device array
 ):
     """Apply one action to each of N games in parallel."""
     i = cuda.grid(1)
@@ -223,35 +224,40 @@ def apply_action_kernel(
             chips[i, pi] -= to_call
             bets[i, pi] += to_call
             pot_total[i] += to_call
-    elif action == 2:  # Raise.
-        # Pot-sized raise (min 1 BB).
-        bet_amount = pot_total[i]
-        if bet_amount < BIG_BLIND:
-            bet_amount = BIG_BLIND
+    elif action >= 2 and action <= 7:  # Fractional raise.
+        frac = raise_fractions[action - 2]
         biggest = int32(0)
         for p in range(n_players):
             if bets[i, p] > biggest:
                 biggest = bets[i, p]
         to_call = biggest - bets[i, pi]
-        raise_chips = bet_amount + to_call
+        raise_chips = int32(frac * float32(pot_total[i])) + to_call
+        if raise_chips < BIG_BLIND:
+            raise_chips = int32(BIG_BLIND)
         if raise_chips > chips[i, pi]:
             raise_chips = chips[i, pi]
         chips[i, pi] -= raise_chips
         bets[i, pi] += raise_chips
         pot_total[i] += raise_chips
         n_raises[i] += 1
+    elif action == 8:  # All-in.
+        all_in = chips[i, pi]
+        chips[i, pi] = int32(0)
+        bets[i, pi] += all_in
+        pot_total[i] += all_in
+        n_raises[i] += 1
 
-    # Record in history.
+    # Record in history (3 categories: calls, raises, folds).
     if action >= 0:
         rd = stage[i]
         if rd > 3:
             rd = 3
         if action == 1:
-            history[i, rd, 0] += 1
-        elif action == 2:
-            history[i, rd, 1] += 1
+            history[i, rd, 0] += 1  # calls
+        elif action >= 2:
+            history[i, rd, 1] += 1  # raises (all sizes)
         elif action == 0:
-            history[i, rd, 2] += 1
+            history[i, rd, 2] += 1  # folds
 
     n_actions[i] += 1
 
@@ -492,20 +498,20 @@ def get_features_kernel(
 
 @cuda.jit
 def get_legal_mask_kernel(
-    active, chips, n_raises, stage,
+    active, chips, bets, n_raises, stage, pot_total,
     player_i_index, n_players,
     preflop_order, postflop_order,
-    out_masks,  # (N, 3) float32
+    raise_fractions,  # (6,) float32 device array
+    out_masks,  # (N, 9) float32
     n_games,
 ):
-    """Compute legal action masks for each game."""
+    """Compute legal action masks for each game (9-action space)."""
     i = cuda.grid(1)
     if i >= n_games:
         return
 
-    out_masks[i, 0] = 0.0
-    out_masks[i, 1] = 0.0
-    out_masks[i, 2] = 0.0
+    for a in range(N_ACTIONS):
+        out_masks[i, a] = float32(0.0)
 
     if stage[i] >= SHOWDOWN:
         return
@@ -514,7 +520,20 @@ def get_legal_mask_kernel(
                          preflop_order, postflop_order)
 
     if active[i, pi]:
-        out_masks[i, 0] = 1.0  # fold
-        out_masks[i, 1] = 1.0  # call
+        out_masks[i, 0] = float32(1.0)  # fold
+        out_masks[i, 1] = float32(1.0)  # call
         if n_raises[i] < 3:
-            out_masks[i, 2] = 1.0  # raise
+            biggest = int32(0)
+            for p in range(n_players):
+                if bets[i, p] > biggest:
+                    biggest = bets[i, p]
+            to_call = biggest - bets[i, pi]
+            player_chips = chips[i, pi]
+            # Check each fractional raise (actions 2-7).
+            for fi in range(6):
+                raise_amount = int32(raise_fractions[fi] * float32(pot_total[i])) + to_call
+                if raise_amount >= BIG_BLIND and raise_amount <= player_chips:
+                    out_masks[i, 2 + fi] = float32(1.0)
+            # All-in (action 8).
+            if player_chips > 0:
+                out_masks[i, 8] = float32(1.0)

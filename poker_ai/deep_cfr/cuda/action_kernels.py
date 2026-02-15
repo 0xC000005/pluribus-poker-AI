@@ -2,11 +2,12 @@
 
 Moves the CPU-bound Python loop (regret matching + np.random.choice)
 to GPU. Combined with zero-copy Numba<->PyTorch interop, this
-eliminates the dominant bottleneck in GPU traversal (~53% of 6-player time).
+eliminates the dominant bottleneck in GPU traversal.
 
-Two kernels:
+Kernels:
   regret_match_kernel: advantages -> strategy probabilities
   sample_action_kernel: strategy + RNG -> sampled action per game
+  classify_and_sample_kernel: classify traverser/opponent + sample
 """
 
 from numba import cuda, int8, int32, float32
@@ -15,7 +16,7 @@ from numba.cuda.random import (
     xoroshiro128p_uniform_float32,
 )
 
-N_ACTIONS = 3
+N_ACTIONS = 9
 PREFLOP = 0
 
 
@@ -38,9 +39,9 @@ def _current_player_ak(player_i_index, stage, n_players,
 
 @cuda.jit
 def regret_match_kernel(
-    advantages,     # (N, 3) float32 — NN output
-    legal_masks,    # (N, 3) float32 — from get_legal_mask_kernel
-    strategies,     # (N, 3) float32 — OUTPUT
+    advantages,     # (N, 9) float32 — NN output
+    legal_masks,    # (N, 9) float32 — from get_legal_mask_kernel
+    strategies,     # (N, 9) float32 — OUTPUT
     n_games,        # int32
 ):
     """Convert advantages to strategy via regret matching. One thread per game.
@@ -53,39 +54,32 @@ def regret_match_kernel(
         return
 
     # Regret matching: clamp to positive, mask illegal.
-    s0 = float32(0.0)
-    s1 = float32(0.0)
-    s2 = float32(0.0)
+    total = float32(0.0)
+    for a in range(N_ACTIONS):
+        val = advantages[gid, a]
+        if val > float32(0.0):
+            s = val * legal_masks[gid, a]
+        else:
+            s = float32(0.0)
+        strategies[gid, a] = s
+        total += s
 
-    a0 = advantages[gid, 0]
-    a1 = advantages[gid, 1]
-    a2 = advantages[gid, 2]
-
-    if a0 > 0.0:
-        s0 = a0 * legal_masks[gid, 0]
-    if a1 > 0.0:
-        s1 = a1 * legal_masks[gid, 1]
-    if a2 > 0.0:
-        s2 = a2 * legal_masks[gid, 2]
-
-    total = s0 + s1 + s2
-    if total > 0.0:
+    if total > float32(0.0):
         inv = float32(1.0) / total
-        strategies[gid, 0] = s0 * inv
-        strategies[gid, 1] = s1 * inv
-        strategies[gid, 2] = s2 * inv
+        for a in range(N_ACTIONS):
+            strategies[gid, a] *= inv
     else:
         # Uniform over legal actions.
-        n_legal = legal_masks[gid, 0] + legal_masks[gid, 1] + legal_masks[gid, 2]
-        if n_legal > 0.0:
+        n_legal = float32(0.0)
+        for a in range(N_ACTIONS):
+            n_legal += legal_masks[gid, a]
+        if n_legal > float32(0.0):
             inv = float32(1.0) / n_legal
-            strategies[gid, 0] = legal_masks[gid, 0] * inv
-            strategies[gid, 1] = legal_masks[gid, 1] * inv
-            strategies[gid, 2] = legal_masks[gid, 2] * inv
+            for a in range(N_ACTIONS):
+                strategies[gid, a] = legal_masks[gid, a] * inv
         else:
-            strategies[gid, 0] = float32(0.0)
-            strategies[gid, 1] = float32(0.0)
-            strategies[gid, 2] = float32(0.0)
+            for a in range(N_ACTIONS):
+                strategies[gid, a] = float32(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -94,11 +88,11 @@ def regret_match_kernel(
 
 @cuda.jit
 def sample_action_kernel(
-    strategies,     # (N, 3) float32
-    legal_masks,    # (N, 3) float32
+    strategies,     # (N, 9) float32
+    legal_masks,    # (N, 9) float32
     stages,         # (N,) int8 — game stage (skip finished games)
     rng_states,     # xoroshiro128p states array
-    out_actions,    # (N,) int8 — OUTPUT: sampled action (0/1/2), -1 for skipped
+    out_actions,    # (N,) int8 — OUTPUT: sampled action (0-8), -1 for skipped
     n_games,        # int32
 ):
     """Sample one action from strategy distribution. One thread per game.
@@ -114,8 +108,10 @@ def sample_action_kernel(
         return
 
     # Check if any legal action.
-    n_legal = legal_masks[gid, 0] + legal_masks[gid, 1] + legal_masks[gid, 2]
-    if n_legal <= 0.0:
+    n_legal = float32(0.0)
+    for a in range(N_ACTIONS):
+        n_legal += legal_masks[gid, a]
+    if n_legal <= float32(0.0):
         out_actions[gid] = int8(-1)
         return
 
@@ -123,15 +119,14 @@ def sample_action_kernel(
     u = xoroshiro128p_uniform_float32(rng_states, gid)
 
     # Categorical sampling via cumulative sum.
-    cumsum = strategies[gid, 0]
-    if u < cumsum:
-        out_actions[gid] = int8(0)
-        return
-    cumsum += strategies[gid, 1]
-    if u < cumsum:
-        out_actions[gid] = int8(1)
-        return
-    out_actions[gid] = int8(2)
+    cumsum = float32(0.0)
+    chosen = int8(N_ACTIONS - 1)  # Default to last action.
+    for a in range(N_ACTIONS):
+        cumsum += strategies[gid, a]
+        if u < cumsum:
+            chosen = int8(a)
+            break
+    out_actions[gid] = chosen
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +135,8 @@ def sample_action_kernel(
 
 @cuda.jit
 def classify_and_sample_kernel(
-    strategies,         # (N, 3) float32
-    legal_masks,        # (N, 3) float32
+    strategies,         # (N, 9) float32
+    legal_masks,        # (N, 9) float32
     stages,             # (N,) int8
     player_i_indices,   # (N,) int8
     n_players,          # int32
@@ -169,8 +164,10 @@ def classify_and_sample_kernel(
     if stages[gid] >= int8(4):
         return
 
-    n_legal = legal_masks[gid, 0] + legal_masks[gid, 1] + legal_masks[gid, 2]
-    if n_legal <= 0.0:
+    n_legal = float32(0.0)
+    for a in range(N_ACTIONS):
+        n_legal += legal_masks[gid, a]
+    if n_legal <= float32(0.0):
         return
 
     # Determine current player.
@@ -185,12 +182,11 @@ def classify_and_sample_kernel(
 
     # Opponent: sample action from strategy.
     u = xoroshiro128p_uniform_float32(rng_states, gid)
-    cumsum = strategies[gid, 0]
-    if u < cumsum:
-        out_actions[gid] = int8(0)
-        return
-    cumsum += strategies[gid, 1]
-    if u < cumsum:
-        out_actions[gid] = int8(1)
-        return
-    out_actions[gid] = int8(2)
+    cumsum = float32(0.0)
+    chosen = int8(N_ACTIONS - 1)
+    for a in range(N_ACTIONS):
+        cumsum += strategies[gid, a]
+        if u < cumsum:
+            chosen = int8(a)
+            break
+    out_actions[gid] = chosen

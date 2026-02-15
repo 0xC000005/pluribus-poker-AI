@@ -30,12 +30,20 @@ _SUIT_TO_INDEX = {"clubs": 0, "diamonds": 1, "hearts": 2, "spades": 3}
 # 52 (hole) + 52 (community) + 4 (round) + 6 (scalars) + 12 (history) = 126
 N_FEATURES = 126
 
-# Number of actions in limit hold'em.
-N_ACTIONS = 3  # fold, call, raise
+# Number of discrete actions (ReBeL standard).
+N_ACTIONS = 9  # fold, call, 6 raise sizes, all-in
+
+# Raise fractions for actions 2-7 (fraction of pot).
+RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 # Action string to index mapping.
-ACTION_TO_INDEX = {"fold": 0, "call": 1, "raise": 2}
-INDEX_TO_ACTION = {0: "fold", 1: "call", 2: "raise"}
+ACTION_TO_INDEX = {
+    "fold": 0, "call": 1,
+    "raise_0.25": 2, "raise_0.5": 3, "raise_0.75": 4,
+    "raise_1.0": 5, "raise_1.5": 6, "raise_2.0": 7,
+    "all_in": 8,
+}
+INDEX_TO_ACTION = {v: k for k, v in ACTION_TO_INDEX.items()}
 
 
 def card_to_index(card: Card) -> int:
@@ -143,7 +151,7 @@ class PokerState:
         Parameters
         ----------
         action_str : str or None
-            One of {"fold", "call", "raise", None}. None for inactive players.
+            One of {"fold", "call", "raise_X", "all_in", None}.
 
         Returns
         -------
@@ -161,20 +169,32 @@ class PokerState:
             new_state.current_player.call(players=new_state.players)
         elif action_str == "fold":
             new_state.current_player.fold()
-        elif action_str == "raise":
-            # Pot-sized raise (min 1 BB).
-            bet_n_chips = max(new_state._table.pot.total, new_state.big_blind)
+        elif action_str == "all_in":
+            all_in_amount = new_state.current_player.n_chips
+            new_state.current_player.raise_to(n_chips=all_in_amount)
+            new_state._n_raises += 1
+        elif action_str.startswith("raise_"):
+            frac = float(action_str.split("_")[1])
             biggest_bet = max(p.n_bet_chips for p in new_state.players)
             n_chips_to_call = biggest_bet - new_state.current_player.n_bet_chips
-            raise_n_chips = bet_n_chips + n_chips_to_call
+            raise_n_chips = int(frac * new_state._table.pot.total) + n_chips_to_call
+            raise_n_chips = max(raise_n_chips, new_state.big_blind)
+            raise_n_chips = min(raise_n_chips, new_state.current_player.n_chips)
             new_state.current_player.raise_to(n_chips=raise_n_chips)
             new_state._n_raises += 1
         else:
             raise ValueError(f"Unknown action: {action_str}")
-        # Record action in history.
+        # Record normalized action in history (all raises → "raise").
+        if action_str is not None:
+            if action_str.startswith("raise_") or action_str == "all_in":
+                history_action = "raise"
+            else:
+                history_action = action_str
+        else:
+            history_action = action_str
         skip_actions = ["skip" for _ in range(new_state._skip_counter)]
         new_state._history[new_state.betting_stage] += skip_actions
-        new_state._history[new_state.betting_stage].append(action_str)
+        new_state._history[new_state.betting_stage].append(history_action)
         new_state._n_actions += 1
         new_state._skip_counter = 0
         # Advance to next player / next stage.
@@ -317,7 +337,15 @@ class PokerState:
         if self.current_player.is_active:
             actions: List[Optional[str]] = ["fold", "call"]
             if self._n_raises < 3:
-                actions.append("raise")
+                biggest_bet = max(p.n_bet_chips for p in self.players)
+                to_call = biggest_bet - self.current_player.n_bet_chips
+                player_chips = self.current_player.n_chips
+                for frac in RAISE_FRACTIONS:
+                    raise_amount = int(frac * self._table.pot.total) + to_call
+                    if raise_amount >= self.big_blind and raise_amount <= player_chips:
+                        actions.append(f"raise_{frac}")
+                if player_chips > 0:
+                    actions.append("all_in")
             return actions
         return [None]
 

@@ -90,6 +90,8 @@ def gpu_evaluate_vs_random(
     blocks = (n_games + threads - 1) // threads
 
     d_preflop, d_postflop = _get_orders(n_players)
+    d_raise_fractions = cuda.to_device(
+        np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0], dtype=np.float32))
 
     # RNG states for action sampling.
     rng_states = create_xoroshiro128p_states(n_games, seed=np.random.randint(1, 2**31))
@@ -107,9 +109,11 @@ def gpu_evaluate_vs_random(
             d_features, n_games,
         )
         get_legal_mask_kernel[blocks, threads](
-            batch.active, batch.chips, batch.n_raises, batch.stage,
+            batch.active, batch.chips, batch.bets, batch.n_raises,
+            batch.stage, batch.pot_total,
             batch.player_i_index, n_players,
             d_preflop, d_postflop,
+            d_raise_fractions,
             d_masks, n_games,
         )
         cuda.synchronize()
@@ -189,6 +193,7 @@ def gpu_evaluate_vs_random(
             batch.history, batch.n_players_started_round,
             d_actions, n_games, n_players,
             d_preflop, d_postflop,
+            d_raise_fractions,
         )
         cuda.synchronize()
 
@@ -232,6 +237,8 @@ def gpu_traverse_for_player(
     d_flush_keys, d_flush_vals, d_unsuited_keys, d_unsuited_vals, d_card_lookup, _ = tables
 
     d_preflop, d_postflop = _get_orders(n_players)
+    d_raise_fractions = cuda.to_device(
+        np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0], dtype=np.float32))
 
     value_net.eval()
 
@@ -281,9 +288,11 @@ def gpu_traverse_for_player(
             d_features, max_pool,
         )
         get_legal_mask_kernel[blocks_pool, threads](
-            batch.active, batch.chips, batch.n_raises, batch.stage,
+            batch.active, batch.chips, batch.bets, batch.n_raises,
+            batch.stage, batch.pot_total,
             batch.player_i_index, n_players,
             d_preflop, d_postflop,
+            d_raise_fractions,
             d_masks, max_pool,
         )
         cuda.synchronize()
@@ -479,6 +488,7 @@ def gpu_traverse_for_player(
             batch.history, batch.n_players_started_round,
             d_actions_final, max_pool, n_players,
             d_preflop, d_postflop,
+            d_raise_fractions,
         )
         cuda.synchronize()
 

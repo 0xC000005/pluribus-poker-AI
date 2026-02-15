@@ -36,7 +36,8 @@ _EVALUATOR = Evaluator()
 
 # Feature vector size (must match N_FEATURES in state.py).
 N_FEATURES = 126
-N_ACTIONS = 3
+N_ACTIONS = 9
+RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 # ---------------------------------------------------------------------------
 # Precomputed player orders (shared by reference, never copied)
@@ -195,25 +196,32 @@ class FastPokerState:
     # ------------------------------------------------------------------
 
     def get_legal_mask(self) -> np.ndarray:
-        """Return (3,) float32 mask: [fold, call, raise]."""
+        """Return (9,) float32 mask for 9-action space."""
         mask = np.zeros(N_ACTIONS, dtype=np.float32)
         pi = self.current_player_i
         if self.active[pi]:
             mask[0] = 1.0  # fold
             mask[1] = 1.0  # call
             if self.n_raises < 3:
-                mask[2] = 1.0  # raise
+                biggest = int(self.bets.max())
+                to_call = biggest - int(self.bets[pi])
+                player_chips = int(self.chips[pi])
+                for i, frac in enumerate(RAISE_FRACTIONS):
+                    raise_amount = int(frac * self.pot_total) + to_call
+                    if raise_amount >= self.big_blind and raise_amount <= player_chips:
+                        mask[2 + i] = 1.0
+                # All-in (action 8).
+                if player_chips > 0:
+                    mask[8] = 1.0
         return mask
 
     @property
     def legal_actions(self) -> list:
-        """List of legal action ints (0/1/2) or [None] for inactive."""
+        """List of legal action ints (0-8) or [None] for inactive."""
         pi = self.current_player_i
         if self.active[pi]:
-            actions = [0, 1]  # fold, call
-            if self.n_raises < 3:
-                actions.append(2)
-            return actions
+            mask = self.get_legal_mask()
+            return [a for a in range(N_ACTIONS) if mask[a] > 0]
         return [None]
 
     # ------------------------------------------------------------------
@@ -239,11 +247,10 @@ class FastPokerState:
     # ------------------------------------------------------------------
 
     def apply_action(self, action) -> None:
-        """Apply action in-place.  action: 0=fold, 1=call, 2=raise, None=skip."""
+        """Apply action in-place.  action: 0-8 or None=skip."""
         pi = self.current_player_i
 
         if action is None:
-            # Inactive player skip — just advance.
             pass
         elif action == 0:  # fold
             self.active[pi] = False
@@ -255,25 +262,31 @@ class FastPokerState:
                 self.chips[pi] -= to_call
                 self.bets[pi] += to_call
                 self.pot_total += to_call
-        elif action == 2:  # raise
-            # Pot-sized raise (min 1 BB).
-            bet_amount = max(self.pot_total, self.big_blind)
+        elif 2 <= action <= 7:  # fractional raise
+            frac = RAISE_FRACTIONS[action - 2]
             biggest = int(self.bets.max())
             to_call = biggest - int(self.bets[pi])
-            raise_chips = bet_amount + to_call
+            raise_chips = int(frac * self.pot_total) + to_call
+            raise_chips = max(raise_chips, self.big_blind)
             raise_chips = min(raise_chips, int(self.chips[pi]))
             self.chips[pi] -= raise_chips
             self.bets[pi] += raise_chips
             self.pot_total += raise_chips
             self.n_raises += 1
+        elif action == 8:  # all-in
+            all_in_chips = int(self.chips[pi])
+            self.chips[pi] = 0
+            self.bets[pi] += all_in_chips
+            self.pot_total += all_in_chips
+            self.n_raises += 1
 
-        # Record in history.
+        # Record in history (3 categories: calls, raises, folds).
         if action is not None:
             rd = min(self.stage, 3)
             if action == 1:
                 self.history[rd, 0] += 1  # calls
-            elif action == 2:
-                self.history[rd, 1] += 1  # raises
+            elif action >= 2:
+                self.history[rd, 1] += 1  # raises (all sizes)
             elif action == 0:
                 self.history[rd, 2] += 1  # folds
 
