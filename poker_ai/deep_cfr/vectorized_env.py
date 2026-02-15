@@ -69,6 +69,7 @@ def fast_evaluate_vs_random(
     device: torch.device,
     n_games: int = 500,
     n_players: int = 2,
+    initial_chips: int = 10000,
 ) -> float:
     """Evaluate trained agent (player 0) vs random opponents.
 
@@ -77,7 +78,7 @@ def fast_evaluate_vs_random(
 
     Returns average payout (chips) per game for player 0.
     """
-    env = VectorizedPokerEnv(n_games, n_players)
+    env = VectorizedPokerEnv(n_games, n_players, initial_chips=initial_chips)
     env.reset()
     value_net.eval()
 

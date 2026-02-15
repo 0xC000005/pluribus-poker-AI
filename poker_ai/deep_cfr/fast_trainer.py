@@ -63,8 +63,10 @@ class FastDeepCFRTrainer:
         n_traversals: int = 500,
         n_workers: int | None = None,
         device: torch.device | None = None,
+        initial_chips: int = 10000,
     ):
         self.n_players = n_players
+        self.initial_chips = initial_chips
         self.hidden_dim = hidden_dim
         self.batch_size = batch_size
         self.lr = lr
@@ -113,6 +115,7 @@ class FastDeepCFRTrainer:
                     iteration=self.iteration,
                     device=self.device,
                     n_players=self.n_players,
+                    initial_chips=self.initial_chips,
                 )
                 self.buffers[player_i].merge(
                     buffer.features, buffer.iterations,
@@ -137,6 +140,7 @@ class FastDeepCFRTrainer:
                             self.iteration, self.n_players,
                             self.buffers[player_i].capacity,
                             self.hidden_dim,
+                            self.initial_chips,
                         )
                         for w, count in enumerate(worker_counts)
                     ]
@@ -171,6 +175,7 @@ class FastDeepCFRTrainer:
         """Evaluate agent vs random using fast vectorized env."""
         return fast_evaluate_vs_random(
             self.value_net, self.device, n_games, self.n_players,
+            initial_chips=self.initial_chips,
         )
 
     def save(self, path: str):
@@ -180,6 +185,7 @@ class FastDeepCFRTrainer:
                 "iteration": self.iteration,
                 "n_players": self.n_players,
                 "hidden_dim": self.hidden_dim,
+                "initial_chips": self.initial_chips,
                 "buffer_sizes": [len(b) for b in self.buffers],
             },
             path,
@@ -192,6 +198,7 @@ class FastDeepCFRTrainer:
         trainer = cls(
             n_players=checkpoint["n_players"],
             hidden_dim=checkpoint["hidden_dim"],
+            initial_chips=checkpoint.get("initial_chips", 10000),
             device=device,
         )
         trainer.value_net.load_state_dict(checkpoint["value_net"])

@@ -106,6 +106,7 @@ def batched_traverse(
     iteration: int,
     device: torch.device,
     n_players: int = 2,
+    initial_chips: int = 10000,
 ) -> None:
     """Run N traversals concurrently, batching their inference requests.
 
@@ -115,7 +116,7 @@ def batched_traverse(
     # Create coroutines.
     coroutines: list[Generator] = []
     for _ in range(n_traversals):
-        state = new_fast_game(n_players)
+        state = new_fast_game(n_players, initial_chips=initial_chips)
         co = traverse_coroutine(state, traverser, buffer, iteration)
         coroutines.append(co)
 
@@ -162,6 +163,7 @@ def worker_fn(
     n_players: int,
     buffer_capacity: int,
     hidden_dim: int,
+    initial_chips: int = 10000,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
     """Worker entry point for multiprocessing.
 
@@ -182,6 +184,7 @@ def worker_fn(
         iteration=iteration,
         device=device,
         n_players=n_players,
+        initial_chips=initial_chips,
     )
 
     return (
