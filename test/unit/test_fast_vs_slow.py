@@ -181,17 +181,24 @@ class TestLegalMask:
         assert mask[1] == 1.0, "Call should always be legal"
 
     def test_raise_limit(self):
-        """After 3 raises, raise should be illegal."""
+        """After 3 raises, all raise/all-in actions (2-8) should be illegal."""
         state = new_fast_game(2)
         for _ in range(3):
             if state.is_terminal:
                 pytest.skip("Game ended before 3 raises")
+            mask = state.get_legal_mask()
+            raise_actions = [a for a in range(2, 9) if mask[a] > 0]
+            if not raise_actions:
+                pytest.skip("No legal raise action available")
             child = state.copy()
-            child.apply_action(2)  # raise
+            child.apply_action(raise_actions[0])
             state = child
         if not state.is_terminal:
             mask = state.get_legal_mask()
-            assert mask[2] == 0.0, "Raise should be illegal after 3 raises"
+            for a in range(2, 9):
+                assert mask[a] == 0.0, (
+                    f"Action {a} should be illegal after 3 raises"
+                )
 
 
 # ---------------------------------------------------------------------------

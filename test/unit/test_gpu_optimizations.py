@@ -41,14 +41,14 @@ class TestRegretMatchKernel:
 
     def test_positive_advantages(self):
         """When advantages are positive, strategy is proportional."""
-        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel, N_ACTIONS
 
-        adv = np.array([[2.0, 1.0, 0.5]], dtype=np.float32)
-        mask = np.array([[1.0, 1.0, 1.0]], dtype=np.float32)
+        adv = np.array([[2.0, 1.0, 0.5, 1.5, 0.3, 0.8, 0.2, 0.1, 0.4]], dtype=np.float32)
+        mask = np.ones((1, N_ACTIONS), dtype=np.float32)
 
         d_adv = cuda.to_device(adv)
         d_mask = cuda.to_device(mask)
-        d_strat = cuda.device_array((1, 3), dtype=np.float32)
+        d_strat = cuda.device_array((1, N_ACTIONS), dtype=np.float32)
 
         regret_match_kernel[1, 1](d_adv, d_mask, d_strat, 1)
         cuda.synchronize()
@@ -59,14 +59,14 @@ class TestRegretMatchKernel:
 
     def test_all_negative_advantages(self):
         """When all advantages are negative, strategy is uniform over legal."""
-        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel, N_ACTIONS
 
-        adv = np.array([[-1.0, -2.0, -3.0]], dtype=np.float32)
-        mask = np.array([[1.0, 1.0, 1.0]], dtype=np.float32)
+        adv = np.full((1, N_ACTIONS), -1.0, dtype=np.float32)
+        mask = np.ones((1, N_ACTIONS), dtype=np.float32)
 
         d_adv = cuda.to_device(adv)
         d_mask = cuda.to_device(mask)
-        d_strat = cuda.device_array((1, 3), dtype=np.float32)
+        d_strat = cuda.device_array((1, N_ACTIONS), dtype=np.float32)
 
         regret_match_kernel[1, 1](d_adv, d_mask, d_strat, 1)
         cuda.synchronize()
@@ -77,14 +77,15 @@ class TestRegretMatchKernel:
 
     def test_mixed_with_illegal_actions(self):
         """Strategy correctly masks out illegal actions."""
-        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel, N_ACTIONS
 
-        adv = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
-        mask = np.array([[1.0, 1.0, 0.0]], dtype=np.float32)  # raise illegal
+        adv = np.array([[1.0, 2.0, 3.0, 0.5, 1.5, 0.8, 0.2, 0.1, 2.5]], dtype=np.float32)
+        # Only fold and call legal, all raises/all-in illegal.
+        mask = np.array([[1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]], dtype=np.float32)
 
         d_adv = cuda.to_device(adv)
         d_mask = cuda.to_device(mask)
-        d_strat = cuda.device_array((1, 3), dtype=np.float32)
+        d_strat = cuda.device_array((1, N_ACTIONS), dtype=np.float32)
 
         regret_match_kernel[1, 1](d_adv, d_mask, d_strat, 1)
         cuda.synchronize()
@@ -92,24 +93,25 @@ class TestRegretMatchKernel:
 
         cpu_strat = self._cpu_regret_match(adv[0], mask[0])
         np.testing.assert_allclose(gpu_strat, cpu_strat, atol=1e-6)
-        assert gpu_strat[2] == 0.0  # Illegal action gets 0 probability.
+        for a in range(2, N_ACTIONS):
+            assert gpu_strat[a] == 0.0, f"Illegal action {a} gets non-zero probability"
 
     def test_batch_matches_cpu(self):
         """GPU batch of 1000 games all match CPU regret matching."""
-        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel, N_ACTIONS
 
         N = 1000
         rng = np.random.default_rng(42)
-        adv = rng.standard_normal((N, 3)).astype(np.float32) * 5
+        adv = rng.standard_normal((N, N_ACTIONS)).astype(np.float32) * 5
         # Random legal masks (at least one action legal).
-        mask = rng.integers(0, 2, (N, 3)).astype(np.float32)
+        mask = rng.integers(0, 2, (N, N_ACTIONS)).astype(np.float32)
         for i in range(N):
             if mask[i].sum() == 0:
                 mask[i, 1] = 1.0  # Ensure at least call is legal.
 
         d_adv = cuda.to_device(adv)
         d_mask = cuda.to_device(mask)
-        d_strat = cuda.device_array((N, 3), dtype=np.float32)
+        d_strat = cuda.device_array((N, N_ACTIONS), dtype=np.float32)
 
         blocks = (N + 255) // 256
         regret_match_kernel[blocks, 256](d_adv, d_mask, d_strat, N)
@@ -125,16 +127,16 @@ class TestRegretMatchKernel:
 
     def test_strategies_sum_to_one(self):
         """All strategies should sum to 1.0 (or 0 if no legal actions)."""
-        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel, N_ACTIONS
 
         N = 500
         rng = np.random.default_rng(123)
-        adv = rng.standard_normal((N, 3)).astype(np.float32)
-        mask = np.ones((N, 3), dtype=np.float32)
+        adv = rng.standard_normal((N, N_ACTIONS)).astype(np.float32)
+        mask = np.ones((N, N_ACTIONS), dtype=np.float32)
 
         d_adv = cuda.to_device(adv)
         d_mask = cuda.to_device(mask)
-        d_strat = cuda.device_array((N, 3), dtype=np.float32)
+        d_strat = cuda.device_array((N, N_ACTIONS), dtype=np.float32)
 
         blocks = (N + 255) // 256
         regret_match_kernel[blocks, 256](d_adv, d_mask, d_strat, N)
@@ -146,14 +148,14 @@ class TestRegretMatchKernel:
 
     def test_no_legal_actions_gives_zero(self):
         """If no actions are legal, strategy should be all zeros."""
-        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import regret_match_kernel, N_ACTIONS
 
-        adv = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
-        mask = np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
+        adv = np.array([[1.0, 2.0, 3.0, 0.5, 1.5, 0.8, 0.2, 0.1, 2.5]], dtype=np.float32)
+        mask = np.zeros((1, N_ACTIONS), dtype=np.float32)
 
         d_adv = cuda.to_device(adv)
         d_mask = cuda.to_device(mask)
-        d_strat = cuda.device_array((1, 3), dtype=np.float32)
+        d_strat = cuda.device_array((1, N_ACTIONS), dtype=np.float32)
 
         regret_match_kernel[1, 1](d_adv, d_mask, d_strat, 1)
         cuda.synchronize()
@@ -170,13 +172,14 @@ class TestSampleActionKernel:
     """Verify GPU action sampling produces valid actions."""
 
     def test_all_actions_valid(self):
-        """Sampled actions should be 0, 1, or 2 for active games."""
-        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel
+        """Sampled actions should be in range 0-8 for active games."""
+        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel, N_ACTIONS
         from numba.cuda.random import create_xoroshiro128p_states
 
         N = 1000
-        strats = np.tile([0.3, 0.3, 0.4], (N, 1)).astype(np.float32)
-        masks = np.ones((N, 3), dtype=np.float32)
+        # Uniform strategy over all 9 actions.
+        strats = np.full((N, N_ACTIONS), 1.0 / N_ACTIONS, dtype=np.float32)
+        masks = np.ones((N, N_ACTIONS), dtype=np.float32)
         stages = np.zeros(N, dtype=np.int8)
 
         d_strat = cuda.to_device(strats)
@@ -192,16 +195,16 @@ class TestSampleActionKernel:
         cuda.synchronize()
         actions = d_actions.copy_to_host()
 
-        assert all(a in [0, 1, 2] for a in actions)
+        assert all(0 <= a < N_ACTIONS for a in actions)
 
     def test_finished_games_get_skip(self):
         """Games with stage >= 4 should get action -1."""
-        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel, N_ACTIONS
         from numba.cuda.random import create_xoroshiro128p_states
 
         N = 10
-        strats = np.ones((N, 3), dtype=np.float32) / 3
-        masks = np.ones((N, 3), dtype=np.float32)
+        strats = np.full((N, N_ACTIONS), 1.0 / N_ACTIONS, dtype=np.float32)
+        masks = np.ones((N, N_ACTIONS), dtype=np.float32)
         stages = np.array([0, 1, 2, 3, 4, 5, 4, 0, 0, 5], dtype=np.int8)
 
         d_strat = cuda.to_device(strats)
@@ -216,9 +219,9 @@ class TestSampleActionKernel:
         cuda.synchronize()
         actions = d_actions.copy_to_host()
 
-        # Active games: actions should be 0, 1, or 2.
+        # Active games: actions should be in [0, N_ACTIONS).
         for i in [0, 1, 2, 3, 7, 8]:
-            assert actions[i] in [0, 1, 2], f"Game {i}: expected valid action, got {actions[i]}"
+            assert 0 <= actions[i] < N_ACTIONS, f"Game {i}: expected valid action, got {actions[i]}"
 
         # Finished games: action should be -1.
         for i in [4, 5, 6, 9]:
@@ -226,13 +229,14 @@ class TestSampleActionKernel:
 
     def test_distribution_matches_strategy(self):
         """Over many samples, action frequencies should match strategy."""
-        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel, N_ACTIONS
         from numba.cuda.random import create_xoroshiro128p_states
 
         N = 10000
-        target = [0.1, 0.3, 0.6]
+        target = [0.05, 0.15, 0.1, 0.1, 0.1, 0.15, 0.1, 0.1, 0.15]
+        assert len(target) == N_ACTIONS
         strats = np.tile(target, (N, 1)).astype(np.float32)
-        masks = np.ones((N, 3), dtype=np.float32)
+        masks = np.ones((N, N_ACTIONS), dtype=np.float32)
         stages = np.zeros(N, dtype=np.int8)
 
         d_strat = cuda.to_device(strats)
@@ -248,26 +252,29 @@ class TestSampleActionKernel:
         cuda.synchronize()
         actions = d_actions.copy_to_host()
 
-        freqs = [np.sum(actions == a) / N for a in range(3)]
-        for a in range(3):
+        freqs = [np.sum(actions == a) / N for a in range(N_ACTIONS)]
+        for a in range(N_ACTIONS):
             assert abs(freqs[a] - target[a]) < 0.03, (
                 f"Action {a}: expected ~{target[a]}, got {freqs[a]}"
             )
 
     def test_respects_legal_mask(self):
         """If an action is illegal (mask=0), it should never be sampled."""
-        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import sample_action_kernel, N_ACTIONS
         from numba.cuda.random import create_xoroshiro128p_states
 
         N = 5000
-        # Strategy has weight on action 2, but mask blocks it.
-        strats = np.tile([0.0, 0.5, 0.5], (N, 1)).astype(np.float32)
-        masks = np.tile([0.0, 1.0, 1.0], (N, 1)).astype(np.float32)
+        # Only actions 1 and 5 have probability; rest are zero.
+        strat = np.zeros(N_ACTIONS, dtype=np.float32)
+        strat[1] = 0.5
+        strat[5] = 0.5
+        strats = np.tile(strat, (N, 1))
+        mask = np.zeros(N_ACTIONS, dtype=np.float32)
+        mask[1] = 1.0
+        mask[5] = 1.0
+        masks = np.tile(mask, (N, 1))
         stages = np.zeros(N, dtype=np.int8)
 
-        # But wait — regret_match_kernel already handles this.
-        # sample_action_kernel trusts the strategy is already masked.
-        # The strategy [0, 0.5, 0.5] shouldn't produce action 0.
         d_strat = cuda.to_device(strats)
         d_mask = cuda.to_device(masks)
         d_stage = cuda.to_device(stages)
@@ -281,8 +288,9 @@ class TestSampleActionKernel:
         cuda.synchronize()
         actions = d_actions.copy_to_host()
 
-        # Action 0 should never appear (probability 0).
-        assert np.sum(actions == 0) == 0, "Sampled illegal action 0!"
+        # Only actions 1 and 5 should appear.
+        unique = set(int(a) for a in actions)
+        assert unique <= {1, 5}, f"Unexpected actions sampled: {unique}"
 
 
 # ---------------------------------------------------------------------------
@@ -294,12 +302,12 @@ class TestClassifyAndSampleKernel:
 
     def test_traverser_gets_no_action(self):
         """Traverser nodes should have out_actions=-1, out_is_traverser=1."""
-        from poker_ai.deep_cfr.cuda.action_kernels import classify_and_sample_kernel
+        from poker_ai.deep_cfr.cuda.action_kernels import classify_and_sample_kernel, N_ACTIONS
         from numba.cuda.random import create_xoroshiro128p_states
 
         N = 4
-        strats = np.ones((N, 3), dtype=np.float32) / 3
-        masks = np.ones((N, 3), dtype=np.float32)
+        strats = np.full((N, N_ACTIONS), 1.0 / N_ACTIONS, dtype=np.float32)
+        masks = np.ones((N, N_ACTIONS), dtype=np.float32)
 
         # 2-player game: preflop order [0, 1].
         # If traverser=0 and current player=0, it's a traverser node.
@@ -335,7 +343,7 @@ class TestClassifyAndSampleKernel:
 
         # Game 1: preflop, pii=1 → player 1 = opponent.
         assert is_trav[1] == 0
-        assert actions[1] in [0, 1, 2]
+        assert 0 <= actions[1] < N_ACTIONS
 
         # Game 2: flop, pii=0 → player 0 = traverser.
         assert is_trav[2] == 1
@@ -343,7 +351,7 @@ class TestClassifyAndSampleKernel:
 
         # Game 3: flop, pii=1 → player 1 = opponent.
         assert is_trav[3] == 0
-        assert actions[3] in [0, 1, 2]
+        assert 0 <= actions[3] < N_ACTIONS
 
 
 # ---------------------------------------------------------------------------
@@ -355,11 +363,11 @@ class TestZeroCopyInterop:
 
     def test_numba_to_pytorch(self):
         """torch.as_tensor from Numba device array shares memory."""
-        data = np.array([[1.0, 2.0, 3.0]], dtype=np.float32)
+        data = np.array([[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]], dtype=np.float32)
         d_arr = cuda.to_device(data)
 
         t = torch.as_tensor(d_arr, device="cuda")
-        assert t.shape == (1, 3)
+        assert t.shape == (1, 9)
         assert t.device.type == "cuda"
 
         # Verify same data.
@@ -367,10 +375,10 @@ class TestZeroCopyInterop:
 
     def test_pytorch_to_numba(self):
         """cuda.as_cuda_array from PyTorch tensor shares memory."""
-        t = torch.tensor([[4.0, 5.0, 6.0]], device="cuda", dtype=torch.float32)
+        t = torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]], device="cuda", dtype=torch.float32)
         d_arr = cuda.as_cuda_array(t)
 
-        assert d_arr.shape == (1, 3)
+        assert d_arr.shape == (1, 9)
         np.testing.assert_allclose(d_arr.copy_to_host(), t.cpu().numpy())
 
     def test_roundtrip_preserves_data(self):
