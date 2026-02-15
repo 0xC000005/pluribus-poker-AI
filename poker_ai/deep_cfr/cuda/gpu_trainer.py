@@ -36,7 +36,6 @@ from poker_ai.deep_cfr.cuda.game_state import (
     GameBatch, create_game_batch, _get_device_orders, copy_game_kernel,
 )
 from poker_ai.deep_cfr.cuda.game_kernels import (
-    INITIAL_CHIPS,
     apply_action_kernel,
     compute_winners_kernel,
     get_features_kernel,
@@ -71,6 +70,7 @@ def gpu_evaluate_vs_random(
     device: torch.device,
     n_games: int = 1000,
     n_players: int = 6,
+    initial_chips: int = 10000,
 ) -> float:
     """Evaluate agent (player 0) vs random opponents using GPU simulation.
 
@@ -79,7 +79,7 @@ def gpu_evaluate_vs_random(
     tables = get_gpu_tables()
     d_flush_keys, d_flush_vals, d_unsuited_keys, d_unsuited_vals, d_card_lookup, _ = tables
 
-    batch = create_game_batch(n_games, n_players)
+    batch = create_game_batch(n_games, n_players, initial_chips=initial_chips)
 
     d_features = cuda.device_array((n_games, N_FEATURES), dtype=np.float32)
     d_masks = cuda.device_array((n_games, N_ACTIONS), dtype=np.float32)
@@ -106,7 +106,7 @@ def gpu_evaluate_vs_random(
             batch.stage, batch.n_raises, batch.player_i_index,
             batch.pot_total, batch.history,
             n_players, d_preflop, d_postflop,
-            d_features, n_games,
+            d_features, n_games, initial_chips,
         )
         get_legal_mask_kernel[blocks, threads](
             batch.active, batch.chips, batch.bets, batch.n_raises,
@@ -205,6 +205,7 @@ def gpu_evaluate_vs_random(
         d_card_lookup,
         d_flush_keys, d_flush_vals, FLUSH_SIZE,
         d_unsuited_keys, d_unsuited_vals, UNSUITED_SIZE,
+        initial_chips,
     )
     cuda.synchronize()
 
@@ -224,6 +225,7 @@ def gpu_traverse_for_player(
     iteration: int,
     n_players: int,
     device: torch.device,
+    initial_chips: int = 10000,
 ):
     """Run n_traversals game tree traversals on GPU for one player.
 
@@ -243,8 +245,10 @@ def gpu_traverse_for_player(
     value_net.eval()
 
     # Pre-allocate a large game pool on GPU.
-    max_pool = n_traversals * 50
-    batch = create_game_batch(max_pool, n_players)
+    # Each traversal needs ~350 slots for 2-player 9-action tree (7 actions × 3 forks).
+    # Use 500 slots per traversal to avoid tree truncation.
+    max_pool = n_traversals * 500
+    batch = create_game_batch(max_pool, n_players, initial_chips=initial_chips)
 
     threads = 256
     blocks_pool = (max_pool + threads - 1) // threads
@@ -285,7 +289,7 @@ def gpu_traverse_for_player(
             batch.stage, batch.n_raises, batch.player_i_index,
             batch.pot_total, batch.history,
             n_players, d_preflop, d_postflop,
-            d_features, max_pool,
+            d_features, max_pool, initial_chips,
         )
         get_legal_mask_kernel[blocks_pool, threads](
             batch.active, batch.chips, batch.bets, batch.n_raises,
@@ -341,6 +345,7 @@ def gpu_traverse_for_player(
                 d_card_lookup,
                 d_flush_keys, d_flush_vals, FLUSH_SIZE,
                 d_unsuited_keys, d_unsuited_vals, UNSUITED_SIZE,
+                initial_chips,
             )
             cuda.synchronize()
             payouts = batch.payout.copy_to_host()
@@ -351,7 +356,7 @@ def gpu_traverse_for_player(
                     idx, value, parent_idx, parent_action,
                     is_traverser_node, child_values, n_children_done,
                     n_children_expected, traverser_features_buf,
-                    slot_strategy, buffer, iteration,
+                    slot_strategy, buffer, iteration, initial_chips,
                 )
 
         if not continuing_indices:
@@ -500,7 +505,7 @@ def _propagate_value(
     parent_idx, parent_action,
     is_traverser_node, child_values, n_children_done,
     n_children_expected, traverser_features, slot_strategy,
-    buffer, iteration,
+    buffer, iteration, initial_chips,
 ):
     """Propagate terminal value up through the tree to compute regrets."""
     current_idx = idx
@@ -528,7 +533,7 @@ def _propagate_value(
                     regrets[a] = child_values[pidx, a] - state_value
 
                 # Normalize regrets to [-1, 1] range for stable NN training.
-                regrets /= INITIAL_CHIPS
+                regrets /= initial_chips
                 buffer.add(traverser_features[pidx], iteration, regrets)
                 current_value = state_value
                 current_idx = pidx
@@ -556,8 +561,10 @@ class GPUDeepCFRTrainer:
         n_training_steps: int = 1000,
         n_traversals: int = 500,
         device: torch.device | None = None,
+        initial_chips: int = 10000,
     ):
         self.n_players = n_players
+        self.initial_chips = initial_chips
         self.hidden_dim = hidden_dim
         self.batch_size = batch_size
         self.lr = lr
@@ -593,6 +600,7 @@ class GPUDeepCFRTrainer:
                 iteration=self.iteration,
                 n_players=self.n_players,
                 device=self.device,
+                initial_chips=self.initial_chips,
             )
 
         # Combine buffers and retrain.
@@ -619,6 +627,7 @@ class GPUDeepCFRTrainer:
     def evaluate(self, n_games: int = 500) -> float:
         return gpu_evaluate_vs_random(
             self.value_net, self.device, n_games, self.n_players,
+            initial_chips=self.initial_chips,
         )
 
     def save(self, path: str):
@@ -628,6 +637,7 @@ class GPUDeepCFRTrainer:
                 "iteration": self.iteration,
                 "n_players": self.n_players,
                 "hidden_dim": self.hidden_dim,
+                "initial_chips": self.initial_chips,
                 "buffer_sizes": [len(b) for b in self.buffers],
             },
             path,
@@ -640,6 +650,7 @@ class GPUDeepCFRTrainer:
         trainer = cls(
             n_players=checkpoint["n_players"],
             hidden_dim=checkpoint["hidden_dim"],
+            initial_chips=checkpoint.get("initial_chips", 10000),
             device=device,
         )
         trainer.value_net.load_state_dict(checkpoint["value_net"])

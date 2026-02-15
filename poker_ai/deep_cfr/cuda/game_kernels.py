@@ -288,6 +288,7 @@ def compute_winners_kernel(
     card_lookup,
     flush_keys, flush_vals, flush_size,
     unsuited_keys, unsuited_vals, unsuited_size,
+    initial_chips,
 ):
     """Compute winners and update chips/payout for finished games."""
     i = cuda.grid(1)
@@ -304,7 +305,7 @@ def compute_winners_kernel(
 
     if n_active == 0:
         for p in range(n_players):
-            payout[i, p] = chips[i, p] - INITIAL_CHIPS
+            payout[i, p] = chips[i, p] - initial_chips
         return
 
     if n_active == 1:
@@ -317,7 +318,7 @@ def compute_winners_kernel(
                 chips[i, p] += total_pot
                 break
         for p in range(n_players):
-            payout[i, p] = chips[i, p] - INITIAL_CHIPS
+            payout[i, p] = chips[i, p] - initial_chips
         return
 
     # Multiple active players — evaluate hands.
@@ -417,7 +418,7 @@ def compute_winners_kernel(
 
     # Compute payout.
     for p in range(n_players):
-        payout[i, p] = chips[i, p] - INITIAL_CHIPS
+        payout[i, p] = chips[i, p] - initial_chips
 
 
 # ---------------------------------------------------------------------------
@@ -430,7 +431,7 @@ def get_features_kernel(
     stage, n_raises, player_i_index, pot_total, history,
     n_players, preflop_order, postflop_order,
     out_features,  # (N, 126) float32
-    n_games,
+    n_games, initial_chips,
 ):
     """Compute 126-dim feature vector for each game."""
     i = cuda.grid(1)
@@ -464,10 +465,10 @@ def get_features_kernel(
         out_features[i, 104 + round_idx] = 1.0
 
     # Scalar features.
-    total_chips = float32(INITIAL_CHIPS * n_players)
+    total_chips = float32(initial_chips * n_players)
     out_features[i, 108] = float32(pot_total[i]) / total_chips
-    out_features[i, 109] = float32(chips[i, pi]) / float32(INITIAL_CHIPS)
-    out_features[i, 110] = float32(bets[i, pi]) / float32(INITIAL_CHIPS)
+    out_features[i, 109] = float32(chips[i, pi]) / float32(initial_chips)
+    out_features[i, 110] = float32(bets[i, pi]) / float32(initial_chips)
 
     active_count = float32(0)
     for p in range(n_players):

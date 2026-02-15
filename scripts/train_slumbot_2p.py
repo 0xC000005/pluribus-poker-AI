@@ -1,36 +1,54 @@
-"""Train 2-player Deep CFR for Slumbot (200BB stacks)."""
+"""Train 2-player Deep CFR for Slumbot (200BB stacks).
+
+Uses GPU trainer for fast wavefront traversal (~1s/iter vs ~15s on CPU).
+"""
 import argparse
+import logging
 import os
 import sys
 import time
+
+# Suppress noisy numba CUDA driver logging before import.
+logging.getLogger('numba').setLevel(logging.WARNING)
+logging.getLogger('numba.cuda').setLevel(logging.WARNING)
 
 import torch
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from poker_ai.deep_cfr.fast_trainer import FastDeepCFRTrainer
+# Must set LD_LIBRARY_PATH before numba import for CUDA nvvm.
+nvvm = os.path.join(
+    os.path.dirname(sys.executable), '..', 'lib', 'python3.13',
+    'site-packages', 'nvidia', 'cuda_nvcc', 'nvvm', 'lib64',
+)
+if os.path.isdir(nvvm):
+    os.environ.setdefault('LD_LIBRARY_PATH', '')
+    if nvvm not in os.environ['LD_LIBRARY_PATH']:
+        os.environ['LD_LIBRARY_PATH'] = nvvm + ':' + os.environ['LD_LIBRARY_PATH']
+
+from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', type=str, default='', help='Resume from checkpoint')
-    parser.add_argument('--n-iterations', type=int, default=200)
-    parser.add_argument('--n-traversals', type=int, default=20)
+    parser.add_argument('--n-iterations', type=int, default=500)
+    parser.add_argument('--n-traversals', type=int, default=500)
     args = parser.parse_args()
 
     print("=" * 60)
-    print("2-Player Deep CFR Training — Slumbot Config (200BB)")
+    print("2-Player Deep CFR Training — Slumbot (GPU Trainer)")
     print("=" * 60)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.resume:
-        trainer = FastDeepCFRTrainer.load(args.resume, device=device)
+        trainer = GPUDeepCFRTrainer.load(args.resume, device=device)
         trainer.n_traversals = args.n_traversals
         trainer.n_training_steps = 300
-        trainer.n_workers = 1
         print(f"Resumed from iteration {trainer.iteration}")
     else:
-        trainer = FastDeepCFRTrainer(
+        trainer = GPUDeepCFRTrainer(
             n_players=2,
             initial_chips=20000,       # 200BB to match Slumbot
             n_traversals=args.n_traversals,
@@ -39,14 +57,13 @@ def main():
             hidden_dim=256,
             batch_size=2048,
             lr=0.001,
-            n_workers=1,               # Single-process: batched GPU inference
             device=device,
         )
 
     os.makedirs("models", exist_ok=True)
     n_iterations = args.n_iterations
-    eval_every = 25
-    save_every = 50
+    eval_every = 50
+    save_every = 100
 
     print(f"Config: {n_iterations} iters, {trainer.n_traversals} trav, "
           f"chips={trainer.initial_chips}, device={trainer.device}")

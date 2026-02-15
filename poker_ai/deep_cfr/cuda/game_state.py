@@ -136,7 +136,7 @@ def init_games_kernel(
     stage, n_raises, player_i_index, n_actions, pot_total,
     n_players_started_round, history, payout, is_done,
     seeds, n_players, n_games,
-    preflop_order,
+    preflop_order, initial_chips,
 ):
     """Initialize game i with thread i.
 
@@ -179,7 +179,7 @@ def init_games_kernel(
 
     # --- Per-player state ---
     for p in range(n_players):
-        chips[i, p] = int32(INITIAL_CHIPS)
+        chips[i, p] = int32(initial_chips)
         bets[i, p] = int32(0)
         active[i, p] = int8(1)
         payout[i, p] = int32(0)
@@ -285,7 +285,7 @@ def copy_game_kernel(
 # Convenience: create_game_batch
 # ---------------------------------------------------------------------------
 
-def create_game_batch(n_games: int, n_players: int) -> GameBatch:
+def create_game_batch(n_games: int, n_players: int, initial_chips: int = 10000) -> GameBatch:
     """Create and initialize a batch of N poker games on GPU.
 
     Seeds are generated from numpy RNG. Returns a GameBatch with all
@@ -321,7 +321,7 @@ def create_game_batch(n_games: int, n_players: int) -> GameBatch:
         batch.n_players_started_round, batch.history, batch.payout,
         batch.is_done,
         d_seeds, n_players, n_games,
-        d_preflop,
+        d_preflop, initial_chips,
     )
 
     return batch
