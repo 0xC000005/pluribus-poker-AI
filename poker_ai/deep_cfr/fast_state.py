@@ -47,9 +47,14 @@ def _make_player_orders(n_players: int):
     """Return (preflop_order, postflop_order) arrays."""
     order = list(range(n_players))
     preflop = order[2:] + order[:2]
+    # In heads-up, SB=Button acts last postflop (BB acts first).
+    if n_players == 2:
+        postflop = [1, 0]
+    else:
+        postflop = order
     return (
         np.array(preflop, dtype=np.int8),
-        np.array(order, dtype=np.int8),
+        np.array(postflop, dtype=np.int8),
     )
 
 

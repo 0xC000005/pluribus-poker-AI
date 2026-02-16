@@ -124,13 +124,18 @@ class PokerState:
         self.players[0].is_small_blind = True
         self.players[1].is_big_blind = True
         self.players[-1].is_dealer = True
+        # In heads-up, SB=Button acts last postflop (BB acts first).
+        if n_players == 2:
+            postflop_order = [1, 0]
+        else:
+            postflop_order = player_i_order
         self._player_i_lut: Dict[str, List[int]] = {
             "pre_flop": player_i_order[2:] + player_i_order[:2],
-            "flop": player_i_order,
-            "turn": player_i_order,
-            "river": player_i_order,
-            "show_down": player_i_order,
-            "terminal": player_i_order,
+            "flop": postflop_order,
+            "turn": postflop_order,
+            "river": postflop_order,
+            "show_down": postflop_order,
+            "terminal": postflop_order,
         }
         self._skip_counter = 0
         self._first_move_of_current_round = True

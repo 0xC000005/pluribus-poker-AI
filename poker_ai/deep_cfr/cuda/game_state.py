@@ -46,7 +46,7 @@ _POSTFLOP_ORDER_6 = np.array([0, 1, 2, 3, 4, 5], dtype=np.int8)
 
 # 2-player orders.
 _PREFLOP_ORDER_2 = np.array([0, 1], dtype=np.int8)
-_POSTFLOP_ORDER_2 = np.array([0, 1], dtype=np.int8)
+_POSTFLOP_ORDER_2 = np.array([1, 0], dtype=np.int8)  # BB first postflop in HU
 
 # Lazy GPU copies.
 _d_orders = None
