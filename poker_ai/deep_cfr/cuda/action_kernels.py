@@ -1,13 +1,12 @@
-"""CUDA kernels for regret matching and action sampling.
-
-Moves the CPU-bound Python loop (regret matching + np.random.choice)
-to GPU. Combined with zero-copy Numba<->PyTorch interop, this
-eliminates the dominant bottleneck in GPU traversal.
+"""CUDA kernels for regret matching, action sampling, and tree traversal.
 
 Kernels:
   regret_match_kernel: advantages -> strategy probabilities
   sample_action_kernel: strategy + RNG -> sampled action per game
   classify_and_sample_kernel: classify traverser/opponent + sample
+  fork_kernel: allocate children for traverser nodes (replaces CPU fork loop)
+  copy_from_parent_kernel: copy game state from parent to child slots
+  propagate_kernel: propagate terminal values up tree, collect regret samples
 """
 
 from numba import cuda, int8, int32, float32
@@ -190,3 +189,209 @@ def classify_and_sample_kernel(
             chosen = int8(a)
             break
     out_actions[gid] = chosen
+
+
+# ---------------------------------------------------------------------------
+# Constants for tree traversal kernels
+# ---------------------------------------------------------------------------
+
+N_FEATURES = 126
+
+
+# ---------------------------------------------------------------------------
+# Kernel: fork traverser nodes (replaces CPU fork loop)
+# ---------------------------------------------------------------------------
+
+@cuda.jit
+def fork_kernel(
+    is_traverser_flag,    # (N,) int8 — 1=traverser (IN/OUT: 0 on pool exhaust)
+    stages,               # (N,) int8
+    features,             # (N, 126) float32
+    strategies,           # (N, 9) float32
+    legal_masks,          # (N, 9) float32
+    parent_idx,           # (max_pool,) int32
+    parent_action,        # (max_pool,) int8
+    is_traverser_node,    # (max_pool,) int8 — marks forked nodes
+    traverser_features,   # (max_pool, 126) float32
+    slot_strategy,        # (max_pool, 9) float32
+    n_children_expected,  # (max_pool,) int32
+    child_values,         # (max_pool, 9) float32
+    n_children_done,      # (max_pool,) int32
+    next_free,            # (1,) int32 — atomic counter
+    max_pool,             # int32
+    actions_out,          # (max_pool,) int8
+    rng_states,
+    n_active,             # int32
+):
+    """Allocate child slots for traverser nodes. One thread per slot."""
+    gid = cuda.grid(1)
+    if gid >= n_active:
+        return
+    if stages[gid] >= int8(4):
+        return
+    if is_traverser_flag[gid] != int8(1):
+        return
+
+    n_legal = int32(0)
+    for a in range(N_ACTIONS):
+        if legal_masks[gid, a] > float32(0.0):
+            n_legal += 1
+    if n_legal == 0:
+        return
+
+    start = cuda.atomic.add(next_free, 0, n_legal)
+    if start >= max_pool or start + n_legal > max_pool:
+        # Pool exhausted — demote to opponent, sample action.
+        is_traverser_flag[gid] = int8(0)
+        u = xoroshiro128p_uniform_float32(rng_states, gid)
+        cumsum_f = float32(0.0)
+        chosen_f = int8(N_ACTIONS - 1)
+        for a in range(N_ACTIONS):
+            cumsum_f += strategies[gid, a]
+            if u < cumsum_f:
+                chosen_f = int8(a)
+                break
+        actions_out[gid] = chosen_f
+        return
+
+    is_traverser_node[gid] = int8(1)
+    n_children_expected[gid] = n_legal
+    n_children_done[gid] = int32(0)
+    for f in range(N_FEATURES):
+        traverser_features[gid, f] = features[gid, f]
+    for a in range(N_ACTIONS):
+        slot_strategy[gid, a] = strategies[gid, a]
+        child_values[gid, a] = float32(0.0)
+
+    legal_i = int32(0)
+    for a in range(N_ACTIONS):
+        if legal_masks[gid, a] > float32(0.0):
+            child = start + legal_i
+            parent_idx[child] = int32(gid)
+            parent_action[child] = int8(a)
+            actions_out[child] = int8(a)
+            is_traverser_node[child] = int8(0)
+            n_children_done[child] = int32(0)
+            n_children_expected[child] = int32(0)
+            legal_i += 1
+
+
+# ---------------------------------------------------------------------------
+# Kernel: copy game state from parent to newly forked children
+# ---------------------------------------------------------------------------
+
+@cuda.jit
+def copy_from_parent_kernel(
+    chips, bets, active, hole_cards, community, deck,
+    deck_cursor, stage, n_raises, player_i_index,
+    n_actions, pot_total, n_players_started_round, history,
+    payout, is_done,
+    parent_idx, start_slot, end_slot, n_players,
+):
+    """Copy game state from parent_idx[slot] to slot, for [start, end)."""
+    tid = cuda.grid(1)
+    slot = start_slot + tid
+    if slot >= end_slot:
+        return
+
+    si = parent_idx[slot]
+    di = slot
+
+    for p in range(n_players):
+        chips[di, p] = chips[si, p]
+        bets[di, p] = bets[si, p]
+        active[di, p] = active[si, p]
+        payout[di, p] = payout[si, p]
+        for c in range(2):
+            hole_cards[di, p, c] = hole_cards[si, p, c]
+
+    for c in range(5):
+        community[di, c] = community[si, c]
+    for c in range(52):
+        deck[di, c] = deck[si, c]
+
+    deck_cursor[di] = deck_cursor[si]
+    stage[di] = stage[si]
+    n_raises[di] = n_raises[si]
+    player_i_index[di] = player_i_index[si]
+    n_actions[di] = n_actions[si]
+    pot_total[di] = pot_total[si]
+    n_players_started_round[di] = n_players_started_round[si]
+    is_done[di] = is_done[si]
+
+    for r in range(4):
+        for a in range(3):
+            history[di, r, a] = history[si, r, a]
+
+
+# ---------------------------------------------------------------------------
+# Kernel: propagate terminal values up tree and collect regret samples
+# ---------------------------------------------------------------------------
+
+@cuda.jit
+def propagate_kernel(
+    stages,              # (N,) int8
+    payouts,             # (N, n_players) int32
+    traverser,           # int32
+    parent_idx,          # (max_pool,) int32
+    parent_action,       # (max_pool,) int8
+    is_traverser_node,   # (max_pool,) int8
+    traverser_features,  # (max_pool, 126) float32
+    slot_strategy,       # (max_pool, 9) float32
+    child_values,        # (max_pool, 9) float32
+    n_children_done,     # (max_pool,) int32
+    n_children_expected, # (max_pool,) int32
+    propagated,          # (max_pool,) int8
+    collected_features,  # (max_pool, 126) float32
+    collected_regrets,   # (max_pool, 9) float32
+    n_collected,         # (1,) int32 — atomic counter
+    initial_chips,       # float32
+    n_slots,             # int32
+):
+    """Propagate terminal values up tree. One thread per terminal."""
+    gid = cuda.grid(1)
+    if gid >= n_slots:
+        return
+    if stages[gid] < int8(4):
+        return
+    if propagated[gid] == int8(1):
+        return
+
+    propagated[gid] = int8(1)
+    current_value = float32(payouts[gid, traverser])
+    current_idx = int32(gid)
+
+    # Max collected = n_slots (one per traverser node at most).
+    max_collected = n_slots
+
+    for _safety in range(200):
+        pidx = parent_idx[current_idx]
+        if pidx < int32(0):
+            break
+
+        if is_traverser_node[pidx] == int8(1):
+            action = parent_action[current_idx]
+            child_values[pidx, action] = current_value
+            old = cuda.atomic.add(n_children_done, pidx, int32(1))
+
+            if old + int32(1) >= n_children_expected[pidx]:
+                state_value = float32(0.0)
+                for a in range(N_ACTIONS):
+                    state_value += slot_strategy[pidx, a] * child_values[pidx, a]
+
+                out_idx = cuda.atomic.add(n_collected, 0, int32(1))
+                if out_idx < max_collected:
+                    ichips = float32(initial_chips)
+                    for f in range(N_FEATURES):
+                        collected_features[out_idx, f] = traverser_features[pidx, f]
+                    for a in range(N_ACTIONS):
+                        collected_regrets[out_idx, a] = (
+                            child_values[pidx, a] - state_value
+                        ) / ichips
+
+                current_value = state_value
+                current_idx = pidx
+            else:
+                break
+        else:
+            current_idx = pidx

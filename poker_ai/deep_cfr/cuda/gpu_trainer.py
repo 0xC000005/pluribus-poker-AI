@@ -33,7 +33,7 @@ from poker_ai.deep_cfr.networks import ValueNetwork
 
 from poker_ai.deep_cfr.cuda.lookup_tables import get_gpu_tables, FLUSH_SIZE, UNSUITED_SIZE
 from poker_ai.deep_cfr.cuda.game_state import (
-    GameBatch, create_game_batch, _get_device_orders, copy_game_kernel,
+    GameBatch, create_game_batch, _get_device_orders,
 )
 from poker_ai.deep_cfr.cuda.game_kernels import (
     apply_action_kernel,
@@ -45,9 +45,56 @@ from poker_ai.deep_cfr.cuda.action_kernels import (
     regret_match_kernel,
     sample_action_kernel,
     classify_and_sample_kernel,
+    fork_kernel,
+    copy_from_parent_kernel,
+    propagate_kernel,
 )
 
 logger = logging.getLogger("poker_ai.deep_cfr.cuda.gpu_trainer")
+
+
+class _MultiBufferView:
+    """Lightweight wrapper that samples from multiple ReservoirBuffers.
+
+    Avoids the 10+GB allocation of combining buffers into one array.
+    Implements the same sample_batch() interface as ReservoirBuffer.
+    """
+
+    def __init__(self, buffers: list):
+        self.buffers = [b for b in buffers if b.size > 0]
+        self.size = sum(b.size for b in self.buffers)
+
+    def __len__(self):
+        return self.size
+
+    def sample_batch(self, batch_size, device=None):
+        """Sample a batch uniformly across all buffers."""
+        if self.size == 0:
+            raise ValueError("Empty buffer")
+        # Allocate per-buffer sample counts proportionally.
+        sizes = np.array([b.size for b in self.buffers])
+        probs = sizes / sizes.sum()
+        counts = np.random.multinomial(min(batch_size, self.size), probs)
+
+        feat_parts = []
+        iter_parts = []
+        adv_parts = []
+        for buf, n in zip(self.buffers, counts):
+            if n == 0:
+                continue
+            idx = np.random.randint(0, buf.size, size=n)
+            feat_parts.append(buf.features[idx])
+            iter_parts.append(buf.iterations[idx].astype(np.float32))
+            adv_parts.append(buf.advantages[idx])
+
+        feat = torch.from_numpy(np.concatenate(feat_parts))
+        iters = torch.from_numpy(np.concatenate(iter_parts))
+        advs = torch.from_numpy(np.concatenate(adv_parts))
+        if device is not None:
+            feat = feat.to(device)
+            iters = iters.to(device)
+            advs = advs.to(device)
+        return feat, iters, advs
 
 
 def _get_orders(n_players):
@@ -229,11 +276,9 @@ def gpu_traverse_for_player(
 ):
     """Run n_traversals game tree traversals on GPU for one player.
 
-    Wavefront traversal: manage a pool of active game states, process
-    them level-by-level.  At traverser nodes, fork into children using
-    GPU copy kernel.  At opponent nodes, sample one action on GPU.
-
-    Optimized: zero-copy Numba↔PyTorch, GPU regret matching + sampling.
+    Fully GPU-resident wavefront traversal — no per-slot Python loops.
+    Fork bookkeeping and value propagation run as GPU kernels.
+    CPU work per depth: kernel launches + 2 scalar reads.
     """
     tables = get_gpu_tables()
     d_flush_keys, d_flush_vals, d_unsuited_keys, d_unsuited_vals, d_card_lookup, _ = tables
@@ -244,52 +289,58 @@ def gpu_traverse_for_player(
 
     value_net.eval()
 
-    # Pre-allocate a large game pool on GPU.
-    # Each traversal needs ~350 slots for 2-player 9-action tree (7 actions × 3 forks).
-    # Use 500 slots per traversal to avoid tree truncation.
     max_pool = n_traversals * 500
     batch = create_game_batch(max_pool, n_players, initial_chips=initial_chips)
 
     threads = 256
     blocks_pool = (max_pool + threads - 1) // threads
 
-    # Pre-allocate GPU arrays for features/masks/strategies/actions.
+    # Pre-allocate GPU arrays for NN I/O.
     d_features = cuda.device_array((max_pool, N_FEATURES), dtype=np.float32)
     d_masks = cuda.device_array((max_pool, N_ACTIONS), dtype=np.float32)
     d_strategies = cuda.device_array((max_pool, N_ACTIONS), dtype=np.float32)
     d_actions_gpu = cuda.device_array(max_pool, dtype=np.int8)
     d_is_traverser = cuda.device_array(max_pool, dtype=np.int8)
 
-    # RNG states for action sampling (one per pool slot).
     rng_states = create_xoroshiro128p_states(
         max_pool, seed=np.random.randint(1, 2**31)
     )
 
-    # CPU-side metadata per slot in the pool.
-    parent_idx = np.full(max_pool, -1, dtype=np.int32)
-    parent_action = np.full(max_pool, -1, dtype=np.int8)
-    slot_strategy = np.zeros((max_pool, N_ACTIONS), dtype=np.float32)
-    is_traverser_node = np.zeros(max_pool, dtype=np.bool_)
-    traverser_features_buf = np.zeros((max_pool, N_FEATURES), dtype=np.float32)
-    child_values = np.zeros((max_pool, N_ACTIONS), dtype=np.float32)
-    n_children_done = np.zeros(max_pool, dtype=np.int32)
-    n_children_expected = np.zeros(max_pool, dtype=np.int32)
+    # GPU-resident bookkeeping arrays for tree traversal.
+    d_parent_idx = cuda.to_device(np.full(max_pool, -1, dtype=np.int32))
+    d_parent_action = cuda.to_device(np.full(max_pool, -1, dtype=np.int8))
+    d_is_traverser_node = cuda.device_array(max_pool, dtype=np.int8)
+    cuda.to_device(np.zeros(max_pool, dtype=np.int8), to=d_is_traverser_node)
+    d_traverser_features = cuda.device_array((max_pool, N_FEATURES), dtype=np.float32)
+    d_slot_strategy = cuda.device_array((max_pool, N_ACTIONS), dtype=np.float32)
+    d_child_values = cuda.device_array((max_pool, N_ACTIONS), dtype=np.float32)
+    d_n_children_done = cuda.device_array(max_pool, dtype=np.int32)
+    cuda.to_device(np.zeros(max_pool, dtype=np.int32), to=d_n_children_done)
+    d_n_children_expected = cuda.device_array(max_pool, dtype=np.int32)
+    cuda.to_device(np.zeros(max_pool, dtype=np.int32), to=d_n_children_expected)
+    d_propagated = cuda.device_array(max_pool, dtype=np.int8)
+    cuda.to_device(np.zeros(max_pool, dtype=np.int8), to=d_propagated)
 
-    active_set = list(range(n_traversals))
-    next_free = n_traversals
+    # Atomic counters (1-element arrays on GPU).
+    d_next_free = cuda.to_device(np.array([n_traversals], dtype=np.int32))
+    d_n_collected = cuda.to_device(np.array([0], dtype=np.int32))
 
-    for depth in range(100):  # Safety bound.
-        if not active_set:
-            break
+    # Output buffers for collected regret samples.
+    d_collected_features = cuda.device_array((max_pool, N_FEATURES), dtype=np.float32)
+    d_collected_regrets = cuda.device_array((max_pool, N_ACTIONS), dtype=np.float32)
 
-        # GPU: get features + masks for ALL slots in pool (only active matter).
+    # Track the high-water mark of allocated slots.
+    n_active = n_traversals
+
+    for depth in range(100):
+        # 1. GPU: extract features + legal masks.
         get_features_kernel[blocks_pool, threads](
             batch.chips, batch.bets, batch.active,
             batch.hole_cards, batch.community,
             batch.stage, batch.n_raises, batch.player_i_index,
             batch.pot_total, batch.history,
             n_players, d_preflop, d_postflop,
-            d_features, max_pool, initial_chips,
+            d_features, n_active, initial_chips,
         )
         get_legal_mask_kernel[blocks_pool, threads](
             batch.active, batch.chips, batch.bets, batch.n_raises,
@@ -297,251 +348,155 @@ def gpu_traverse_for_player(
             batch.player_i_index, n_players,
             d_preflop, d_postflop,
             d_raise_fractions,
-            d_masks, max_pool,
+            d_masks, n_active,
         )
         cuda.synchronize()
 
-        # NN forward pass — zero-copy Numba → PyTorch → Numba.
-        with torch.no_grad():
-            feat_t = torch.as_tensor(d_features, device=device)
-            adv_t = value_net(feat_t)
+        # 2. NN forward pass — zero-copy, chunked. Only process n_active slots.
+        feat_t = torch.as_tensor(d_features, device=device)
+        NN_CHUNK = 500_000
+        if n_active <= NN_CHUNK:
+            with torch.no_grad():
+                adv_t = value_net(feat_t[:n_active])
+        else:
+            chunks = []
+            for s in range(0, n_active, NN_CHUNK):
+                e = min(s + NN_CHUNK, n_active)
+                with torch.no_grad():
+                    chunks.append(value_net(feat_t[s:e]))
+            adv_t = torch.cat(chunks, dim=0)
         torch.cuda.synchronize()
 
+        # Write NN output into a pre-allocated GPU buffer for zero-copy kernel access.
+        # adv_t is (n_active, 9) — contiguous on GPU. Kernels bound to n_active.
         d_advantages = cuda.as_cuda_array(adv_t.detach())
 
-        # GPU: regret matching → strategies.
-        regret_match_kernel[blocks_pool, threads](
-            d_advantages, d_masks, d_strategies, max_pool,
+        # 3. GPU: regret matching + classify/sample.
+        blocks_active = (n_active + threads - 1) // threads
+        regret_match_kernel[blocks_active, threads](
+            d_advantages, d_masks, d_strategies, n_active,
         )
-
-        # GPU: classify traverser/opponent + sample opponent actions.
-        classify_and_sample_kernel[blocks_pool, threads](
+        classify_and_sample_kernel[blocks_active, threads](
             d_strategies, d_masks, batch.stage, batch.player_i_index,
             n_players, traverser, d_preflop, d_postflop,
-            rng_states, d_actions_gpu, d_is_traverser, max_pool,
+            rng_states, d_actions_gpu, d_is_traverser, n_active,
         )
         cuda.synchronize()
 
-        # Copy only what we need to CPU for fork bookkeeping.
-        stages = batch.stage.copy_to_host()
-        is_trav_host = d_is_traverser.copy_to_host()
-        actions_host = d_actions_gpu.copy_to_host()
+        # 4. GPU: compute winners for terminals.
+        compute_winners_kernel[blocks_active, threads](
+            batch.chips, batch.bets, batch.active,
+            batch.hole_cards, batch.community,
+            batch.payout, batch.stage, n_active, n_players,
+            d_card_lookup,
+            d_flush_keys, d_flush_vals, FLUSH_SIZE,
+            d_unsuited_keys, d_unsuited_vals, UNSUITED_SIZE,
+            initial_chips,
+        )
+        cuda.synchronize()
 
-        # For traverser nodes, we need strategies and features on CPU.
-        # Only copy for active traverser nodes (small subset).
-        strategies_host = None
-        features_host = None
+        # 5. GPU: propagate terminal values up tree, collect regret samples.
+        propagate_kernel[blocks_active, threads](
+            batch.stage, batch.payout, traverser,
+            d_parent_idx, d_parent_action,
+            d_is_traverser_node, d_traverser_features, d_slot_strategy,
+            d_child_values, d_n_children_done, d_n_children_expected,
+            d_propagated,
+            d_collected_features, d_collected_regrets, d_n_collected,
+            np.float32(initial_chips), n_active,
+        )
+        cuda.synchronize()
 
-        # Separate terminals from active.
-        terminal_indices = [i for i in active_set if stages[i] >= 4]
-        continuing_indices = [i for i in active_set if stages[i] < 4]
+        # 6. Read old_next_free (1 scalar D→H). Clamp to max_pool.
+        old_next_free = min(int(d_next_free.copy_to_host()[0]), max_pool)
 
-        # --- Process terminals ---
-        if terminal_indices:
-            compute_winners_kernel[blocks_pool, threads](
-                batch.chips, batch.bets, batch.active,
-                batch.hole_cards, batch.community,
-                batch.payout, batch.stage, max_pool, n_players,
-                d_card_lookup,
-                d_flush_keys, d_flush_vals, FLUSH_SIZE,
-                d_unsuited_keys, d_unsuited_vals, UNSUITED_SIZE,
-                initial_chips,
-            )
-            cuda.synchronize()
-            payouts = batch.payout.copy_to_host()
+        # 7. GPU: fork traverser nodes — allocate children.
+        fork_kernel[blocks_active, threads](
+            d_is_traverser, batch.stage,
+            d_features, d_strategies, d_masks,
+            d_parent_idx, d_parent_action,
+            d_is_traverser_node, d_traverser_features, d_slot_strategy,
+            d_n_children_expected, d_child_values, d_n_children_done,
+            d_next_free, max_pool,
+            d_actions_gpu, rng_states, n_active,
+        )
+        cuda.synchronize()
 
-            for idx in terminal_indices:
-                value = float(payouts[idx, traverser])
-                _propagate_value(
-                    idx, value, parent_idx, parent_action,
-                    is_traverser_node, child_values, n_children_done,
-                    n_children_expected, traverser_features_buf,
-                    slot_strategy, buffer, iteration, initial_chips,
-                )
+        # 8. Read new_next_free (1 scalar D→H). Clamp to max_pool since
+        #    atomic counter can overshoot when multiple threads try to allocate
+        #    simultaneously and some fall back.
+        new_next_free = min(int(d_next_free.copy_to_host()[0]), max_pool)
 
-        if not continuing_indices:
-            active_set = []
-            continue
-
-        # Check if any traverser nodes exist (need CPU fork logic).
-        has_traverser = False
-        for idx in continuing_indices:
-            if is_trav_host[idx]:
-                has_traverser = True
-                break
-
-        # Lazy-copy strategies and features only if needed for forking.
-        if has_traverser:
-            strategies_host = d_strategies.copy_to_host()
-            features_host = d_features.copy_to_host()
-
-        # --- CPU fork bookkeeping for traverser nodes ---
-        new_active_set = []
-        actions_final = actions_host.copy()  # Will be modified for traverser children.
-        copy_src_list = []
-        copy_dst_list = []
-
-        for idx in continuing_indices:
-            if not is_trav_host[idx]:
-                # Opponent node: action already sampled by GPU kernel.
-                if actions_final[idx] < 0:
-                    # No legal action — just carry forward.
-                    pass
-                new_active_set.append(idx)
-                continue
-
-            # Traverser node: fork into children for each legal action.
-            mask = strategies_host[idx]  # Actually need legal mask for this.
-            # Reconstruct legal actions from strategy (nonzero = legal).
-            legal = []
-            for a in range(N_ACTIONS):
-                # Strategy can be 0 for a legal action if all advantages <= 0
-                # and the uniform assignment rounds. Use a different check.
-                pass
-
-            # We need the actual legal mask. Copy d_masks for this slot.
-            # Since we already have strategies_host, and regret_match_kernel
-            # sets strategy=0 only when legal_mask=0, we can use strategies_host
-            # to infer legality — BUT uniform distribution means all legal
-            # actions get equal weight. Need actual mask.
-            # Let's copy masks too if we have traverser nodes.
-            pass
-
-        # Actually, let's copy masks_host once if there are traverser nodes.
-        masks_host = None
-        if has_traverser:
-            masks_host = d_masks.copy_to_host()
-
-        # Redo the fork loop with proper mask data.
-        new_active_set = []
-        actions_final = actions_host.copy()
-        copy_src_list = []
-        copy_dst_list = []
-
-        for idx in continuing_indices:
-            if not is_trav_host[idx]:
-                # Opponent node: action already sampled by GPU.
-                new_active_set.append(idx)
-                continue
-
-            # Traverser node: fork.
-            mask = masks_host[idx]
-            strategy = strategies_host[idx]
-            legal = [a for a in range(N_ACTIONS) if mask[a] > 0]
-
-            if not legal:
-                new_active_set.append(idx)
-                continue
-
-            is_traverser_node[idx] = True
-            traverser_features_buf[idx] = features_host[idx]
-            n_children_expected[idx] = len(legal)
-            child_values[idx] = 0.0
-            n_children_done[idx] = 0
-            slot_strategy[idx] = strategy
-
-            pool_exhausted = False
-            for action in legal:
-                if next_free >= max_pool:
-                    pool_exhausted = True
-                    break
-                child_idx = next_free
-                next_free += 1
-                copy_src_list.append(idx)
-                copy_dst_list.append(child_idx)
-                parent_idx[child_idx] = idx
-                parent_action[child_idx] = action
-                actions_final[child_idx] = action
-                new_active_set.append(child_idx)
-
-            if pool_exhausted:
-                # Fallback: sample one action instead of forking.
-                is_traverser_node[idx] = False
-                probs = np.array([strategy[a] for a in legal], dtype=np.float64)
-                probs /= probs.sum()
-                actions_final[idx] = np.random.choice(legal, p=probs)
-                new_active_set.append(idx)
-
-        # --- Batch GPU copy for all forks ---
-        if copy_src_list:
-            n_copies = len(copy_src_list)
-            d_src = cuda.to_device(np.array(copy_src_list, dtype=np.int32))
-            d_dst = cuda.to_device(np.array(copy_dst_list, dtype=np.int32))
-            copy_blocks = (n_copies + threads - 1) // threads
-            copy_game_kernel[copy_blocks, threads](
+        # 9. GPU: copy game state from parents to newly allocated children.
+        if new_next_free > old_next_free:
+            n_new = new_next_free - old_next_free
+            copy_blocks = (n_new + threads - 1) // threads
+            copy_from_parent_kernel[copy_blocks, threads](
                 batch.chips, batch.bets, batch.active, batch.hole_cards,
                 batch.community, batch.deck, batch.deck_cursor, batch.stage,
                 batch.n_raises, batch.player_i_index, batch.n_actions,
                 batch.pot_total, batch.n_players_started_round, batch.history,
                 batch.payout, batch.is_done,
-                batch.chips, batch.bets, batch.active, batch.hole_cards,
-                batch.community, batch.deck, batch.deck_cursor, batch.stage,
-                batch.n_raises, batch.player_i_index, batch.n_actions,
-                batch.pot_total, batch.n_players_started_round, batch.history,
-                batch.payout, batch.is_done,
-                d_src, d_dst, n_copies, n_players,
+                d_parent_idx, old_next_free, new_next_free, n_players,
             )
             cuda.synchronize()
+            n_active = new_next_free
 
-        # --- Batch GPU apply actions ---
-        d_actions_final = cuda.to_device(actions_final)
-        apply_action_kernel[blocks_pool, threads](
+        # 10. GPU: apply actions for ALL slots (opponent sampled + fork children).
+        #     Terminal/traverser slots have action=-1 and are skipped by the kernel.
+        blocks_active = (n_active + threads - 1) // threads
+        apply_action_kernel[blocks_active, threads](
             batch.chips, batch.bets, batch.active,
             batch.hole_cards, batch.community, batch.deck,
             batch.deck_cursor, batch.stage, batch.n_raises,
             batch.player_i_index, batch.n_actions, batch.pot_total,
             batch.history, batch.n_players_started_round,
-            d_actions_final, max_pool, n_players,
+            d_actions_gpu, n_active, n_players,
             d_preflop, d_postflop,
             d_raise_fractions,
         )
         cuda.synchronize()
 
-        active_set = new_active_set
+        # 11. Check if all games are terminal (1 small D→H copy).
+        stages_host = batch.stage.copy_to_host()[:n_active]
+        if np.all(stages_host >= 4):
+            break
 
+    # Final propagation pass: handle terminals from the last depth.
+    blocks_final = (n_active + threads - 1) // threads
+    compute_winners_kernel[blocks_final, threads](
+        batch.chips, batch.bets, batch.active,
+        batch.hole_cards, batch.community,
+        batch.payout, batch.stage, n_active, n_players,
+        d_card_lookup,
+        d_flush_keys, d_flush_vals, FLUSH_SIZE,
+        d_unsuited_keys, d_unsuited_vals, UNSUITED_SIZE,
+        initial_chips,
+    )
+    propagate_kernel[blocks_final, threads](
+        batch.stage, batch.payout, traverser,
+        d_parent_idx, d_parent_action,
+        d_is_traverser_node, d_traverser_features, d_slot_strategy,
+        d_child_values, d_n_children_done, d_n_children_expected,
+        d_propagated,
+        d_collected_features, d_collected_regrets, d_n_collected,
+        np.float32(initial_chips), n_active,
+    )
+    cuda.synchronize()
 
-def _propagate_value(
-    idx, value,
-    parent_idx, parent_action,
-    is_traverser_node, child_values, n_children_done,
-    n_children_expected, traverser_features, slot_strategy,
-    buffer, iteration, initial_chips,
-):
-    """Propagate terminal value up through the tree to compute regrets."""
-    current_idx = idx
-    current_value = value
+    # Copy collected samples to CPU and add to buffer.
+    n_collected = min(int(d_n_collected.copy_to_host()[0]), max_pool)
+    if n_collected > 0:
+        h_features = d_collected_features[:n_collected].copy_to_host()
+        h_regrets = d_collected_regrets[:n_collected].copy_to_host()
+        buffer.add_batch(h_features, iteration, h_regrets, n_collected)
 
-    while True:
-        pidx = parent_idx[current_idx]
-        if pidx < 0:
-            break  # Reached root.
-
-        if is_traverser_node[pidx]:
-            action = parent_action[current_idx]
-            child_values[pidx, action] = current_value
-            n_children_done[pidx] += 1
-
-            if n_children_done[pidx] >= n_children_expected[pidx]:
-                # All children done — compute regrets.
-                strategy = slot_strategy[pidx]
-                state_value = 0.0
-                for a in range(N_ACTIONS):
-                    state_value += strategy[a] * child_values[pidx, a]
-
-                regrets = np.zeros(N_ACTIONS, dtype=np.float32)
-                for a in range(N_ACTIONS):
-                    regrets[a] = child_values[pidx, a] - state_value
-
-                # Normalize regrets to [-1, 1] range for stable NN training.
-                regrets /= initial_chips
-                buffer.add(traverser_features[pidx], iteration, regrets)
-                current_value = state_value
-                current_idx = pidx
-            else:
-                break  # Still waiting for other children.
-        else:
-            # Opponent node — value passes through.
-            current_idx = pidx
+    final_next_free = int(d_next_free.copy_to_host()[0])
+    if n_traversals >= 1000:
+        print(f"    [pool] used {final_next_free}/{max_pool} slots "
+              f"({final_next_free/max_pool*100:.0f}%), "
+              f"{final_next_free/n_traversals:.0f} per trav, "
+              f"{n_collected} samples")
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +511,7 @@ class GPUDeepCFRTrainer:
         n_players: int = 6,
         buffer_capacity: int = 2_000_000,
         hidden_dim: int = 256,
+        n_layers: int = 2,
         batch_size: int = 2048,
         lr: float = 0.001,
         n_training_steps: int = 1000,
@@ -566,6 +522,7 @@ class GPUDeepCFRTrainer:
         self.n_players = n_players
         self.initial_chips = initial_chips
         self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
         self.batch_size = batch_size
         self.lr = lr
         self.n_training_steps = n_training_steps
@@ -582,26 +539,36 @@ class GPUDeepCFRTrainer:
             ReservoirBuffer(buffer_capacity) for _ in range(n_players)
         ]
         self.value_net = ValueNetwork(
-            N_FEATURES, hidden_dim, N_ACTIONS
+            N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers
         ).to(self.device)
         self.iteration = 0
 
     def run_iteration(self):
         """Run one CFR iteration with GPU traversal."""
+        import time as _time
         self.iteration += 1
         self.value_net.eval()
 
+        # Batch traversals to keep GPU pool memory manageable.
+        # Pool = TRAV_BATCH * 500 slots = 1M for batch=2000. ~2GB VRAM.
+        TRAV_BATCH = 2000
+        t0 = _time.perf_counter()
         for player_i in range(self.n_players):
-            gpu_traverse_for_player(
-                traverser=player_i,
-                n_traversals=self.n_traversals,
-                value_net=self.value_net,
-                buffer=self.buffers[player_i],
-                iteration=self.iteration,
-                n_players=self.n_players,
-                device=self.device,
-                initial_chips=self.initial_chips,
-            )
+            remaining = self.n_traversals
+            while remaining > 0:
+                chunk = min(remaining, TRAV_BATCH)
+                gpu_traverse_for_player(
+                    traverser=player_i,
+                    n_traversals=chunk,
+                    value_net=self.value_net,
+                    buffer=self.buffers[player_i],
+                    iteration=self.iteration,
+                    n_players=self.n_players,
+                    device=self.device,
+                    initial_chips=self.initial_chips,
+                )
+                remaining -= chunk
+        t1 = _time.perf_counter()
 
         # Combine buffers and retrain.
         combined = self._combine_buffers()
@@ -613,16 +580,18 @@ class GPUDeepCFRTrainer:
                 batch_size=self.batch_size,
                 lr=self.lr,
                 device=self.device,
+                n_layers=self.n_layers,
             )
+        t2 = _time.perf_counter()
+        print(f"  [profile] traverse={t1-t0:.1f}s  train={t2-t1:.1f}s")
 
     def _combine_buffers(self) -> ReservoirBuffer:
-        total_size = sum(len(b) for b in self.buffers)
-        combined = ReservoirBuffer(total_size)
-        for buf in self.buffers:
-            combined.merge(
-                buf.features, buf.iterations, buf.advantages, buf.size,
-            )
-        return combined
+        """Create a lightweight view that samples from all player buffers.
+
+        Instead of copying 10+GB into a new array, we use a MultiBuffer
+        wrapper that samples proportionally from each player's buffer.
+        """
+        return _MultiBufferView(self.buffers)
 
     def evaluate(self, n_games: int = 500) -> float:
         return gpu_evaluate_vs_random(
@@ -637,6 +606,7 @@ class GPUDeepCFRTrainer:
                 "iteration": self.iteration,
                 "n_players": self.n_players,
                 "hidden_dim": self.hidden_dim,
+                "n_layers": self.n_layers,
                 "initial_chips": self.initial_chips,
                 "buffer_sizes": [len(b) for b in self.buffers],
             },
@@ -650,6 +620,7 @@ class GPUDeepCFRTrainer:
         trainer = cls(
             n_players=checkpoint["n_players"],
             hidden_dim=checkpoint["hidden_dim"],
+            n_layers=checkpoint.get("n_layers", 2),
             initial_chips=checkpoint.get("initial_chips", 10000),
             device=device,
         )
