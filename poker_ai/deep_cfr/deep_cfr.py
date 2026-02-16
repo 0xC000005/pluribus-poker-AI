@@ -173,6 +173,7 @@ def train_value_network(
     batch_size: int = 2048,
     lr: float = 0.001,
     device: torch.device | None = None,
+    n_layers: int = 2,
 ) -> ValueNetwork:
     """Train a new value network from scratch on the buffer contents.
 
@@ -189,6 +190,8 @@ def train_value_network(
     batch_size : int
     lr : float
     device : torch.device
+    n_layers : int
+        Number of hidden layers in the value network.
 
     Returns
     -------
@@ -198,7 +201,7 @@ def train_value_network(
     if device is None:
         device = torch.device("cpu")
 
-    net = ValueNetwork(input_dim, hidden_dim, output_dim).to(device)
+    net = ValueNetwork(input_dim, hidden_dim, output_dim, n_layers=n_layers).to(device)
     optimizer = optim.Adam(net.parameters(), lr=lr)
 
     net.train()

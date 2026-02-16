@@ -13,8 +13,8 @@ from poker_ai.games.full_deck.state import N_FEATURES, N_ACTIONS
 class ValueNetwork(nn.Module):
     """MLP that maps game state features to per-action advantage values.
 
-    Architecture: input(N_FEATURES) -> 256 -> ReLU -> 256 -> ReLU -> N_ACTIONS
-    ~100K parameters, <400KB on disk.
+    Default architecture: input -> hidden -> ReLU -> ... -> output.
+    Supports configurable depth via n_layers parameter.
     """
 
     def __init__(
@@ -22,15 +22,14 @@ class ValueNetwork(nn.Module):
         input_dim: int = N_FEATURES,
         hidden_dim: int = 256,
         output_dim: int = N_ACTIONS,
+        n_layers: int = 2,
     ):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim),
-        )
+        layers = [nn.Linear(input_dim, hidden_dim), nn.ReLU()]
+        for _ in range(n_layers - 1):
+            layers.extend([nn.Linear(hidden_dim, hidden_dim), nn.ReLU()])
+        layers.append(nn.Linear(hidden_dim, output_dim))
+        self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
