@@ -84,6 +84,59 @@ class ReservoirBuffer:
             advs = advs.to(device)
         return feat, iters, advs
 
+    def add_batch(
+        self,
+        features_batch: np.ndarray,
+        iteration: int,
+        advantages_batch: np.ndarray,
+        count: int,
+    ):
+        """Add multiple samples to the buffer using vectorized reservoir sampling.
+
+        Parameters
+        ----------
+        features_batch : ndarray of shape (count, N_FEATURES)
+        iteration : int
+        advantages_batch : ndarray of shape (count, N_ACTIONS)
+        count : int
+            Number of valid samples in the arrays.
+        """
+        if count == 0:
+            return
+
+        # Phase 1: fill unfilled capacity with direct copy.
+        n_direct = 0
+        if self.size < self.capacity:
+            n_direct = min(count, self.capacity - self.size)
+            start = self.size
+            self.features[start:start + n_direct] = features_batch[:n_direct]
+            self.iterations[start:start + n_direct] = iteration
+            self.advantages[start:start + n_direct] = advantages_batch[:n_direct]
+            self.size += n_direct
+            self._n_seen += n_direct
+
+        # Phase 2: reservoir sampling for remaining samples.
+        n_reservoir = count - n_direct
+        if n_reservoir > 0:
+            # Generate all random indices at once.
+            # For sample i, n_seen will be self._n_seen + i + 1.
+            n_seen_base = self._n_seen
+            n_seen_values = n_seen_base + np.arange(1, n_reservoir + 1)
+            rand_idx = (np.random.random(n_reservoir) * n_seen_values).astype(np.int64)
+
+            # Keep only samples where rand_idx < capacity.
+            keep_mask = rand_idx < self.capacity
+            keep_positions = np.where(keep_mask)[0]
+
+            if len(keep_positions) > 0:
+                src_indices = n_direct + keep_positions
+                dst_indices = rand_idx[keep_positions]
+                self.features[dst_indices] = features_batch[src_indices]
+                self.iterations[dst_indices] = iteration
+                self.advantages[dst_indices] = advantages_batch[src_indices]
+
+            self._n_seen += n_reservoir
+
     def clear(self):
         """Reset the buffer."""
         self.size = 0
@@ -106,8 +159,38 @@ class ReservoirBuffer:
         size : int
             Number of valid samples in the arrays.
         """
-        for i in range(size):
-            self.add(features[i], int(iterations[i]), advantages[i])
+        if size == 0:
+            return
+
+        # Phase 1: fill unfilled capacity with direct copy.
+        n_direct = 0
+        if self.size < self.capacity:
+            n_direct = min(size, self.capacity - self.size)
+            start = self.size
+            self.features[start:start + n_direct] = features[:n_direct]
+            self.iterations[start:start + n_direct] = iterations[:n_direct]
+            self.advantages[start:start + n_direct] = advantages[:n_direct]
+            self.size += n_direct
+            self._n_seen += n_direct
+
+        # Phase 2: reservoir sampling for remaining samples.
+        n_reservoir = size - n_direct
+        if n_reservoir > 0:
+            n_seen_base = self._n_seen
+            n_seen_values = n_seen_base + np.arange(1, n_reservoir + 1)
+            rand_idx = (np.random.random(n_reservoir) * n_seen_values).astype(np.int64)
+
+            keep_mask = rand_idx < self.capacity
+            keep_positions = np.where(keep_mask)[0]
+
+            if len(keep_positions) > 0:
+                src_indices = n_direct + keep_positions
+                dst_indices = rand_idx[keep_positions]
+                self.features[dst_indices] = features[src_indices]
+                self.iterations[dst_indices] = iterations[src_indices]
+                self.advantages[dst_indices] = advantages[src_indices]
+
+            self._n_seen += n_reservoir
 
     def __len__(self) -> int:
         return self.size
