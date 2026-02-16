@@ -32,8 +32,13 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', type=str, default='', help='Resume from checkpoint')
-    parser.add_argument('--n-iterations', type=int, default=500)
-    parser.add_argument('--n-traversals', type=int, default=500)
+    parser.add_argument('--n-iterations', type=int, default=1000)
+    parser.add_argument('--n-traversals', type=int, default=10000)
+    parser.add_argument('--n-training-steps', type=int, default=4000)
+    parser.add_argument('--buffer-capacity', type=int, default=10_000_000)
+    parser.add_argument('--hidden-dim', type=int, default=256)
+    parser.add_argument('--n-layers', type=int, default=2)
+    parser.add_argument('--batch-size', type=int, default=4096)
     args = parser.parse_args()
 
     print("=" * 60)
@@ -45,17 +50,18 @@ def main():
     if args.resume:
         trainer = GPUDeepCFRTrainer.load(args.resume, device=device)
         trainer.n_traversals = args.n_traversals
-        trainer.n_training_steps = 300
+        trainer.n_training_steps = args.n_training_steps
         print(f"Resumed from iteration {trainer.iteration}")
     else:
         trainer = GPUDeepCFRTrainer(
             n_players=2,
             initial_chips=20000,       # 200BB to match Slumbot
             n_traversals=args.n_traversals,
-            n_training_steps=300,
-            buffer_capacity=2_000_000,
-            hidden_dim=256,
-            batch_size=2048,
+            n_training_steps=args.n_training_steps,
+            buffer_capacity=args.buffer_capacity,
+            hidden_dim=args.hidden_dim,
+            n_layers=args.n_layers,
+            batch_size=args.batch_size,
             lr=0.001,
             device=device,
         )
@@ -66,7 +72,9 @@ def main():
     save_every = 100
 
     print(f"Config: {n_iterations} iters, {trainer.n_traversals} trav, "
-          f"chips={trainer.initial_chips}, device={trainer.device}")
+          f"{trainer.n_training_steps} steps, batch={trainer.batch_size}, "
+          f"buf={args.buffer_capacity//1_000_000}M, chips={trainer.initial_chips}, "
+          f"device={trainer.device}")
     print()
 
     total_start = time.time()

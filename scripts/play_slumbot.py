@@ -16,7 +16,11 @@ import torch
 
 sys.stdout.reconfigure(line_buffering=True)
 
-from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES, RAISE_FRACTIONS
+# Inline constants to avoid importing poker_ai (which eagerly loads sklearn/scipy/etc).
+N_FEATURES = 126
+N_ACTIONS = 9
+RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
+
 from poker_ai.deep_cfr.networks import ValueNetwork
 
 # ---------------------------------------------------------------------------
@@ -43,6 +47,52 @@ def card_str_to_index(card_str: str) -> int:
     rank = _RANK_MAP[card_str[0]]
     suit = _SUIT_MAP[card_str[1]]
     return (rank - 2) * 4 + suit
+
+
+# ---------------------------------------------------------------------------
+# Simple hand strength heuristic (for gating all-in plays)
+# ---------------------------------------------------------------------------
+
+# Preflop hand tiers (0-51 card indices → tier).
+# Tier 1: top ~8% (AA-TT, AKs, AKo, AQs) — always allow all-in
+# Tier 2: top ~20% (99-66, AJs-ATs, KQs, AQo-AJo) — allow all-in only facing a raise
+# Tier 3: everything else — never allow preflop all-in
+
+def _card_rank(card_str):
+    """Return rank 2-14 from card string."""
+    return _RANK_MAP[card_str[0]]
+
+def _card_suit(card_str):
+    """Return suit char from card string."""
+    return card_str[1]
+
+def preflop_tier(hole_cards):
+    """Classify hole cards into strength tiers (1=premium, 2=good, 3=weak)."""
+    r1, r2 = _card_rank(hole_cards[0]), _card_rank(hole_cards[1])
+    suited = _card_suit(hole_cards[0]) == _card_suit(hole_cards[1])
+    hi, lo = max(r1, r2), min(r1, r2)
+
+    # Tier 1: AA-TT, AKs, AKo, AQs
+    if hi == lo and hi >= 10:  # Pairs TT+
+        return 1
+    if hi == 14 and lo == 13:  # AK suited or offsuit
+        return 1
+    if hi == 14 and lo == 12 and suited:  # AQs
+        return 1
+
+    # Tier 2: 99-66, AJs-ATs, KQs, KJs, AQo-AJo, KQo
+    if hi == lo and hi >= 6:  # Pairs 66-99
+        return 2
+    if hi == 14 and lo >= 10 and suited:  # ATs+
+        return 2
+    if hi == 14 and lo >= 11:  # AJo+
+        return 2
+    if hi == 13 and lo >= 11 and suited:  # KJs+
+        return 2
+    if hi == 13 and lo == 12:  # KQo
+        return 2
+
+    return 3
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +216,9 @@ def count_actions_in_street(action_str, street_idx):
     if street_idx >= len(streets):
         return 0, 0, 0
     s = streets[street_idx]
-    n_calls = s.count('c')
+    # In our training, checks (action 1 with no bet) are recorded as CALL.
+    # Slumbot uses 'k' for checks and 'c' for calls — count both.
+    n_calls = s.count('c') + s.count('k')
     n_folds = s.count('f')
     n_raises = s.count('b')
     return n_calls, n_raises, n_folds
@@ -449,15 +501,28 @@ def action_to_slumbot(action_idx, parsed, action_str, client_pos):
 # ---------------------------------------------------------------------------
 
 def regret_match(advantages, legal_mask):
-    """Convert advantages to strategy via regret matching."""
+    """Convert advantages to strategy via regret matching.
+
+    When all advantages are ≤ 0, use softmax over legal non-fold actions
+    instead of uniform (which would fold strong hands).
+    """
     strategy = np.maximum(advantages, 0) * legal_mask
     total = strategy.sum()
     if total > 0:
         strategy /= total
     else:
-        n_legal = legal_mask.sum()
-        if n_legal > 0:
-            strategy = legal_mask / n_legal
+        # All advantages negative — use softmax fallback on non-fold actions.
+        non_fold_mask = legal_mask.copy()
+        non_fold_mask[0] = 0  # exclude fold
+        if non_fold_mask.sum() > 0:
+            # Softmax over advantages for non-fold legal actions.
+            adv = advantages * non_fold_mask
+            adv = adv - adv[non_fold_mask > 0].max()  # numerical stability
+            exp_adv = np.exp(adv) * non_fold_mask
+            strategy = exp_adv / exp_adv.sum()
+        else:
+            # Only fold is legal (shouldn't happen).
+            strategy = legal_mask / legal_mask.sum()
     return strategy
 
 
@@ -494,7 +559,8 @@ ACTION_NAMES = [
 ]
 
 
-def play_hand(value_net, token, device, verbose=False):
+def play_hand(value_net, token, device, verbose=False, greedy=False,
+              no_allin=False):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token)
     token = r.get('token', token)
@@ -531,20 +597,28 @@ def play_hand(value_net, token, device, verbose=False):
         with torch.no_grad():
             advantages = value_net(feat_t).cpu().numpy()[0]
 
+        if no_allin:
+            legal_mask[8] = 0  # disable all-in
+
         strategy = regret_match(advantages, legal_mask)
 
-        # Sample action from strategy.
+        # Select action.
         legal_actions = np.where(legal_mask > 0)[0]
         if len(legal_actions) == 0:
             # Shouldn't happen, but check/call as fallback.
             incr = 'k' if parsed['last_bet_size'] == 0 else 'c'
         else:
-            probs = np.array([strategy[a] for a in legal_actions], dtype=np.float64)
-            if probs.sum() > 0:
-                probs /= probs.sum()
-                action_idx = int(np.random.choice(legal_actions, p=probs))
+            if greedy:
+                # Deterministic: pick legal action with highest advantage.
+                masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
+                action_idx = int(np.argmax(masked_adv))
             else:
-                action_idx = int(np.random.choice(legal_actions))
+                probs = np.array([strategy[a] for a in legal_actions], dtype=np.float64)
+                if probs.sum() > 0:
+                    probs /= probs.sum()
+                    action_idx = int(np.random.choice(legal_actions, p=probs))
+                else:
+                    action_idx = int(np.random.choice(legal_actions))
 
             incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
 
@@ -569,10 +643,15 @@ def main():
     parser.add_argument('--model', type=str, required=True, help='Model checkpoint path')
     parser.add_argument('--hands', type=int, default=200, help='Number of hands to play')
     parser.add_argument('--verbose', action='store_true', help='Print each hand')
+    parser.add_argument('--greedy', action='store_true', help='Deterministic (argmax) action selection')
+    parser.add_argument('--no-allin', action='store_true', help='Disable all-in action')
     args = parser.parse_args()
 
+    mode_str = "greedy" if args.greedy else "sampled"
+    if args.no_allin:
+        mode_str += "+no-allin"
     print("=" * 60)
-    print(f"Playing {args.hands} hands vs Slumbot")
+    print(f"Playing {args.hands} hands vs Slumbot ({mode_str})")
     print(f"Model: {args.model}")
     print("=" * 60)
 
@@ -580,10 +659,11 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     checkpoint = torch.load(args.model, map_location=device, weights_only=False)
     hidden_dim = checkpoint.get('hidden_dim', 256)
-    value_net = ValueNetwork(N_FEATURES, hidden_dim, N_ACTIONS).to(device)
+    n_layers = checkpoint.get('n_layers', 2)
+    value_net = ValueNetwork(N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers).to(device)
     value_net.load_state_dict(checkpoint['value_net'])
     value_net.eval()
-    print(f"Loaded model (iter {checkpoint['iteration']}, hidden={hidden_dim})")
+    print(f"Loaded model (iter {checkpoint['iteration']}, hidden={hidden_dim}, layers={n_layers})")
     print()
 
     token = None
@@ -594,7 +674,8 @@ def main():
         if args.verbose:
             print(f"Hand {h+1:3d}:", end="")
 
-        token, w = play_hand(value_net, token, device, verbose=args.verbose)
+        token, w = play_hand(value_net, token, device, verbose=args.verbose,
+                             greedy=args.greedy, no_allin=args.no_allin)
         total_winnings += w
         results.append(w)
 
