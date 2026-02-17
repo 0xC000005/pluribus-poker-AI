@@ -22,6 +22,8 @@ N_ACTIONS = 9
 RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 from poker_ai.deep_cfr.networks import ValueNetwork
+from solver import solve_street, solver_action_to_slumbot
+from range_tracker import RangeTracker, update_tracker_from_actions
 
 # ---------------------------------------------------------------------------
 # Slumbot API constants
@@ -47,52 +49,6 @@ def card_str_to_index(card_str: str) -> int:
     rank = _RANK_MAP[card_str[0]]
     suit = _SUIT_MAP[card_str[1]]
     return (rank - 2) * 4 + suit
-
-
-# ---------------------------------------------------------------------------
-# Simple hand strength heuristic (for gating all-in plays)
-# ---------------------------------------------------------------------------
-
-# Preflop hand tiers (0-51 card indices → tier).
-# Tier 1: top ~8% (AA-TT, AKs, AKo, AQs) — always allow all-in
-# Tier 2: top ~20% (99-66, AJs-ATs, KQs, AQo-AJo) — allow all-in only facing a raise
-# Tier 3: everything else — never allow preflop all-in
-
-def _card_rank(card_str):
-    """Return rank 2-14 from card string."""
-    return _RANK_MAP[card_str[0]]
-
-def _card_suit(card_str):
-    """Return suit char from card string."""
-    return card_str[1]
-
-def preflop_tier(hole_cards):
-    """Classify hole cards into strength tiers (1=premium, 2=good, 3=weak)."""
-    r1, r2 = _card_rank(hole_cards[0]), _card_rank(hole_cards[1])
-    suited = _card_suit(hole_cards[0]) == _card_suit(hole_cards[1])
-    hi, lo = max(r1, r2), min(r1, r2)
-
-    # Tier 1: AA-TT, AKs, AKo, AQs
-    if hi == lo and hi >= 10:  # Pairs TT+
-        return 1
-    if hi == 14 and lo == 13:  # AK suited or offsuit
-        return 1
-    if hi == 14 and lo == 12 and suited:  # AQs
-        return 1
-
-    # Tier 2: 99-66, AJs-ATs, KQs, KJs, AQo-AJo, KQo
-    if hi == lo and hi >= 6:  # Pairs 66-99
-        return 2
-    if hi == 14 and lo >= 10 and suited:  # ATs+
-        return 2
-    if hi == 14 and lo >= 11:  # AJo+
-        return 2
-    if hi == 13 and lo >= 11 and suited:  # KJs+
-        return 2
-    if hi == 13 and lo == 12:  # KQo
-        return 2
-
-    return 3
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +328,28 @@ def _compute_bets(action_str, client_pos):
     return our_total, opp_total
 
 
+def _compute_bets_before_street(action_str, client_pos, target_street):
+    """Compute total bets for each player up to (not including) target_street.
+
+    Returns (our_total_bet, opp_total_bet) at the start of target_street.
+    """
+    # Process action_str only up to the target_street boundary.
+    streets = action_str.split('/')
+    # Rejoin only streets before target_street.
+    pre_streets = streets[:target_street]
+    if not pre_streets:
+        # No actions before this street.
+        return (BIG_BLIND if client_pos == 0 else SMALL_BLIND,
+                BIG_BLIND if client_pos == 1 else SMALL_BLIND)
+    pre_action = '/'.join(pre_streets)
+    return _compute_bets(pre_action, client_pos)
+
+
+SOLVER_ACTION_NAMES = {
+    0: 'fold', 1: 'chk/call', 2: '0.5xpot', 3: '1xpot', 4: '2xpot', 5: 'all-in',
+}
+
+
 # ---------------------------------------------------------------------------
 # Action translation: our discrete action -> Slumbot format
 # ---------------------------------------------------------------------------
@@ -391,29 +369,25 @@ def get_legal_mask_from_parsed(parsed, action_str, client_pos):
     mask[1] = 1.0  # call or check
 
     # Raise actions (2-7) and all-in (8).
+    # Must match training legal mask logic exactly (fast_state.py / game_kernels.py):
+    #   raise_amount = int(frac * pot_total) + to_call
+    #   legal if raise_amount >= BIG_BLIND and raise_amount <= player_chips
     n_raises = count_raises_current_street(action_str)
     if n_raises < 3 and our_chips > 0:
-        street_last_bet_to = parsed['street_last_bet_to']
         streets = action_str.split('/')
         current_street = streets[-1] if streets else ''
         our_street_bet = _get_our_street_bet(current_street, client_pos, parsed['st'])
-
+        street_last_bet_to = parsed['street_last_bet_to']
         to_call = street_last_bet_to - our_street_bet
-        # Min raise-by: at least last_bet_size and at least BIG_BLIND.
-        min_raise_by = max(parsed['last_bet_size'], BIG_BLIND)
-        min_raise_to = street_last_bet_to + min_raise_by
 
         for fi, frac in enumerate(RAISE_FRACTIONS):
-            raise_by = int(frac * pot_total)
-            new_street_bet = street_last_bet_to + raise_by
-            # Clamp up to min raise.
-            new_street_bet = max(new_street_bet, min_raise_to)
-            raise_total = new_street_bet - our_street_bet  # chips from our stack
-            if raise_total <= our_chips and new_street_bet > street_last_bet_to:
+            # Match training: raise_amount = frac * pot + to_call (total chips from stack)
+            raise_amount = int(frac * pot_total) + to_call
+            if raise_amount >= BIG_BLIND and raise_amount <= our_chips:
                 mask[2 + fi] = 1.0
 
-        # All-in always legal if we have chips beyond calling.
-        if our_chips > to_call:
+        # All-in always legal if we have chips.
+        if our_chips > 0:
             mask[8] = 1.0
 
     # If no fold possible (no outstanding bet), remove fold.
@@ -480,6 +454,9 @@ def action_to_slumbot(action_idx, parsed, action_str, client_pos):
     if action_idx == 8:
         # All-in: bet everything.
         new_street_bet = our_street_bet + our_chips
+        # If our all-in doesn't exceed the current bet, just call (call-all-in).
+        if new_street_bet <= street_last_bet_to:
+            return 'c'
         return f'b{new_street_bet}'
 
     # Fractional raise (actions 2-7).
@@ -493,6 +470,9 @@ def action_to_slumbot(action_idx, parsed, action_str, client_pos):
     # Cap at our total chips.
     max_street_bet = our_street_bet + our_chips
     new_street_bet = min(new_street_bet, max_street_bet)
+    # If capped bet doesn't exceed current bet, just call.
+    if new_street_bet <= street_last_bet_to:
+        return 'c'
     return f'b{new_street_bet}'
 
 
@@ -503,27 +483,14 @@ def action_to_slumbot(action_idx, parsed, action_str, client_pos):
 def regret_match(advantages, legal_mask):
     """Convert advantages to strategy via regret matching.
 
-    When all advantages are ≤ 0, use softmax over legal non-fold actions
-    instead of uniform (which would fold strong hands).
+    Must match the training regret_match (deep_cfr.py) exactly:
+    positive advantages normalized, else uniform over legal actions.
     """
-    strategy = np.maximum(advantages, 0) * legal_mask
-    total = strategy.sum()
+    positive = np.maximum(advantages, 0) * legal_mask
+    total = positive.sum()
     if total > 0:
-        strategy /= total
-    else:
-        # All advantages negative — use softmax fallback on non-fold actions.
-        non_fold_mask = legal_mask.copy()
-        non_fold_mask[0] = 0  # exclude fold
-        if non_fold_mask.sum() > 0:
-            # Softmax over advantages for non-fold legal actions.
-            adv = advantages * non_fold_mask
-            adv = adv - adv[non_fold_mask > 0].max()  # numerical stability
-            exp_adv = np.exp(adv) * non_fold_mask
-            strategy = exp_adv / exp_adv.sum()
-        else:
-            # Only fold is legal (shouldn't happen).
-            strategy = legal_mask / legal_mask.sum()
-    return strategy
+        return positive / total
+    return legal_mask / legal_mask.sum()
 
 
 # ---------------------------------------------------------------------------
@@ -543,8 +510,14 @@ def api_act(token, incr):
     data = {'token': token, 'incr': incr}
     r = requests.post(f'https://{HOST}/slumbot/api/act', json=data).json()
     if 'error_msg' in r:
-        print(f"API error on '{incr}': {r['error_msg']}")
-        sys.exit(1)
+        print(f"\n  API error on '{incr}': {r['error_msg']}")
+        # Try folding to recover the hand gracefully.
+        r2 = requests.post(f'https://{HOST}/slumbot/api/act',
+                           json={'token': token, 'incr': 'f'}).json()
+        if 'error_msg' not in r2:
+            return r2
+        # If fold also fails, return the original error with winnings=0.
+        return {'token': token, 'winnings': 0}
     return r
 
 
@@ -559,8 +532,97 @@ ACTION_NAMES = [
 ]
 
 
+def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
+                         value_net, device, greedy, no_allin, verbose):
+    """Select action using trained base policy (for pre-river streets)."""
+    features = build_features(hole_cards, board, action_str, client_pos, parsed)
+    legal_mask = get_legal_mask_from_parsed(parsed, action_str, client_pos)
+
+    feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
+    with torch.no_grad():
+        advantages = value_net(feat_t).cpu().numpy()[0]
+
+    if no_allin:
+        legal_mask[8] = 0
+
+    strategy = regret_match(advantages, legal_mask)
+
+    legal_actions = np.where(legal_mask > 0)[0]
+    if len(legal_actions) == 0:
+        return 'k' if parsed['last_bet_size'] == 0 else 'c'
+
+    if greedy:
+        masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
+        action_idx = int(np.argmax(masked_adv))
+    else:
+        probs = np.array([strategy[a] for a in legal_actions], dtype=np.float64)
+        if probs.sum() > 0:
+            probs /= probs.sum()
+            action_idx = int(np.random.choice(legal_actions, p=probs))
+        else:
+            action_idx = int(np.random.choice(legal_actions))
+
+    incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
+    if verbose:
+        print(f" [{ACTION_NAMES[action_idx]}→{incr}]", end="", flush=True)
+    return incr
+
+
+def _solver_action(hole_cards, board, action_str, client_pos, parsed,
+                    verbose, tracker=None):
+    """Select action using real-time CFR+ solver (turn or river)."""
+    import itertools
+
+    st = parsed['st']  # 2=turn, 3=river
+    n_board = 4 if st == 2 else 5
+
+    # Compute game state at start of this street.
+    our_bet_pre, opp_bet_pre = _compute_bets_before_street(
+        action_str, client_pos, target_street=st)
+    pot = our_bet_pre + opp_bet_pre
+    hero_stack = STACK_SIZE - our_bet_pre
+    villain_stack = STACK_SIZE - opp_bet_pre
+    hero_first = (client_pos == 0)
+
+    our_cards_idx = [card_str_to_index(c) for c in hole_cards]
+    board_idx = [card_str_to_index(c) for c in board[:n_board]]
+
+    # Extract current street actions.
+    streets = action_str.split('/')
+    street_str = streets[st] if len(streets) > st else ''
+
+    # Get tracked villain range (no pruning — solver uses full hand set).
+    villain_range = None
+    if tracker is not None:
+        remaining = sorted(set(range(52)) - set(board_idx))
+        all_hands = list(itertools.combinations(remaining, 2))
+        all_hand_to_idx = {h: i for i, h in enumerate(all_hands)}
+        _, villain_range = tracker.get_solver_ranges(all_hands, all_hand_to_idx)
+
+    solver_action, strategy, solver, node = solve_street(
+        our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
+        action_str=street_str, n_iterations=100,
+        villain_range=villain_range,
+    )
+
+    # Convert solver action to Slumbot format.
+    if node is None or node.is_terminal:
+        incr = 'k' if parsed['last_bet_size'] == 0 else 'c'
+    else:
+        incr = solver_action_to_slumbot(solver_action, node, solver, parsed)
+
+    if verbose:
+        strat_str = ' '.join(f'{SOLVER_ACTION_NAMES[a]}:{p:.0%}'
+                             for a, p in sorted(strategy.items()))
+        label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
+        print(f" [{label}:{SOLVER_ACTION_NAMES[solver_action]}>{incr} ({strat_str})]",
+              end="", flush=True)
+
+    return incr
+
+
 def play_hand(value_net, token, device, verbose=False, greedy=False,
-              no_allin=False):
+              no_allin=False, use_solver=True):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token)
     token = r.get('token', token)
@@ -577,6 +639,12 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
             print(f" | bot folded preflop | {r['winnings']:+d}")
         return token, r['winnings']
 
+    # Create range tracker for this hand.
+    tracker = None
+    if use_solver:
+        our_cards_idx = [card_str_to_index(c) for c in hole_cards]
+        tracker = RangeTracker(our_cards_idx, value_net, device)
+
     while r.get('winnings') is None:
         action_str = r.get('action', '')
         board = r.get('board', [])
@@ -589,41 +657,23 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
             token = r.get('token', token)
             break
 
-        # Build features and get strategy from NN.
-        features = build_features(hole_cards, board, action_str, client_pos, parsed)
-        legal_mask = get_legal_mask_from_parsed(parsed, action_str, client_pos)
+        # Update range tracker with all actions so far.
+        if tracker is not None:
+            board_idx = [card_str_to_index(c) for c in board]
+            update_tracker_from_actions(tracker, action_str, client_pos, board_idx)
 
-        feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
-        with torch.no_grad():
-            advantages = value_net(feat_t).cpu().numpy()[0]
-
-        if no_allin:
-            legal_mask[8] = 0  # disable all-in
-
-        strategy = regret_match(advantages, legal_mask)
-
-        # Select action.
-        legal_actions = np.where(legal_mask > 0)[0]
-        if len(legal_actions) == 0:
-            # Shouldn't happen, but check/call as fallback.
-            incr = 'k' if parsed['last_bet_size'] == 0 else 'c'
+        # ----- Turn/River: use real-time CFR+ solver -----
+        if parsed['st'] >= 2 and use_solver:
+            incr = _solver_action(
+                hole_cards, board, action_str, client_pos, parsed, verbose,
+                tracker=tracker,
+            )
         else:
-            if greedy:
-                # Deterministic: pick legal action with highest advantage.
-                masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
-                action_idx = int(np.argmax(masked_adv))
-            else:
-                probs = np.array([strategy[a] for a in legal_actions], dtype=np.float64)
-                if probs.sum() > 0:
-                    probs /= probs.sum()
-                    action_idx = int(np.random.choice(legal_actions, p=probs))
-                else:
-                    action_idx = int(np.random.choice(legal_actions))
-
-            incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
-
-            if verbose:
-                print(f" [{ACTION_NAMES[action_idx]}→{incr}]", end="", flush=True)
+            # ----- Preflop/Flop: use base policy (trained model) -----
+            incr = _base_policy_action(
+                hole_cards, board, action_str, client_pos, parsed,
+                value_net, device, greedy, no_allin, verbose,
+            )
 
         r = api_act(token, incr)
         token = r.get('token', token)
@@ -645,11 +695,14 @@ def main():
     parser.add_argument('--verbose', action='store_true', help='Print each hand')
     parser.add_argument('--greedy', action='store_true', help='Deterministic (argmax) action selection')
     parser.add_argument('--no-allin', action='store_true', help='Disable all-in action')
+    parser.add_argument('--no-solver', action='store_true', help='Disable river CFR solver')
     args = parser.parse_args()
 
     mode_str = "greedy" if args.greedy else "sampled"
     if args.no_allin:
         mode_str += "+no-allin"
+    if not args.no_solver:
+        mode_str += "+turn+river-solver"
     print("=" * 60)
     print(f"Playing {args.hands} hands vs Slumbot ({mode_str})")
     print(f"Model: {args.model}")
@@ -675,7 +728,8 @@ def main():
             print(f"Hand {h+1:3d}:", end="")
 
         token, w = play_hand(value_net, token, device, verbose=args.verbose,
-                             greedy=args.greedy, no_allin=args.no_allin)
+                             greedy=args.greedy, no_allin=args.no_allin,
+                             use_solver=not args.no_solver)
         total_winnings += w
         results.append(w)
 
