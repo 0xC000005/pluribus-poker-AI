@@ -346,7 +346,9 @@ def _compute_bets_before_street(action_str, client_pos, target_street):
 
 
 SOLVER_ACTION_NAMES = {
-    0: 'fold', 1: 'chk/call', 2: '0.5xpot', 3: '1xpot', 4: '2xpot', 5: 'all-in',
+    0: 'fold', 1: 'chk/call',
+    2: '0.25xpot', 3: '0.5xpot', 4: '0.75xpot', 5: '1.0xpot',
+    6: '1.5xpot', 7: '2.0xpot', 8: 'all-in',
 }
 
 
@@ -531,6 +533,9 @@ ACTION_NAMES = [
     "all-in",
 ]
 
+# Simple cache for subgame solves keyed by (street, board, action_str, stacks, hero_first).
+_SOLVER_CACHE = {}
+
 
 def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
                          value_net, device, greedy, no_allin, verbose):
@@ -599,9 +604,42 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         all_hand_to_idx = {h: i for i, h in enumerate(all_hands)}
         _, villain_range = tracker.get_solver_ranges(all_hands, all_hand_to_idx)
 
+    # Cache key: street, board, action string for this street, stacks, hero_first.
+    cache_key = (
+        st,
+        tuple(board_idx),
+        street_str,
+        int(pot), int(hero_stack), int(villain_stack),
+        bool(hero_first),
+    )
+
+    incr_cached = _SOLVER_CACHE.get(cache_key)
+    if incr_cached is not None:
+        incr = incr_cached
+        if verbose:
+            label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
+            print(f" [{label}:CACHED>{incr}]", end="", flush=True)
+        return incr
+
+    # Adaptive iterations: increase when facing large to_call or deep stacks.
+    streets = action_str.split('/')
+    current_street = streets[-1] if streets else ''
+    our_street_bet = _get_our_street_bet(current_street, client_pos, parsed['st'])
+    to_call = parsed['street_last_bet_to'] - our_street_bet
+    iters = 150
+    # Scale iterations by pressure and depth.
+    if to_call > 0:
+        pressure = to_call / max(pot, 1)
+        if pressure >= 0.25:
+            iters = 250
+        if pressure >= 0.5:
+            iters = 350
+    if max(hero_stack, villain_stack) >= 10000:
+        iters = max(iters, 250)
+
     solver_action, strategy, solver, node = solve_street(
         our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
-        action_str=street_str, n_iterations=100,
+        action_str=street_str, n_iterations=iters,
         villain_range=villain_range,
     )
 
@@ -618,6 +656,8 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         print(f" [{label}:{SOLVER_ACTION_NAMES[solver_action]}>{incr} ({strat_str})]",
               end="", flush=True)
 
+    # Cache result for identical future states in this session.
+    _SOLVER_CACHE[cache_key] = incr
     return incr
 
 

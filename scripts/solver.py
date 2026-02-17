@@ -1,12 +1,9 @@
 """Unified range-vs-range CFR+ solver for heads-up no-limit hold'em.
 
 Handles both turn (equity-based leaf evaluation) and river (exact showdown).
-Uses a subset of the training action abstraction for consistency:
-  0=fold, 1=check/call, 2=0.5x pot, 3=1.0x pot, 4=2.0x pot, 5=all-in
-
-These bet fractions (0.5, 1.0, 2.0) are a subset of the training fractions
-(0.25, 0.5, 0.75, 1.0, 1.5, 2.0), ensuring the solver explores actions the
-neural net was trained on — no inconsistent abstractions.
+Uses the same 9-action abstraction as training for consistency:
+  0=fold, 1=check/call, 2=0.25x pot, 3=0.5x pot, 4=0.75x pot,
+  5=1.0x pot, 6=1.5x pot, 7=2.0x pot, 8=all-in
 """
 import itertools
 from dataclasses import dataclass, field
@@ -18,9 +15,9 @@ from poker_ai.poker.evaluation.evaluator import Evaluator
 from fast_cfr import build_tree_arrays, solve_cfr, get_average_strategy
 
 BIG_BLIND = 100
-# Subset of training RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0).
-BET_FRACS = {2: 0.5, 3: 1.0, 4: 2.0}
-ALLIN_ACTION = 5
+# Use full training RAISE_FRACTIONS mapping for action indices 2..7.
+BET_FRACS = {2: 0.25, 3: 0.5, 4: 0.75, 5: 1.0, 6: 1.5, 7: 2.0}
+ALLIN_ACTION = 8
 
 _EVALUATOR = Evaluator()
 _SUIT_CHARS = ['c', 'd', 'h', 's']

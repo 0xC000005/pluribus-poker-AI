@@ -19,6 +19,7 @@ Usage:
     hero_range = tracker.hero_range
 """
 import itertools
+import logging
 
 import numpy as np
 import torch
@@ -31,6 +32,8 @@ SMALL_BLIND = 50
 BIG_BLIND = 100
 STACK_SIZE = 20000
 NUM_STREETS = 4
+
+logger = logging.getLogger("poker_ai.slumbot.mapping")
 
 
 def regret_match(advantages, legal_mask):
@@ -325,18 +328,14 @@ def _parse_action(action):
 
 def map_slumbot_action_to_idx(action_char, bet_to_amount, action_str_before,
                                acting_pos, parsed_before):
-    """Map an observed Slumbot action to the closest discrete action index.
+    """Map an observed Slumbot action to weighted discrete action indices.
 
-    action_char: 'f', 'k', 'c', or 'b'
-    bet_to_amount: for 'b', the bet-to amount on this street (int)
-    action_str_before: action string BEFORE this action was taken
-    acting_pos: Slumbot position (0=BB, 1=SB) of the player who acted
-    parsed_before: parse_action(action_str_before)
+    Returns list of (action_idx, weight) tuples.
     """
     if action_char == 'f':
-        return 0
+        return [(0, 1.0)]
     if action_char in ('k', 'c'):
-        return 1
+        return [(1, 1.0)]
 
     # Bet action: compute pot fraction.
     our_bet, opp_bet = _compute_bets(action_str_before, acting_pos)
@@ -352,13 +351,39 @@ def map_slumbot_action_to_idx(action_char, bet_to_amount, action_str_before,
     chips_left = STACK_SIZE - our_bet
     bet_from_stack = bet_to_amount - our_sb
     if bet_from_stack >= chips_left * 0.95:  # near all-in
-        return 8
+        return [(8, 1.0)]
 
-    # Map to closest raise fraction.
+    # Map to closest raise fraction (Soft Mapping).
+    if pot <= 0:
+        logger.warning("map_slumbot_action_to_idx: zero pot before bet mapping; defaulting to smallest raise")
     frac = raise_by / pot if pot > 0 else 0
     fracs = list(RAISE_FRACTIONS)
-    best = min(range(len(fracs)), key=lambda i: abs(fracs[i] - frac))
-    return best + 2
+
+    if frac <= fracs[0]:
+        if frac < fracs[0] - 0.05:
+            logger.debug(f"Bet fraction {frac:.3f} below min; mapping to 0.25x")
+        return [(2, 1.0)]
+    if frac >= fracs[-1]:
+        if frac > fracs[-1] + 0.25:
+            logger.debug(f"Bet fraction {frac:.3f} above max; mapping to 2.0x")
+        return [(2 + len(fracs) - 1, 1.0)]
+
+    for i in range(len(fracs) - 1):
+        low, high = fracs[i], fracs[i+1]
+        if low <= frac <= high:
+            dist = high - low
+            if dist < 1e-9:
+                return [(2 + i, 1.0)]
+            w_high = (frac - low) / dist
+            w_low = 1.0 - w_high
+            if min(w_low, w_high) < 0.2:
+                logger.debug(
+                    f"Soft-mapping bet fraction {frac:.3f} between {low:.2f} and {high:.2f}: "
+                    f"weights=({w_low:.2f},{w_high:.2f})"
+                )
+            return [(2 + i, w_low), (2 + i + 1, w_high)]
+
+    return [(2, 1.0)]
 
 
 # ---------------------------------------------------------------------------
@@ -480,20 +505,23 @@ class RangeTracker:
         if hs > 0:
             self.hero_range /= hs
 
-    def update_opponent_action(self, action_idx, action_str_before,
+    def update_opponent_action(self, action_data, action_str_before,
                                 opp_pos, parsed_before, board_idx):
         """Opponent took action_idx. Narrow their range via Bayes rule.
 
         P(hand | action) ∝ P(action | hand) × P(hand)
         where P(action | hand) = blueprint_strategy(hand, state)[action_idx]
 
-        Uses epsilon-greedy floor to prevent catastrophic zeroing:
-        the blueprint might assign 0 to an action for a hand that should
-        be possible (e.g., AA never raises 0.75x in a weak blueprint).
+        action_data: list of (idx, weight) from map_slumbot_action_to_idx.
         """
         strategies = self._batch_blueprint(
             self.hands, board_idx, action_str_before, opp_pos, parsed_before)
-        likelihood = strategies[:, action_idx]
+
+        # Weighted likelihood
+        likelihood = np.zeros(self.n, dtype=np.float32)
+        for idx, weight in action_data:
+            likelihood += strategies[:, idx] * weight
+
         # Floor: mix with uniform to prevent exact zeros.
         eps = 0.01
         likelihood = (1.0 - eps) * likelihood + eps * (1.0 / N_ACTIONS)
@@ -502,7 +530,7 @@ class RangeTracker:
         if s > 0:
             self.opponent_range /= s
 
-    def update_hero_action(self, action_idx, action_str_before,
+    def update_hero_action(self, action_data, action_str_before,
                             hero_pos, parsed_before, board_idx):
         """We took action_idx. Update opponent's belief about our range.
 
@@ -510,7 +538,11 @@ class RangeTracker:
         """
         strategies = self._batch_blueprint(
             self.hands, board_idx, action_str_before, hero_pos, parsed_before)
-        likelihood = strategies[:, action_idx]
+
+        likelihood = np.zeros(self.n, dtype=np.float32)
+        for idx, weight in action_data:
+            likelihood += strategies[:, idx] * weight
+
         eps = 0.01
         likelihood = (1.0 - eps) * likelihood + eps * (1.0 / N_ACTIONS)
         self.hero_range *= likelihood

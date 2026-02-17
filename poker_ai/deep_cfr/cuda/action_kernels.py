@@ -395,3 +395,47 @@ def propagate_kernel(
                 break
         else:
             current_idx = pidx
+
+
+# ---------------------------------------------------------------------------
+# Kernel: reset traversal bookkeeping arrays
+# ---------------------------------------------------------------------------
+
+@cuda.jit
+def reset_traversal_state_kernel(
+    parent_idx,          # (max_pool,) int32
+    parent_action,       # (max_pool,) int8
+    is_traverser_node,   # (max_pool,) int8
+    n_children_done,     # (max_pool,) int32
+    n_children_expected, # (max_pool,) int32
+    propagated,          # (max_pool,) int8
+    n_slots,             # int32
+):
+    """Reset traversal bookkeeping arrays for [0, n_slots)."""
+    gid = cuda.grid(1)
+    if gid >= n_slots:
+        return
+    parent_idx[gid] = int32(-1)
+    parent_action[gid] = int8(-1)
+    is_traverser_node[gid] = int8(0)
+    n_children_done[gid] = int32(0)
+    n_children_expected[gid] = int32(0)
+    propagated[gid] = int8(0)
+
+
+# ---------------------------------------------------------------------------
+# Kernel: count non-terminal slots
+# ---------------------------------------------------------------------------
+
+@cuda.jit
+def count_nonterminal_kernel(
+    stages,     # (N,) int8
+    out_count,  # (1,) int32
+    n_slots,    # int32
+):
+    """Count slots where stage < 4 using one atomic counter."""
+    gid = cuda.grid(1)
+    if gid >= n_slots:
+        return
+    if stages[gid] < int8(4):
+        cuda.atomic.add(out_count, 0, int32(1))

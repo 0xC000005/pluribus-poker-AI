@@ -43,29 +43,19 @@ pip install .
 
 ## Command Line Interface (CLI)
 
-We have a CLI that will be installed when you pip install the package. To get help on any option, just add the `--help` flag when invoking the CLI.
+The CLI is installed with the package. For help, add `--help` to any command.
 
-How to get a list of commands that can be run:
+List available commands:
 ```bash
 poker_ai --help
-``` 
-
-You will need to produce some lookup tables that cluster the various information sets. Here is more information on that:
-```bash
-poker_ai cluster --help
 ```
 
-How to get information on training an agent:
+Recommended training path (Deep CFR, full deck):
 ```bash
-poker_ai train start --help
+poker_ai train-fast-deep-cfr --help
 ```
 
-How to get information on resuming training:
-```bash
-poker_ai train resume --help
-```
-
-Once you have an agent, and want to play against it, you can do the following:
+Legacy (tabular/short-deck) is retained for reference but not recommended for new work. To play against a trained agent:
 ```bash
 poker_ai play --help
 ```

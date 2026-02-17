@@ -10,6 +10,7 @@ Reference: Brown et al., "Deep Counterfactual Regret Minimization" (2019)
 from __future__ import annotations
 
 import logging
+import os
 from typing import List
 
 import numpy as np
@@ -140,7 +141,14 @@ def traverse(
             regrets[idx] = action_values[action] - state_value
 
         # Normalize regrets to [-1, 1] range for stable NN training.
-        regrets /= 10000.0
+        # Use initial stack size for scale (consistent with fast_traverse).
+        try:
+            init_chips = float(getattr(state, "_initial_n_chips", 10000))
+        except Exception:
+            init_chips = 10000.0
+        if init_chips <= 0:
+            init_chips = 1.0
+        regrets /= init_chips
         # Add sample to buffer.
         buffer.add(features, iteration, regrets)
         return state_value
@@ -201,8 +209,46 @@ def train_value_network(
     if device is None:
         device = torch.device("cpu")
 
-    net = ValueNetwork(input_dim, hidden_dim, output_dim, n_layers=n_layers).to(device)
-    optimizer = optim.Adam(net.parameters(), lr=lr)
+    if device.type == "cuda":
+        # Allow tensor cores to accelerate dense matmuls on modern NVIDIA GPUs.
+        torch.backends.cuda.matmul.allow_tf32 = True
+        if hasattr(torch.backends, "cudnn"):
+            torch.backends.cudnn.allow_tf32 = True
+        torch.set_float32_matmul_precision("high")
+
+    net = ValueNetwork(
+        input_dim, hidden_dim, output_dim, n_layers=n_layers
+    ).to(device)
+
+    use_cuda = device.type == "cuda"
+    use_amp = use_cuda
+    amp_dtype = (
+        torch.bfloat16 if (use_cuda and torch.cuda.is_bf16_supported())
+        else torch.float16
+    )
+
+    # Fused optimizer is substantially faster on CUDA for many small steps.
+    if use_cuda:
+        try:
+            optimizer = optim.AdamW(
+                net.parameters(), lr=lr, weight_decay=0.0, fused=True
+            )
+        except (TypeError, RuntimeError):
+            optimizer = optim.Adam(net.parameters(), lr=lr)
+    else:
+        optimizer = optim.Adam(net.parameters(), lr=lr)
+
+    # Compile the model graph when available; this reduces Python/kernel
+    # launch overhead in the per-step training loop.
+    compile_enabled = os.getenv("POKER_AI_COMPILE_VALUE_NET", "0").lower() in {
+        "1", "true", "yes", "on",
+    }
+    if use_cuda and compile_enabled and hasattr(torch, "compile"):
+        try:
+            net = torch.compile(net, mode="reduce-overhead")
+        except Exception:
+            logger.warning("torch.compile unavailable for value net; using eager mode.")
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     net.train()
     total_loss = 0.0
@@ -215,15 +261,34 @@ def train_value_network(
         weights = iterations / iterations.max().clamp(min=1)
         weights = weights.unsqueeze(1)  # (batch, 1)
 
-        predictions = net(features)
-        # Weighted MSE loss.
-        loss = (weights * (predictions - advantages) ** 2).mean()
+        optimizer.zero_grad(set_to_none=True)
+        with torch.autocast(
+            device_type=device.type, dtype=amp_dtype, enabled=use_amp
+        ):
+            adv_pred, pol_logits = net.forward_with_policy(features)
+            # Advantage loss (MSE on regrets).
+            loss_adv = (weights * (adv_pred - advantages) ** 2).mean()
 
-        optimizer.zero_grad()
-        loss.backward()
-        # Gradient clipping to prevent NaN explosion.
-        nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
-        optimizer.step()
+            # Policy loss: target = regret-matching(advantages_target) without mask.
+            # Convert target regrets to non-negative and normalize per sample.
+            with torch.no_grad():
+                pos = torch.clamp(advantages, min=0.0)
+                denom = pos.sum(dim=1, keepdim=True).clamp(min=1e-8)
+                policy_target = pos / denom
+            logp = torch.log_softmax(pol_logits, dim=1)
+            loss_pol = -(weights * (policy_target * logp).sum(dim=1)).mean()
+            loss = loss_adv + 0.1 * loss_pol
+
+        if use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
+            optimizer.step()
 
         total_loss += loss.item()
 
