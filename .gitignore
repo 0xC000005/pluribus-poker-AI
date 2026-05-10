@@ -1,8 +1,14 @@
 research/
+!poker_ai/research/
+!poker_ai/research/*.py
 tags
 tags/
 *.pkl
 *.gz
+
+# Autoresearch local state (keep only the directory note tracked)
+autoresearch-session/*
+!autoresearch-session/README.md
 
 # Claude Code
 CLAUDE.md

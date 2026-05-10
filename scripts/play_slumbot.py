@@ -728,6 +728,31 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
     return token, w
 
 
+def _remap_legacy_state_dict(state: dict) -> dict:
+    """Remap legacy `net.<i>.{weight,bias}` keys to the current layout.
+
+    Older checkpoints stored ValueNetwork as a plain nn.Sequential named
+    `net` (trunk layers interleaved with the final output head). The current
+    architecture splits these into `trunk` + `adv_head`.
+    """
+    if not any(k.startswith('net.') for k in state):
+        return state
+    linear_indices = sorted({int(k.split('.')[1]) for k in state if k.startswith('net.')})
+    *trunk_idxs, head_idx = linear_indices
+    remapped = {}
+    for k, v in state.items():
+        if not k.startswith('net.'):
+            remapped[k] = v
+            continue
+        _, idx, param = k.split('.', 2)
+        idx = int(idx)
+        if idx == head_idx:
+            remapped[f'adv_head.{param}'] = v
+        else:
+            remapped[f'trunk.{idx}.{param}'] = v
+    return remapped
+
+
 def main():
     parser = argparse.ArgumentParser(description='Play against Slumbot')
     parser.add_argument('--model', type=str, required=True, help='Model checkpoint path')
@@ -754,7 +779,12 @@ def main():
     hidden_dim = checkpoint.get('hidden_dim', 256)
     n_layers = checkpoint.get('n_layers', 2)
     value_net = ValueNetwork(N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers).to(device)
-    value_net.load_state_dict(checkpoint['value_net'])
+    state = _remap_legacy_state_dict(checkpoint['value_net'])
+    missing, unexpected = value_net.load_state_dict(state, strict=False)
+    if unexpected:
+        raise RuntimeError(f"Unexpected keys in checkpoint: {unexpected}")
+    # policy_head/seq_proj absent in legacy checkpoints; they are unused at
+    # inference time (forward() returns only adv from trunk+adv_head).
     value_net.eval()
     print(f"Loaded model (iter {checkpoint['iteration']}, hidden={hidden_dim}, layers={n_layers})")
     print()
