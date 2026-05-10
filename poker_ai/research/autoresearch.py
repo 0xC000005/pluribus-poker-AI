@@ -597,6 +597,63 @@ def enqueue_candidate_comparison(
     )
 
 
+def enqueue_slumbot_smoke(
+    root: str | Path,
+    model: str | Path,
+    *,
+    hands: int = 5,
+    greedy: bool = True,
+    no_allin: bool = True,
+    no_solver: bool = True,
+    timeout_seconds: int = 600,
+) -> dict:
+    """Create and queue a sparse live Slumbot smoke for a candidate checkpoint."""
+    root = Path(root)
+    model_path = _resolve_existing_path(root, model, label="Slumbot model checkpoint")
+    gate_name = (
+        f"slumbot-candidate-smoke-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
+        f"{_slug(model_path.stem)}"
+    )
+    command = [
+        sys.executable,
+        "scripts/poker_autoresearch_slumbot.py",
+        "--model",
+        str(model_path),
+        "--hands",
+        str(hands),
+        "--timeout-seconds",
+        str(timeout_seconds),
+    ]
+    if greedy:
+        command.append("--greedy")
+    if no_allin:
+        command.append("--no-allin")
+    if no_solver:
+        command.append("--no-solver")
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "One-off sparse live Slumbot smoke for a candidate checkpoint. "
+            "This is an integration and distribution-shift diagnostic, not a "
+            "promotion gate by itself."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            f"Candidate checkpoint {model_path.name} should produce parsed live "
+            "Slumbot metrics under the sparse smoke budget."
+        ),
+        cycle_type="experiment",
+        failure_class="distribution_shift",
+        gate=gate_name,
+    )
+
+
 def append_research_log(
     root: str | Path,
     *,

@@ -152,6 +152,12 @@ python scripts/poker_autoresearch.py enqueue-compare \
   --n-games 500 \
   --seeds 20260511,20260512,20260513 \
   --head-to-head
+python scripts/poker_autoresearch.py enqueue-slumbot \
+  --model models/candidate.pt \
+  --hands 10 \
+  --greedy \
+  --no-allin \
+  --no-solver
 python scripts/poker_autoresearch.py close-cycle \
   --run-id <run_id> \
   --outcome passed \
@@ -184,6 +190,9 @@ one-off comparison gate in `poker_goal.json`, queues it, and defaults the
 baseline to the recorded incumbent checkpoint.
 Pass `--head-to-head` to queue duplicate-swapped candidate-vs-incumbent play;
 omit it only for the cheaper candidate-vs-random delta diagnostic.
+Use `enqueue-slumbot` only for sparse live checks after local comparison says a
+candidate is interesting. It creates a one-off live smoke gate and records
+Slumbot chips/hand, CI, elapsed seconds, and seconds/hand.
 `slumbot-smoke` runs five live Slumbot hands with greedy, no-all-in, no-solver
 diagnostic settings and parses the final chips/hand summary into JSON.
 The Slumbot wrapper also emits `elapsed_seconds` and `seconds_per_hand` so

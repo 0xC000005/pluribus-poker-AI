@@ -17,6 +17,7 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_slumbot_smoke,
     enqueue_cycle,
     init_state,
     new_cycle,
@@ -81,6 +82,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Queue duplicate-swapped model-vs-model evaluation instead of vs-random deltas.",
     )
+
+    slumbot = subparsers.add_parser(
+        "enqueue-slumbot",
+        help="Create and queue a sparse live Slumbot smoke gate for one model.",
+    )
+    slumbot.add_argument("--model", required=True)
+    slumbot.add_argument("--hands", type=int, default=5)
+    slumbot.add_argument("--greedy", action="store_true")
+    slumbot.add_argument("--no-allin", action="store_true")
+    slumbot.add_argument("--no-solver", action="store_true")
+    slumbot.add_argument("--timeout-seconds", type=int, default=600)
 
     close = subparsers.add_parser("close-cycle", help="Close the active research cycle.")
     close.add_argument("--run-id", required=True)
@@ -159,6 +171,20 @@ def main(argv: list[str] | None = None) -> int:
                 device=args.device,
                 timeout_seconds=args.timeout_seconds,
                 head_to_head=args.head_to_head,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-slumbot":
+        _emit(
+            enqueue_slumbot_smoke(
+                root,
+                args.model,
+                hands=args.hands,
+                greedy=args.greedy,
+                no_allin=args.no_allin,
+                no_solver=args.no_solver,
+                timeout_seconds=args.timeout_seconds,
             )
         )
         return 0

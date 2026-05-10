@@ -8,6 +8,7 @@ from poker_ai.research.autoresearch import (
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_slumbot_smoke,
     enqueue_cycle,
     init_state,
     new_cycle,
@@ -271,6 +272,36 @@ def test_enqueue_candidate_comparison_creates_named_gate_from_incumbent(tmp_path
     assert "1,2" in command
 
 
+def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
+    init_state(tmp_path)
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    queued = enqueue_slumbot_smoke(
+        tmp_path,
+        model,
+        hands=7,
+        greedy=True,
+        no_allin=True,
+        no_solver=True,
+        timeout_seconds=123,
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    gate = goal["gates"][queued["gate"]]
+    command = gate["commands"][0]
+    assert queued["gate"].startswith("slumbot-candidate-smoke-")
+    assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
+    assert str(model) in command
+    assert "7" in command
+    assert "--greedy" in command
+    assert "--no-allin" in command
+    assert "--no-solver" in command
+    assert "123" in command
+
+
 def test_set_incumbent_records_checkpoint_metadata(tmp_path):
     init_state(tmp_path)
     checkpoint = tmp_path / "models" / "candidate.pt"
@@ -368,3 +399,42 @@ def test_cli_enqueue_compare_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--head-to-head" in goal["gates"][queued["gate"]]["commands"][0]
+
+
+def test_cli_enqueue_slumbot_creates_gate(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-slumbot",
+            "--model",
+            str(model),
+            "--hands",
+            "3",
+            "--greedy",
+            "--no-allin",
+            "--no-solver",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    assert queued["gate"] in goal["gates"]
+    assert "--no-solver" in goal["gates"][queued["gate"]]["commands"][0]

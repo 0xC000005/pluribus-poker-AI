@@ -54,6 +54,23 @@ Local head-to-head self-comparison:
 - Promotion status: `promotable=false`.
 - Promotion blocker: `local_head_to_head_requires_slumbot_confirmation`.
 
+Candidate checkpoint comparison:
+
+- `iter700` vs `iter1000`: `-49.32` chips/hand, lower95 `-94.37`
+  over 3,000 duplicate-swapped local games.
+- `iter800` vs `iter1000`: `-11.75` chips/hand, lower95 `-103.79`
+  over 3,000 duplicate-swapped local games.
+- `iter900` vs `iter1000`: `-9.50` chips/hand, lower95 `-27.58`
+  over 3,000 duplicate-swapped local games.
+- Larger `iter900` vs `iter1000`: `+6.14` chips/hand, lower95 `+0.46`
+  over 12,000 duplicate-swapped local games.
+
+Sparse live candidate smoke:
+
+- `iter900`, no-solver, no-all-in, 10 hands: `-1138` chips/hand,
+  CI `1982`, `0.694` seconds/hand. This is too noisy for ranking, but it
+  reinforces that local head-to-head gains do not yet prove Slumbot transfer.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.
@@ -86,5 +103,7 @@ script passes all 10 checks and is now part of Tier 0.
 2. Candidate checkpoint comparisons are now queueable with
    `python scripts/poker_autoresearch.py enqueue-compare --candidate <path>`.
    Use `--head-to-head` for the stronger duplicate-swapped model-vs-model gate.
-3. Investigate why no-solver and solver Slumbot smokes remain negative despite
+3. Sparse live Slumbot smokes are now queueable with
+   `python scripts/poker_autoresearch.py enqueue-slumbot --model <path>`.
+4. Investigate why no-solver and solver Slumbot smokes remain negative despite
    strong local-random metrics.
