@@ -112,6 +112,10 @@ GPU training readiness:
   `device=cuda`, `traverse=2.3s`, `train=0.6s`, and saved
   `models/autoresearch_minraise_smoke/corrected_minraise_final.pt` without
   overwriting existing checkpoints.
+- A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
+  replay cache consumed most of the 8GB card. The trainer now skips the GPU
+  replay cache when its estimated tensor footprint would exceed a safe fraction
+  of free GPU memory, falling back to host sampling instead of crashing.
 
 ## Diagnosis
 

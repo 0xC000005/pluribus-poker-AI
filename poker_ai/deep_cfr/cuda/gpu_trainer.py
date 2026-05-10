@@ -55,6 +55,19 @@ from poker_ai.deep_cfr.cuda.action_kernels import (
 logger = logging.getLogger("poker_ai.deep_cfr.cuda.gpu_trainer")
 
 
+def _gpu_cache_nbytes(n_samples: int) -> int:
+    return int(n_samples) * (N_FEATURES + 1 + N_ACTIONS) * 4
+
+
+def _gpu_cache_budget_allows(
+    *,
+    n_samples: int,
+    free_bytes: int,
+    safety_fraction: float = 0.60,
+) -> bool:
+    return _gpu_cache_nbytes(n_samples) <= int(float(free_bytes) * safety_fraction)
+
+
 class _MultiBufferView:
     """Lightweight wrapper that samples from multiple ReservoirBuffers.
 
@@ -95,6 +108,22 @@ class _MultiBufferView:
             return True
 
         try:
+            if device.type == "cuda":
+                free_bytes, _ = torch.cuda.mem_get_info(device)
+                if not _gpu_cache_budget_allows(
+                    n_samples=self.size,
+                    free_bytes=free_bytes,
+                ):
+                    logger.warning(
+                        "Skipping GPU replay cache: %d samples need %.2f GiB and "
+                        "current free memory is %.2f GiB.",
+                        self.size,
+                        _gpu_cache_nbytes(self.size) / (1024**3),
+                        free_bytes / (1024**3),
+                    )
+                    self._gpu_cache_disabled = True
+                    return False
+
             feat = torch.empty(
                 (self.size, N_FEATURES), dtype=torch.float32, device=device
             )
