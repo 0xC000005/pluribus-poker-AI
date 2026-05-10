@@ -249,10 +249,10 @@ def test_preflop_bb_facing_raise():
 
 
 def test_postflop_both_checked_preflop():
-    """Scenario C: Postflop, both checked preflop, flop dealt, first to act.
+    """Scenario C: Postflop after limp/check, BB first to act.
 
     Preflop: SB calls (limps), BB checks. Street ends.
-    Flop dealt. Postflop order [0,1], player_i_index=0 → player 0 (SB) to act.
+    Flop dealt. Postflop order [1,0], player_i_index=0 → player 1 (BB) to act.
 
     GPU state after preflop SB call + BB check:
     - SB (p0): bet=100 (called BB), chips=INITIAL_CHIPS-100
@@ -283,52 +283,16 @@ def test_postflop_both_checked_preflop():
       branch: pos = (pos+1) % 2, check_or_call_ends_street = True.
     - BB does 'k': it's a check. check_or_call_ends_street is True, so street ends.
 
-    So action_str for the flop with BB to act = 'ck/' and pos=0 (BB acts first postflop).
-    Wait — we want *SB* first to act on flop. In Slumbot, postflop pos 0 acts first.
-    Slumbot pos 0 = BB. So actually BB is first postflop. But in our GPU training,
-    postflop order is [0, 1], player_i_index=0 → player 0 (SB).
-
-    Hmm, this is a potential mismatch! Let me check more carefully.
-
-    In the GPU 2-player game:
-    - Postflop order: [0, 1]
-    - player_i_index=0 → postflop_order[0] = player 0 (SB)
-    - So SB acts first postflop in training.
-
-    In real poker (and Slumbot):
-    - BB is first to act postflop (or rather, the player in earlier position).
-    - In heads-up, SB is the button/dealer, and BB acts first postflop.
-    - So in Slumbot, pos 0 = BB acts first postflop.
-
-    But wait — in heads-up, SB = button. Preflop: SB/button acts first.
-    Postflop: BB acts first (non-dealer acts first).
-
-    In our GPU game for 2 players:
-    - Player 0 = SB (posts small blind in init_games_kernel line 191-192)
-    - Player 1 = BB
-    - Preflop order: [0, 1] → player 0 (SB) acts first preflop. Correct.
-    - Postflop order: [0, 1] → player 0 (SB) acts first postflop. WRONG!
-
-    In real poker heads-up, BB acts first postflop. So the postflop order for
-    2 players should be [1, 0] not [0, 1].
-
-    BUT — this is how the model was TRAINED. So if we're checking whether play
-    matches training, we need to match what training does, not what's correct.
-
-    For feature encoding specifically: the position feature (112) encodes `pi / (n_players-1)`.
-    If training has SB as player 0 acting first postflop, pi=0, position=0.0.
-    If play maps SB correctly as player 0 (our_player_idx = 1 - 1 = 0), position=0.0.
-
-    The actual acting order only affects which game states are reached, not the
-    feature encoding of a given state. For feature comparison we just need to
-    match the state exactly. Let me just focus on that.
+    Slumbot and the training stack both use BB first postflop in heads-up.
+    This scenario must therefore compare BB/client_pos=0 features.
     """
     flop_cards = ['Qh', '9c', '4d']
     flop_idx = [card_str_to_index(c) for c in flop_cards]
 
     sb_cards = ['Ac', 'Kh']
     sb_card_idx = [card_str_to_index(c) for c in sb_cards]
-    bb_card_idx = [0, 1]
+    bb_cards = ['2c', '2d']
+    bb_card_idx = [card_str_to_index(c) for c in bb_cards]
 
     batch = make_gpu_batch()
     history = np.zeros((4, 3), dtype=np.int8)
@@ -347,41 +311,41 @@ def test_postflop_both_checked_preflop():
         active=[1, 1],
         stage=FLOP,
         n_raises=0,
-        player_i_index=0,  # postflop order [0,1] → player 0 (SB)
+        player_i_index=0,  # postflop order [1,0] → player 1 (BB)
         pot_total=200,
         history=history,
     )
     gpu_feat = get_gpu_features(batch)
 
-    # Play: SB's turn on flop.
-    # client_pos=1 (SB). Action string: 'ck/' (SB called, BB checked, flop).
+    # Play: BB's turn on flop.
+    # client_pos=0 (BB). Action string: 'ck/' (SB called, BB checked, flop).
     action_str = 'ck/'
     parsed = parse_action(action_str)
-    play_feat = build_features(sb_cards, flop_cards, action_str, client_pos=1, parsed=parsed)
+    play_feat = build_features(bb_cards, flop_cards, action_str, client_pos=0, parsed=parsed)
 
-    return compare_features(gpu_feat, play_feat, "C: Postflop SB first to act (checked preflop)")
+    return compare_features(gpu_feat, play_feat, "C: Postflop BB first to act (checked preflop)")
 
 
 def test_postflop_after_bet_and_call():
     """Scenario D: Postflop, after a bet and call on flop.
 
-    Preflop: SB raises to 200, BB calls. Flop: SB bets 200, BB calls.
-    Now on the turn, SB to act.
+    Preflop: SB raises to 200, BB calls. Flop: BB bets 200, SB calls.
+    Now on the turn, BB acts first.
 
     GPU state:
     - Preflop: SB raise (history[0,1]+=1), BB call (history[0,0]+=1)
     - SB chips: 20000 - 200 = 19800 after preflop
     - BB chips: 20000 - 200 = 19800 after preflop (called 200)
     - Pot after preflop: 400
-    - Flop: SB bets 200 more (raise action in training? or... need to think)
+    - Flop: BB bets 200 more (raise action in training? or... need to think)
     - Actually in training, a "bet" on flop is a raise action (action 2-7) since
     - there's no outstanding bet. Raise amount = frac * pot + to_call.
     - With frac=0.5, pot=400, to_call=0: raise_chips = 200. That works.
-    - So SB does action 3 (frac=0.5): history[1,1]+=1 (flop raise)
-    - SB chips: 19800 - 200 = 19600, SB bets: 200+200=400
-    - Pot: 400 + 200 = 600
-    - BB calls: history[1,0]+=1 (flop call)
+    - So BB does action 3 (frac=0.5): history[1,1]+=1 (flop raise)
     - BB chips: 19800 - 200 = 19600, BB bets: 200+200=400
+    - Pot: 400 + 200 = 600
+    - SB calls: history[1,0]+=1 (flop call)
+    - SB chips: 19800 - 200 = 19600, SB bets: 200+200=400
     - Pot: 600 + 200 = 800
     - Now on turn, bets stay (accumulated), n_raises reset to 0.
 
@@ -402,7 +366,8 @@ def test_postflop_after_bet_and_call():
 
     sb_cards = ['Ac', 'Kh']
     sb_card_idx = [card_str_to_index(c) for c in sb_cards]
-    bb_card_idx = [0, 1]
+    bb_cards = ['2c', '2d']
+    bb_card_idx = [card_str_to_index(c) for c in bb_cards]
 
     batch = make_gpu_batch()
     history = np.zeros((4, 3), dtype=np.int8)
@@ -423,16 +388,16 @@ def test_postflop_after_bet_and_call():
         active=[1, 1],
         stage=TURN,
         n_raises=0,
-        player_i_index=0,  # postflop order [0,1] → player 0 (SB)
+        player_i_index=0,  # postflop order [1,0] → player 1 (BB)
         pot_total=800,
         history=history,
     )
     gpu_feat = get_gpu_features(batch)
 
-    # Play: client_pos=1 (SB). Action: 'b200c/b200c/'
+    # Play: client_pos=0 (BB). Action: 'b200c/b200c/'
     action_str = 'b200c/b200c/'
     parsed = parse_action(action_str)
-    play_feat = build_features(sb_cards, community, action_str, client_pos=1, parsed=parsed)
+    play_feat = build_features(bb_cards, community, action_str, client_pos=0, parsed=parsed)
 
     return compare_features(gpu_feat, play_feat, "D: Turn after bet-call on flop")
 
@@ -458,10 +423,10 @@ def test_turn_after_checks():
     - BB (p1): preflop put in 100 (blind), turn bet 200 = 300 total
     - Pot: 100 + 100 + 200 = 400
     - Current player: SB (player 0), player_i_index depends on postflop order.
-      GPU postflop order [0,1]: player_i_index=0 → player 0 (SB). So player_i_index=0.
+      GPU postflop order [1,0]: player_i_index=1 → player 0 (SB). So player_i_index=1.
       But wait, BB already acted (bet 200). After BB acts, advance moves to next player.
-      In GPU postflop order [0,1]: BB is player 1, at index 1. After acting, advance
-      goes to index (1+1)%2 = 0, which is player 0 (SB). So player_i_index=0. OK.
+      In GPU postflop order [1,0]: BB is player 1, at index 0. After acting, advance
+      goes to index (0+1)%2 = 1, which is player 0 (SB). So player_i_index=1. OK.
 
     History: preflop 2 calls, flop 2 calls (checks), turn 1 raise.
     n_raises on turn = 1.
@@ -492,7 +457,7 @@ def test_turn_after_checks():
         active=[1, 1],
         stage=TURN,
         n_raises=1,
-        player_i_index=0,  # postflop order [0,1] → player 0 (SB) to act
+        player_i_index=1,  # postflop order [1,0] → player 0 (SB) to act
         pot_total=400,
         history=history,
     )
@@ -556,13 +521,13 @@ def test_river_complex():
     Preflop: SB raises to 300, BB calls.
     Flop: SB bets 300, BB raises to 900, SB calls.
     Turn: Both check.
-    River: SB to act.
+    River: BB to act.
 
     GPU:
     - Preflop: history[0,1]=1 (SB raise), history[0,0]=1 (BB call)
     - Flop: history[1,1]=2 (SB bet + BB raise), history[1,0]=1 (SB call)
     - Turn: history[2,0]=2 (two checks)
-    - River: n_raises=0, player_i_index=0 (SB)
+    - River: n_raises=0, player_i_index=0 (BB)
 
     Bets accumulated: SB=300+900=1200, BB=300+900=1200. Pot=2400.
 
@@ -576,7 +541,8 @@ def test_river_complex():
 
     sb_cards = ['Ac', 'Kh']
     sb_card_idx = [card_str_to_index(c) for c in sb_cards]
-    bb_card_idx = [card_str_to_index('Js'), card_str_to_index('Td')]
+    bb_cards = ['Js', 'Td']
+    bb_card_idx = [card_str_to_index(c) for c in bb_cards]
 
     batch = make_gpu_batch()
     history = np.zeros((4, 3), dtype=np.int8)
@@ -604,7 +570,7 @@ def test_river_complex():
 
     action_str = 'b300c/b300b900c/kk/'
     parsed = parse_action(action_str)
-    play_feat = build_features(sb_cards, community, action_str, client_pos=1, parsed=parsed)
+    play_feat = build_features(bb_cards, community, action_str, client_pos=0, parsed=parsed)
 
     return compare_features(gpu_feat, play_feat, "G: River complex multi-street")
 

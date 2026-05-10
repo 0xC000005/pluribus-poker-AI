@@ -114,6 +114,12 @@ def _default_goal() -> dict:
                         "test/unit/test_network_mask.py",
                         "test/unit/test_slumbot_mapping.py",
                         "test/unit/test_legal_mask_parity.py",
+                    ],
+                    [
+                        "/usr/bin/env",
+                        "NUMBA_ENABLE_CUDASIM=1",
+                        sys.executable,
+                        "scripts/test_feature_encoding.py",
                     ]
                 ],
             },
@@ -292,7 +298,18 @@ def init_state(root: str | Path, force: bool = False) -> dict:
         goal = _read_json(goal_path)
         goal.setdefault("gates", {})
         for gate_name, gate_config in default_goal["gates"].items():
-            goal["gates"].setdefault(gate_name, gate_config)
+            if gate_name not in goal["gates"]:
+                goal["gates"][gate_name] = gate_config
+                continue
+            existing = goal["gates"][gate_name]
+            existing.setdefault("description", gate_config.get("description", ""))
+            existing.setdefault("timeout_seconds", gate_config.get("timeout_seconds"))
+            existing.setdefault("commands", [])
+            existing_commands = {tuple(command) for command in existing["commands"]}
+            for command in gate_config.get("commands", []):
+                if tuple(command) not in existing_commands:
+                    existing["commands"].append(command)
+                    existing_commands.add(tuple(command))
         _write_json(goal_path, goal)
 
     state_path = _state_path(root)

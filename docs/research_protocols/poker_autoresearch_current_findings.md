@@ -11,7 +11,8 @@ Date: 2026-05-10
 
 ## Completed Gates
 
-- `tier0`: passed legal-mask, network-mask, and Slumbot mapping tests.
+- `tier0`: passed legal-mask, network-mask, Slumbot mapping tests, and 10/10
+  Slumbot feature-encoding parity checks under CUDA simulation.
 - `eval-local`: passed 32-game fixed-seed local random-opponent smoke.
 - `eval-local-confidence`: passed 1,000-game local random-opponent baseline.
 - `eval-local-multiseed`: passed 3 seeds x 1,000 games.
@@ -69,6 +70,14 @@ The solver-enabled smoke took about 8.5 seconds per hand at the current 10-hand
 setting. This is acceptable for a diagnostic smoke but too slow to use casually
 inside every unattended iteration. Slumbot search needs separate latency,
 cache, and quality gates.
+
+Resolved workflow issue: `rules_parity`.
+
+The feature-encoding parity script was stale for heads-up postflop order. It
+assumed SB-first postflop in several scenarios, but the current fast/CUDA game
+uses `[1, 0]` postflop order, matching BB-first heads-up poker and Slumbot.
+After updating those scenarios and running under `NUMBA_ENABLE_CUDASIM=1`, the
+script passes all 10 checks and is now part of Tier 0.
 
 ## Next Workflow Moves
 

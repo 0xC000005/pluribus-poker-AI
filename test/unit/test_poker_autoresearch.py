@@ -57,6 +57,8 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert state["hypothesis_queue"][0]["gate"] == "tier0"
     goal = _read_json(session / "poker_goal.json")
     assert "tier0" in goal["gates"]
+    tier0_commands = goal["gates"]["tier0"]["commands"]
+    assert any("scripts/test_feature_encoding.py" in command for command in tier0_commands)
     assert "eval-local" in goal["gates"]
     assert "eval-local-confidence" in goal["gates"]
     assert "eval-local-multiseed" in goal["gates"]
@@ -83,6 +85,31 @@ def test_init_state_syncs_missing_default_gates_without_overwriting_history(tmp_
     synced_goal = _read_json(goal_path)
     synced_state = _read_json(state_path)
     assert "eval-local-confidence" in synced_goal["gates"]
+    assert synced_state["history"] == [{"run_id": "kept"}]
+
+
+def test_init_state_syncs_missing_default_commands_without_overwriting_history(tmp_path):
+    init_state(tmp_path)
+    goal_path = tmp_path / "autoresearch-session" / "poker_goal.json"
+    goal = _read_json(goal_path)
+    goal["gates"]["tier0"]["commands"] = [
+        command
+        for command in goal["gates"]["tier0"]["commands"]
+        if "scripts/test_feature_encoding.py" not in command
+    ]
+    goal_path.write_text(json.dumps(goal), encoding="utf-8")
+
+    state_path = tmp_path / "autoresearch-session" / "poker_state.json"
+    state = _read_json(state_path)
+    state["history"].append({"run_id": "kept"})
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    init_state(tmp_path)
+
+    synced_goal = _read_json(goal_path)
+    tier0_commands = synced_goal["gates"]["tier0"]["commands"]
+    synced_state = _read_json(state_path)
+    assert any("scripts/test_feature_encoding.py" in command for command in tier0_commands)
     assert synced_state["history"] == [{"run_id": "kept"}]
 
 

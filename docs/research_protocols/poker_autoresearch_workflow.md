@@ -55,7 +55,9 @@ must stay out of git.
 Results are not promotable unless they pass the appropriate ladder level:
 
 - **Tier 0: integrity.** Unit/parity tests for legal masks, feature encoders,
-  Slumbot action mapping, checkpoint loading, and solver compatibility.
+  Slumbot action mapping, checkpoint loading, and solver compatibility. The
+  feature-encoding parity script runs under `NUMBA_ENABLE_CUDASIM=1` so the
+  input-contract check does not require a visible CUDA device.
 - **Tier 1: local smoke.** Fast fixed-seed evaluation against random and simple
   baseline policies. The implemented `eval-local` gate evaluates
   `models/slumbot_2p_iter1000.pt` for a small fixed-seed sample against random
