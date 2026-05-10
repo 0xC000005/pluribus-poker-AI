@@ -84,6 +84,11 @@ The primary metric for Slumbot work is lower 95% confidence bound of chips/hand
 or mbb/hand versus the incumbent. Training changes must also report iters/hour,
 samples/sec, and train seconds/iteration.
 
+GPU training scripts call `scripts/cuda_env.py` before importing Numba so the
+process can discover the pip NVVM package and force the local GPU compute
+capability. This avoids shell-level `LD_LIBRARY_PATH` overrides, which can hide
+the GPU from this environment.
+
 ## Failure Classes
 
 Every failed or inconclusive cycle assigns one primary class:

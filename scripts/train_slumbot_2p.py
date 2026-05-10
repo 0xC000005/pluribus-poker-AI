@@ -16,20 +16,13 @@ import torch
 
 sys.stdout.reconfigure(line_buffering=True)
 
-# Must set LD_LIBRARY_PATH before numba import for CUDA nvvm.
-nvvm = os.path.join(
-    os.path.dirname(sys.executable), '..', 'lib', 'python3.13',
-    'site-packages', 'nvidia', 'cuda_nvcc', 'nvvm', 'lib64',
-)
-if os.path.isdir(nvvm):
-    os.environ.setdefault('LD_LIBRARY_PATH', '')
-    if nvvm not in os.environ['LD_LIBRARY_PATH']:
-        os.environ['LD_LIBRARY_PATH'] = nvvm + ':' + os.environ['LD_LIBRARY_PATH']
+from cuda_env import configure_numba_cuda_env
 
+configure_numba_cuda_env()
 from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--resume', type=str, default='', help='Resume from checkpoint')
     parser.add_argument('--n-iterations', type=int, default=1000)
@@ -39,7 +32,15 @@ def main():
     parser.add_argument('--hidden-dim', type=int, default=256)
     parser.add_argument('--n-layers', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=4096)
-    args = parser.parse_args()
+    parser.add_argument('--save-dir', type=str, default='models')
+    parser.add_argument('--prefix', type=str, default='slumbot_2p')
+    parser.add_argument('--eval-every', type=int, default=50)
+    parser.add_argument('--save-every', type=int, default=100)
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
 
     print("=" * 60)
     print("2-Player Deep CFR Training — Slumbot (GPU Trainer)")
@@ -66,10 +67,10 @@ def main():
             device=device,
         )
 
-    os.makedirs("models", exist_ok=True)
+    os.makedirs(args.save_dir, exist_ok=True)
     n_iterations = args.n_iterations
-    eval_every = 50
-    save_every = 100
+    eval_every = args.eval_every
+    save_every = args.save_every
 
     print(f"Config: {n_iterations} iters, {trainer.n_traversals} trav, "
           f"{trainer.n_training_steps} steps, batch={trainer.batch_size}, "
@@ -88,25 +89,26 @@ def main():
         buf_size = sum(len(b) for b in trainer.buffers)
         print(f"Iter {trainer.iteration:3d}/{start_iter + n_iterations} | {iter_time:.1f}s | buffer: {buf_size:,}")
 
-        if trainer.iteration % eval_every == 0:
+        if eval_every > 0 and trainer.iteration % eval_every == 0:
             payout = trainer.evaluate(n_games=1000)
             elapsed = time.time() - total_start
             print(f"  >>> Eval: {payout:+.0f} chips/game vs random | "
                   f"elapsed: {elapsed/60:.1f}min")
 
-        if trainer.iteration % save_every == 0:
-            path = f"models/slumbot_2p_iter{trainer.iteration}.pt"
+        if save_every > 0 and trainer.iteration % save_every == 0:
+            path = os.path.join(args.save_dir, f"{args.prefix}_iter{trainer.iteration}.pt")
             trainer.save(path)
             print(f"  >>> Saved: {path}")
 
         sys.stdout.flush()
 
-    trainer.save("models/slumbot_2p_final.pt")
+    final_path = os.path.join(args.save_dir, f"{args.prefix}_final.pt")
+    trainer.save(final_path)
     total_time = time.time() - total_start
     print()
     print("=" * 60)
     print(f"Done! {n_iterations} iters in {total_time/60:.1f}min")
-    print(f"Model: models/slumbot_2p_final.pt")
+    print(f"Model: {final_path}")
 
     payout = trainer.evaluate(n_games=5000)
     print(f"Final eval (5K games): {payout:+.0f} chips/game vs random")

@@ -1,17 +1,10 @@
 """Train 6-player Deep CFR with 9-action space."""
 import os
-import sys
 import time
 
-# Set LD_LIBRARY_PATH for Numba CUDA before any imports
-nvvm_path = os.path.join(
-    os.path.dirname(sys.executable), "..", "lib", "python3.13",
-    "site-packages", "nvidia", "cuda_nvcc", "nvvm", "lib64"
-)
-nvvm_path = os.path.normpath(nvvm_path)
-if os.path.isdir(nvvm_path):
-    os.environ["LD_LIBRARY_PATH"] = nvvm_path + ":" + os.environ.get("LD_LIBRARY_PATH", "")
+from cuda_env import configure_numba_cuda_env
 
+configure_numba_cuda_env()
 from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
 
 def main():

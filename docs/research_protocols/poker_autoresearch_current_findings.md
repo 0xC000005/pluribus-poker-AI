@@ -101,6 +101,18 @@ Post-fix sparse live diagnostics:
 - Read: the adapter drift is fixed; old checkpoints remain stale/weak under
   corrected legality and should not be promoted without retraining.
 
+GPU training readiness:
+
+- Installed a CUDA NVVM wheel in the active Python environment and added the
+  missing `libnvvm.so.4` compatibility symlink so Numba can discover NVVM.
+- Added `scripts/cuda_env.py` so training entrypoints set `CUDA_HOME` and
+  `NUMBA_FORCE_CUDA_CC=8.6` inside Python before importing Numba. Shell-level
+  env overrides made CUDA invisible here.
+- One-iteration corrected-legality Slumbot GPU training smoke passed with
+  `device=cuda`, `traverse=2.3s`, `train=0.6s`, and saved
+  `models/autoresearch_minraise_smoke/corrected_minraise_final.pt` without
+  overwriting existing checkpoints.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.

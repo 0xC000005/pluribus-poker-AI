@@ -11,6 +11,9 @@ os.environ["TESTING_SUITE"] = "1"
 import numpy as np
 import torch
 
+from cuda_env import configure_numba_cuda_env
+
+configure_numba_cuda_env()
 from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
 
 

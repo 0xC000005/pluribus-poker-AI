@@ -17,6 +17,10 @@ import argparse
 from pathlib import Path
 
 import torch
+
+from cuda_env import configure_numba_cuda_env
+
+configure_numba_cuda_env()
 from numba import cuda
 import logging as _logging
 from rich.console import Console
