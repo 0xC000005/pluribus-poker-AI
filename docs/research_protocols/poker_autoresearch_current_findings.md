@@ -91,6 +91,16 @@ fast-state, CUDA, Slumbot play, and range-tracker masks now require fractional
 raise amounts to cover the no-limit minimum raise contribution before the
 bucket is legal.
 
+Post-fix sparse live diagnostics:
+
+- `iter1000`, no-solver, no-all-in, 20 hands: mapping drift mean dropped from
+  `0.119` to `0.002` and max from `0.911` to `0.013`; result was still noisy
+  and negative at `-1186 +/- 1913` chips/hand.
+- `iter900`, no-solver, no-all-in, 20 hands: mapping drift mean `0.001`, max
+  `0.013`; result was `-2194 +/- 2391` chips/hand.
+- Read: the adapter drift is fixed; old checkpoints remain stale/weak under
+  corrected legality and should not be promoted without retraining.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.
@@ -128,6 +138,5 @@ script passes all 10 checks and is now part of Tier 0.
 4. Investigate why no-solver and solver Slumbot smokes remain negative despite
    strong local-random metrics by comparing the new action diagnostics across
    incumbent and candidate checkpoints.
-5. Re-run sparse Slumbot diagnostics after the minimum-raise parity fix. Treat
-   older checkpoints as potentially stale because they were trained with the
-   previous under-minimum raise legality.
+5. Train a fresh corrected-legality checkpoint and compare it locally before
+   spending more Slumbot hands.
