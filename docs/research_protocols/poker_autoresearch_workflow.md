@@ -192,7 +192,9 @@ Pass `--head-to-head` to queue duplicate-swapped candidate-vs-incumbent play;
 omit it only for the cheaper candidate-vs-random delta diagnostic.
 Use `enqueue-slumbot` only for sparse live checks after local comparison says a
 candidate is interesting. It creates a one-off live smoke gate and records
-Slumbot chips/hand, CI, elapsed seconds, and seconds/hand.
+Slumbot chips/hand, CI, elapsed seconds, seconds/hand, action mix, increment
+mix, policy/solver/fallback decision counts, parse/API errors, and
+action-mapping drift.
 `slumbot-smoke` runs five live Slumbot hands with greedy, no-all-in, no-solver
 diagnostic settings and parses the final chips/hand summary into JSON.
 The Slumbot wrapper also emits `elapsed_seconds` and `seconds_per_hand` so

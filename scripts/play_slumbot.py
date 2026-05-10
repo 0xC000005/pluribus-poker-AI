@@ -23,7 +23,11 @@ RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 from poker_ai.deep_cfr.networks import ValueNetwork
 from solver import solve_street, solver_action_to_slumbot
-from range_tracker import RangeTracker, update_tracker_from_actions
+from range_tracker import (
+    RangeTracker,
+    map_slumbot_action_to_idx,
+    update_tracker_from_actions,
+)
 
 # ---------------------------------------------------------------------------
 # Slumbot API constants
@@ -533,12 +537,114 @@ ACTION_NAMES = [
     "all-in",
 ]
 
+
+class ActionDiagnostics:
+    """Track cheap live-play diagnostics for Slumbot distribution shift."""
+
+    def __init__(self):
+        self.decision_policy = 0
+        self.decision_solver = 0
+        self.decision_fallback = 0
+        self.parse_errors = 0
+        self.api_errors = 0
+        self.action_mix = {name: 0 for name in ACTION_NAMES}
+        self.action_mix["solver"] = 0
+        self.increment_mix = {"f": 0, "k": 0, "c": 0, "b": 0}
+        self.mapping_drifts = []
+
+    def _record_increment(self, incr):
+        if not incr:
+            return
+        key = incr[0]
+        if key in self.increment_mix:
+            self.increment_mix[key] += 1
+
+    def _record_mapping_drift(self, action_idx, incr, action_str, client_pos, parsed):
+        if not incr:
+            return
+        action_char = incr[0]
+        bet_to = int(incr[1:]) if action_char == "b" and incr[1:].isdigit() else 0
+        mapped = map_slumbot_action_to_idx(
+            action_char, bet_to, action_str, client_pos, parsed,
+        )
+        intended_weight = sum(weight for idx, weight in mapped if idx == action_idx)
+        drift = max(0.0, min(1.0, 1.0 - intended_weight))
+        self.mapping_drifts.append(drift)
+
+    def record_policy_action(self, action_idx, incr, action_str, client_pos, parsed):
+        self.decision_policy += 1
+        self.action_mix[ACTION_NAMES[action_idx]] += 1
+        self._record_increment(incr)
+        self._record_mapping_drift(action_idx, incr, action_str, client_pos, parsed)
+
+    def record_solver_action(self, incr):
+        self.decision_solver += 1
+        self.action_mix["solver"] += 1
+        self._record_increment(incr)
+
+    def record_fallback(self, incr):
+        self.decision_fallback += 1
+        self._record_increment(incr)
+
+    def record_parse_error(self):
+        self.parse_errors += 1
+
+    def record_api_error(self):
+        self.api_errors += 1
+
+    def as_summary(self):
+        n_drift = len(self.mapping_drifts)
+        mean_drift = float(np.mean(self.mapping_drifts)) if n_drift else 0.0
+        max_drift = float(np.max(self.mapping_drifts)) if n_drift else 0.0
+        return {
+            "decision_total": (
+                self.decision_policy + self.decision_solver + self.decision_fallback
+            ),
+            "decision_policy": self.decision_policy,
+            "decision_solver": self.decision_solver,
+            "decision_fallback": self.decision_fallback,
+            "parse_errors": self.parse_errors,
+            "api_errors": self.api_errors,
+            "action_mix": dict(self.action_mix),
+            "increment_mix": dict(self.increment_mix),
+            "mapping_drift_n": n_drift,
+            "mapping_drift_mean": round(mean_drift, 3),
+            "mapping_drift_max": round(max_drift, 3),
+        }
+
+    def format_summary_lines(self):
+        summary = self.as_summary()
+        action_parts = " ".join(
+            f"{name}={summary['action_mix'][name]}"
+            for name in [*ACTION_NAMES, "solver"]
+        )
+        increment_parts = " ".join(
+            f"{name}={summary['increment_mix'][name]}" for name in ["f", "k", "c", "b"]
+        )
+        return [
+            "  Decisions: "
+            f"total={summary['decision_total']} "
+            f"policy={summary['decision_policy']} "
+            f"solver={summary['decision_solver']} "
+            f"fallback={summary['decision_fallback']} "
+            f"parse_errors={summary['parse_errors']} "
+            f"api_errors={summary['api_errors']}",
+            f"  Action mix: {action_parts}",
+            f"  Increments: {increment_parts}",
+            "  Mapping drift: "
+            f"n={summary['mapping_drift_n']} "
+            f"mean={summary['mapping_drift_mean']:.3f} "
+            f"max={summary['mapping_drift_max']:.3f}",
+        ]
+
+
 # Simple cache for subgame solves keyed by (street, board, action_str, stacks, hero_first).
 _SOLVER_CACHE = {}
 
 
 def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
-                         value_net, device, greedy, no_allin, verbose):
+                         value_net, device, greedy, no_allin, verbose,
+                         diagnostics=None):
     """Select action using trained base policy (for pre-river streets)."""
     features = build_features(hole_cards, board, action_str, client_pos, parsed)
     legal_mask = get_legal_mask_from_parsed(parsed, action_str, client_pos)
@@ -554,7 +660,10 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
 
     legal_actions = np.where(legal_mask > 0)[0]
     if len(legal_actions) == 0:
-        return 'k' if parsed['last_bet_size'] == 0 else 'c'
+        incr = 'k' if parsed['last_bet_size'] == 0 else 'c'
+        if diagnostics is not None:
+            diagnostics.record_fallback(incr)
+        return incr
 
     if greedy:
         masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
@@ -568,13 +677,15 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
             action_idx = int(np.random.choice(legal_actions))
 
     incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
+    if diagnostics is not None:
+        diagnostics.record_policy_action(action_idx, incr, action_str, client_pos, parsed)
     if verbose:
         print(f" [{ACTION_NAMES[action_idx]}→{incr}]", end="", flush=True)
     return incr
 
 
 def _solver_action(hole_cards, board, action_str, client_pos, parsed,
-                    verbose, tracker=None):
+                    verbose, tracker=None, diagnostics=None):
     """Select action using real-time CFR+ solver (turn or river)."""
     import itertools
 
@@ -616,6 +727,8 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     incr_cached = _SOLVER_CACHE.get(cache_key)
     if incr_cached is not None:
         incr = incr_cached
+        if diagnostics is not None:
+            diagnostics.record_solver_action(incr)
         if verbose:
             label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
             print(f" [{label}:CACHED>{incr}]", end="", flush=True)
@@ -658,11 +771,13 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
 
     # Cache result for identical future states in this session.
     _SOLVER_CACHE[cache_key] = incr
+    if diagnostics is not None:
+        diagnostics.record_solver_action(incr)
     return incr
 
 
 def play_hand(value_net, token, device, verbose=False, greedy=False,
-              no_allin=False, use_solver=True):
+              no_allin=False, use_solver=True, diagnostics=None):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token)
     token = r.get('token', token)
@@ -692,6 +807,8 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
 
         if 'error' in parsed:
             print(f"\n  PARSE ERROR: {parsed['error']} in '{action_str}'")
+            if diagnostics is not None:
+                diagnostics.record_parse_error()
             # Fold to recover.
             r = api_act(token, 'f')
             token = r.get('token', token)
@@ -706,13 +823,14 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
         if parsed['st'] >= 2 and use_solver:
             incr = _solver_action(
                 hole_cards, board, action_str, client_pos, parsed, verbose,
-                tracker=tracker,
+                tracker=tracker, diagnostics=diagnostics,
             )
         else:
             # ----- Preflop/Flop: use base policy (trained model) -----
             incr = _base_policy_action(
                 hole_cards, board, action_str, client_pos, parsed,
                 value_net, device, greedy, no_allin, verbose,
+                diagnostics=diagnostics,
             )
 
         r = api_act(token, incr)
@@ -792,6 +910,7 @@ def main():
     token = None
     total_winnings = 0
     results = []
+    diagnostics = ActionDiagnostics()
 
     for h in range(args.hands):
         if args.verbose:
@@ -799,7 +918,8 @@ def main():
 
         token, w = play_hand(value_net, token, device, verbose=args.verbose,
                              greedy=args.greedy, no_allin=args.no_allin,
-                             use_solver=not args.no_solver)
+                             use_solver=not args.no_solver,
+                             diagnostics=diagnostics)
         total_winnings += w
         results.append(w)
 
@@ -818,6 +938,8 @@ def main():
     print(f"  Avg: {avg:+.0f} +/- {1.96*se:.0f} chips/hand")
     print(f"  Rate: {mbb_per_hand:+.0f} mbb/hand")
     print(f"  Win rate: {np.mean(np.array(results) > 0)*100:.1f}%")
+    for line in diagnostics.format_summary_lines():
+        print(line)
     print("=" * 60)
 
 

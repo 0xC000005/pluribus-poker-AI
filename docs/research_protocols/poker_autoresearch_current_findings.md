@@ -71,6 +71,13 @@ Sparse live candidate smoke:
   CI `1982`, `0.694` seconds/hand. This is too noisy for ranking, but it
   reinforces that local head-to-head gains do not yet prove Slumbot transfer.
 
+Slumbot diagnostic instrumentation:
+
+- Live Slumbot summaries now include policy/solver/fallback decision counts,
+  action mix, increment mix, parse/API error counts, and action-mapping drift.
+  These fields are parsed into gate JSON so future smokes can distinguish
+  poor strategy from adapter or mapping drift.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.
@@ -106,4 +113,5 @@ script passes all 10 checks and is now part of Tier 0.
 3. Sparse live Slumbot smokes are now queueable with
    `python scripts/poker_autoresearch.py enqueue-slumbot --model <path>`.
 4. Investigate why no-solver and solver Slumbot smokes remain negative despite
-   strong local-random metrics.
+   strong local-random metrics by comparing the new action diagnostics across
+   incumbent and candidate checkpoints.
