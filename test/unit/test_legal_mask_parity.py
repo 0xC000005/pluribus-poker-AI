@@ -68,3 +68,19 @@ def test_legal_mask_parity_random_walk():
 
         if state_fast.is_terminal and state_cpu.is_terminal:
             break
+
+
+def test_initial_preflop_mask_excludes_under_min_raise_buckets():
+    state_cpu = new_game(2, initial_chips=20000)
+    state_fast = new_fast_game(2, initial_chips=20000)
+
+    mask_cpu = cpu_get_legal_mask(state_cpu)
+    mask_fast = state_fast.get_legal_mask()
+
+    # SB facing the big blind must raise at least to 200 total. The 0.5x-pot
+    # bucket would only spend 125 chips from the stack, so exposing it causes
+    # Slumbot play to clamp the action into a different bucket.
+    assert mask_cpu[3] == 0.0
+    assert mask_fast[3] == 0.0
+    assert mask_cpu[4] == 1.0
+    assert mask_fast[4] == 1.0

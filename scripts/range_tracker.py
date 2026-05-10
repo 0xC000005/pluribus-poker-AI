@@ -143,10 +143,11 @@ def _get_legal_mask(parsed, action_str, client_pos):
         current_street = streets[-1] if streets else ''
         our_sb = _get_our_street_bet(current_street, client_pos, parsed['st'])
         to_call = parsed['street_last_bet_to'] - our_sb
+        min_raise_chips = BIG_BLIND if to_call <= 0 else to_call + max(to_call, BIG_BLIND)
 
         for fi, frac in enumerate(RAISE_FRACTIONS):
             raise_amount = int(frac * pot_total) + to_call
-            if raise_amount >= BIG_BLIND and raise_amount <= our_chips:
+            if raise_amount >= min_raise_chips and raise_amount <= our_chips:
                 mask[2 + fi] = 1.0
 
         if our_chips > 0:

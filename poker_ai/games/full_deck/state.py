@@ -46,6 +46,13 @@ ACTION_TO_INDEX = {
 INDEX_TO_ACTION = {v: k for k, v in ACTION_TO_INDEX.items()}
 
 
+def _min_raise_contribution(to_call: int, big_blind: int) -> int:
+    """Minimum chips the acting player must add for a legal raise."""
+    if to_call <= 0:
+        return big_blind
+    return to_call + max(to_call, big_blind)
+
+
 def card_to_index(card: Card) -> int:
     """Convert a Card to a 0-51 index for the feature vector."""
     return (card.rank_int - 2) * 4 + _SUIT_TO_INDEX[card.suit]
@@ -183,7 +190,10 @@ class PokerState:
             biggest_bet = max(p.n_bet_chips for p in new_state.players)
             n_chips_to_call = biggest_bet - new_state.current_player.n_bet_chips
             raise_n_chips = int(frac * new_state._table.pot.total) + n_chips_to_call
-            raise_n_chips = max(raise_n_chips, new_state.big_blind)
+            raise_n_chips = max(
+                raise_n_chips,
+                _min_raise_contribution(n_chips_to_call, new_state.big_blind),
+            )
             raise_n_chips = min(raise_n_chips, new_state.current_player.n_chips)
             new_state.current_player.raise_to(n_chips=raise_n_chips)
             new_state._n_raises += 1
@@ -345,9 +355,10 @@ class PokerState:
                 biggest_bet = max(p.n_bet_chips for p in self.players)
                 to_call = biggest_bet - self.current_player.n_bet_chips
                 player_chips = self.current_player.n_chips
+                min_raise = _min_raise_contribution(to_call, self.big_blind)
                 for frac in RAISE_FRACTIONS:
                     raise_amount = int(frac * self._table.pot.total) + to_call
-                    if raise_amount >= self.big_blind and raise_amount <= player_chips:
+                    if raise_amount >= min_raise and raise_amount <= player_chips:
                         actions.append(f"raise_{frac}")
                 if player_chips > 0:
                     actions.append("all_in")

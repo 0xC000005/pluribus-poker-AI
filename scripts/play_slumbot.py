@@ -377,7 +377,7 @@ def get_legal_mask_from_parsed(parsed, action_str, client_pos):
     # Raise actions (2-7) and all-in (8).
     # Must match training legal mask logic exactly (fast_state.py / game_kernels.py):
     #   raise_amount = int(frac * pot_total) + to_call
-    #   legal if raise_amount >= BIG_BLIND and raise_amount <= player_chips
+    #   legal if raise_amount covers the no-limit minimum raise and fits stack
     n_raises = count_raises_current_street(action_str)
     if n_raises < 3 and our_chips > 0:
         streets = action_str.split('/')
@@ -385,11 +385,12 @@ def get_legal_mask_from_parsed(parsed, action_str, client_pos):
         our_street_bet = _get_our_street_bet(current_street, client_pos, parsed['st'])
         street_last_bet_to = parsed['street_last_bet_to']
         to_call = street_last_bet_to - our_street_bet
+        min_raise_chips = BIG_BLIND if to_call <= 0 else to_call + max(to_call, BIG_BLIND)
 
         for fi, frac in enumerate(RAISE_FRACTIONS):
             # Match training: raise_amount = frac * pot + to_call (total chips from stack)
             raise_amount = int(frac * pot_total) + to_call
-            if raise_amount >= BIG_BLIND and raise_amount <= our_chips:
+            if raise_amount >= min_raise_chips and raise_amount <= our_chips:
                 mask[2 + fi] = 1.0
 
         # All-in always legal if we have chips.

@@ -232,8 +232,15 @@ def apply_action_kernel(
                 biggest = bets[i, p]
         to_call = biggest - bets[i, pi]
         raise_chips = int32(frac * float32(pot_total[i])) + to_call
-        if raise_chips < BIG_BLIND:
-            raise_chips = int32(BIG_BLIND)
+        if to_call > 0:
+            min_raise_by = to_call
+            if min_raise_by < BIG_BLIND:
+                min_raise_by = int32(BIG_BLIND)
+            min_raise = to_call + min_raise_by
+        else:
+            min_raise = int32(BIG_BLIND)
+        if raise_chips < min_raise:
+            raise_chips = min_raise
         if raise_chips > chips[i, pi]:
             raise_chips = chips[i, pi]
         chips[i, pi] -= raise_chips
@@ -530,10 +537,17 @@ def get_legal_mask_kernel(
                     biggest = bets[i, p]
             to_call = biggest - bets[i, pi]
             player_chips = chips[i, pi]
+            if to_call > 0:
+                min_raise_by = to_call
+                if min_raise_by < BIG_BLIND:
+                    min_raise_by = int32(BIG_BLIND)
+                min_raise = to_call + min_raise_by
+            else:
+                min_raise = int32(BIG_BLIND)
             # Check each fractional raise (actions 2-7).
             for fi in range(6):
                 raise_amount = int32(raise_fractions[fi] * float32(pot_total[i])) + to_call
-                if raise_amount >= BIG_BLIND and raise_amount <= player_chips:
+                if raise_amount >= min_raise and raise_amount <= player_chips:
                     out_masks[i, 2 + fi] = float32(1.0)
             # All-in (action 8).
             if player_chips > 0:

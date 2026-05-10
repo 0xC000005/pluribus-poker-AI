@@ -39,6 +39,13 @@ N_FEATURES = 126
 N_ACTIONS = 9
 RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
+
+def _min_raise_contribution(to_call: int, big_blind: int) -> int:
+    """Minimum chips the acting player must add for a legal raise."""
+    if to_call <= 0:
+        return big_blind
+    return to_call + max(to_call, big_blind)
+
 # ---------------------------------------------------------------------------
 # Precomputed player orders (shared by reference, never copied)
 # ---------------------------------------------------------------------------
@@ -211,9 +218,10 @@ class FastPokerState:
                 biggest = int(self.bets.max())
                 to_call = biggest - int(self.bets[pi])
                 player_chips = int(self.chips[pi])
+                min_raise = _min_raise_contribution(to_call, self.big_blind)
                 for i, frac in enumerate(RAISE_FRACTIONS):
                     raise_amount = int(frac * self.pot_total) + to_call
-                    if raise_amount >= self.big_blind and raise_amount <= player_chips:
+                    if raise_amount >= min_raise and raise_amount <= player_chips:
                         mask[2 + i] = 1.0
                 # All-in (action 8).
                 if player_chips > 0:
@@ -272,7 +280,10 @@ class FastPokerState:
             biggest = int(self.bets.max())
             to_call = biggest - int(self.bets[pi])
             raise_chips = int(frac * self.pot_total) + to_call
-            raise_chips = max(raise_chips, self.big_blind)
+            raise_chips = max(
+                raise_chips,
+                _min_raise_contribution(to_call, self.big_blind),
+            )
             raise_chips = min(raise_chips, int(self.chips[pi]))
             self.chips[pi] -= raise_chips
             self.bets[pi] += raise_chips

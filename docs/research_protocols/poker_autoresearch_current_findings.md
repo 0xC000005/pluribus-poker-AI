@@ -77,6 +77,19 @@ Slumbot diagnostic instrumentation:
   action mix, increment mix, parse/API error counts, and action-mapping drift.
   These fields are parsed into gate JSON so future smokes can distinguish
   poor strategy from adapter or mapping drift.
+- Pre-min-raise-fix paired 20-hand no-solver smokes showed the issue clearly:
+  `iter1000` produced 26 bet increments with mapping drift mean `0.119` and
+  max `0.911`, while `iter900` was fold-heavy with zero mapping drift.
+
+Resolved workflow issue: `action_mapping`.
+
+The training and live masks exposed under-minimum raise buckets. Example: SB
+first preflop marked the `0.5x` bucket legal even though it would spend only
+125 chips from stack and must be clamped to a legal raise-to-200 Slumbot action.
+This made the selected bucket differ from the executed live action. CPU,
+fast-state, CUDA, Slumbot play, and range-tracker masks now require fractional
+raise amounts to cover the no-limit minimum raise contribution before the
+bucket is legal.
 
 ## Diagnosis
 
@@ -115,3 +128,6 @@ script passes all 10 checks and is now part of Tier 0.
 4. Investigate why no-solver and solver Slumbot smokes remain negative despite
    strong local-random metrics by comparing the new action diagnostics across
    incumbent and candidate checkpoints.
+5. Re-run sparse Slumbot diagnostics after the minimum-raise parity fix. Treat
+   older checkpoints as potentially stale because they were trained with the
+   previous under-minimum raise legality.

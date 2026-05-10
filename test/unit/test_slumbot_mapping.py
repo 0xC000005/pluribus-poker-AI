@@ -1,8 +1,22 @@
+import sys
+from pathlib import Path
+
 from scripts.range_tracker import (
     map_slumbot_action_to_idx,
     _parse_action,
     SMALL_BLIND,
     BIG_BLIND,
+)
+
+
+SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from play_slumbot import (
+    action_to_slumbot,
+    get_legal_mask_from_parsed,
+    parse_action,
 )
 
 
@@ -52,3 +66,30 @@ def test_near_all_in_maps_allin():
     bet_to_allin = 50 + 20000
     m = map_slumbot_action_to_idx('b', bet_to_allin, before, acting_pos, parsed)
     assert m == [(8, 1.0)]
+
+
+def test_slumbot_mask_excludes_preflop_under_min_raise_bucket():
+    parsed = parse_action('')
+
+    mask = get_legal_mask_from_parsed(parsed, '', client_pos=1)
+
+    assert mask[3] == 0.0
+    assert mask[4] == 1.0
+
+
+def test_legal_slumbot_raises_round_trip_to_intended_bucket():
+    action_str = ''
+    parsed = parse_action(action_str)
+    client_pos = 1
+    mask = get_legal_mask_from_parsed(parsed, action_str, client_pos)
+
+    for action_idx in range(2, 8):
+        if mask[action_idx] <= 0:
+            continue
+        incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
+        bet_to = int(incr[1:])
+        mapped = map_slumbot_action_to_idx(
+            'b', bet_to, action_str, client_pos, parsed,
+        )
+        intended_weight = sum(weight for idx, weight in mapped if idx == action_idx)
+        assert intended_weight >= 0.95
