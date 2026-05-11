@@ -148,6 +148,7 @@ def _policy_decision(
     parsed: dict,
     *,
     allow_allin: bool = True,
+    strategy_source: str = "regret",
 ) -> PolicyDecision:
     features = build_features(
         list(case.hole_cards),
@@ -160,14 +161,26 @@ def _policy_decision(
     if not allow_allin:
         legal_mask = legal_mask.copy()
         legal_mask[8] = 0.0
+    feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
     with torch.no_grad():
-        advantages = (
-            value_net(torch.from_numpy(features).unsqueeze(0).to(device))
-            .cpu()
-            .numpy()[0]
-            .astype(np.float64)
-        )
-    strategy = regret_match(advantages, legal_mask).astype(np.float64)
+        if strategy_source == "policy_head":
+            adv_t, logits_t = value_net.forward_with_policy(feat_t)
+            advantages = adv_t.cpu().numpy()[0].astype(np.float64)
+            logits = logits_t.cpu().numpy()[0].astype(np.float64)
+        elif strategy_source == "regret":
+            advantages = value_net(feat_t).cpu().numpy()[0].astype(np.float64)
+            logits = None
+        else:
+            raise ValueError(f"Unknown strategy_source: {strategy_source}")
+
+    if strategy_source == "policy_head":
+        masked_logits = np.where(legal_mask > 0, logits, -1e9)
+        shifted = masked_logits - np.max(masked_logits)
+        probs = np.exp(shifted) * legal_mask
+        total = probs.sum()
+        strategy = probs / total if total > 0 else legal_mask / legal_mask.sum()
+    else:
+        strategy = regret_match(advantages, legal_mask).astype(np.float64)
     action = int(np.argmax(strategy))
     increment = action_to_slumbot(action, parsed, case.action_str, case.client_pos)
     return PolicyDecision(action, increment, strategy, advantages, legal_mask)
@@ -281,6 +294,13 @@ def _case_metrics(
         parsed,
         allow_allin=False,
     )
+    policy_head = _policy_decision(
+        value_net,
+        device,
+        case,
+        parsed,
+        strategy_source="policy_head",
+    )
     solver = _solver_decision(case, parsed, solver_iterations=solver_iterations)
     if solver is None:
         return {
@@ -295,6 +315,9 @@ def _case_metrics(
             ),
             "blueprint_allin_selected": bool(policy.action == 8),
             "allin_removed_action_changed": bool(policy.action != policy_no_allin.action),
+            "policy_head_action": policy_head.action,
+            "policy_head_action_legal": bool(policy_head.legal_mask[policy_head.action] > 0),
+            "policy_head_allin_selected": bool(policy_head.action == 8),
             "solver_action_legal": False,
             "solver_increment_legal": False,
         }
@@ -303,6 +326,7 @@ def _case_metrics(
     blueprint_no_allin_legal = bool(
         policy_no_allin.legal_mask[policy_no_allin.action] > 0
     )
+    policy_head_legal = bool(policy_head.legal_mask[policy_head.action] > 0)
     solver_legal = bool(policy.legal_mask[solver.action] > 0)
     solver_increment_legal = _mapped_increment_legal(
         solver.increment,
@@ -325,6 +349,7 @@ def _case_metrics(
             finite
             and blueprint_legal
             and blueprint_no_allin_legal
+            and policy_head_legal
             and solver_legal
             and solver_increment_legal
         ),
@@ -336,6 +361,11 @@ def _case_metrics(
         "blueprint_no_allin_action_legal": blueprint_no_allin_legal,
         "blueprint_allin_selected": bool(policy.action == 8),
         "allin_removed_action_changed": bool(policy.action != policy_no_allin.action),
+        "policy_head_action": policy_head.action,
+        "policy_head_increment": policy_head.increment,
+        "policy_head_action_legal": policy_head_legal,
+        "policy_head_allin_selected": bool(policy_head.action == 8),
+        "policy_head_action_l1_drift": float(np.abs(policy_head.strategy - solver.strategy).sum()),
         "solver_action": solver.action,
         "solver_increment": solver.increment,
         "solver_action_legal": solver_legal,
@@ -373,8 +403,14 @@ def run_resolver_benchmark(
     solver_results = [item for item in results if "solver_latency_ms" in item]
     latency_values = [float(item["solver_latency_ms"]) for item in solver_results]
     drift_values = [float(item["action_l1_drift"]) for item in solver_results]
+    policy_head_drift_values = [
+        float(item["policy_head_action_l1_drift"]) for item in solver_results
+    ]
     advantage_deltas = [float(item["advantage_delta_proxy"]) for item in solver_results]
     blueprint_allin_count = sum(1 for item in results if item.get("blueprint_allin_selected"))
+    policy_head_allin_count = sum(
+        1 for item in results if item.get("policy_head_allin_selected")
+    )
     allin_changed_count = sum(
         1 for item in results if item.get("allin_removed_action_changed")
     )
@@ -392,6 +428,9 @@ def run_resolver_benchmark(
         "avg_solver_latency_ms": float(np.mean(latency_values)) if latency_values else 0.0,
         "max_solver_latency_ms": float(np.max(latency_values)) if latency_values else 0.0,
         "mean_action_l1_drift": float(np.mean(drift_values)) if drift_values else 0.0,
+        "policy_head_mean_action_l1_drift": (
+            float(np.mean(policy_head_drift_values)) if policy_head_drift_values else 0.0
+        ),
         "mean_advantage_delta_proxy": (
             float(np.mean(advantage_deltas)) if advantage_deltas else 0.0
         ),
@@ -401,11 +440,15 @@ def run_resolver_benchmark(
         "no_allin_changed_rate": (
             float(allin_changed_count / len(results)) if results else 0.0
         ),
+        "policy_head_allin_rate": (
+            float(policy_head_allin_count / len(results)) if results else 0.0
+        ),
         "illegal_case_count": sum(
             1
             for item in results
             if not item.get("blueprint_action_legal")
             or not item.get("blueprint_no_allin_action_legal")
+            or not item.get("policy_head_action_legal")
             or not item.get("solver_action_legal")
             or not item.get("solver_increment_legal")
         ),
