@@ -187,6 +187,17 @@ GPU training readiness:
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
   `61.924` over 18,000 duplicate-swapped games. This should be treated as a
   policy-head diagnostic, not promotion evidence against the legacy incumbent.
+- Sparse Slumbot smokes did not confirm that local policy-head signal. The same
+  `trainsteps2k_4x512_100x2k_final.pt` checkpoint produced a noisy positive
+  50-hand sampled policy-head smoke (`avg_chips_per_hand=366`, CI `336`), but
+  the 300-hand confirmation was negative (`avg_chips_per_hand=-677`, CI `569`,
+  no solver/no all-in). The legacy incumbent under the same 300-hand sampled
+  no-solver/no-all-in protocol was also negative (`avg_chips_per_hand=-393`, CI
+  `329`), so the live protocol remains harsh and noisy, but the candidate still
+  fails transfer at this sample size.
+- Queueing two one-off gates inside the same second exposed a workflow bug:
+  timestamp-only gate names collided and one Slumbot smoke overwrote another.
+  One-off gate creation now uniquifies names with numeric suffixes when needed.
 - The 175-iteration checkpointed curve still failed extended confirmation:
   the final checkpoint moved from a near-miss 3,000-game comparison to
   `avg_chips_per_hand=-17.650`, lower95 `-31.220` over 6,000 games.

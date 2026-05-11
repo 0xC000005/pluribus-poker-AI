@@ -499,6 +499,19 @@ def _slug(text: str) -> str:
     return "-".join(parts[:8]) or "cycle"
 
 
+def _unique_gate_name(root: Path, base_name: str) -> str:
+    goal_path = _goal_path(root)
+    if not goal_path.exists():
+        return base_name
+    existing = set(_read_json(goal_path).get("gates", {}))
+    if base_name not in existing:
+        return base_name
+    suffix = 2
+    while f"{base_name}-{suffix}" in existing:
+        suffix += 1
+    return f"{base_name}-{suffix}"
+
+
 def new_cycle(
     root: str | Path,
     *,
@@ -605,7 +618,10 @@ def enqueue_gpu_training(
     if resume:
         resume = _resolve_existing_path(root, resume, label="Resume checkpoint")
 
-    gate_name = f"train-gpu-deep-cfr-{timestamp}-{_slug(prefix)}"
+    gate_name = _unique_gate_name(
+        root,
+        f"train-gpu-deep-cfr-{timestamp}-{_slug(prefix)}",
+    )
     python = _project_python(root)
     command = [
         python,
@@ -758,10 +774,10 @@ def enqueue_candidate_comparison(
             raise RuntimeError("No baseline checkpoint provided and no incumbent is recorded.")
     baseline = _resolve_existing_path(root, baseline_checkpoint, label="Baseline checkpoint")
 
-    gate_name = (
+    gate_name = _unique_gate_name(root, (
         f"eval-candidate-compare-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(candidate.stem)}"
-    )
+    ))
     python = _project_python(root)
     command = [
         python,
@@ -823,10 +839,10 @@ def enqueue_slumbot_smoke(
     """Create and queue a sparse live Slumbot smoke for a candidate checkpoint."""
     root = Path(root)
     model_path = _resolve_existing_path(root, model, label="Slumbot model checkpoint")
-    gate_name = (
+    gate_name = _unique_gate_name(root, (
         f"slumbot-candidate-smoke-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(model_path.stem)}"
-    )
+    ))
     python = _project_python(root)
     command = [
         python,
@@ -885,10 +901,10 @@ def enqueue_resolver_benchmark(
     """Create and queue a fixed public-state resolver benchmark for a checkpoint."""
     root = Path(root)
     model_path = _resolve_existing_path(root, model, label="Resolver benchmark model checkpoint")
-    gate_name = (
+    gate_name = _unique_gate_name(root, (
         f"resolver-candidate-benchmark-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(model_path.stem)}"
-    )
+    ))
     python = _project_python(root)
     command = [
         python,

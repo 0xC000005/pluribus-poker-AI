@@ -1,8 +1,10 @@
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
+import poker_ai.research.autoresearch as autoresearch
 from poker_ai.research.autoresearch import (
     CommandResult,
     close_cycle,
@@ -321,6 +323,36 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     assert "--strategy-source" in command
     assert "policy-head" in command
     assert "123" in command
+
+
+def test_enqueue_slumbot_smoke_uses_unique_gate_names_with_same_timestamp(
+    tmp_path,
+    monkeypatch,
+):
+    init_state(tmp_path)
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz):
+            return datetime(2026, 5, 11, 19, 29, 29, tzinfo=UTC)
+
+    monkeypatch.setattr(autoresearch, "datetime", FixedDateTime)
+
+    first = enqueue_slumbot_smoke(tmp_path, model, strategy_source="policy-head")
+    second = enqueue_slumbot_smoke(tmp_path, model, strategy_source="regret")
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    assert first["gate"] != second["gate"]
+    assert first["gate"] in goal["gates"]
+    assert second["gate"] in goal["gates"]
+    assert [item["gate"] for item in state["hypothesis_queue"][-2:]] == [
+        first["gate"],
+        second["gate"],
+    ]
 
 
 def test_enqueue_resolver_benchmark_creates_candidate_gate(tmp_path):
