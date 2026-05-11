@@ -225,6 +225,25 @@ def _default_goal() -> dict:
                     ]
                 ],
             },
+            "eval-resolver-fixed-states": {
+                "description": (
+                    "Fixed public-state turn/river benchmark for blueprint-vs-resolver "
+                    "legality, latency, action drift, and learned-advantage proxies."
+                ),
+                "timeout_seconds": 1200,
+                "commands": [
+                    [
+                        sys.executable,
+                        "scripts/poker_resolver_benchmark.py",
+                        "--checkpoint",
+                        "models/slumbot_2p_iter1000.pt",
+                        "--device",
+                        "auto",
+                        "--solver-iterations",
+                        "25",
+                    ]
+                ],
+            },
             "slumbot-smoke": {
                 "description": "Tiny live Slumbot API smoke with conservative diagnostics settings.",
                 "timeout_seconds": 600,
@@ -650,6 +669,58 @@ def enqueue_slumbot_smoke(
         ),
         cycle_type="experiment",
         failure_class="distribution_shift",
+        gate=gate_name,
+    )
+
+
+def enqueue_resolver_benchmark(
+    root: str | Path,
+    model: str | Path,
+    *,
+    solver_iterations: int = 25,
+    max_cases: int | None = None,
+    device: str = "auto",
+    timeout_seconds: int = 1200,
+) -> dict:
+    """Create and queue a fixed public-state resolver benchmark for a checkpoint."""
+    root = Path(root)
+    model_path = _resolve_existing_path(root, model, label="Resolver benchmark model checkpoint")
+    gate_name = (
+        f"resolver-candidate-benchmark-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
+        f"{_slug(model_path.stem)}"
+    )
+    command = [
+        sys.executable,
+        "scripts/poker_resolver_benchmark.py",
+        "--checkpoint",
+        str(model_path),
+        "--device",
+        device,
+        "--solver-iterations",
+        str(solver_iterations),
+    ]
+    if max_cases is not None:
+        command.extend(["--max-cases", str(max_cases)])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "One-off fixed public-state resolver benchmark for a candidate checkpoint. "
+            "This catches legality, latency, and blueprint-vs-resolver drift before "
+            "spending Slumbot hands."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            f"Candidate checkpoint {model_path.name} should pass fixed turn/river "
+            "resolver legality and drift diagnostics before live Slumbot evaluation."
+        ),
+        cycle_type="experiment",
+        failure_class="search_quality",
         gate=gate_name,
     )
 

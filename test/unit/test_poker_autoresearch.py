@@ -8,6 +8,7 @@ from poker_ai.research.autoresearch import (
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
     init_state,
@@ -65,6 +66,7 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "eval-local-multiseed" in goal["gates"]
     assert "eval-incumbent-self-compare" in goal["gates"]
     assert "eval-head-to-head-self-compare" in goal["gates"]
+    assert "eval-resolver-fixed-states" in goal["gates"]
     assert "slumbot-smoke" in goal["gates"]
     assert "slumbot-solver-smoke" in goal["gates"]
 
@@ -302,6 +304,34 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     assert "123" in command
 
 
+def test_enqueue_resolver_benchmark_creates_candidate_gate(tmp_path):
+    init_state(tmp_path)
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    queued = enqueue_resolver_benchmark(
+        tmp_path,
+        model,
+        solver_iterations=9,
+        max_cases=2,
+        device="cpu",
+        timeout_seconds=321,
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    gate = goal["gates"][queued["gate"]]
+    command = gate["commands"][0]
+    assert queued["gate"].startswith("resolver-candidate-benchmark-")
+    assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
+    assert str(model) in command
+    assert "scripts/poker_resolver_benchmark.py" in command
+    assert "9" in command
+    assert "2" in command
+    assert "321" == str(gate["timeout_seconds"])
+
+
 def test_set_incumbent_records_checkpoint_metadata(tmp_path):
     init_state(tmp_path)
     checkpoint = tmp_path / "models" / "candidate.pt"
@@ -438,3 +468,43 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--no-solver" in goal["gates"][queued["gate"]]["commands"][0]
+
+
+def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-resolver",
+            "--model",
+            str(model),
+            "--solver-iterations",
+            "8",
+            "--max-cases",
+            "1",
+            "--device",
+            "cpu",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    assert queued["gate"] in goal["gates"]
+    assert "--max-cases" in goal["gates"][queued["gate"]]["commands"][0]

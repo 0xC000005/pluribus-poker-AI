@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 - `poker_ai/deep_cfr/` is the active full-deck Deep CFR stack. Key files: `deep_cfr.py` (reference loop), `networks.py` (advantage/policy heads), `buffer.py`, and `cuda/` (Numba kernels + `GPUDeepCFRTrainer`).
-- `poker_ai/research/` contains the autoresearch workflow primitives, local evaluation helpers, promotion blockers, and Slumbot smoke parsers.
+- `poker_ai/research/` contains the autoresearch workflow primitives, local evaluation helpers, fixed-state resolver benchmarks, promotion blockers, and Slumbot smoke parsers.
 - `poker_ai/games/full_deck/` is the canonical 52-card state and feature encoder used for parity checks.
 - `scripts/` contains runnable entrypoints: `run_gpu_deep_cfr.py`, `train_slumbot_2p.py`, `play_slumbot.py`, `solver.py`, and diagnostics.
 - `test/unit/` holds fast regression tests such as `test_network_mask.py`, `test_legal_mask_parity.py`, and `test_slumbot_mapping.py`.
@@ -18,7 +18,10 @@
 - Autoresearch status: `python scripts/poker_autoresearch.py status`
 - Autoresearch comparison gate: `python scripts/poker_autoresearch.py gate eval-incumbent-self-compare`
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
+- Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
+- Resolver benchmark CLI: `python scripts/poker_resolver_benchmark.py --checkpoint models/candidate.pt --solver-iterations 25`
 - Queue candidate comparison: `python scripts/poker_autoresearch.py enqueue-compare --candidate models/candidate.pt --head-to-head`
+- Queue candidate resolver check: `python scripts/poker_autoresearch.py enqueue-resolver --model models/candidate.pt`
 - Unit checks: `pytest -q test/unit/test_network_mask.py test/unit/test_slumbot_mapping.py test/unit/test_legal_mask_parity.py`
 
 ## Coding Style & Naming Conventions

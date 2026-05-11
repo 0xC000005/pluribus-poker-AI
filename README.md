@@ -21,6 +21,9 @@ recommended path for new work.
   and optionally uses the turn/river solver.
 - `scripts/solver.py` and `scripts/fast_cfr.py` implement the turn/river
   range-vs-range CFR+ solver.
+- `scripts/poker_resolver_benchmark.py` runs fixed public-state diagnostics for
+  blueprint-vs-resolver legality, latency, action drift, and learned-advantage
+  proxies before spending live Slumbot hands.
 
 ## Action And Feature Contract
 
@@ -101,6 +104,23 @@ python scripts/play_slumbot.py \
 
 Use `--no-solver` to disable turn/river solving and `--no-allin` for lower
 variance diagnostics.
+
+## Resolver Diagnostics
+
+Run the fixed turn/river benchmark before promoting a checkpoint to live
+Slumbot evaluation:
+
+```bash
+python scripts/poker_resolver_benchmark.py \
+  --checkpoint models/slumbot_2p_iter1000.pt \
+  --solver-iterations 25
+```
+
+The same check is available as an autoresearch gate:
+
+```bash
+python scripts/poker_autoresearch.py gate eval-resolver-fixed-states
+```
 
 ## Testing
 

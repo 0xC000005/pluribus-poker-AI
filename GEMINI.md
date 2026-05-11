@@ -21,6 +21,8 @@ clustering, terminal play, and visualisation code are retained for reference.
 - `scripts/play_slumbot.py`: Slumbot API adapter plus optional turn/river
   solver.
 - `scripts/solver.py` and `scripts/fast_cfr.py`: range-vs-range CFR+ solver.
+- `scripts/poker_resolver_benchmark.py`: fixed public-state resolver benchmark
+  for legality, latency, blueprint drift, and learned-advantage proxies.
 
 ## Current Contract
 
@@ -61,6 +63,13 @@ Slumbot play:
 
 ```bash
 python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy
+```
+
+Resolver diagnostics:
+
+```bash
+python scripts/poker_resolver_benchmark.py --checkpoint models/slumbot_2p_iter1000.pt --solver-iterations 25
+python scripts/poker_autoresearch.py gate eval-resolver-fixed-states
 ```
 
 ## Development Rules

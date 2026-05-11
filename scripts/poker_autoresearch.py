@@ -17,6 +17,7 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
     init_state,
@@ -93,6 +94,16 @@ def build_parser() -> argparse.ArgumentParser:
     slumbot.add_argument("--no-allin", action="store_true")
     slumbot.add_argument("--no-solver", action="store_true")
     slumbot.add_argument("--timeout-seconds", type=int, default=600)
+
+    resolver = subparsers.add_parser(
+        "enqueue-resolver",
+        help="Create and queue a fixed public-state resolver benchmark gate.",
+    )
+    resolver.add_argument("--model", required=True)
+    resolver.add_argument("--solver-iterations", type=int, default=25)
+    resolver.add_argument("--max-cases", type=int)
+    resolver.add_argument("--device", default="auto")
+    resolver.add_argument("--timeout-seconds", type=int, default=1200)
 
     close = subparsers.add_parser("close-cycle", help="Close the active research cycle.")
     close.add_argument("--run-id", required=True)
@@ -184,6 +195,19 @@ def main(argv: list[str] | None = None) -> int:
                 greedy=args.greedy,
                 no_allin=args.no_allin,
                 no_solver=args.no_solver,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-resolver":
+        _emit(
+            enqueue_resolver_benchmark(
+                root,
+                args.model,
+                solver_iterations=args.solver_iterations,
+                max_cases=args.max_cases,
+                device=args.device,
                 timeout_seconds=args.timeout_seconds,
             )
         )
