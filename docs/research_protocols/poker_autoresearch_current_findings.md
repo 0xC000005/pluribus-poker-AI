@@ -151,6 +151,11 @@ GPU training readiness:
   run reached iteration 1050 with `avg_iter_seconds=6.148` and
   `traversals_per_second=325.286`, but comparison was negative:
   `avg_chips_per_hand=-106.451`, lower95 `-183.261`.
+- Fresh 4x512 GPU run reached 100 iterations with 2000 traversals and 1000
+  training steps per iteration in `751.758s` (`avg_iter_seconds=7.518`,
+  `traversals_per_second=266.043`). The 3,000-game duplicate-swapped local
+  comparison was close but not promotable: `avg_chips_per_hand=15.758`,
+  lower95 `-9.706`.
 - A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
   replay cache consumed most of the 8GB card. The trainer now skips the GPU
   replay cache when its estimated tensor footprint would exceed a safe fraction
