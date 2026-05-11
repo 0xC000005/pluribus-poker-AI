@@ -56,10 +56,16 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     assert 0 <= result["blueprint_action"] < N_ACTIONS
     assert 0 <= result["solver_action"] < N_ACTIONS
     assert result["blueprint_action_legal"] is True
+    assert 0 <= result["blueprint_no_allin_action"] < N_ACTIONS
+    assert result["blueprint_no_allin_action_legal"] is True
+    assert isinstance(result["blueprint_allin_selected"], bool)
+    assert isinstance(result["allin_removed_action_changed"], bool)
     assert result["solver_action_legal"] is True
     assert result["solver_latency_ms"] >= 0.0
     assert 0.0 <= result["action_l1_drift"] <= 2.0
     assert isinstance(result["advantage_delta_proxy"], float)
+    assert "blueprint_allin_rate" in metrics
+    assert "no_allin_changed_rate" in metrics
 
 
 def test_resolver_benchmark_cli_emits_json_for_checkpoint(tmp_path):

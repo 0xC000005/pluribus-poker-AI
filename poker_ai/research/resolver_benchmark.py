@@ -146,6 +146,8 @@ def _policy_decision(
     device: torch.device,
     case: ResolverBenchmarkCase,
     parsed: dict,
+    *,
+    allow_allin: bool = True,
 ) -> PolicyDecision:
     features = build_features(
         list(case.hole_cards),
@@ -155,6 +157,9 @@ def _policy_decision(
         parsed,
     )
     legal_mask = get_legal_mask_from_parsed(parsed, case.action_str, case.client_pos)
+    if not allow_allin:
+        legal_mask = legal_mask.copy()
+        legal_mask[8] = 0.0
     with torch.no_grad():
         advantages = (
             value_net(torch.from_numpy(features).unsqueeze(0).to(device))
@@ -269,6 +274,13 @@ def _case_metrics(
         }
 
     policy = _policy_decision(value_net, device, case, parsed)
+    policy_no_allin = _policy_decision(
+        value_net,
+        device,
+        case,
+        parsed,
+        allow_allin=False,
+    )
     solver = _solver_decision(case, parsed, solver_iterations=solver_iterations)
     if solver is None:
         return {
@@ -277,11 +289,20 @@ def _case_metrics(
             "validation_errors": ["solver_skipped"],
             "blueprint_action": policy.action,
             "blueprint_action_legal": bool(policy.legal_mask[policy.action] > 0),
+            "blueprint_no_allin_action": policy_no_allin.action,
+            "blueprint_no_allin_action_legal": bool(
+                policy_no_allin.legal_mask[policy_no_allin.action] > 0
+            ),
+            "blueprint_allin_selected": bool(policy.action == 8),
+            "allin_removed_action_changed": bool(policy.action != policy_no_allin.action),
             "solver_action_legal": False,
             "solver_increment_legal": False,
         }
 
     blueprint_legal = bool(policy.legal_mask[policy.action] > 0)
+    blueprint_no_allin_legal = bool(
+        policy_no_allin.legal_mask[policy_no_allin.action] > 0
+    )
     solver_legal = bool(policy.legal_mask[solver.action] > 0)
     solver_increment_legal = _mapped_increment_legal(
         solver.increment,
@@ -300,10 +321,21 @@ def _case_metrics(
     advantage_delta = float(policy.advantages[solver.action] - policy.advantages[policy.action])
     return {
         **base,
-        "passed": bool(finite and blueprint_legal and solver_legal and solver_increment_legal),
+        "passed": bool(
+            finite
+            and blueprint_legal
+            and blueprint_no_allin_legal
+            and solver_legal
+            and solver_increment_legal
+        ),
         "blueprint_action": policy.action,
         "blueprint_increment": policy.increment,
         "blueprint_action_legal": blueprint_legal,
+        "blueprint_no_allin_action": policy_no_allin.action,
+        "blueprint_no_allin_increment": policy_no_allin.increment,
+        "blueprint_no_allin_action_legal": blueprint_no_allin_legal,
+        "blueprint_allin_selected": bool(policy.action == 8),
+        "allin_removed_action_changed": bool(policy.action != policy_no_allin.action),
         "solver_action": solver.action,
         "solver_increment": solver.increment,
         "solver_action_legal": solver_legal,
@@ -342,6 +374,10 @@ def run_resolver_benchmark(
     latency_values = [float(item["solver_latency_ms"]) for item in solver_results]
     drift_values = [float(item["action_l1_drift"]) for item in solver_results]
     advantage_deltas = [float(item["advantage_delta_proxy"]) for item in solver_results]
+    blueprint_allin_count = sum(1 for item in results if item.get("blueprint_allin_selected"))
+    allin_changed_count = sum(
+        1 for item in results if item.get("allin_removed_action_changed")
+    )
     metadata = checkpoint_metadata or {}
     return {
         "passed": all(bool(item["passed"]) for item in results),
@@ -359,10 +395,17 @@ def run_resolver_benchmark(
         "mean_advantage_delta_proxy": (
             float(np.mean(advantage_deltas)) if advantage_deltas else 0.0
         ),
+        "blueprint_allin_rate": (
+            float(blueprint_allin_count / len(results)) if results else 0.0
+        ),
+        "no_allin_changed_rate": (
+            float(allin_changed_count / len(results)) if results else 0.0
+        ),
         "illegal_case_count": sum(
             1
             for item in results
             if not item.get("blueprint_action_legal")
+            or not item.get("blueprint_no_allin_action_legal")
             or not item.get("solver_action_legal")
             or not item.get("solver_increment_legal")
         ),
