@@ -1,6 +1,7 @@
 # poker_ai_visualisation
 
-> A visualisation of the poker game state 
+Legacy Vue frontend for the short-deck visualisation app. It is not part of the
+current full-deck Deep CFR or Slumbot play path.
 
 ## Build Setup
 
@@ -18,4 +19,5 @@ npm run build
 npm run build --report
 ```
 
-For a detailed explanation on how things work, check out the [guide](http://vuejs-templates.github.io/webpack/) and [docs for vue-loader](http://vuejs.github.io/vue-loader).
+For current engine development, use the Python tests and Slumbot scripts at the
+repository root instead of this UI.

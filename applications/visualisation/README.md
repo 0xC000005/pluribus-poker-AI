@@ -1,49 +1,37 @@
 ## Visualisation Code
 
-This code is to visualise a given instance of the `ShortDeckPokerState`. [The frontend code is based on this codepen.](https://codepen.io/Rovak/pen/ExYeQar)
+This is a legacy visualisation app for `ShortDeckPokerState`. It is not wired
+to the current full-deck Deep CFR or Slumbot training path. Use it only when
+working on the old short-deck/terminal stack.
 
-It looks like this:
-<p align="center">
-  <img src="https://github.com/fedden/poker_ai-poker-AI/blob/develop/assets/visualisation.png">
-</p>
+### Run
 
-### How to run
+Build the Vue frontend first:
 
-First build the frontend, this will be served a static files by the `PokerPlot` class.
 ```bash
-cd frontend
+cd applications/visualisation/frontend
+npm install
 npm run build
 ```
 
-Next run the plot in some script, i.e:
+Then create a `PokerPlot` instance from Python and send it short-deck states:
+
 ```python
 from plot import PokerPlot
 from poker_ai.games.short_deck.player import ShortDeckPokerPlayer
 from poker_ai.games.short_deck.state import ShortDeckPokerState
 from poker_ai.poker.pot import Pot
 
+pot = Pot()
+players = [
+    ShortDeckPokerPlayer(player_i=i, initial_chips=10000, pot=pot)
+    for i in range(6)
+]
+state = ShortDeckPokerState(players=players, pickle_dir="../../research/blueprint_algo/")
 
-def get_state() -> ShortDeckPokerState:
-    """Gets a state to visualise"""
-    n_players = 6
-    pot = Pot()
-    players = [
-        ShortDeckPokerPlayer(player_i=player_i, initial_chips=10000, pot=pot)
-        for player_i in range(n_players)
-    ]
-    return ShortDeckPokerState(
-        players=players, 
-        pickle_dir="../../research/blueprint_algo/"
-    )
-
-
-pp: PokerPlot = PokerPlot()
-# If you visit http://localhost:5000/ now you will see an empty table.
-
-# ... later on in the code, as proxy for some code that obtains a new state ...
-# Obtain a new state.
-state: ShortDeckPokerState = get_state()
-# Update the state to be plotted, this is sent via websockets to the frontend.
-pp.update_state(state)
-# If you visit http://localhost:5000/ now you will see table with 6 players.
+plot = PokerPlot()
+plot.update_state(state)
 ```
+
+For current engine work, prefer the parity tests and Slumbot diagnostics under
+`scripts/`.
