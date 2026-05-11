@@ -380,6 +380,107 @@ def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
     assert "678" == str(gate["timeout_seconds"])
 
 
+def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_path):
+    init_state(tmp_path)
+    baseline = tmp_path / "models" / "incumbent.pt"
+    baseline.parent.mkdir()
+    baseline.write_bytes(b"checkpoint")
+    set_incumbent(tmp_path, baseline, reason="baseline")
+
+    queued = enqueue_gpu_training(
+        tmp_path,
+        n_iterations=4,
+        n_traversals=3,
+        save_dir="models/train_gate",
+        prefix="probe",
+        save_every=2,
+        auto_compare=True,
+        compare_n_games=7,
+        compare_seeds="1,2",
+        compare_timeout_seconds=99,
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    gate = goal["gates"][queued["gate"]]
+    command = gate["commands"][0]
+    queued_item = state["hypothesis_queue"][-1]
+    assert "--save-every" in command
+    assert "2" in command
+    assert queued_item["postprocess"] == {
+        "type": "compare_training_checkpoints",
+        "n_games": 7,
+        "seeds": "1,2",
+        "device": "auto",
+        "timeout_seconds": 99,
+        "head_to_head": True,
+    }
+
+
+def test_continuous_queues_comparisons_for_saved_training_checkpoints(tmp_path):
+    init_state(tmp_path)
+    baseline = tmp_path / "models" / "incumbent.pt"
+    baseline.parent.mkdir()
+    baseline.write_bytes(b"checkpoint")
+    set_incumbent(tmp_path, baseline, reason="baseline")
+
+    state_path = tmp_path / "autoresearch-session" / "poker_state.json"
+    state = _read_json(state_path)
+    state["hypothesis_queue"] = []
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    save_dir = tmp_path / "models" / "train_gate"
+    enqueue_gpu_training(
+        tmp_path,
+        n_iterations=2,
+        n_traversals=3,
+        save_dir=save_dir,
+        prefix="probe",
+        save_every=1,
+        auto_compare=True,
+        compare_n_games=11,
+        compare_seeds="5,6",
+    )
+
+    def training_runner(command, timeout_seconds=None):
+        iter_path = save_dir / "probe_iter_1.pt"
+        final_path = save_dir / "probe_final.pt"
+        save_dir.mkdir(parents=True, exist_ok=True)
+        iter_path.write_bytes(b"iter")
+        final_path.write_bytes(b"final")
+        return CommandResult(
+            command=list(command),
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "passed": True,
+                    "mode": "autoresearch_gpu_deep_cfr_train",
+                    "checkpoint": str(final_path),
+                    "checkpoints": [
+                        {"path": str(iter_path), "kind": "periodic", "iteration": 1},
+                        {"path": str(final_path), "kind": "final", "iteration": 2},
+                    ],
+                }
+            ),
+            stderr="",
+            seconds=0.1,
+        )
+
+    result = continuous(tmp_path, max_cycles=1, runner=training_runner, sleep_seconds=0)
+
+    assert result == {"cycles_completed": 1, "stopped_reason": "max_cycles"}
+    state = _read_json(state_path)
+    compare_gates = [item["gate"] for item in state["hypothesis_queue"]]
+    assert len(compare_gates) == 2
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    commands = [goal["gates"][gate]["commands"][0] for gate in compare_gates]
+    assert str(save_dir / "probe_iter_1.pt") in commands[0]
+    assert str(save_dir / "probe_final.pt") in commands[1]
+    assert all("--head-to-head" in command for command in commands)
+    assert all("11" in command for command in commands)
+    assert all("5,6" in command for command in commands)
+
+
 def test_set_incumbent_records_checkpoint_metadata(tmp_path):
     init_state(tmp_path)
     checkpoint = tmp_path / "models" / "candidate.pt"
@@ -583,6 +684,11 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
             "3",
             "--prefix",
             "probe",
+            "--save-every",
+            "1",
+            "--auto-compare",
+            "--compare-n-games",
+            "6",
             "--timeout-seconds",
             "55",
         ],
@@ -597,3 +703,7 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
     command = goal["gates"][queued["gate"]]["commands"][0]
     assert "scripts/poker_autoresearch_train.py" in command
     assert "probe" in command
+    assert "--save-every" in command
+    assert "1" in command
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    assert state["hypothesis_queue"][-1]["postprocess"]["n_games"] == 6

@@ -134,8 +134,18 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--batch-size", type=int, default=4096)
     train.add_argument("--save-dir")
     train.add_argument("--prefix", default="candidate")
+    train.add_argument("--save-every", type=int, default=0)
     train.add_argument("--resume")
     train.add_argument("--eval-games", type=int, default=0)
+    train.add_argument(
+        "--auto-compare",
+        action="store_true",
+        help="After training passes, queue incumbent head-to-head comparisons for emitted checkpoints.",
+    )
+    train.add_argument("--compare-n-games", type=int, default=500)
+    train.add_argument("--compare-seeds", default="20260511,20260512,20260513")
+    train.add_argument("--compare-device", default="auto")
+    train.add_argument("--compare-timeout-seconds", type=int, default=2400)
     train.add_argument("--timeout-seconds", type=int, default=7200)
 
     close = subparsers.add_parser("close-cycle", help="Close the active research cycle.")
@@ -262,8 +272,14 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 save_dir=args.save_dir,
                 prefix=args.prefix,
+                save_every=args.save_every,
                 resume=args.resume,
                 eval_games=args.eval_games,
+                auto_compare=args.auto_compare,
+                compare_n_games=args.compare_n_games,
+                compare_seeds=args.compare_seeds,
+                compare_device=args.compare_device,
+                compare_timeout_seconds=args.compare_timeout_seconds,
                 timeout_seconds=args.timeout_seconds,
             )
         )

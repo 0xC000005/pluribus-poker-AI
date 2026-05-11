@@ -539,6 +539,7 @@ def enqueue_cycle(
     cycle_type: str,
     failure_class: str,
     gate: str,
+    postprocess: dict | None = None,
 ) -> dict:
     root = Path(root)
     state = _read_json(_state_path(root))
@@ -549,6 +550,8 @@ def enqueue_cycle(
         "failure_class": failure_class,
         "gate": gate,
     }
+    if postprocess is not None:
+        item["postprocess"] = postprocess
     state.setdefault("hypothesis_queue", []).append(item)
     state["updated_at"] = _now()
     _write_json(_state_path(root), state)
@@ -575,8 +578,15 @@ def enqueue_gpu_training(
     batch_size: int = 4096,
     save_dir: str | Path | None = None,
     prefix: str = "candidate",
+    save_every: int = 0,
     resume: str | Path | None = None,
     eval_games: int = 0,
+    auto_compare: bool = False,
+    compare_n_games: int = 500,
+    compare_seeds: str = "20260511,20260512,20260513",
+    compare_device: str = "auto",
+    compare_timeout_seconds: int = 2400,
+    compare_head_to_head: bool = True,
     timeout_seconds: int = 7200,
 ) -> dict:
     """Create and queue a GPU Deep CFR candidate-training gate."""
@@ -615,6 +625,8 @@ def enqueue_gpu_training(
         str(save_dir),
         "--prefix",
         prefix,
+        "--save-every",
+        str(save_every),
         "--eval-games",
         str(eval_games),
     ]
@@ -631,6 +643,16 @@ def enqueue_gpu_training(
         "commands": [command],
     }
     _write_json(_goal_path(root), goal)
+    postprocess = None
+    if auto_compare:
+        postprocess = {
+            "type": "compare_training_checkpoints",
+            "n_games": int(compare_n_games),
+            "seeds": compare_seeds,
+            "device": compare_device,
+            "timeout_seconds": int(compare_timeout_seconds),
+            "head_to_head": bool(compare_head_to_head),
+        }
     return enqueue_cycle(
         root,
         hypothesis=(
@@ -640,7 +662,67 @@ def enqueue_gpu_training(
         cycle_type="experiment",
         failure_class="compute_efficiency",
         gate=gate_name,
+        postprocess=postprocess,
     )
+
+
+def _first_stdout_json(metrics: dict) -> dict | None:
+    for command_metric in metrics.get("commands", []):
+        payload = command_metric.get("stdout_json")
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _training_checkpoint_paths(payload: dict) -> list[str]:
+    paths: list[str] = []
+    seen: set[str] = set()
+    for record in payload.get("checkpoints", []):
+        if isinstance(record, dict):
+            path = record.get("path")
+        else:
+            path = record
+        if not isinstance(path, str) or not path:
+            continue
+        if path not in seen:
+            paths.append(path)
+            seen.add(path)
+    final = payload.get("checkpoint")
+    if isinstance(final, str) and final and final not in seen:
+        paths.append(final)
+    return paths
+
+
+def _postprocess_completed_cycle(root: Path, item: dict, metrics: dict) -> list[dict]:
+    postprocess = item.get("postprocess") or {}
+    if not metrics.get("passed"):
+        return []
+    if postprocess.get("type") != "compare_training_checkpoints":
+        return []
+
+    payload = _first_stdout_json(metrics)
+    if payload is None or payload.get("mode") != "autoresearch_gpu_deep_cfr_train":
+        return []
+
+    queued: list[dict] = []
+    for checkpoint in _training_checkpoint_paths(payload):
+        checkpoint_path = Path(checkpoint)
+        if not checkpoint_path.is_absolute():
+            checkpoint_path = root / checkpoint_path
+        if not checkpoint_path.exists():
+            continue
+        queued.append(
+            enqueue_candidate_comparison(
+                root,
+                checkpoint_path,
+                n_games=int(postprocess.get("n_games", 500)),
+                seeds=str(postprocess.get("seeds", "20260511,20260512,20260513")),
+                device=str(postprocess.get("device", "auto")),
+                timeout_seconds=int(postprocess.get("timeout_seconds", 2400)),
+                head_to_head=bool(postprocess.get("head_to_head", True)),
+            )
+        )
+    return queued
 
 
 def enqueue_candidate_comparison(
@@ -954,6 +1036,13 @@ def continuous(
             gate=item["gate"],
         )
         metrics = run_gate(root, item["gate"], run_dir=cycle["run_dir"], runner=runner)
+        if metrics["passed"]:
+            queued_followups = _postprocess_completed_cycle(root, item, metrics)
+            if queued_followups:
+                metrics["postprocessed"] = {
+                    "queued_followup_cycles": queued_followups,
+                }
+                _write_json(Path(cycle["run_dir"]) / "metrics.json", metrics)
         outcome = "passed" if metrics["passed"] else "failed"
         close_cycle(
             root,

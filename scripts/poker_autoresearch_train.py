@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--save-dir", default="models/autoresearch_gpu")
     parser.add_argument("--prefix", default="candidate")
+    parser.add_argument(
+        "--save-every",
+        type=int,
+        default=0,
+        help="Save periodic checkpoints every N trainer iterations; 0 disables.",
+    )
     parser.add_argument("--eval-games", type=int, default=0)
     return parser
 
@@ -75,14 +81,32 @@ def main(argv: list[str] | None = None) -> int:
         save_dir.mkdir(parents=True, exist_ok=True)
 
         iteration_times: list[float] = []
+        checkpoints: list[dict[str, object]] = []
         started = time.monotonic()
         for _ in range(args.n_iterations):
             iter_started = time.monotonic()
             trainer.run_iteration()
             iteration_times.append(time.monotonic() - iter_started)
+            if args.save_every > 0 and trainer.iteration % args.save_every == 0:
+                periodic = save_dir / f"{args.prefix}_iter_{trainer.iteration}.pt"
+                trainer.save(str(periodic))
+                checkpoints.append(
+                    {
+                        "path": str(periodic),
+                        "kind": "periodic",
+                        "iteration": int(trainer.iteration),
+                    }
+                )
 
         checkpoint = save_dir / f"{args.prefix}_final.pt"
         trainer.save(str(checkpoint))
+        checkpoints.append(
+            {
+                "path": str(checkpoint),
+                "kind": "final",
+                "iteration": int(trainer.iteration),
+            }
+        )
         elapsed = time.monotonic() - started
         buffer_size = sum(len(buffer) for buffer in trainer.buffers)
 
@@ -103,10 +127,12 @@ def main(argv: list[str] | None = None) -> int:
             "n_traversals": int(args.n_traversals),
             "n_training_steps": int(args.n_training_steps),
             "batch_size": int(args.batch_size),
+            "save_every": int(args.save_every),
             "hidden_dim": int(args.hidden_dim),
             "n_layers": int(args.n_layers),
             "buffer_capacity": int(args.buffer_capacity),
             "buffer_size": int(buffer_size),
+            "checkpoints": checkpoints,
             "elapsed_seconds": round(float(elapsed), 3),
             "avg_iter_seconds": round(float(avg_iter_seconds), 3),
             "iters_per_hour": round(3600.0 / avg_iter_seconds, 3)

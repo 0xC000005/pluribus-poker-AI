@@ -156,10 +156,18 @@ GPU training readiness:
   `traversals_per_second=266.043`). The 3,000-game duplicate-swapped local
   comparison was close but not promotable: `avg_chips_per_hand=15.758`,
   lower95 `-9.706`.
+- Extended evaluation of the same 100-iteration checkpoint over 6,000
+  duplicate-swapped games was not promotable: `avg_chips_per_hand=-9.883`,
+  lower95 `-67.258`.
 - Fresh 4x512 GPU run at 200 iterations with the same per-iteration budget
   completed in `1497.888s` (`avg_iter_seconds=7.489`,
   `traversals_per_second=267.043`) but regressed locally:
   `avg_chips_per_hand=-23.961`, lower95 `-76.519`.
+- Autoresearch GPU training now supports periodic `--save-every` checkpoints
+  and `--auto-compare`, which queues incumbent head-to-head comparisons for
+  every emitted checkpoint after the training gate passes. This is now the
+  preferred unattended mode because current results are non-monotonic across
+  training length.
 - A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
   replay cache consumed most of the 8GB card. The trainer now skips the GPU
   replay cache when its estimated tensor footprint would exceed a safe fraction

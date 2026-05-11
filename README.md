@@ -95,14 +95,17 @@ python scripts/train_slumbot_2p.py \
 ```
 
 Autoresearch GPU training gate, which emits JSON throughput metrics and a
-candidate checkpoint path:
+candidate checkpoint path. Use periodic saves plus auto-compare for longer
+runs so the workflow evaluates intermediate checkpoints against the incumbent:
 
 ```bash
 python scripts/poker_autoresearch.py enqueue-train \
   --n-iterations 50 \
   --n-traversals 4000 \
   --n-training-steps 1500 \
-  --prefix candidate_gpu
+  --prefix candidate_gpu \
+  --save-every 25 \
+  --auto-compare
 ```
 
 ## Playing Slumbot

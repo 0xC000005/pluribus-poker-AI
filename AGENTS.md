@@ -19,7 +19,7 @@
 - Autoresearch status: `python scripts/poker_autoresearch.py status`
 - Autoresearch comparison gate: `python scripts/poker_autoresearch.py gate eval-incumbent-self-compare`
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
-- Queue GPU candidate training: `python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --prefix candidate_gpu`
+- Queue GPU candidate training: `python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --prefix candidate_gpu --save-every 25 --auto-compare`
 - Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
 - Resolver benchmark CLI: `python scripts/poker_resolver_benchmark.py --checkpoint models/candidate.pt --solver-iterations 25 --solver-backend auto`
 - Queue candidate comparison: `python scripts/poker_autoresearch.py enqueue-compare --candidate models/candidate.pt --head-to-head`
@@ -35,6 +35,7 @@
 - Place isolated logic tests in `test/unit/`; broader flows in `test/functional/`.
 - For any action-space, feature, or mapping change, add/update parity tests and include regression coverage.
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
+- For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
 

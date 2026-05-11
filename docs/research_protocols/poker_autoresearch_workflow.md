@@ -202,6 +202,11 @@ one-off comparison gate in `poker_goal.json`, queues it, and defaults the
 baseline to the recorded incumbent checkpoint.
 Pass `--head-to-head` to queue duplicate-swapped candidate-vs-incumbent play;
 omit it only for the cheaper candidate-vs-random delta diagnostic.
+Use `enqueue-train --save-every N --auto-compare` for longer GPU runs. The
+training gate writes periodic checkpoints, emits them in JSON, then continuous
+mode queues head-to-head incumbent comparisons for every emitted checkpoint.
+This avoids judging a long run only by its final checkpoint when the learning
+curve is non-monotonic.
 Use `enqueue-slumbot` only for sparse live checks after local comparison says a
 candidate is interesting. It creates a one-off live smoke gate and records
 Slumbot chips/hand, CI, elapsed seconds, seconds/hand, action mix, increment
