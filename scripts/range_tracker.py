@@ -462,7 +462,7 @@ class RangeTracker:
         hero_range: ndarray (n_hands,) — P(hero has hand_i) from opponent's view.
     """
 
-    def __init__(self, our_cards_idx, value_net, device):
+    def __init__(self, our_cards_idx, value_net, device, strategy_source="regret"):
         """
         our_cards_idx: list of 2 ints (0-51), our hole cards
         value_net: trained ValueNetwork
@@ -471,6 +471,7 @@ class RangeTracker:
         self.our_cards = tuple(sorted(our_cards_idx))
         self.value_net = value_net
         self.device = device
+        self.strategy_source = strategy_source
 
         # All possible hands for the opponent (excluding our cards).
         remaining = sorted(set(range(52)) - set(our_cards_idx))
@@ -563,13 +564,28 @@ class RangeTracker:
         # Batch inference.
         feat_t = torch.from_numpy(features).to(self.device)
         with torch.no_grad():
-            advantages = self.value_net(feat_t).cpu().numpy()
+            if self.strategy_source == "policy-head":
+                advantages_t, logits_t = self.value_net.forward_with_policy(feat_t)
+                advantages = advantages_t.cpu().numpy()
+                logits = logits_t.cpu().numpy()
+            elif self.strategy_source == "regret":
+                advantages = self.value_net(feat_t).cpu().numpy()
+                logits = None
+            else:
+                raise ValueError(f"Unknown strategy source: {self.strategy_source}")
 
         # Regret match each hand (vectorized where possible).
         n = len(hands)
         strategies = np.zeros((n, N_ACTIONS), dtype=np.float64)
         for i in range(n):
-            strategies[i] = regret_match(advantages[i], legal_mask)
+            if self.strategy_source == "policy-head":
+                masked_logits = np.where(legal_mask > 0, logits[i], -1e9)
+                shifted = masked_logits - np.max(masked_logits)
+                probs = np.exp(shifted) * legal_mask
+                total = probs.sum()
+                strategies[i] = probs / total if total > 0 else legal_mask / legal_mask.sum()
+            else:
+                strategies[i] = regret_match(advantages[i], legal_mask)
 
         return strategies
 

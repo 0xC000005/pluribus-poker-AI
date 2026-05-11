@@ -25,6 +25,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--greedy", action="store_true")
     parser.add_argument("--no-allin", action="store_true")
     parser.add_argument("--no-solver", action="store_true")
+    parser.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+    )
     parser.add_argument("--timeout-seconds", type=float, default=300.0)
     args = parser.parse_args(argv)
 
@@ -42,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         command.append("--no-allin")
     if args.no_solver:
         command.append("--no-solver")
+    if args.strategy_source != "regret":
+        command.extend(["--strategy-source", args.strategy_source])
 
     started = time.monotonic()
     completed = subprocess.run(

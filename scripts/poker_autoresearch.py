@@ -93,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
     slumbot.add_argument("--greedy", action="store_true")
     slumbot.add_argument("--no-allin", action="store_true")
     slumbot.add_argument("--no-solver", action="store_true")
+    slumbot.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+    )
     slumbot.add_argument("--timeout-seconds", type=int, default=600)
 
     resolver = subparsers.add_parser(
@@ -195,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
                 greedy=args.greedy,
                 no_allin=args.no_allin,
                 no_solver=args.no_solver,
+                strategy_source=args.strategy_source,
                 timeout_seconds=args.timeout_seconds,
             )
         )

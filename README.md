@@ -103,7 +103,9 @@ python scripts/play_slumbot.py \
 ```
 
 Use `--no-solver` to disable turn/river solving and `--no-allin` for lower
-variance diagnostics.
+variance diagnostics. Use `--strategy-source policy-head` to test the trained
+policy head instead of regret matching the advantage head for non-solver
+decisions and range tracking.
 
 ## Resolver Diagnostics
 

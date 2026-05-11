@@ -287,6 +287,7 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
         greedy=True,
         no_allin=True,
         no_solver=True,
+        strategy_source="policy-head",
         timeout_seconds=123,
     )
 
@@ -301,6 +302,8 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     assert "--greedy" in command
     assert "--no-allin" in command
     assert "--no-solver" in command
+    assert "--strategy-source" in command
+    assert "policy-head" in command
     assert "123" in command
 
 
@@ -457,6 +460,8 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
             "--greedy",
             "--no-allin",
             "--no-solver",
+            "--strategy-source",
+            "policy-head",
         ],
         capture_output=True,
         text=True,
@@ -468,6 +473,7 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--no-solver" in goal["gates"][queued["gate"]]["commands"][0]
+    assert "policy-head" in goal["gates"][queued["gate"]]["commands"][0]
 
 
 def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):

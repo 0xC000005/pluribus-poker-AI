@@ -624,6 +624,7 @@ def enqueue_slumbot_smoke(
     greedy: bool = True,
     no_allin: bool = True,
     no_solver: bool = True,
+    strategy_source: str = "regret",
     timeout_seconds: int = 600,
 ) -> dict:
     """Create and queue a sparse live Slumbot smoke for a candidate checkpoint."""
@@ -649,6 +650,8 @@ def enqueue_slumbot_smoke(
         command.append("--no-allin")
     if no_solver:
         command.append("--no-solver")
+    if strategy_source != "regret":
+        command.extend(["--strategy-source", strategy_source])
 
     goal = _read_json(_goal_path(root))
     goal.setdefault("gates", {})[gate_name] = {

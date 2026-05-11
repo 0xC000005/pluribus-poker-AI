@@ -1,12 +1,14 @@
 import sys
 from pathlib import Path
 
+import torch
+
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from play_slumbot import ActionDiagnostics, action_to_slumbot, parse_action
+from play_slumbot import ActionDiagnostics, _base_policy_action, action_to_slumbot, parse_action
 
 
 def test_action_diagnostics_records_policy_mapping_drift():
@@ -37,3 +39,51 @@ def test_action_diagnostics_records_fallback_and_parse_error():
     assert summary["decision_fallback"] == 1
     assert summary["parse_errors"] == 1
     assert summary["increment_mix"]["c"] == 1
+
+
+class _PolicyHeadProbeNet(torch.nn.Module):
+    def forward(self, features):
+        advantages = torch.zeros((features.shape[0], 9), dtype=torch.float32)
+        advantages[:, 8] = 10.0
+        return advantages
+
+    def forward_with_policy(self, features):
+        advantages = self.forward(features)
+        logits = torch.zeros_like(advantages)
+        logits[:, 1] = 10.0
+        return advantages, logits
+
+
+def test_base_policy_action_can_use_policy_head_instead_of_regret_matching():
+    parsed = parse_action("")
+    net = _PolicyHeadProbeNet()
+
+    regret_incr = _base_policy_action(
+        ["Ac", "Kd"],
+        [],
+        "",
+        1,
+        parsed,
+        net,
+        torch.device("cpu"),
+        greedy=True,
+        no_allin=False,
+        verbose=False,
+        strategy_source="regret",
+    )
+    policy_incr = _base_policy_action(
+        ["Ac", "Kd"],
+        [],
+        "",
+        1,
+        parsed,
+        net,
+        torch.device("cpu"),
+        greedy=True,
+        no_allin=False,
+        verbose=False,
+        strategy_source="policy-head",
+    )
+
+    assert regret_incr.startswith("b")
+    assert policy_incr == "c"

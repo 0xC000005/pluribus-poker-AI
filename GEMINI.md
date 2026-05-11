@@ -63,6 +63,7 @@ Slumbot play:
 
 ```bash
 python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy
+python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --strategy-source policy-head
 ```
 
 Resolver diagnostics:

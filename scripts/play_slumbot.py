@@ -500,6 +500,26 @@ def regret_match(advantages, legal_mask):
     return legal_mask / legal_mask.sum()
 
 
+def network_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
+    """Return (advantages, strategy) from the requested learned policy source."""
+    feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
+    with torch.no_grad():
+        if strategy_source == "policy-head":
+            adv_t, logits_t = value_net.forward_with_policy(feat_t)
+            advantages = adv_t.cpu().numpy()[0]
+            logits = logits_t.cpu().numpy()[0].astype(np.float64)
+            masked_logits = np.where(legal_mask > 0, logits, -1e9)
+            shifted = masked_logits - np.max(masked_logits)
+            probs = np.exp(shifted) * legal_mask
+            total = probs.sum()
+            strategy = probs / total if total > 0 else legal_mask / legal_mask.sum()
+            return advantages, strategy
+        if strategy_source != "regret":
+            raise ValueError(f"Unknown strategy source: {strategy_source}")
+        advantages = value_net(feat_t).cpu().numpy()[0]
+    return advantages, regret_match(advantages, legal_mask)
+
+
 # ---------------------------------------------------------------------------
 # Slumbot API
 # ---------------------------------------------------------------------------
@@ -645,19 +665,16 @@ _SOLVER_CACHE = {}
 
 def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
                          value_net, device, greedy, no_allin, verbose,
-                         diagnostics=None):
+                         diagnostics=None, strategy_source="regret"):
     """Select action using trained base policy (for pre-river streets)."""
     features = build_features(hole_cards, board, action_str, client_pos, parsed)
     legal_mask = get_legal_mask_from_parsed(parsed, action_str, client_pos)
 
-    feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
-    with torch.no_grad():
-        advantages = value_net(feat_t).cpu().numpy()[0]
-
     if no_allin:
         legal_mask[8] = 0
 
-    strategy = regret_match(advantages, legal_mask)
+    advantages, strategy = network_strategy(
+        value_net, features, legal_mask, device, strategy_source=strategy_source)
 
     legal_actions = np.where(legal_mask > 0)[0]
     if len(legal_actions) == 0:
@@ -667,8 +684,11 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
         return incr
 
     if greedy:
-        masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
-        action_idx = int(np.argmax(masked_adv))
+        if strategy_source == "policy-head":
+            action_idx = int(np.argmax(strategy))
+        else:
+            masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
+            action_idx = int(np.argmax(masked_adv))
     else:
         probs = np.array([strategy[a] for a in legal_actions], dtype=np.float64)
         if probs.sum() > 0:
@@ -778,7 +798,8 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
 
 
 def play_hand(value_net, token, device, verbose=False, greedy=False,
-              no_allin=False, use_solver=True, diagnostics=None):
+              no_allin=False, use_solver=True, diagnostics=None,
+              strategy_source="regret"):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token)
     token = r.get('token', token)
@@ -799,7 +820,8 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
     tracker = None
     if use_solver:
         our_cards_idx = [card_str_to_index(c) for c in hole_cards]
-        tracker = RangeTracker(our_cards_idx, value_net, device)
+        tracker = RangeTracker(
+            our_cards_idx, value_net, device, strategy_source=strategy_source)
 
     while r.get('winnings') is None:
         action_str = r.get('action', '')
@@ -831,7 +853,7 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
             incr = _base_policy_action(
                 hole_cards, board, action_str, client_pos, parsed,
                 value_net, device, greedy, no_allin, verbose,
-                diagnostics=diagnostics,
+                diagnostics=diagnostics, strategy_source=strategy_source,
             )
 
         r = api_act(token, incr)
@@ -880,6 +902,12 @@ def main():
     parser.add_argument('--greedy', action='store_true', help='Deterministic (argmax) action selection')
     parser.add_argument('--no-allin', action='store_true', help='Disable all-in action')
     parser.add_argument('--no-solver', action='store_true', help='Disable river CFR solver')
+    parser.add_argument(
+        '--strategy-source',
+        choices=('regret', 'policy-head'),
+        default='regret',
+        help='Learned blueprint source for non-solver decisions and range tracking.',
+    )
     args = parser.parse_args()
 
     mode_str = "greedy" if args.greedy else "sampled"
@@ -887,6 +915,8 @@ def main():
         mode_str += "+no-allin"
     if not args.no_solver:
         mode_str += "+turn+river-solver"
+    if args.strategy_source != "regret":
+        mode_str += f"+{args.strategy_source}"
     print("=" * 60)
     print(f"Playing {args.hands} hands vs Slumbot ({mode_str})")
     print(f"Model: {args.model}")
@@ -920,7 +950,8 @@ def main():
         token, w = play_hand(value_net, token, device, verbose=args.verbose,
                              greedy=args.greedy, no_allin=args.no_allin,
                              use_solver=not args.no_solver,
-                             diagnostics=diagnostics)
+                             diagnostics=diagnostics,
+                             strategy_source=args.strategy_source)
         total_winnings += w
         results.append(w)
 

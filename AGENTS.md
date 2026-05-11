@@ -15,6 +15,7 @@
 - GPU Deep CFR (script): `python scripts/run_gpu_deep_cfr.py --n-iterations 50 --n-traversals 400 --save-path ./models`
 - Slumbot training: `python scripts/train_slumbot_2p.py --n-iterations 1000 --n-traversals 10000 --hidden-dim 512 --n-layers 4`
 - Slumbot play/eval: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy`
+- Policy-head Slumbot diagnostic: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --strategy-source policy-head`
 - Autoresearch status: `python scripts/poker_autoresearch.py status`
 - Autoresearch comparison gate: `python scripts/poker_autoresearch.py gate eval-incumbent-self-compare`
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
