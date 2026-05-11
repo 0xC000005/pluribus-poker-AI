@@ -168,6 +168,12 @@ GPU training readiness:
   every emitted checkpoint after the training gate passes. This is now the
   preferred unattended mode because current results are non-monotonic across
   training length.
+- Local evaluation can now choose `--strategy-source regret` or
+  `--strategy-source policy-head`. Policy-head evaluation is guarded so legacy
+  checkpoints without trained `policy_head` weights are rejected instead of
+  silently using a randomly initialized head. The current recorded incumbent
+  `models/slumbot_2p_iter1000.pt` is legacy, so policy-head comparisons require
+  first promoting or explicitly selecting a policy-head-capable incumbent.
 - The 175-iteration checkpointed curve still failed extended confirmation:
   the final checkpoint moved from a near-miss 3,000-game comparison to
   `avg_chips_per_hand=-17.650`, lower95 `-31.220` over 6,000 games.
@@ -238,7 +244,9 @@ script passes all 10 checks and is now part of Tier 0.
    path and promotion blockers are stable.
 2. Candidate checkpoint comparisons are now queueable with
    `python scripts/poker_autoresearch.py enqueue-compare --candidate <path>`.
-   Use `--head-to-head` for the stronger duplicate-swapped model-vs-model gate.
+   Use `--head-to-head` for the stronger duplicate-swapped model-vs-model gate,
+   and reserve `--strategy-source policy-head` for checkpoints with trained
+   policy heads on both sides.
 3. Sparse live Slumbot smokes are now queueable with
    `python scripts/poker_autoresearch.py enqueue-slumbot --model <path>`.
 4. Investigate why no-solver and solver Slumbot smokes remain negative despite

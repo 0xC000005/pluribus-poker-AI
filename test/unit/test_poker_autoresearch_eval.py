@@ -7,11 +7,23 @@ import torch
 
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from poker_ai.research.evaluation import (
+    assert_strategy_source_supported,
     compare_checkpoint_metrics,
     evaluate_value_nets_head_to_head,
     evaluate_value_net_vs_random,
     load_value_network_checkpoint,
 )
+
+
+class _PolicyOnlyProbeNet(torch.nn.Module):
+    def forward(self, features):
+        raise AssertionError("policy-head evaluation should not call forward()")
+
+    def forward_with_policy(self, features):
+        advantages = torch.zeros((features.shape[0], N_ACTIONS), dtype=torch.float32)
+        logits = torch.zeros_like(advantages)
+        logits[:, 1] = 10.0
+        return advantages, logits
 
 
 def test_load_value_network_checkpoint_accepts_legacy_sequential_keys(tmp_path):
@@ -36,7 +48,34 @@ def test_load_value_network_checkpoint_accepts_legacy_sequential_keys(tmp_path):
     assert loaded.metadata["iteration"] == 7
     assert loaded.metadata["n_players"] == 2
     assert loaded.metadata["initial_chips"] == 20000
+    assert loaded.metadata["has_policy_head"] is False
     assert loaded.value_net.hidden_dim == 16
+
+
+def test_strategy_source_guard_rejects_legacy_policy_head_checkpoint(tmp_path):
+    checkpoint = {
+        "iteration": 7,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 20000,
+        "value_net": {
+            "net.0.weight": torch.randn(16, N_FEATURES),
+            "net.0.bias": torch.randn(16),
+            "net.2.weight": torch.randn(N_ACTIONS, 16),
+            "net.2.bias": torch.randn(N_ACTIONS),
+        },
+    }
+    path = tmp_path / "legacy.pt"
+    torch.save(checkpoint, path)
+    loaded = load_value_network_checkpoint(path, torch.device("cpu"))
+
+    try:
+        assert_strategy_source_supported(loaded, "policy-head")
+    except RuntimeError as exc:
+        assert "does not contain a trained policy head" in str(exc)
+    else:
+        raise AssertionError("legacy checkpoint should reject policy-head evaluation")
 
 
 def test_evaluate_value_net_vs_random_returns_ci_metrics():
@@ -66,6 +105,28 @@ def test_evaluate_value_net_vs_random_returns_ci_metrics():
     assert metrics["checkpoint_iteration"] == 0
 
 
+def test_evaluate_value_net_vs_random_can_use_policy_head_source():
+    checkpoint = {
+        "iteration": 0,
+        "n_players": 2,
+        "initial_chips": 1000,
+    }
+
+    metrics = evaluate_value_net_vs_random(
+        _PolicyOnlyProbeNet(),
+        torch.device("cpu"),
+        n_games=4,
+        n_players=2,
+        initial_chips=1000,
+        seed=123,
+        checkpoint_metadata=checkpoint,
+        strategy_source="policy-head",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["strategy_source"] == "policy-head"
+
+
 def test_evaluate_value_nets_head_to_head_self_compare_is_zero_with_swapped_seats():
     from poker_ai.deep_cfr.networks import ValueNetwork
 
@@ -93,6 +154,30 @@ def test_evaluate_value_nets_head_to_head_self_compare_is_zero_with_swapped_seat
     assert metrics["avg_chips_per_hand"] == 0.0
     assert metrics["paired_delta_lower95_chips_per_hand"] == 0.0
     assert metrics["promotable"] is False
+
+
+def test_evaluate_value_nets_head_to_head_can_use_policy_head_source():
+    metadata = {
+        "checkpoint": "self.pt",
+        "checkpoint_iteration": 0,
+        "hidden_dim": 32,
+        "n_layers": 1,
+    }
+
+    metrics = evaluate_value_nets_head_to_head(
+        _PolicyOnlyProbeNet(),
+        _PolicyOnlyProbeNet(),
+        torch.device("cpu"),
+        n_games=4,
+        initial_chips=1000,
+        seed=123,
+        candidate_metadata=metadata,
+        baseline_metadata=metadata,
+        strategy_source="policy-head",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["strategy_source"] == "policy-head"
 
 
 def test_eval_cli_emits_json_for_legacy_checkpoint(tmp_path):
@@ -180,6 +265,48 @@ def test_eval_cli_aggregates_multiple_seeds(tmp_path):
     assert metrics["n_runs"] == 2
     assert [run["seed"] for run in metrics["runs"]] == [11, 12]
     assert isinstance(metrics["avg_chips_per_hand"], float)
+
+
+def test_eval_cli_accepts_policy_head_strategy_source(tmp_path):
+    from poker_ai.deep_cfr.networks import ValueNetwork
+
+    value_net = ValueNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    checkpoint = {
+        "iteration": 6,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 1000,
+        "value_net": value_net.state_dict(),
+    }
+    checkpoint_path = tmp_path / "policy.pt"
+    torch.save(checkpoint, checkpoint_path)
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch_eval.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--checkpoint",
+            str(checkpoint_path),
+            "--n-games",
+            "4",
+            "--device",
+            "cpu",
+            "--seed",
+            "7",
+            "--strategy-source",
+            "policy-head",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    metrics = json.loads(result.stdout)
+    assert metrics["passed"] is True
+    assert metrics["strategy_source"] == "policy-head"
 
 
 def test_compare_checkpoint_metrics_keeps_local_result_non_promotable():

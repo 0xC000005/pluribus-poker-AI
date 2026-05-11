@@ -589,6 +589,7 @@ def enqueue_gpu_training(
     compare_device: str = "auto",
     compare_timeout_seconds: int = 2400,
     compare_head_to_head: bool = True,
+    compare_strategy_source: str = "regret",
     timeout_seconds: int = 7200,
 ) -> dict:
     """Create and queue a GPU Deep CFR candidate-training gate."""
@@ -658,6 +659,7 @@ def enqueue_gpu_training(
             "device": compare_device,
             "timeout_seconds": int(compare_timeout_seconds),
             "head_to_head": bool(compare_head_to_head),
+            "strategy_source": compare_strategy_source,
         }
     return enqueue_cycle(
         root,
@@ -726,6 +728,7 @@ def _postprocess_completed_cycle(root: Path, item: dict, metrics: dict) -> list[
                 device=str(postprocess.get("device", "auto")),
                 timeout_seconds=int(postprocess.get("timeout_seconds", 2400)),
                 head_to_head=bool(postprocess.get("head_to_head", True)),
+                strategy_source=str(postprocess.get("strategy_source", "regret")),
             )
         )
     return queued
@@ -741,6 +744,7 @@ def enqueue_candidate_comparison(
     device: str = "auto",
     timeout_seconds: int = 2400,
     head_to_head: bool = False,
+    strategy_source: str = "regret",
 ) -> dict:
     """Create and queue a one-off candidate-vs-incumbent local comparison gate."""
     root = Path(root)
@@ -775,6 +779,8 @@ def enqueue_candidate_comparison(
     ]
     if head_to_head:
         command.append("--head-to-head")
+    if strategy_source != "regret":
+        command.extend(["--strategy-source", strategy_source])
 
     gate_config = {
         "description": (
@@ -794,7 +800,7 @@ def enqueue_candidate_comparison(
         hypothesis=(
             f"Candidate checkpoint {candidate.name} should improve local "
             f"comparison metrics against incumbent {baseline.name} without "
-            "claiming local-only promotion."
+            f"claiming local-only promotion using {strategy_source} strategy source."
         ),
         cycle_type="experiment",
         failure_class="strategy_quality",

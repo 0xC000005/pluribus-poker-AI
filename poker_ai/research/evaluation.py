@@ -76,6 +76,10 @@ def load_value_network_checkpoint(
             "Checkpoint is incompatible: "
             f"missing={disallowed_missing}, unexpected={list(unexpected)}"
         )
+    has_policy_head = not {
+        "policy_head.weight",
+        "policy_head.bias",
+    }.intersection(missing)
     value_net.eval()
 
     return LoadedValueNetwork(
@@ -88,8 +92,58 @@ def load_value_network_checkpoint(
             "hidden_dim": hidden_dim,
             "n_layers": n_layers,
             "initial_chips": initial_chips,
+            "has_policy_head": has_policy_head,
         },
     )
+
+
+def assert_strategy_source_supported(
+    loaded: LoadedValueNetwork,
+    strategy_source: str,
+) -> None:
+    if strategy_source == "policy-head" and not loaded.metadata.get("has_policy_head"):
+        checkpoint = loaded.metadata.get("checkpoint", "<unknown>")
+        raise RuntimeError(
+            f"Checkpoint {checkpoint} does not contain a trained policy head; "
+            "use --strategy-source regret or retrain/create an incumbent with "
+            "policy_head weights."
+        )
+    if strategy_source not in {"regret", "policy-head"}:
+        raise ValueError(f"Unknown strategy source: {strategy_source}")
+
+
+def _strategies_from_network(
+    value_net: ValueNetwork,
+    features: np.ndarray,
+    masks: list[np.ndarray],
+    device: torch.device,
+    *,
+    strategy_source: str,
+) -> list[np.ndarray]:
+    """Return legal action probabilities from the requested learned source."""
+    feature_tensor = torch.from_numpy(features).to(device)
+    if strategy_source == "regret":
+        with torch.no_grad():
+            advantages = value_net(feature_tensor).cpu().numpy()
+        return [regret_match(advantages[i], masks[i]) for i in range(len(masks))]
+
+    if strategy_source == "policy-head":
+        with torch.no_grad():
+            _, logits_t = value_net.forward_with_policy(feature_tensor)
+        logits = logits_t.cpu().numpy().astype(np.float64)
+        strategies: list[np.ndarray] = []
+        for i, mask in enumerate(masks):
+            masked_logits = np.where(mask > 0, logits[i], -1e9)
+            shifted = masked_logits - np.max(masked_logits)
+            probs = np.exp(shifted) * mask
+            total = probs.sum()
+            if total > 0:
+                strategies.append(probs / total)
+            else:
+                strategies.append(mask / mask.sum())
+        return strategies
+
+    raise ValueError(f"Unknown strategy source: {strategy_source}")
 
 
 def _evaluate_payouts_vs_random(
@@ -99,6 +153,7 @@ def _evaluate_payouts_vs_random(
     n_games: int,
     n_players: int,
     initial_chips: int,
+    strategy_source: str,
 ) -> np.ndarray:
     env = VectorizedPokerEnv(n_games, n_players, initial_chips=initial_chips)
     env.reset()
@@ -143,13 +198,17 @@ def _evaluate_payouts_vs_random(
         if agent_indices:
             features = np.stack([env.states[i].to_feature_vector() for i in agent_indices])
             masks = [env.states[i].get_legal_mask() for i in agent_indices]
-            with torch.no_grad():
-                advantages = value_net(torch.from_numpy(features).to(device)).cpu().numpy()
+            strategies = _strategies_from_network(
+                value_net,
+                features,
+                masks,
+                device,
+                strategy_source=strategy_source,
+            )
 
             for j, i in enumerate(agent_indices):
-                strategy = regret_match(advantages[j], masks[j])
                 legal = np.where(masks[j] > 0)[0]
-                probs = np.array([strategy[action] for action in legal], dtype=np.float64)
+                probs = np.array([strategies[j][action] for action in legal], dtype=np.float64)
                 probs /= probs.sum()
                 env.step_single(i, int(np.random.choice(legal, p=probs)))
 
@@ -161,18 +220,24 @@ def _step_model_group(
     indices: list[int],
     value_net: ValueNetwork,
     device: torch.device,
+    *,
+    strategy_source: str,
 ) -> None:
     if not indices:
         return
     features = np.stack([env.states[i].to_feature_vector() for i in indices])
     masks = [env.states[i].get_legal_mask() for i in indices]
-    with torch.no_grad():
-        advantages = value_net(torch.from_numpy(features).to(device)).cpu().numpy()
+    strategies = _strategies_from_network(
+        value_net,
+        features,
+        masks,
+        device,
+        strategy_source=strategy_source,
+    )
 
     for j, env_index in enumerate(indices):
-        strategy = regret_match(advantages[j], masks[j])
         legal = np.where(masks[j] > 0)[0]
-        probs = np.array([strategy[action] for action in legal], dtype=np.float64)
+        probs = np.array([strategies[j][action] for action in legal], dtype=np.float64)
         probs /= probs.sum()
         env.step_single(env_index, int(np.random.choice(legal, p=probs)))
 
@@ -184,6 +249,7 @@ def _evaluate_head_to_head_payouts(
     *,
     n_games: int,
     initial_chips: int,
+    strategy_source: str,
 ) -> np.ndarray:
     env = VectorizedPokerEnv(n_games, 2, initial_chips=initial_chips)
     env.reset()
@@ -221,8 +287,20 @@ def _evaluate_head_to_head_payouts(
             else:
                 player1_indices.append(i)
 
-        _step_model_group(env, player0_indices, player0_net, device)
-        _step_model_group(env, player1_indices, player1_net, device)
+        _step_model_group(
+            env,
+            player0_indices,
+            player0_net,
+            device,
+            strategy_source=strategy_source,
+        )
+        _step_model_group(
+            env,
+            player1_indices,
+            player1_net,
+            device,
+            strategy_source=strategy_source,
+        )
 
     return env.get_payouts(0)
 
@@ -236,6 +314,7 @@ def evaluate_value_net_vs_random(
     initial_chips: int,
     seed: int,
     checkpoint_metadata: dict[str, Any],
+    strategy_source: str = "regret",
 ) -> dict[str, Any]:
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -245,6 +324,7 @@ def evaluate_value_net_vs_random(
         n_games=n_games,
         n_players=n_players,
         initial_chips=initial_chips,
+        strategy_source=strategy_source,
     )
     avg = float(payouts.mean())
     std = float(payouts.std(ddof=1)) if len(payouts) > 1 else 0.0
@@ -255,6 +335,7 @@ def evaluate_value_net_vs_random(
         "n_players": int(n_players),
         "initial_chips": int(initial_chips),
         "seed": int(seed),
+        "strategy_source": strategy_source,
         "avg_chips_per_hand": avg,
         "ci95_chips_per_hand": ci95,
         "lower95_chips_per_hand": avg - ci95,
@@ -281,6 +362,7 @@ def evaluate_value_nets_head_to_head(
     seed: int,
     candidate_metadata: dict[str, Any],
     baseline_metadata: dict[str, Any],
+    strategy_source: str = "regret",
 ) -> dict[str, Any]:
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -290,6 +372,7 @@ def evaluate_value_nets_head_to_head(
         device,
         n_games=n_games,
         initial_chips=initial_chips,
+        strategy_source=strategy_source,
     )
 
     np.random.seed(seed)
@@ -300,6 +383,7 @@ def evaluate_value_nets_head_to_head(
         device,
         n_games=n_games,
         initial_chips=initial_chips,
+        strategy_source=strategy_source,
     )
     paired = (candidate_seat0 - baseline_seat0) / 2.0
     avg = float(paired.mean())
@@ -313,6 +397,7 @@ def evaluate_value_nets_head_to_head(
         "n_players": 2,
         "initial_chips": int(initial_chips),
         "seed": int(seed),
+        "strategy_source": strategy_source,
         "avg_chips_per_hand": avg,
         "ci95_chips_per_hand": ci95,
         "paired_delta_lower95_chips_per_hand": avg - ci95,
@@ -377,6 +462,7 @@ def aggregate_seed_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "baseline_n_layers",
         "promotable",
         "promotion_blockers",
+        "strategy_source",
     ):
         if key in first and first[key] is not None:
             metrics[key] = first[key]

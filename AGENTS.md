@@ -15,7 +15,7 @@
 - GPU Deep CFR (script): `python scripts/run_gpu_deep_cfr.py --n-iterations 50 --n-traversals 400 --save-path ./models`
 - Slumbot training: `python scripts/train_slumbot_2p.py --n-iterations 1000 --n-traversals 10000 --hidden-dim 512 --n-layers 4`
 - Slumbot play/eval: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --solver-backend auto`
-- Policy-head Slumbot diagnostic: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --strategy-source policy-head`
+- Policy-head Slumbot diagnostic: `python scripts/play_slumbot.py --model models/<policy_head_checkpoint>.pt --hands 300 --greedy --strategy-source policy-head`
 - Autoresearch status: `python scripts/poker_autoresearch.py status`
 - Autoresearch comparison gate: `python scripts/poker_autoresearch.py gate eval-incumbent-self-compare`
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
@@ -36,6 +36,7 @@
 - For any action-space, feature, or mapping change, add/update parity tests and include regression coverage.
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
 - For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
+- Use `--compare-strategy-source policy-head` only when both candidate and incumbent checkpoints include trained `policy_head` weights; legacy checkpoints must use regret matching.
 - Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment; the 2,500-slot mode was much slower and not better in the first local gate.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.

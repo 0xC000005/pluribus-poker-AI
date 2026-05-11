@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from poker_ai.research.evaluation import (  # noqa: E402
     aggregate_seed_runs,
+    assert_strategy_source_supported,
     compare_checkpoint_metrics,
     evaluate_value_nets_head_to_head,
     evaluate_value_net_vs_random,
@@ -38,8 +39,10 @@ def _evaluate_checkpoint(
     seeds: list[int],
     n_players_override: int | None,
     initial_chips_override: int | None,
+    strategy_source: str,
 ) -> dict:
     loaded = load_value_network_checkpoint(checkpoint, device)
+    assert_strategy_source_supported(loaded, strategy_source)
     metadata = dict(loaded.metadata)
     n_players = n_players_override or int(metadata["n_players"])
     initial_chips = initial_chips_override or int(metadata["initial_chips"])
@@ -52,6 +55,7 @@ def _evaluate_checkpoint(
             initial_chips=initial_chips,
             seed=seed,
             checkpoint_metadata=metadata,
+            strategy_source=strategy_source,
         )
         for seed in seeds
     ]
@@ -66,9 +70,12 @@ def _evaluate_head_to_head(
     n_games: int,
     seeds: list[int],
     initial_chips_override: int | None,
+    strategy_source: str,
 ) -> dict:
     candidate = load_value_network_checkpoint(candidate_checkpoint, device)
     baseline = load_value_network_checkpoint(baseline_checkpoint, device)
+    assert_strategy_source_supported(candidate, strategy_source)
+    assert_strategy_source_supported(baseline, strategy_source)
     candidate_metadata = dict(candidate.metadata)
     baseline_metadata = dict(baseline.metadata)
     initial_chips = initial_chips_override or int(candidate_metadata["initial_chips"])
@@ -82,6 +89,7 @@ def _evaluate_head_to_head(
             seed=seed,
             candidate_metadata=candidate_metadata,
             baseline_metadata=baseline_metadata,
+            strategy_source=strategy_source,
         )
         for seed in seeds
     ]
@@ -109,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--n-players", type=int)
     parser.add_argument("--initial-chips", type=int)
+    parser.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+        help="Use advantage regret matching or the trained average-strategy policy head.",
+    )
     args = parser.parse_args(argv)
 
     device = _device(args.device)
@@ -127,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
             n_games=args.n_games,
             seeds=seeds,
             initial_chips_override=args.initial_chips,
+            strategy_source=args.strategy_source,
         )
         print(json.dumps(metrics, indent=2, sort_keys=True))
         return 0 if metrics["passed"] else 1
@@ -138,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         seeds=seeds,
         n_players_override=args.n_players,
         initial_chips_override=args.initial_chips,
+        strategy_source=args.strategy_source,
     )
     if args.baseline_checkpoint:
         baseline = _evaluate_checkpoint(
@@ -147,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             seeds=seeds,
             n_players_override=args.n_players,
             initial_chips_override=args.initial_chips,
+            strategy_source=args.strategy_source,
         )
         metrics = compare_checkpoint_metrics(metrics, baseline)
     print(json.dumps(metrics, indent=2, sort_keys=True))

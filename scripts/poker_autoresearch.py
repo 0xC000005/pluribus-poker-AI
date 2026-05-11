@@ -84,6 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Queue duplicate-swapped model-vs-model evaluation instead of vs-random deltas.",
     )
+    compare.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+        help="Use advantage regret matching or the trained average-strategy policy head.",
+    )
 
     slumbot = subparsers.add_parser(
         "enqueue-slumbot",
@@ -148,6 +154,12 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--compare-seeds", default="20260511,20260512,20260513")
     train.add_argument("--compare-device", default="auto")
     train.add_argument("--compare-timeout-seconds", type=int, default=2400)
+    train.add_argument(
+        "--compare-strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+        help="Strategy source to use for auto-queued checkpoint comparisons.",
+    )
     train.add_argument("--timeout-seconds", type=int, default=7200)
 
     close = subparsers.add_parser("close-cycle", help="Close the active research cycle.")
@@ -227,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
                 device=args.device,
                 timeout_seconds=args.timeout_seconds,
                 head_to_head=args.head_to_head,
+                strategy_source=args.strategy_source,
             )
         )
         return 0
@@ -284,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
                 compare_seeds=args.compare_seeds,
                 compare_device=args.compare_device,
                 compare_timeout_seconds=args.compare_timeout_seconds,
+                compare_strategy_source=args.compare_strategy_source,
                 timeout_seconds=args.timeout_seconds,
             )
         )

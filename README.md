@@ -105,8 +105,13 @@ python scripts/poker_autoresearch.py enqueue-train \
   --n-training-steps 1500 \
   --prefix candidate_gpu \
   --save-every 25 \
-  --auto-compare
+  --auto-compare \
+  --compare-strategy-source regret
 ```
+
+Use `--compare-strategy-source policy-head` only when both candidate and
+incumbent checkpoints contain trained `policy_head` weights; legacy incumbents
+must stay on `regret` comparisons.
 
 ## Playing Slumbot
 

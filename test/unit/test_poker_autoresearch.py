@@ -271,6 +271,7 @@ def test_enqueue_candidate_comparison_creates_named_gate_from_incumbent(tmp_path
         seeds="1,2",
         device="cpu",
         head_to_head=True,
+        strategy_source="policy-head",
     )
 
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
@@ -283,6 +284,8 @@ def test_enqueue_candidate_comparison_creates_named_gate_from_incumbent(tmp_path
     assert str(incumbent) in command
     assert "--baseline-checkpoint" in command
     assert "--head-to-head" in command
+    assert "--strategy-source" in command
+    assert "policy-head" in command
     assert "12" in command
     assert "1,2" in command
 
@@ -400,6 +403,7 @@ def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_pa
         compare_n_games=7,
         compare_seeds="1,2",
         compare_timeout_seconds=99,
+        compare_strategy_source="policy-head",
     )
 
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
@@ -420,6 +424,7 @@ def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_pa
         "device": "auto",
         "timeout_seconds": 99,
         "head_to_head": True,
+        "strategy_source": "policy-head",
     }
 
 
@@ -446,6 +451,7 @@ def test_continuous_queues_comparisons_for_saved_training_checkpoints(tmp_path):
         auto_compare=True,
         compare_n_games=11,
         compare_seeds="5,6",
+        compare_strategy_source="policy-head",
     )
 
     def training_runner(command, timeout_seconds=None):
@@ -483,6 +489,8 @@ def test_continuous_queues_comparisons_for_saved_training_checkpoints(tmp_path):
     assert str(save_dir / "probe_iter_1.pt") in commands[0]
     assert str(save_dir / "probe_final.pt") in commands[1]
     assert all("--head-to-head" in command for command in commands)
+    assert all("--strategy-source" in command for command in commands)
+    assert all("policy-head" in command for command in commands)
     assert all("11" in command for command in commands)
     assert all("5,6" in command for command in commands)
 
@@ -573,6 +581,8 @@ def test_cli_enqueue_compare_creates_gate(tmp_path):
             "--device",
             "cpu",
             "--head-to-head",
+            "--strategy-source",
+            "policy-head",
         ],
         capture_output=True,
         text=True,
@@ -584,6 +594,7 @@ def test_cli_enqueue_compare_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--head-to-head" in goal["gates"][queued["gate"]]["commands"][0]
+    assert "policy-head" in goal["gates"][queued["gate"]]["commands"][0]
 
 
 def test_cli_enqueue_slumbot_creates_gate(tmp_path):
@@ -695,6 +706,8 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
             "--auto-compare",
             "--compare-n-games",
             "6",
+            "--compare-strategy-source",
+            "policy-head",
             "--timeout-seconds",
             "55",
         ],
@@ -713,3 +726,4 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
     assert "1" in command
     state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
     assert state["hypothesis_queue"][-1]["postprocess"]["n_games"] == 6
+    assert state["hypothesis_queue"][-1]["postprocess"]["strategy_source"] == "policy-head"

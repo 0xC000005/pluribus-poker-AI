@@ -158,7 +158,8 @@ python scripts/poker_autoresearch.py enqueue-compare \
   --candidate models/candidate.pt \
   --n-games 500 \
   --seeds 20260511,20260512,20260513 \
-  --head-to-head
+  --head-to-head \
+  --strategy-source regret
 python scripts/poker_autoresearch.py enqueue-slumbot \
   --model models/candidate.pt \
   --hands 10 \
@@ -169,7 +170,10 @@ python scripts/poker_autoresearch.py enqueue-train \
   --n-iterations 50 \
   --n-traversals 4000 \
   --n-training-steps 1500 \
-  --prefix candidate_gpu
+  --prefix candidate_gpu \
+  --save-every 25 \
+  --auto-compare \
+  --compare-strategy-source regret
 python scripts/poker_autoresearch.py close-cycle \
   --run-id <run_id> \
   --outcome passed \
@@ -202,11 +206,16 @@ one-off comparison gate in `poker_goal.json`, queues it, and defaults the
 baseline to the recorded incumbent checkpoint.
 Pass `--head-to-head` to queue duplicate-swapped candidate-vs-incumbent play;
 omit it only for the cheaper candidate-vs-random delta diagnostic.
+Pass `--strategy-source policy-head` only when every evaluated checkpoint has
+trained `policy_head` weights. Legacy checkpoints are rejected for policy-head
+evaluation so the workflow cannot silently benchmark random initialized heads.
 Use `enqueue-train --save-every N --auto-compare` for longer GPU runs. The
 training gate writes periodic checkpoints, emits them in JSON, then continuous
 mode queues head-to-head incumbent comparisons for every emitted checkpoint.
 This avoids judging a long run only by its final checkpoint when the learning
 curve is non-monotonic.
+Use `--compare-strategy-source policy-head` for auto-queued comparisons only
+after the incumbent itself is a policy-head-capable checkpoint.
 Use `enqueue-slumbot` only for sparse live checks after local comparison says a
 candidate is interesting. It creates a one-off live smoke gate and records
 Slumbot chips/hand, CI, elapsed seconds, seconds/hand, action mix, increment
