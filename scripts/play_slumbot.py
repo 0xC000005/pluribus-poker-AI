@@ -577,6 +577,10 @@ class ActionDiagnostics:
         self.action_mix["solver"] = 0
         self.increment_mix = {"f": 0, "k": 0, "c": 0, "b": 0}
         self.mapping_drifts = []
+        self.solver_latencies_ms = []
+        self.solver_hand_counts = []
+        self.solver_full_hand_counts = []
+        self.solver_cache_hits = 0
 
     def _record_increment(self, incr):
         if not incr:
@@ -603,10 +607,19 @@ class ActionDiagnostics:
         self._record_increment(incr)
         self._record_mapping_drift(action_idx, incr, action_str, client_pos, parsed)
 
-    def record_solver_action(self, incr):
+    def record_solver_action(self, incr, *, latency_ms=None, n_hands=None,
+                             full_n_hands=None, cached=False):
         self.decision_solver += 1
         self.action_mix["solver"] += 1
         self._record_increment(incr)
+        if cached:
+            self.solver_cache_hits += 1
+        if latency_ms is not None:
+            self.solver_latencies_ms.append(float(latency_ms))
+        if n_hands is not None:
+            self.solver_hand_counts.append(int(n_hands))
+        if full_n_hands is not None:
+            self.solver_full_hand_counts.append(int(full_n_hands))
 
     def record_fallback(self, incr):
         self.decision_fallback += 1
@@ -622,6 +635,24 @@ class ActionDiagnostics:
         n_drift = len(self.mapping_drifts)
         mean_drift = float(np.mean(self.mapping_drifts)) if n_drift else 0.0
         max_drift = float(np.max(self.mapping_drifts)) if n_drift else 0.0
+        n_solver_latency = len(self.solver_latencies_ms)
+        mean_solver_latency = (
+            float(np.mean(self.solver_latencies_ms)) if n_solver_latency else 0.0
+        )
+        max_solver_latency = (
+            float(np.max(self.solver_latencies_ms)) if n_solver_latency else 0.0
+        )
+        mean_solver_hands = (
+            float(np.mean(self.solver_hand_counts)) if self.solver_hand_counts else 0.0
+        )
+        mean_solver_full_hands = (
+            float(np.mean(self.solver_full_hand_counts))
+            if self.solver_full_hand_counts else 0.0
+        )
+        mean_prune_ratio = (
+            mean_solver_hands / mean_solver_full_hands
+            if mean_solver_full_hands > 0 else 0.0
+        )
         return {
             "decision_total": (
                 self.decision_policy + self.decision_solver + self.decision_fallback
@@ -636,6 +667,13 @@ class ActionDiagnostics:
             "mapping_drift_n": n_drift,
             "mapping_drift_mean": round(mean_drift, 3),
             "mapping_drift_max": round(max_drift, 3),
+            "solver_latency_n": n_solver_latency,
+            "solver_latency_mean_ms": round(mean_solver_latency, 1),
+            "solver_latency_max_ms": round(max_solver_latency, 1),
+            "solver_cache_hits": self.solver_cache_hits,
+            "solver_mean_hands": round(mean_solver_hands, 1),
+            "solver_mean_full_hands": round(mean_solver_full_hands, 1),
+            "solver_mean_prune_ratio": round(mean_prune_ratio, 4),
         }
 
     def format_summary_lines(self):
@@ -661,6 +699,14 @@ class ActionDiagnostics:
             f"n={summary['mapping_drift_n']} "
             f"mean={summary['mapping_drift_mean']:.3f} "
             f"max={summary['mapping_drift_max']:.3f}",
+            "  Solver perf: "
+            f"n={summary['solver_latency_n']} "
+            f"mean_ms={summary['solver_latency_mean_ms']:.1f} "
+            f"max_ms={summary['solver_latency_max_ms']:.1f} "
+            f"cache_hits={summary['solver_cache_hits']} "
+            f"mean_hands={summary['solver_mean_hands']:.1f}/"
+            f"{summary['solver_mean_full_hands']:.1f} "
+            f"prune_ratio={summary['solver_mean_prune_ratio']:.4f}",
         ]
 
 
@@ -734,7 +780,8 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     streets = action_str.split('/')
     street_str = streets[st] if len(streets) > st else ''
 
-    # Get tracked villain range (no pruning — solver uses full hand set).
+    # Get tracked ranges; solve_street prunes low-probability hands before CFR.
+    hero_range = None
     villain_range = None
     if tracker is not None:
         remaining = sorted(set(range(52)) - set(board_idx))
@@ -755,7 +802,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     if incr_cached is not None:
         incr = incr_cached
         if diagnostics is not None:
-            diagnostics.record_solver_action(incr)
+            diagnostics.record_solver_action(incr, cached=True)
         if verbose:
             label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
             print(f" [{label}:CACHED>{incr}]", end="", flush=True)
@@ -777,6 +824,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     if max(hero_stack, villain_stack) >= 10000:
         iters = max(iters, 250)
 
+    solve_started = time.perf_counter()
     solver_action, strategy, solver, node = solve_street(
         our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
         action_str=street_str, n_iterations=iters,
@@ -785,6 +833,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         backend=solver_backend,
         range_prune_threshold=1e-4,
     )
+    solve_latency_ms = (time.perf_counter() - solve_started) * 1000.0
 
     # Convert solver action to Slumbot format.
     if node is None or node.is_terminal:
@@ -804,7 +853,12 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     # Cache result for identical future states in this session.
     _SOLVER_CACHE[cache_key] = incr
     if diagnostics is not None:
-        diagnostics.record_solver_action(incr)
+        diagnostics.record_solver_action(
+            incr,
+            latency_ms=solve_latency_ms,
+            n_hands=solver.n,
+            full_n_hands=solver.full_n,
+        )
     return incr
 
 

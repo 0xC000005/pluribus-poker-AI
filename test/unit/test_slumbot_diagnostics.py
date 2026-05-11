@@ -42,6 +42,22 @@ def test_action_diagnostics_records_fallback_and_parse_error():
     assert summary["increment_mix"]["c"] == 1
 
 
+def test_action_diagnostics_records_solver_performance_stats():
+    diagnostics = ActionDiagnostics()
+
+    diagnostics.record_solver_action("b300", latency_ms=125.5, n_hands=20, full_n_hands=100)
+    diagnostics.record_solver_action("k", cached=True)
+
+    summary = diagnostics.as_summary()
+    assert summary["decision_solver"] == 2
+    assert summary["solver_latency_n"] == 1
+    assert summary["solver_latency_mean_ms"] == 125.5
+    assert summary["solver_cache_hits"] == 1
+    assert summary["solver_mean_hands"] == 20.0
+    assert summary["solver_mean_full_hands"] == 100.0
+    assert summary["solver_mean_prune_ratio"] == 0.2
+
+
 class _PolicyHeadProbeNet(torch.nn.Module):
     def forward(self, features):
         advantages = torch.zeros((features.shape[0], 9), dtype=torch.float32)

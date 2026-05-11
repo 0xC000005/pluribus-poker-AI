@@ -6,6 +6,7 @@ Uses the same 9-action abstraction as training for consistency:
   5=1.0x pot, 6=1.5x pot, 7=2.0x pot, 8=all-in
 """
 import itertools
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -82,6 +83,7 @@ class StreetSolver:
         # Enumerate possible hands (excluding board cards).
         remaining = sorted(set(range(52)) - set(board))
         all_hands = list(itertools.combinations(remaining, 2))
+        self.full_n = len(all_hands)
         if active_indices is None:
             self.hands = all_hands
         else:
@@ -259,6 +261,7 @@ class StreetSolver:
             kwargs = {'device': device or 'cuda'}
         else:
             raise ValueError(f"Unknown solver backend: {backend}")
+        started = time.perf_counter()
         self._regret_sum, self._strategy_sum = solver_fn(
             self._tree, self.n,
             self.win_m, self.lose_m, self.tie_m, self.valid,
@@ -267,6 +270,7 @@ class StreetSolver:
             hero_range=hr, villain_range=vr,
             **kwargs,
         )
+        self.last_solve_ms = (time.perf_counter() - started) * 1000.0
 
     def get_strategy(self, hand, node=None):
         if node is None:
