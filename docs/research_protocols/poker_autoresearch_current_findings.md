@@ -145,6 +145,12 @@ GPU training readiness:
   `models/autoresearch_gpu_20260511T163408Z/gpu_candidate_20x2k_final.pt`.
   The 3,000-game duplicate-swapped comparison against the incumbent was still
   negative: `avg_chips_per_hand=-66.27`, lower95 `-111.607`.
+- Incumbent resume gate now loads legacy checkpoints, but the first resumed
+  run was not a true continuation because existing checkpoints do not store
+  replay buffers and Deep CFR retrains from replay. The 50-iteration resumed
+  run reached iteration 1050 with `avg_iter_seconds=6.148` and
+  `traversals_per_second=325.286`, but comparison was negative:
+  `avg_chips_per_hand=-106.451`, lower95 `-183.261`.
 - A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
   replay cache consumed most of the 8GB card. The trainer now skips the GPU
   replay cache when its estimated tensor footprint would exceed a safe fraction
@@ -167,6 +173,9 @@ Live solver backend status:
   most hands (`0.9178` mean prune ratio). The practical read is that better
   learned range concentration or a fused GPU CFR backend is required for a
   larger live-search speedup.
+- Treat old checkpoint resume as a compute/path smoke, not a strategy
+  improvement method, until either replay buffers are serialized or the trainer
+  intentionally supports warm-started value-network updates.
 
 ## Diagnosis
 
