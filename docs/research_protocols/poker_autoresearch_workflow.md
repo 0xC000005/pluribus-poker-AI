@@ -165,6 +165,11 @@ python scripts/poker_autoresearch.py enqueue-slumbot \
   --greedy \
   --no-allin \
   --no-solver
+python scripts/poker_autoresearch.py enqueue-train \
+  --n-iterations 50 \
+  --n-traversals 4000 \
+  --n-training-steps 1500 \
+  --prefix candidate_gpu
 python scripts/poker_autoresearch.py close-cycle \
   --run-id <run_id> \
   --outcome passed \

@@ -546,6 +546,85 @@ def _resolve_existing_path(root: Path, path: str | Path, *, label: str) -> Path:
     return resolved
 
 
+def enqueue_gpu_training(
+    root: str | Path,
+    *,
+    n_iterations: int = 10,
+    n_traversals: int = 1000,
+    n_training_steps: int = 1000,
+    buffer_capacity: int = 2_000_000,
+    hidden_dim: int = 512,
+    n_layers: int = 4,
+    batch_size: int = 4096,
+    save_dir: str | Path | None = None,
+    prefix: str = "candidate",
+    resume: str | Path | None = None,
+    eval_games: int = 0,
+    timeout_seconds: int = 7200,
+) -> dict:
+    """Create and queue a GPU Deep CFR candidate-training gate."""
+    root = Path(root)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if save_dir is None:
+        save_dir = root / "models" / f"autoresearch_gpu_{timestamp}"
+    else:
+        save_dir = Path(save_dir)
+        if not save_dir.is_absolute():
+            save_dir = root / save_dir
+    save_dir.mkdir(parents=True, exist_ok=True)
+    if resume:
+        resume = _resolve_existing_path(root, resume, label="Resume checkpoint")
+
+    gate_name = f"train-gpu-deep-cfr-{timestamp}-{_slug(prefix)}"
+    command = [
+        sys.executable,
+        "scripts/poker_autoresearch_train.py",
+        "--n-iterations",
+        str(n_iterations),
+        "--n-traversals",
+        str(n_traversals),
+        "--n-training-steps",
+        str(n_training_steps),
+        "--buffer-capacity",
+        str(buffer_capacity),
+        "--hidden-dim",
+        str(hidden_dim),
+        "--n-layers",
+        str(n_layers),
+        "--batch-size",
+        str(batch_size),
+        "--save-dir",
+        str(save_dir),
+        "--prefix",
+        prefix,
+        "--eval-games",
+        str(eval_games),
+    ]
+    if resume:
+        command.extend(["--resume", str(resume)])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "One-off GPU Deep CFR training job that emits candidate checkpoint "
+            "path and throughput metrics as JSON."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            f"GPU Deep CFR training should produce {prefix}_final.pt with "
+            "machine-readable throughput metrics."
+        ),
+        cycle_type="experiment",
+        failure_class="compute_efficiency",
+        gate=gate_name,
+    )
+
+
 def enqueue_candidate_comparison(
     root: str | Path,
     candidate_checkpoint: str | Path,

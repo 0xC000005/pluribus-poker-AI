@@ -17,6 +17,7 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_gpu_training,
     enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
@@ -119,6 +120,23 @@ def build_parser() -> argparse.ArgumentParser:
     resolver.add_argument("--max-cases", type=int)
     resolver.add_argument("--device", default="auto")
     resolver.add_argument("--timeout-seconds", type=int, default=1200)
+
+    train = subparsers.add_parser(
+        "enqueue-train",
+        help="Create and queue a GPU Deep CFR candidate-training gate.",
+    )
+    train.add_argument("--n-iterations", type=int, default=10)
+    train.add_argument("--n-traversals", type=int, default=1000)
+    train.add_argument("--n-training-steps", type=int, default=1000)
+    train.add_argument("--buffer-capacity", type=int, default=2_000_000)
+    train.add_argument("--hidden-dim", type=int, default=512)
+    train.add_argument("--n-layers", type=int, default=4)
+    train.add_argument("--batch-size", type=int, default=4096)
+    train.add_argument("--save-dir")
+    train.add_argument("--prefix", default="candidate")
+    train.add_argument("--resume")
+    train.add_argument("--eval-games", type=int, default=0)
+    train.add_argument("--timeout-seconds", type=int, default=7200)
 
     close = subparsers.add_parser("close-cycle", help="Close the active research cycle.")
     close.add_argument("--run-id", required=True)
@@ -226,6 +244,26 @@ def main(argv: list[str] | None = None) -> int:
                 solver_backend=args.solver_backend,
                 max_cases=args.max_cases,
                 device=args.device,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-train":
+        _emit(
+            enqueue_gpu_training(
+                root,
+                n_iterations=args.n_iterations,
+                n_traversals=args.n_traversals,
+                n_training_steps=args.n_training_steps,
+                buffer_capacity=args.buffer_capacity,
+                hidden_dim=args.hidden_dim,
+                n_layers=args.n_layers,
+                batch_size=args.batch_size,
+                save_dir=args.save_dir,
+                prefix=args.prefix,
+                resume=args.resume,
+                eval_games=args.eval_games,
                 timeout_seconds=args.timeout_seconds,
             )
         )

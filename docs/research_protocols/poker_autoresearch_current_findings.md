@@ -45,6 +45,10 @@ Live Slumbot diagnostic smokes:
 - Policy-head sampled solver smoke, no-all-in, 50 hands: `-432` chips/hand,
   CI `1576`, zero parse/API errors, mapping drift mean `0.001`, and
   `5.249` seconds/hand after learned range pruning.
+- Policy-head sampled solver smoke with direct solver performance metrics,
+  no-all-in, 30 hands: `-1272` chips/hand, CI `1845`, `5.416` seconds/hand,
+  12 solver calls, mean solver latency `12229.1 ms`, mean active hands
+  `1017.2/1108.4`, prune ratio `0.9178`, and no parse/API errors.
 
 Local incumbent comparison:
 
@@ -140,6 +144,10 @@ Live solver backend status:
 - Learned range pruning is the current confirmed live-search speed path. In a
   concentrated-range river benchmark, pruning reduced a 1081-hand solve to 2
   active hands and cut wall time from about `2.03s` to `0.53s`.
+- The latest live Slumbot ranges were still diffuse, so threshold pruning kept
+  most hands (`0.9178` mean prune ratio). The practical read is that better
+  learned range concentration or a fused GPU CFR backend is required for a
+  larger live-search speedup.
 
 ## Diagnosis
 
@@ -158,6 +166,8 @@ The original solver-enabled smoke took about 8.5 seconds per hand at the
 the latest 50-hand solver smoke to `5.249` seconds/hand, but this is still too
 slow to use casually inside every unattended iteration. Slumbot search needs
 separate latency, cache, active-hand-count, and quality gates.
+The first direct solver-performance gate showed the main live bottleneck:
+solver calls averaged `12.2s` and range pruning kept most possible hands.
 
 Resolved workflow issue: `rules_parity`.
 

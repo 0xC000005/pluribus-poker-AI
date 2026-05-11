@@ -8,6 +8,7 @@ from poker_ai.research.autoresearch import (
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_gpu_training,
     enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
@@ -335,6 +336,38 @@ def test_enqueue_resolver_benchmark_creates_candidate_gate(tmp_path):
     assert "321" == str(gate["timeout_seconds"])
 
 
+def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
+    init_state(tmp_path)
+
+    queued = enqueue_gpu_training(
+        tmp_path,
+        n_iterations=2,
+        n_traversals=3,
+        n_training_steps=4,
+        buffer_capacity=5000,
+        hidden_dim=64,
+        n_layers=2,
+        batch_size=128,
+        save_dir="models/train_gate",
+        prefix="probe",
+        eval_games=5,
+        timeout_seconds=678,
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    gate = goal["gates"][queued["gate"]]
+    command = gate["commands"][0]
+    assert queued["gate"].startswith("train-gpu-deep-cfr-")
+    assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
+    assert "scripts/poker_autoresearch_train.py" in command
+    assert "--save-dir" in command
+    assert str(tmp_path / "models" / "train_gate") in command
+    assert "--prefix" in command
+    assert "probe" in command
+    assert "678" == str(gate["timeout_seconds"])
+
+
 def test_set_incumbent_records_checkpoint_metadata(tmp_path):
     init_state(tmp_path)
     checkpoint = tmp_path / "models" / "candidate.pt"
@@ -514,3 +547,41 @@ def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--max-cases" in goal["gates"][queued["gate"]]["commands"][0]
+
+
+def test_cli_enqueue_train_creates_gate(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-train",
+            "--n-iterations",
+            "2",
+            "--n-traversals",
+            "3",
+            "--prefix",
+            "probe",
+            "--timeout-seconds",
+            "55",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    command = goal["gates"][queued["gate"]]["commands"][0]
+    assert "scripts/poker_autoresearch_train.py" in command
+    assert "probe" in command

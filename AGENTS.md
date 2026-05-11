@@ -19,6 +19,7 @@
 - Autoresearch status: `python scripts/poker_autoresearch.py status`
 - Autoresearch comparison gate: `python scripts/poker_autoresearch.py gate eval-incumbent-self-compare`
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
+- Queue GPU candidate training: `python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --prefix candidate_gpu`
 - Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
 - Resolver benchmark CLI: `python scripts/poker_resolver_benchmark.py --checkpoint models/candidate.pt --solver-iterations 25 --solver-backend auto`
 - Queue candidate comparison: `python scripts/poker_autoresearch.py enqueue-compare --candidate models/candidate.pt --head-to-head`

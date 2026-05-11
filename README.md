@@ -94,6 +94,17 @@ python scripts/train_slumbot_2p.py \
   --n-layers 4
 ```
 
+Autoresearch GPU training gate, which emits JSON throughput metrics and a
+candidate checkpoint path:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-train \
+  --n-iterations 50 \
+  --n-traversals 4000 \
+  --n-training-steps 1500 \
+  --prefix candidate_gpu
+```
+
 ## Playing Slumbot
 
 ```bash
