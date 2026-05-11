@@ -34,6 +34,7 @@
 - Place isolated logic tests in `test/unit/`; broader flows in `test/functional/`.
 - For any action-space, feature, or mapping change, add/update parity tests and include regression coverage.
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
+- Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
 
 ## Commit & Pull Request Guidelines

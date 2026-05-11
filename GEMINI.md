@@ -66,6 +66,9 @@ python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300
 python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --strategy-source policy-head --solver-backend auto
 ```
 
+`--solver-backend torch-cuda` exists for benchmarking, but the default `auto`
+backend currently stays on CPU because the torch backend is not fused yet.
+
 Resolver diagnostics:
 
 ```bash

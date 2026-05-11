@@ -32,7 +32,10 @@ for _ci in range(52):
 def resolve_solver_backend(backend='auto', device=None):
     """Resolve public backend names to the concrete CFR implementation."""
     if backend == 'auto':
-        return ('torch', 'cuda') if torch.cuda.is_available() else ('cpu', None)
+        # The current torch-CUDA backend is experimental and often slower than
+        # NumPy because the CFR tree recurrence is still Python-driven. Keep
+        # auto on the measured-fast reference backend until the solver is fused.
+        return 'cpu', None
     if backend == 'torch-cuda':
         if not torch.cuda.is_available():
             raise RuntimeError("torch-cuda solver backend requested but CUDA is unavailable.")

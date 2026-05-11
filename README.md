@@ -106,7 +106,9 @@ Use `--no-solver` to disable turn/river solving and `--no-allin` for lower
 variance diagnostics. Use `--strategy-source policy-head` to test the trained
 policy head instead of regret matching the advantage head for non-solver
 decisions and range tracking. Use `--solver-backend torch-cuda` to force the
-torch/CUDA CFR+ backend; the default `auto` backend uses CUDA when available.
+experimental torch/CUDA CFR+ backend for benchmarking; the default `auto`
+backend stays on the measured-fast CPU solver until the CFR recurrence is
+fused.
 
 ## Resolver Diagnostics
 
