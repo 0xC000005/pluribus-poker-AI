@@ -1,4 +1,5 @@
 import sys
+import subprocess
 from pathlib import Path
 
 import torch
@@ -87,3 +88,17 @@ def test_base_policy_action_can_use_policy_head_instead_of_regret_matching():
 
     assert regret_incr.startswith("b")
     assert policy_incr == "c"
+
+
+def test_play_slumbot_script_help_imports_from_repo_root():
+    script = SCRIPTS_DIR / "play_slumbot.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--strategy-source" in result.stdout
