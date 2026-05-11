@@ -105,7 +105,8 @@ python scripts/play_slumbot.py \
 Use `--no-solver` to disable turn/river solving and `--no-allin` for lower
 variance diagnostics. Use `--strategy-source policy-head` to test the trained
 policy head instead of regret matching the advantage head for non-solver
-decisions and range tracking.
+decisions and range tracking. Use `--solver-backend torch-cuda` to force the
+torch/CUDA CFR+ backend; the default `auto` backend uses CUDA when available.
 
 ## Resolver Diagnostics
 
@@ -115,7 +116,8 @@ Slumbot evaluation:
 ```bash
 python scripts/poker_resolver_benchmark.py \
   --checkpoint models/slumbot_2p_iter1000.pt \
-  --solver-iterations 25
+  --solver-iterations 25 \
+  --solver-backend auto
 ```
 
 The same check is available as an autoresearch gate:

@@ -37,6 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--solver-iterations", type=int, default=25)
     parser.add_argument(
+        "--solver-backend",
+        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        default="auto",
+    )
+    parser.add_argument(
         "--cases-json",
         help="Optional JSON list or {'cases': [...]} of fixed resolver benchmark cases.",
     )
@@ -58,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         device,
         cases=cases,
         solver_iterations=args.solver_iterations,
+        solver_backend=args.solver_backend,
         checkpoint_metadata=loaded.metadata,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))

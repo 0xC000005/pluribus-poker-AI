@@ -26,6 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-allin", action="store_true")
     parser.add_argument("--no-solver", action="store_true")
     parser.add_argument(
+        "--solver-backend",
+        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        default="auto",
+    )
+    parser.add_argument(
         "--strategy-source",
         choices=("regret", "policy-head"),
         default="regret",
@@ -47,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
         command.append("--no-allin")
     if args.no_solver:
         command.append("--no-solver")
+    if not args.no_solver and args.solver_backend != "auto":
+        command.extend(["--solver-backend", args.solver_backend])
     if args.strategy_source != "regret":
         command.extend(["--strategy-source", args.strategy_source])
 

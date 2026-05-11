@@ -94,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
     slumbot.add_argument("--no-allin", action="store_true")
     slumbot.add_argument("--no-solver", action="store_true")
     slumbot.add_argument(
+        "--solver-backend",
+        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        default="auto",
+    )
+    slumbot.add_argument(
         "--strategy-source",
         choices=("regret", "policy-head"),
         default="regret",
@@ -106,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     resolver.add_argument("--model", required=True)
     resolver.add_argument("--solver-iterations", type=int, default=25)
+    resolver.add_argument(
+        "--solver-backend",
+        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        default="auto",
+    )
     resolver.add_argument("--max-cases", type=int)
     resolver.add_argument("--device", default="auto")
     resolver.add_argument("--timeout-seconds", type=int, default=1200)
@@ -201,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
                 no_allin=args.no_allin,
                 no_solver=args.no_solver,
                 strategy_source=args.strategy_source,
+                solver_backend=args.solver_backend,
                 timeout_seconds=args.timeout_seconds,
             )
         )
@@ -212,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
                 root,
                 args.model,
                 solver_iterations=args.solver_iterations,
+                solver_backend=args.solver_backend,
                 max_cases=args.max_cases,
                 device=args.device,
                 timeout_seconds=args.timeout_seconds,

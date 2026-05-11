@@ -16,6 +16,7 @@ import itertools
 from collections import deque
 
 import numpy as np
+import torch
 
 # Terminal types
 T_DECISION = 0
@@ -308,6 +309,187 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                     strategy_sum[i, a] += vr_at[i] * strat_cache[a]
 
     return regret_sum, strategy_sum
+
+
+def solve_cfr_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
+                    pot_start, hero_stack_start, villain_stack_start,
+                    n_iterations=100, hero_range=None, villain_range=None,
+                    device="cuda"):
+    """Run the same CFR+ recurrence with torch tensors on CPU or CUDA.
+
+    This keeps the CPU solver as the reference implementation while allowing
+    the dense per-terminal matrix products to run on GPU. The tree walk remains
+    Python-driven, so this is an acceleration backend, not a fully fused kernel.
+    """
+    torch_device = torch.device(device)
+    if torch_device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA solver backend requested but torch.cuda is unavailable.")
+
+    n = n_hands
+    nn = tree['n_nodes']
+    n_actions = tree['n_actions']
+    player_cpu = tree['player']
+    children_cpu = tree['children']
+    decision_actions = tree['decision_actions']
+    decision_action_tensors = [
+        torch.as_tensor(actions, dtype=torch.long, device=torch_device)
+        if actions else None
+        for actions in decision_actions
+    ]
+
+    win_t = torch.as_tensor(win_m, dtype=torch.float32, device=torch_device)
+    lose_t = torch.as_tensor(lose_m, dtype=torch.float32, device=torch_device)
+    tie_t = torch.as_tensor(tie_m, dtype=torch.float32, device=torch_device)
+    valid_t = torch.as_tensor(valid_m, dtype=torch.float32, device=torch_device)
+
+    stacks_h = torch.as_tensor(tree['stacks_h'], dtype=torch.float32, device=torch_device)
+    stacks_v = torch.as_tensor(tree['stacks_v'], dtype=torch.float32, device=torch_device)
+    hi_all = float(hero_stack_start) - stacks_h
+    vi_all = float(villain_stack_start) - stacks_v
+
+    show_idx = torch.as_tensor(tree['showdown_idx'], dtype=torch.long, device=torch_device)
+    hfold_idx = torch.as_tensor(tree['hero_fold_idx'], dtype=torch.long, device=torch_device)
+    vfold_idx = torch.as_tensor(tree['villain_fold_idx'], dtype=torch.long, device=torch_device)
+
+    if show_idx.numel() > 0:
+        hi_s = hi_all.index_select(0, show_idx).reshape(-1, 1)
+        vi_s = vi_all.index_select(0, show_idx).reshape(-1, 1)
+        hw_s = float(pot_start) + vi_s
+        hl_s = -hi_s
+        ht_s = (float(pot_start) + vi_s - hi_s) / 2.0
+        vw_s = float(pot_start) + hi_s
+        vl_s = -vi_s
+        vt_s = (float(pot_start) + hi_s - vi_s) / 2.0
+
+    if hfold_idx.numel() > 0:
+        hi_hf = hi_all.index_select(0, hfold_idx).reshape(-1, 1)
+        hf_hero_coeff = -hi_hf
+        hf_vill_coeff = float(pot_start) + hi_hf
+
+    if vfold_idx.numel() > 0:
+        vi_vf = vi_all.index_select(0, vfold_idx).reshape(-1, 1)
+        vf_hero_coeff = float(pot_start) + vi_vf
+        vf_vill_coeff = -vi_vf
+
+    regret_sum = torch.zeros((nn, n_actions, n), dtype=torch.float32, device=torch_device)
+    strategy_sum = torch.zeros_like(regret_sum)
+    hr_at = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
+    vr_at = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
+    hvals = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
+    vvals = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
+
+    hr_init = (
+        torch.as_tensor(hero_range, dtype=torch.float32, device=torch_device)
+        if hero_range is not None else torch.ones(n, dtype=torch.float32, device=torch_device)
+    )
+    vr_init = (
+        torch.as_tensor(villain_range, dtype=torch.float32, device=torch_device)
+        if villain_range is not None else torch.ones(n, dtype=torch.float32, device=torch_device)
+    )
+
+    for _iter in range(n_iterations):
+        hr_at.zero_()
+        vr_at.zero_()
+        hvals.zero_()
+        vvals.zero_()
+        hr_at[0].copy_(hr_init)
+        vr_at[0].copy_(vr_init)
+
+        for i in range(nn):
+            player = int(player_cpu[i])
+            if player == -1:
+                continue
+            acts_t = decision_action_tensors[i]
+            acts = decision_actions[i]
+            rs_acts = regret_sum[i].index_select(0, acts_t)
+            pos = torch.clamp(rs_acts, min=0.0)
+            total = pos.sum(dim=0)
+            safe = total.clamp(min=1.0)
+            uniform = 1.0 / len(acts)
+            strategy = torch.where(total.unsqueeze(0) > 0.0, pos / safe, uniform)
+
+            for k, action in enumerate(acts):
+                child_idx = int(children_cpu[i, action])
+                if player == 0:
+                    hr_at[child_idx].copy_(hr_at[i] * strategy[k])
+                    vr_at[child_idx].copy_(vr_at[i])
+                else:
+                    hr_at[child_idx].copy_(hr_at[i])
+                    vr_at[child_idx].copy_(vr_at[i] * strategy[k])
+
+        if show_idx.numel() > 0:
+            vr_s = hr_at.new_empty((show_idx.numel(), n))
+            hr_s = hr_at.new_empty((show_idx.numel(), n))
+            vr_s.copy_(vr_at.index_select(0, show_idx))
+            hr_s.copy_(hr_at.index_select(0, show_idx))
+
+            h_win = vr_s @ win_t.T
+            h_lose = vr_s @ lose_t.T
+            h_tie = vr_s @ tie_t.T
+            v_win = hr_s @ win_t
+            v_lose = hr_s @ lose_t
+            v_tie = hr_s @ tie_t
+
+            hvals[show_idx] = hw_s * h_win + hl_s * h_lose + ht_s * h_tie
+            vvals[show_idx] = vw_s * v_lose + vl_s * v_win + vt_s * v_tie
+
+        if hfold_idx.numel() > 0:
+            vr_hf = vr_at.index_select(0, hfold_idx)
+            hr_hf = hr_at.index_select(0, hfold_idx)
+            hvals[hfold_idx] = hf_hero_coeff * (vr_hf @ valid_t.T)
+            vvals[hfold_idx] = hf_vill_coeff * (hr_hf @ valid_t)
+
+        if vfold_idx.numel() > 0:
+            vr_vf = vr_at.index_select(0, vfold_idx)
+            hr_vf = hr_at.index_select(0, vfold_idx)
+            hvals[vfold_idx] = vf_hero_coeff * (vr_vf @ valid_t.T)
+            vvals[vfold_idx] = vf_vill_coeff * (hr_vf @ valid_t)
+
+        for i in reversed(range(nn)):
+            player = int(player_cpu[i])
+            if player == -1:
+                continue
+            acts_t = decision_action_tensors[i]
+            acts = decision_actions[i]
+            rs_acts = regret_sum[i].index_select(0, acts_t)
+            pos = torch.clamp(rs_acts, min=0.0)
+            total = pos.sum(dim=0)
+            safe = total.clamp(min=1.0)
+            uniform = 1.0 / len(acts)
+            strategy = torch.where(total.unsqueeze(0) > 0.0, pos / safe, uniform)
+
+            hval = torch.zeros(n, dtype=torch.float32, device=torch_device)
+            vval = torch.zeros(n, dtype=torch.float32, device=torch_device)
+            for k, action in enumerate(acts):
+                child_idx = int(children_cpu[i, action])
+                hval += strategy[k] * hvals[child_idx]
+                vval += strategy[k] * vvals[child_idx]
+
+            hvals[i].copy_(hval)
+            vvals[i].copy_(vval)
+
+            if player == 0:
+                reach = hr_at[i]
+                for k, action in enumerate(acts):
+                    child_idx = int(children_cpu[i, action])
+                    regret_sum[i, action] = torch.clamp(
+                        regret_sum[i, action] + hvals[child_idx] - hval,
+                        min=0.0,
+                    )
+                    strategy_sum[i, action] += reach * strategy[k]
+            else:
+                reach = vr_at[i]
+                for k, action in enumerate(acts):
+                    child_idx = int(children_cpu[i, action])
+                    regret_sum[i, action] = torch.clamp(
+                        regret_sum[i, action] + vvals[child_idx] - vval,
+                        min=0.0,
+                    )
+                    strategy_sum[i, action] += reach * strategy[k]
+
+    if torch_device.type == "cuda":
+        torch.cuda.synchronize(torch_device)
+    return regret_sum.cpu().numpy(), strategy_sum.cpu().numpy()
 
 
 def get_average_strategy(strategy_sum, node_idx, actions, hand_idx):

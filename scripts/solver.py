@@ -9,10 +9,11 @@ import itertools
 from dataclasses import dataclass, field
 
 import numpy as np
+import torch
 
 from poker_ai.poker.evaluation.eval_card import EvaluationCard
 from poker_ai.poker.evaluation.evaluator import Evaluator
-from fast_cfr import build_tree_arrays, solve_cfr, get_average_strategy
+from fast_cfr import build_tree_arrays, solve_cfr, solve_cfr_torch, get_average_strategy
 
 BIG_BLIND = 100
 # Use full training RAISE_FRACTIONS mapping for action indices 2..7.
@@ -26,6 +27,21 @@ _CARD_TO_EVAL = np.zeros(52, dtype=np.int32)
 for _ci in range(52):
     _CARD_TO_EVAL[_ci] = EvaluationCard.new(
         _RANK_CHARS[_ci // 4] + _SUIT_CHARS[_ci % 4])
+
+
+def resolve_solver_backend(backend='auto', device=None):
+    """Resolve public backend names to the concrete CFR implementation."""
+    if backend == 'auto':
+        return ('torch', 'cuda') if torch.cuda.is_available() else ('cpu', None)
+    if backend == 'torch-cuda':
+        if not torch.cuda.is_available():
+            raise RuntimeError("torch-cuda solver backend requested but CUDA is unavailable.")
+        return 'torch', 'cuda'
+    if backend == 'torch-cpu':
+        return 'torch', 'cpu'
+    if backend in ('cpu', 'torch'):
+        return backend, device
+    raise ValueError(f"Unknown solver backend: {backend}")
 
 
 @dataclass
@@ -216,15 +232,26 @@ class StreetSolver:
     # Public API
     # ------------------------------------------------------------------
 
-    def solve(self, n_iterations=100, hero_range=None, villain_range=None):
+    def solve(self, n_iterations=100, hero_range=None, villain_range=None,
+              backend='cpu', device=None):
         hr = hero_range.astype(np.float32) if hero_range is not None else None
         vr = villain_range.astype(np.float32) if villain_range is not None else None
-        self._regret_sum, self._strategy_sum = solve_cfr(
+        backend, device = resolve_solver_backend(backend, device)
+        if backend == 'cpu':
+            solver_fn = solve_cfr
+            kwargs = {}
+        elif backend == 'torch':
+            solver_fn = solve_cfr_torch
+            kwargs = {'device': device or 'cuda'}
+        else:
+            raise ValueError(f"Unknown solver backend: {backend}")
+        self._regret_sum, self._strategy_sum = solver_fn(
             self._tree, self.n,
             self.win_m, self.lose_m, self.tie_m, self.valid,
             self.pot_start, self.hero_stack_start, self.villain_stack_start,
             n_iterations=n_iterations,
             hero_range=hr, villain_range=vr,
+            **kwargs,
         )
 
     def get_strategy(self, hand, node=None):
@@ -269,6 +296,7 @@ class StreetSolver:
 def solve_street(
     our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
     action_str='', n_iterations=100, villain_range=None,
+    backend='cpu', device=None,
 ):
     """Solve a street (turn or river) and return action.
 
@@ -276,7 +304,8 @@ def solve_street(
     """
     solver = StreetSolver(
         board_idx, pot, hero_stack, villain_stack, hero_first)
-    solver.solve(n_iterations, villain_range=villain_range)
+    solver.solve(n_iterations, villain_range=villain_range,
+                 backend=backend, device=device)
 
     nav = _parse_nav(action_str, solver)
     node = solver.navigate(nav)

@@ -63,13 +63,13 @@ Slumbot play:
 
 ```bash
 python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy
-python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --strategy-source policy-head
+python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --strategy-source policy-head --solver-backend auto
 ```
 
 Resolver diagnostics:
 
 ```bash
-python scripts/poker_resolver_benchmark.py --checkpoint models/slumbot_2p_iter1000.pt --solver-iterations 25
+python scripts/poker_resolver_benchmark.py --checkpoint models/slumbot_2p_iter1000.pt --solver-iterations 25 --solver-backend auto
 python scripts/poker_autoresearch.py gate eval-resolver-fixed-states
 ```
 

@@ -625,6 +625,7 @@ def enqueue_slumbot_smoke(
     no_allin: bool = True,
     no_solver: bool = True,
     strategy_source: str = "regret",
+    solver_backend: str = "auto",
     timeout_seconds: int = 600,
 ) -> dict:
     """Create and queue a sparse live Slumbot smoke for a candidate checkpoint."""
@@ -650,6 +651,8 @@ def enqueue_slumbot_smoke(
         command.append("--no-allin")
     if no_solver:
         command.append("--no-solver")
+    if not no_solver and solver_backend != "auto":
+        command.extend(["--solver-backend", solver_backend])
     if strategy_source != "regret":
         command.extend(["--strategy-source", strategy_source])
 
@@ -681,6 +684,7 @@ def enqueue_resolver_benchmark(
     model: str | Path,
     *,
     solver_iterations: int = 25,
+    solver_backend: str = "auto",
     max_cases: int | None = None,
     device: str = "auto",
     timeout_seconds: int = 1200,
@@ -701,6 +705,8 @@ def enqueue_resolver_benchmark(
         device,
         "--solver-iterations",
         str(solver_iterations),
+        "--solver-backend",
+        solver_backend,
     ]
     if max_cases is not None:
         command.extend(["--max-cases", str(max_cases)])

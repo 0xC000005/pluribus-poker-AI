@@ -191,6 +191,7 @@ def _solver_decision(
     parsed: dict,
     *,
     solver_iterations: int,
+    solver_backend: str,
 ) -> SolverDecision | None:
     street = int(parsed["st"])
     if street not in (2, 3):
@@ -213,7 +214,7 @@ def _solver_decision(
 
     started = time.perf_counter()
     solver = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
-    solver.solve(n_iterations=solver_iterations)
+    solver.solve(n_iterations=solver_iterations, backend=solver_backend)
     nav = _parse_nav(street_action, solver)
     node = solver.navigate(nav)
 
@@ -269,6 +270,7 @@ def _case_metrics(
     case: ResolverBenchmarkCase,
     *,
     solver_iterations: int,
+    solver_backend: str,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     validation_errors = _validate_case(case, parsed)
@@ -301,7 +303,11 @@ def _case_metrics(
         parsed,
         strategy_source="policy_head",
     )
-    solver = _solver_decision(case, parsed, solver_iterations=solver_iterations)
+    solver = _solver_decision(
+        case, parsed,
+        solver_iterations=solver_iterations,
+        solver_backend=solver_backend,
+    )
     if solver is None:
         return {
             **base,
@@ -387,6 +393,7 @@ def run_resolver_benchmark(
     *,
     cases: Iterable[ResolverBenchmarkCase] | None = None,
     solver_iterations: int = 25,
+    solver_backend: str = "auto",
     checkpoint_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     value_net.eval()
@@ -397,6 +404,7 @@ def run_resolver_benchmark(
             device,
             case,
             solver_iterations=solver_iterations,
+            solver_backend=solver_backend,
         )
         for case in selected_cases
     ]
@@ -421,6 +429,7 @@ def run_resolver_benchmark(
         "n_cases": len(results),
         "n_solver_cases": len(solver_results),
         "solver_iterations": int(solver_iterations),
+        "solver_backend": solver_backend,
         "checkpoint": metadata.get("checkpoint"),
         "checkpoint_iteration": metadata.get("checkpoint_iteration", metadata.get("iteration")),
         "hidden_dim": metadata.get("hidden_dim"),

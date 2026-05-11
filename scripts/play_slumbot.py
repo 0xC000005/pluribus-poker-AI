@@ -27,7 +27,7 @@ N_ACTIONS = 9
 RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 from poker_ai.deep_cfr.networks import ValueNetwork
-from solver import solve_street, solver_action_to_slumbot
+from solver import resolve_solver_backend, solve_street, solver_action_to_slumbot
 from range_tracker import (
     RangeTracker,
     map_slumbot_action_to_idx,
@@ -711,7 +711,8 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
 
 
 def _solver_action(hole_cards, board, action_str, client_pos, parsed,
-                    verbose, tracker=None, diagnostics=None):
+                    verbose, tracker=None, diagnostics=None,
+                    solver_backend='auto'):
     """Select action using real-time CFR+ solver (turn or river)."""
     import itertools
 
@@ -780,6 +781,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
         action_str=street_str, n_iterations=iters,
         villain_range=villain_range,
+        backend=solver_backend,
     )
 
     # Convert solver action to Slumbot format.
@@ -792,7 +794,9 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         strat_str = ' '.join(f'{SOLVER_ACTION_NAMES[a]}:{p:.0%}'
                              for a, p in sorted(strategy.items()))
         label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
-        print(f" [{label}:{SOLVER_ACTION_NAMES[solver_action]}>{incr} ({strat_str})]",
+        backend_name, backend_device = resolve_solver_backend(solver_backend)
+        backend_label = backend_device or backend_name
+        print(f" [{label}:{backend_label}:{SOLVER_ACTION_NAMES[solver_action]}>{incr} ({strat_str})]",
               end="", flush=True)
 
     # Cache result for identical future states in this session.
@@ -804,7 +808,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
 
 def play_hand(value_net, token, device, verbose=False, greedy=False,
               no_allin=False, use_solver=True, diagnostics=None,
-              strategy_source="regret"):
+              strategy_source="regret", solver_backend='auto'):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token)
     token = r.get('token', token)
@@ -852,6 +856,7 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
             incr = _solver_action(
                 hole_cards, board, action_str, client_pos, parsed, verbose,
                 tracker=tracker, diagnostics=diagnostics,
+                solver_backend=solver_backend,
             )
         else:
             # ----- Preflop/Flop: use base policy (trained model) -----
@@ -908,6 +913,12 @@ def main():
     parser.add_argument('--no-allin', action='store_true', help='Disable all-in action')
     parser.add_argument('--no-solver', action='store_true', help='Disable river CFR solver')
     parser.add_argument(
+        '--solver-backend',
+        choices=('auto', 'cpu', 'torch-cuda', 'torch-cpu'),
+        default='auto',
+        help='Turn/river CFR+ backend. auto uses CUDA when available.',
+    )
+    parser.add_argument(
         '--strategy-source',
         choices=('regret', 'policy-head'),
         default='regret',
@@ -920,6 +931,7 @@ def main():
         mode_str += "+no-allin"
     if not args.no_solver:
         mode_str += "+turn+river-solver"
+        mode_str += f"+solver-{args.solver_backend}"
     if args.strategy_source != "regret":
         mode_str += f"+{args.strategy_source}"
     print("=" * 60)
@@ -956,7 +968,8 @@ def main():
                              greedy=args.greedy, no_allin=args.no_allin,
                              use_solver=not args.no_solver,
                              diagnostics=diagnostics,
-                             strategy_source=args.strategy_source)
+                             strategy_source=args.strategy_source,
+                             solver_backend=args.solver_backend)
         total_winnings += w
         results.append(w)
 
