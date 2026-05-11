@@ -139,6 +139,12 @@ GPU training readiness:
   `models/autoresearch_gpu_20260511T163126Z/gpu_candidate_smoke_final.pt`.
   The follow-up 400-game duplicate-swapped comparison was not promotable:
   `avg_chips_per_hand=-99.5525`, lower95 `-390.294`.
+- Larger GPU candidate run passed: 20 iterations, 2000 traversals, 500
+  training steps, `avg_iter_seconds=2.736`, `iters_per_hour=1315.781`,
+  `traversals_per_second=730.962`, checkpoint
+  `models/autoresearch_gpu_20260511T163408Z/gpu_candidate_20x2k_final.pt`.
+  The 3,000-game duplicate-swapped comparison against the incumbent was still
+  negative: `avg_chips_per_hand=-66.27`, lower95 `-111.607`.
 - A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
   replay cache consumed most of the 8GB card. The trainer now skips the GPU
   replay cache when its estimated tensor footprint would exceed a safe fraction
