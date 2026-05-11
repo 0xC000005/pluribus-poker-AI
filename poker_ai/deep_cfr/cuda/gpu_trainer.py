@@ -86,6 +86,26 @@ def _gpu_cache_budget_allows(
     ) <= int(float(free_bytes) * safety_fraction)
 
 
+def _remap_legacy_value_state_dict(state: dict) -> dict:
+    """Map older sequential ValueNetwork checkpoints onto trunk/adv_head."""
+    if not any(key.startswith("net.") for key in state):
+        return state
+    linear_indices = sorted({int(key.split(".")[1]) for key in state if key.startswith("net.")})
+    *trunk_indices, head_index = linear_indices
+    remapped = {}
+    for key, value in state.items():
+        if not key.startswith("net."):
+            remapped[key] = value
+            continue
+        _, index, param = key.split(".", 2)
+        index = int(index)
+        if index == head_index:
+            remapped[f"adv_head.{param}"] = value
+        elif index in trunk_indices:
+            remapped[f"trunk.{index}.{param}"] = value
+    return remapped
+
+
 def _torch_dtype_nbytes(dtype: torch.dtype) -> int:
     return torch.empty((), dtype=dtype).element_size()
 
@@ -974,6 +994,20 @@ class GPUDeepCFRTrainer:
             initial_chips=checkpoint.get("initial_chips", 10000),
             device=device,
         )
-        trainer.value_net.load_state_dict(checkpoint["value_net"])
+        state = _remap_legacy_value_state_dict(checkpoint["value_net"])
+        missing, unexpected = trainer.value_net.load_state_dict(state, strict=False)
+        allowed_missing = {
+            "policy_head.weight",
+            "policy_head.bias",
+            "seq_proj.weight",
+            "seq_proj.bias",
+        }
+        missing = [key for key in missing if key not in allowed_missing]
+        unexpected = list(unexpected)
+        if missing or unexpected:
+            raise RuntimeError(
+                "Could not load value_net state_dict: "
+                f"missing={missing}, unexpected={unexpected}"
+            )
         trainer.iteration = checkpoint["iteration"]
         return trainer

@@ -114,3 +114,29 @@ def test_gpu_cache_skips_when_training_budget_is_smaller_than_buffer(monkeypatch
 
     assert not view._try_build_gpu_cache(torch.device("cuda"))
     assert mem_info_calls == []
+
+
+def test_gpu_trainer_load_accepts_legacy_sequential_value_net(tmp_path):
+    hidden_dim = 16
+    checkpoint = {
+        "value_net": {
+            "net.0.weight": torch.randn(hidden_dim, N_FEATURES),
+            "net.0.bias": torch.randn(hidden_dim),
+            "net.2.weight": torch.randn(hidden_dim, hidden_dim),
+            "net.2.bias": torch.randn(hidden_dim),
+            "net.4.weight": torch.randn(N_ACTIONS, hidden_dim),
+            "net.4.bias": torch.randn(N_ACTIONS),
+        },
+        "iteration": 7,
+        "n_players": 2,
+        "hidden_dim": hidden_dim,
+        "n_layers": 2,
+        "initial_chips": 20000,
+    }
+    path = tmp_path / "legacy.pt"
+    torch.save(checkpoint, path)
+
+    trainer = GPUDeepCFRTrainer.load(str(path), device=torch.device("cpu"))
+
+    assert trainer.iteration == 7
+    assert trainer.value_net.adv_head.weight.shape == (N_ACTIONS, hidden_dim)
