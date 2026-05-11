@@ -21,6 +21,8 @@
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
 - Queue methodology review: `python scripts/poker_autoresearch.py enqueue-review --subject "New search objective" --trigger method_change --claim "The objective should improve Slumbot transfer."`
 - Validate methodology review: `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/<review_id> --require-complete`
+- Objective-drift audit: `python scripts/poker_objective_audit.py --base-ref HEAD`
+- Objective-drift audit with review: `python scripts/poker_autoresearch.py objective-audit --changed-path scripts/play_slumbot.py --review-dir autoresearch-session/poker_reviews/<review_id>`
 - Register research knob: `python scripts/poker_autoresearch.py add-knob --name search_target_mix --default 0.0 --failure-class search_quality --mechanism "Test whether search-distilled targets reduce live transfer loss." --rationale "One variable isolates the target mechanism." --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."`
 - Queue GPU candidate training: `python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --prefix candidate_gpu --save-every 25 --auto-compare`
 - Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
@@ -40,7 +42,9 @@
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
 - For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
 - Use `--compare-strategy-source policy-head` only when both candidate and incumbent checkpoints include trained `policy_head` weights; legacy checkpoints must use regret matching.
-- For method, evaluation-protocol, checkpoint-promotion, or persistent-knob changes, enqueue and complete a methodology review. The review must include independent-verifier findings and related work with source URLs.
+- For method, evaluation-protocol, checkpoint-promotion, or persistent-knob changes, enqueue and complete a methodology review. The review must include independent-verifier findings, related work with source URLs, and a benchmark-hacking audit.
+- Treat evaluation harnesses, Slumbot adapters, solver benchmarks, promotion logic, parsers, seed lists, and parity tests as protected surfaces. Changes to them require a completed review and objective-drift audit.
+- Use sub-agents as a review team when available: verifier for `review.md`, literature scout for `related_work.md`, benchmark auditor for `benchmark_audit.md`, and research lead for `decision.json`.
 - Add persistent knobs only through `add-knob`; each needs one mechanism, one default, one failure class, and a removal criterion. Do not use broad hyperparameter sweeps as research progress.
 - Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment; the 2,500-slot mode was much slower and not better in the first local gate.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.

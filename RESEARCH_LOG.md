@@ -938,3 +938,14 @@
 - Summary: Added commit/review/knob policies, methodology-review queue and validator, governed knob registration, session migration, documentation updates, and concise key-metrics logging.
 - Metrics file: not recorded
 - Key metrics: `{"passed": true, "pytest_autoresearch": "44 passed", "compileall": "passed", "diff_check": "passed", "status_ready": true}`
+
+## 20260511T202441Z-objective-drift-audit-hardening - passed
+
+- Timestamp: 2026-05-11T20:24:41Z
+- Type: implementation
+- Gate: objective-drift-audit
+- Hypothesis: Long unattended autoresearch needs an explicit benchmark-hacking audit and protected evaluation surfaces so iteration pressure cannot quietly reshape the objective.
+- Failure class: none
+- Summary: Added protected-surface objective audit, required `benchmark_audit.md` review artifact, multi-agent review routing, and docs for immutable evaluation surfaces.
+- Metrics file: not recorded
+- Key metrics: `{"passed": true, "sources": ["karpathy/autoresearch", "AI Scientist", "POPPER", "OpenEvolve", "specification gaming"], "primary_guard": "protected evaluation surfaces require completed review"}`

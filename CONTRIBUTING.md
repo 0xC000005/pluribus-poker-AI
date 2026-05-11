@@ -41,11 +41,26 @@ python scripts/poker_autoresearch.py enqueue-review \
 ```
 
 Complete `review.md`, `related_work.md`, and `decision.json`, then validate:
+The review bundle also includes `benchmark_audit.md` and `team_review.md`.
+Use separate sub-agents for independent verification, literature review, and
+benchmark-hacking audit when available; the files are the durable record.
 
 ```bash
 python scripts/poker_methodology_review.py \
   --review-dir autoresearch-session/poker_reviews/<review_id> \
   --require-complete
+```
+
+Protected evaluation surfaces are immutable during ordinary experiments:
+evaluation scripts, Slumbot adapters, solver benchmarks, promotion logic,
+parsers, seed lists, and parity tests. Audit protected-surface changes before
+keeping a candidate or committing methodology changes:
+
+```bash
+python scripts/poker_objective_audit.py --base-ref HEAD
+python scripts/poker_autoresearch.py objective-audit \
+  --changed-path scripts/play_slumbot.py \
+  --review-dir autoresearch-session/poker_reviews/<review_id>
 ```
 
 Register persistent knobs through the workflow so they have a mechanism and a
@@ -88,6 +103,7 @@ For autoresearch workflow changes, also run:
 ```bash
 pytest -q test/unit/test_poker_autoresearch.py test/unit/test_poker_autoresearch_eval.py
 python -m compileall -q poker_ai/research/autoresearch.py scripts/poker_autoresearch.py scripts/poker_methodology_review.py
+python -m compileall -q scripts/poker_objective_audit.py
 ```
 
 ## Pull Requests

@@ -7,6 +7,7 @@ from pathlib import Path
 import poker_ai.research.autoresearch as autoresearch
 from poker_ai.research.autoresearch import (
     CommandResult,
+    audit_objective_alignment,
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
@@ -78,6 +79,7 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert goal["commit_policy"]["mode"] == "batch_by_research_objective"
     assert "methodology_review_required" in goal["review_policy"]["required_for"]
     assert goal["knob_policy"]["max_active_knobs"] == 5
+    assert "scripts/play_slumbot.py" in goal["objective_alignment_policy"]["protected_surfaces"]
 
 
 def test_init_state_prefers_repo_venv_python_for_default_gates(tmp_path):
@@ -339,9 +341,12 @@ def test_enqueue_methodology_review_creates_templates_and_related_work_gate(tmp_
     assert queued["gate"].startswith("methodology-review-")
     assert queued["requires_independent_verifier"] is True
     assert queued["requires_related_work"] is True
+    assert queued["requires_benchmark_audit"] is True
     assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
     assert (review_dir / "review.md").is_file()
     assert (review_dir / "related_work.md").is_file()
+    assert (review_dir / "benchmark_audit.md").is_file()
+    assert (review_dir / "team_review.md").is_file()
     assert (review_dir / "decision.json").is_file()
     assert "scripts/poker_methodology_review.py" in command
     assert "--require-complete" in command
@@ -366,6 +371,7 @@ def test_methodology_review_validator_requires_independent_review_and_related_wo
     )
     assert pending.returncode == 1
     assert "review.md is still pending" in pending.stderr
+    assert "benchmark_audit.md is still pending" in pending.stderr
 
     (review_dir / "review.md").write_text(
         "# Independent Verification\n\n"
@@ -376,6 +382,12 @@ def test_methodology_review_validator_requires_independent_review_and_related_wo
     (review_dir / "related_work.md").write_text(
         "# Related Work\n\n"
         "- [Deep CFR](https://arxiv.org/abs/1811.00164): canonical baseline.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "benchmark_audit.md").write_text(
+        "# Benchmark-Hacking Audit\n\n"
+        "Protected surfaces checked: no eval harness weakening.\n\n"
+        "Verdict: PASS\n",
         encoding="utf-8",
     )
     (review_dir / "decision.json").write_text(
@@ -397,6 +409,61 @@ def test_methodology_review_validator_requires_independent_review_and_related_wo
     )
     assert complete.returncode == 0
     assert json.loads(complete.stdout)["passed"] is True
+
+
+def test_objective_audit_blocks_protected_surface_without_review(tmp_path):
+    init_state(tmp_path)
+
+    result = audit_objective_alignment(
+        tmp_path,
+        changed_paths=["scripts/play_slumbot.py", "poker_ai/deep_cfr/networks.py"],
+    )
+
+    assert result["passed"] is False
+    assert result["protected_hits"] == ["scripts/play_slumbot.py"]
+    assert "Protected evaluation surfaces changed" in result["errors"][0]
+
+
+def test_objective_audit_allows_protected_surface_with_completed_review(tmp_path):
+    init_state(tmp_path)
+    queued = enqueue_methodology_review(
+        tmp_path,
+        subject="Slumbot parser update",
+        trigger="evaluation_protocol_change",
+        claim="Parser update preserves evaluation hardness.",
+    )
+    review_dir = Path(queued["review_dir"])
+    (review_dir / "review.md").write_text(
+        "# Independent Verification\n\nVerdict: PASS\n\nArtifacts inspected.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "related_work.md").write_text(
+        "# Related Work\n\n- [Deep CFR](https://arxiv.org/abs/1811.00164)\n",
+        encoding="utf-8",
+    )
+    (review_dir / "benchmark_audit.md").write_text(
+        "# Benchmark-Hacking Audit\n\nVerdict: PASS\n\nNo benchmark weakening.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "decision.json").write_text(
+        json.dumps(
+            {
+                "decision": "proceed",
+                "reason": "Parser fix keeps metric semantics unchanged.",
+                "sources": ["https://arxiv.org/abs/1811.00164"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = audit_objective_alignment(
+        tmp_path,
+        changed_paths=["scripts/play_slumbot.py"],
+        review_dir=review_dir,
+    )
+
+    assert result["passed"] is True
+    assert result["protected_hits"] == ["scripts/play_slumbot.py"]
 
 
 def test_register_research_knob_requires_mechanism_and_enforces_budget(tmp_path):
@@ -978,6 +1045,35 @@ def test_cli_add_knob_records_governed_knob(tmp_path):
         encoding="utf-8"
     )
     assert "search_target_mix" in knob_text
+
+
+def test_cli_objective_audit_blocks_protected_surface(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "objective-audit",
+            "--changed-path",
+            "scripts/play_slumbot.py",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert payload["protected_hits"] == ["scripts/play_slumbot.py"]
 
 
 def test_cli_enqueue_train_creates_gate(tmp_path):

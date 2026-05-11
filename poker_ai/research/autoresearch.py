@@ -27,6 +27,21 @@ KNOBS_FILE = "poker_knobs.tsv"
 STOP_FILE = "STOP"
 RESEARCH_LOG = "RESEARCH_LOG.md"
 ALLOWED_REVIEW_DECISIONS = {"proceed", "revise", "abandon", "gather_more_evidence"}
+PROTECTED_EVAL_SURFACES = [
+    "scripts/poker_autoresearch_eval.py",
+    "scripts/poker_autoresearch_slumbot.py",
+    "scripts/poker_resolver_benchmark.py",
+    "scripts/play_slumbot.py",
+    "scripts/solver.py",
+    "scripts/fast_cfr.py",
+    "scripts/poker_objective_audit.py",
+    "poker_ai/research/autoresearch.py",
+    "poker_ai/research/promotion.py",
+    "test/unit/test_network_mask.py",
+    "test/unit/test_slumbot_mapping.py",
+    "test/unit/test_legal_mask_parity.py",
+    "test/unit/test_poker_autoresearch_eval.py",
+]
 KNOB_COLUMNS = [
     "name",
     "status",
@@ -241,6 +256,29 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "rule": (
                 "Every persistent knob needs a mechanism, one primary variable, "
                 "and a removal criterion. Broad sweeps are rejected."
+            ),
+        },
+        "objective_alignment_policy": {
+            "long_term_objective": (
+                "Develop novel, compute-efficient Texas hold'em methods that "
+                "transfer to Slumbot and stronger bots on personal-PC hardware."
+            ),
+            "protected_surfaces": PROTECTED_EVAL_SURFACES,
+            "protected_surface_rule": (
+                "Evaluation harnesses, Slumbot adapters, promotion logic, seed "
+                "lists, parsers, and parity tests are immutable during ordinary "
+                "experiments. Changing them requires completed methodology review "
+                "and benchmark-hacking audit artifacts."
+            ),
+            "promotion_requires": [
+                "paired incumbent head-to-head lower-bound evidence",
+                "fixed-state resolver diagnostics",
+                "sparse live Slumbot confirmation",
+                "objective-alignment audit",
+            ],
+            "visible_metric_rule": (
+                "Local random and smoke metrics are diagnostics, not promotion "
+                "targets. Do not optimize solely for visible smoke gates."
             ),
         },
         "primary_metric": "lower_95_ci_mbb_per_hand_vs_incumbent",
@@ -822,6 +860,33 @@ def _write_methodology_review_templates(
         "- TODO\n",
         encoding="utf-8",
     )
+    (review_dir / "benchmark_audit.md").write_text(
+        "# Benchmark-Hacking Audit\n\n"
+        f"Claim under review: {claim}\n\n"
+        "Team role: benchmark-hacking auditor.\n\n"
+        "Protected surfaces:\n"
+        "- Evaluation harnesses, Slumbot adapters, promotion logic, seed lists, "
+        "parsers, and parity tests.\n\n"
+        "Required checks:\n"
+        "- TODO: list changed files and identify protected-surface changes.\n"
+        "- TODO: confirm no tests, parsers, legal masks, opponent adapters, or "
+        "promotion blockers were weakened to improve the metric.\n"
+        "- TODO: identify which metrics are diagnostic and which are promotion gates.\n"
+        "- TODO: state why the result should transfer to Slumbot instead of only "
+        "the visible local benchmark.\n\n"
+        "Verdict: PENDING\n",
+        encoding="utf-8",
+    )
+    (review_dir / "team_review.md").write_text(
+        "# Review Team Routing\n\n"
+        "- Research lead: owns `decision.json` and final go/no-go.\n"
+        "- Independent verifier: fills `review.md` from local artifacts.\n"
+        "- Literature scout: fills `related_work.md` from primary sources.\n"
+        "- Benchmark auditor: fills `benchmark_audit.md` and checks objective drift.\n\n"
+        "Use separate sub-agents for these roles when available. The files are "
+        "the source of truth, not chat memory.\n",
+        encoding="utf-8",
+    )
     _write_json(
         review_dir / "decision.json",
         {
@@ -889,10 +954,12 @@ def enqueue_methodology_review(
     item["review_dir"] = str(review_dir)
     item["requires_independent_verifier"] = True
     item["requires_related_work"] = True
+    item["requires_benchmark_audit"] = True
     state = _read_json(_state_path(root))
     state["hypothesis_queue"][-1]["review_dir"] = str(review_dir)
     state["hypothesis_queue"][-1]["requires_independent_verifier"] = True
     state["hypothesis_queue"][-1]["requires_related_work"] = True
+    state["hypothesis_queue"][-1]["requires_benchmark_audit"] = True
     state["updated_at"] = _now()
     _write_json(_state_path(root), state)
     return item
@@ -904,8 +971,9 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
     errors: list[str] = []
     review_path = review_dir / "review.md"
     related_path = review_dir / "related_work.md"
+    benchmark_path = review_dir / "benchmark_audit.md"
     decision_path = review_dir / "decision.json"
-    for path in (review_path, related_path, decision_path):
+    for path in (review_path, related_path, benchmark_path, decision_path):
         if not path.exists():
             errors.append(f"Missing required artifact: {path.name}")
 
@@ -920,6 +988,12 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
         errors.append("related_work.md is still pending")
     if "http://" not in related_text and "https://" not in related_text:
         errors.append("related_work.md must cite at least one source URL")
+
+    benchmark_text = benchmark_path.read_text(encoding="utf-8") if benchmark_path.exists() else ""
+    if "PENDING" in benchmark_text or "TODO" in benchmark_text:
+        errors.append("benchmark_audit.md is still pending")
+    if "Verdict:" not in benchmark_text:
+        errors.append("benchmark_audit.md must include a Verdict line")
 
     decision: dict = {}
     if decision_path.exists():
@@ -943,6 +1017,57 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
         "review_dir": str(review_dir),
         "errors": errors,
         "decision": decision.get("decision"),
+    }
+
+
+def _is_protected_path(path: str, protected_surfaces: Iterable[str]) -> bool:
+    normalized = path.replace("\\", "/").lstrip("./")
+    for protected in protected_surfaces:
+        prefix = protected.replace("\\", "/").rstrip("/")
+        if normalized == prefix or normalized.startswith(f"{prefix}/"):
+            return True
+    return False
+
+
+def audit_objective_alignment(
+    root: str | Path,
+    *,
+    changed_paths: Iterable[str],
+    review_dir: str | Path | None = None,
+) -> dict:
+    """Reject objective drift unless protected-surface changes are reviewed."""
+    root = Path(root)
+    goal = _read_json(_goal_path(root))
+    policy = goal.get("objective_alignment_policy", {})
+    protected_surfaces = policy.get("protected_surfaces", PROTECTED_EVAL_SURFACES)
+    changed = sorted({str(path).replace("\\", "/").lstrip("./") for path in changed_paths})
+    protected_hits = [
+        path for path in changed if _is_protected_path(path, protected_surfaces)
+    ]
+    errors: list[str] = []
+    review_result: dict | None = None
+
+    if protected_hits:
+        if review_dir is None:
+            errors.append(
+                "Protected evaluation surfaces changed without a completed "
+                "methodology review."
+            )
+        else:
+            review_result = validate_methodology_review(review_dir)
+            if not review_result["passed"]:
+                errors.append(
+                    "Protected evaluation surfaces changed but review artifacts "
+                    "are incomplete."
+                )
+                errors.extend(review_result["errors"])
+
+    return {
+        "passed": not errors,
+        "changed_paths": changed,
+        "protected_hits": protected_hits,
+        "errors": errors,
+        "review": review_result,
     }
 
 

@@ -127,7 +127,8 @@ python scripts/poker_autoresearch.py continuous --sleep-seconds 30
 
 Before changing a method, evaluation protocol, promotion rule, or persistent
 research knob, queue a methodology review. Completing the review requires
-independent-verifier notes, related work with source URLs, and a decision file:
+independent-verifier notes, related work with source URLs, a benchmark-hacking
+audit, and a decision file:
 
 ```bash
 python scripts/poker_autoresearch.py enqueue-review \
@@ -142,6 +143,14 @@ python scripts/poker_methodology_review.py \
 Register persistent knobs through `add-knob`, not ad hoc config drift. Each
 knob needs one mechanism, one default, one failure class, and a removal
 criterion; broad sweeps are intentionally rejected.
+
+Evaluation harnesses, Slumbot adapters, solver benchmarks, promotion logic,
+parsers, seed lists, and parity tests are protected surfaces. Audit them before
+keeping a candidate or committing methodology changes:
+
+```bash
+python scripts/poker_objective_audit.py --base-ref HEAD
+```
 
 ## Playing Slumbot
 

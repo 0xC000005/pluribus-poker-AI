@@ -242,7 +242,13 @@ Workflow governance status:
 - Methodology-review bundles are queueable with `enqueue-review` and validated
   by `scripts/poker_methodology_review.py --require-complete`. A completed
   review must include independent-verifier findings, related work with source
-  URLs, and a decision file.
+  URLs, benchmark-hacking audit, and a decision file. `team_review.md` maps
+  those files to research lead, verifier, literature scout, and benchmark
+  auditor roles for sub-agent use.
+- Objective-drift audit now blocks protected evaluation-surface changes unless
+  a completed review exists. Protected surfaces include evaluation harnesses,
+  Slumbot adapters, solver benchmarks, promotion logic, parsers, seed lists,
+  and parity tests.
 - Persistent knobs are registered through `add-knob`, require a mechanism and
   removal criterion, and reject broad sweep-shaped defaults. This keeps the
   workflow focused on falsifying mechanisms instead of benchmark tuning.
@@ -300,3 +306,6 @@ script passes all 10 checks and is now part of Tier 0.
    or persistent knob set, run `enqueue-review`, complete related-work review,
    and commit only after implementation, tests, docs, and log updates are
    batched into one research-objective change.
+8. Before keeping any candidate that touched protected evaluation surfaces, run
+   `python scripts/poker_objective_audit.py --base-ref HEAD` and require a
+   completed review bundle if the audit reports protected hits.

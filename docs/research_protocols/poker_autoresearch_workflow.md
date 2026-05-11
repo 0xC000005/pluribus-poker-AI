@@ -54,12 +54,37 @@ creates a review bundle under `autoresearch-session/poker_reviews/` with:
 
 - `review.md`: independent-verifier findings based on local files/artifacts.
 - `related_work.md`: at least one primary source URL and a transfer analysis.
+- `benchmark_audit.md`: objective-drift and benchmark-hacking checks.
+- `team_review.md`: routing for research lead, verifier, literature scout, and
+  benchmark auditor roles.
 - `decision.json`: one of `proceed`, `revise`, `abandon`, or
   `gather_more_evidence`.
 
 The validator rejects pending `TODO`/`PENDING` review files and decisions
 without sources. When the independent verifier is invoked, related-work review
-is mandatory.
+and benchmark-hacking audit are mandatory. Use separate sub-agents for these
+roles when available; the review files are the durable source of truth.
+
+## Objective-Drift Guard
+
+Autoresearch experiments may change candidate/training code and configuration,
+but protected evaluation surfaces are immutable by default. Protected surfaces
+include local evaluation scripts, Slumbot adapters, solver benchmarks,
+promotion logic, parsers, seed lists, and parity tests. Changing those files
+requires a completed methodology review and benchmark audit.
+
+Run the audit when keeping a candidate or before any methodology commit:
+
+```bash
+python scripts/poker_objective_audit.py --base-ref HEAD
+python scripts/poker_autoresearch.py objective-audit \
+  --changed-path scripts/play_slumbot.py \
+  --review-dir autoresearch-session/poker_reviews/<review_id>
+```
+
+The long-term objective remains the controlling policy: novel, compute-efficient
+Texas hold'em methods that transfer to Slumbot and stronger bots on personal-PC
+hardware. Visible smoke metrics are diagnostics, not promotion targets.
 
 ## Research Knob Governance
 
@@ -80,7 +105,7 @@ The approved implementation should create local resumability state under
 - `poker_knobs.tsv`: every new knob with status, default, failure class,
   mechanism, rationale, and removal criterion.
 - `poker_reviews/`: methodology-review bundles with verifier notes, related
-  work, and decisions.
+  work, benchmark audits, team routing, and decisions.
 - `poker_runs/`: ignored run artifacts, configs, raw logs, metrics JSON, and
   Slumbot transcripts.
 
@@ -203,6 +228,10 @@ python scripts/poker_autoresearch.py enqueue-review \
 python scripts/poker_methodology_review.py \
   --review-dir autoresearch-session/poker_reviews/<review_id> \
   --require-complete
+python scripts/poker_objective_audit.py --base-ref HEAD
+python scripts/poker_autoresearch.py objective-audit \
+  --changed-path scripts/play_slumbot.py \
+  --review-dir autoresearch-session/poker_reviews/<review_id>
 python scripts/poker_autoresearch.py add-knob \
   --name search_target_mix \
   --default 0.0 \
@@ -245,7 +274,8 @@ Local generated state is under `autoresearch-session/`:
 - `poker_goal.json`: objective, constraints, gate commands, hard stops.
 - `poker_state.json`: incumbent, active cycle, queue, history, last metrics.
 - `poker_knobs.tsv`: knob ledger.
-- `poker_reviews/`: methodology-review artifacts.
+- `poker_reviews/`: methodology-review, related-work, benchmark-audit, and
+  team-routing artifacts.
 - `poker_runs/`: ignored cycle artifacts and `metrics.json` files.
 
 The runner appends cycle summaries to `RESEARCH_LOG.md`. New entries include a

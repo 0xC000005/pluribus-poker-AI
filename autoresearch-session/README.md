@@ -14,9 +14,12 @@ Important ignored files:
   metrics.
 - `poker_knobs.tsv`: governed knob ledger with mechanism and removal criteria.
 - `poker_reviews/`: methodology-review bundles containing `review.md`,
-  `related_work.md`, and `decision.json`.
+  `related_work.md`, `benchmark_audit.md`, `team_review.md`, and
+  `decision.json`.
 - `poker_runs/`: per-cycle metrics and raw command output.
 
 Use `enqueue-review` before method, evaluation-protocol, promotion, or
 persistent-knob changes. Validate review bundles with
 `scripts/poker_methodology_review.py --require-complete`.
+Run `scripts/poker_objective_audit.py --base-ref HEAD` before keeping
+candidates that touched protected evaluation surfaces.

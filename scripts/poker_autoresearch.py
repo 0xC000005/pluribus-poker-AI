@@ -14,6 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from poker_ai.research.autoresearch import (  # noqa: E402
+    audit_objective_alignment,
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
@@ -148,6 +149,18 @@ def build_parser() -> argparse.ArgumentParser:
     knob.add_argument("--mechanism", required=True)
     knob.add_argument("--rationale", required=True)
     knob.add_argument("--removal-criterion", required=True)
+
+    audit = subparsers.add_parser(
+        "objective-audit",
+        help="Check changed files for protected evaluation-surface drift.",
+    )
+    audit.add_argument(
+        "--changed-path",
+        action="append",
+        default=[],
+        help="Repository-relative changed path. Repeat for multiple paths.",
+    )
+    audit.add_argument("--review-dir", help="Completed methodology review bundle.")
 
     train = subparsers.add_parser(
         "enqueue-train",
@@ -321,6 +334,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
+
+    if args.command == "objective-audit":
+        result = audit_objective_alignment(
+            root,
+            changed_paths=args.changed_path,
+            review_dir=args.review_dir,
+        )
+        _emit(result)
+        return 0 if result["passed"] else 1
 
     if args.command == "enqueue-train":
         _emit(

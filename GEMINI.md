@@ -81,6 +81,7 @@ Autoresearch governance:
 ```bash
 python scripts/poker_autoresearch.py enqueue-review --subject "New search objective" --trigger method_change --claim "The objective should improve Slumbot transfer."
 python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/<review_id> --require-complete
+python scripts/poker_objective_audit.py --base-ref HEAD
 python scripts/poker_autoresearch.py add-knob --name search_target_mix --default 0.0 --failure-class search_quality --mechanism "Test whether search-distilled targets reduce live transfer loss." --rationale "One variable isolates the target mechanism." --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."
 ```
 
@@ -90,7 +91,10 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
 - Avoid new hand-crafted poker heuristics; prefer learned policies, regret
   matching, and principled search.
 - Before method, evaluation, promotion, or persistent-knob changes, complete a
-  methodology review with independent verification and related work.
+  methodology review with independent verification, related work, and a
+  benchmark-hacking audit.
+- Treat evaluation scripts, Slumbot adapters, solver benchmarks, promotion
+  logic, parsers, seed lists, and parity tests as protected surfaces.
 - Add research knobs only through `add-knob`; keep one mechanism and one
   primary variable, and avoid broad sweeps.
 - For performance work, report `iters/hour`, `samples/sec`, and
