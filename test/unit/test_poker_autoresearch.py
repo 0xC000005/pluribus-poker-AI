@@ -72,6 +72,18 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "slumbot-solver-smoke" in goal["gates"]
 
 
+def test_init_state_prefers_repo_venv_python_for_default_gates(tmp_path):
+    repo_python = tmp_path / ".venv" / "bin" / "python"
+    repo_python.parent.mkdir(parents=True)
+    repo_python.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    init_state(tmp_path)
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    assert goal["gates"]["tier0"]["commands"][0][0] == str(repo_python)
+    assert goal["gates"]["eval-local"]["commands"][0][0] == str(repo_python)
+
+
 def test_init_state_syncs_missing_default_gates_without_overwriting_history(tmp_path):
     init_state(tmp_path)
     goal_path = tmp_path / "autoresearch-session" / "poker_goal.json"

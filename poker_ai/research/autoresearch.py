@@ -8,6 +8,7 @@ handling.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -79,7 +80,23 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def _default_goal() -> dict:
+def _project_python(root: str | Path | None = None) -> str:
+    """Return the Python executable that should run repo-local gates."""
+    candidates = []
+    if root is not None:
+        candidates.append(Path(root) / ".venv" / "bin" / "python")
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        candidates.append(Path(conda_prefix) / "bin" / "python")
+    candidates.append(Path(sys.executable))
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
+def _default_goal(root: str | Path | None = None) -> dict:
+    python = _project_python(root)
     return {
         "objective": (
             "Train a learned full-deck poker engine on a personal PC that uses "
@@ -107,7 +124,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 600,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "-m",
                         "pytest",
                         "-q",
@@ -118,7 +135,7 @@ def _default_goal() -> dict:
                     [
                         "/usr/bin/env",
                         "NUMBA_ENABLE_CUDASIM=1",
-                        sys.executable,
+                        python,
                         "scripts/test_feature_encoding.py",
                     ]
                 ],
@@ -128,7 +145,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 900,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_eval.py",
                         "--checkpoint",
                         "models/slumbot_2p_iter1000.pt",
@@ -146,7 +163,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 1800,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_eval.py",
                         "--checkpoint",
                         "models/slumbot_2p_iter1000.pt",
@@ -164,7 +181,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 2400,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_eval.py",
                         "--checkpoint",
                         "models/slumbot_2p_iter1000.pt",
@@ -185,7 +202,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 2400,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_eval.py",
                         "--checkpoint",
                         "models/slumbot_2p_iter1000.pt",
@@ -209,7 +226,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 2400,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_eval.py",
                         "--checkpoint",
                         "models/slumbot_2p_iter1000.pt",
@@ -233,7 +250,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 1200,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_resolver_benchmark.py",
                         "--checkpoint",
                         "models/slumbot_2p_iter1000.pt",
@@ -249,7 +266,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 600,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_slumbot.py",
                         "--model",
                         "models/slumbot_2p_iter1000.pt",
@@ -266,7 +283,7 @@ def _default_goal() -> dict:
                 "timeout_seconds": 900,
                 "commands": [
                     [
-                        sys.executable,
+                        python,
                         "scripts/poker_autoresearch_slumbot.py",
                         "--model",
                         "models/slumbot_2p_iter1000.pt",
@@ -309,7 +326,7 @@ def init_state(root: str | Path, force: bool = False) -> dict:
     session.mkdir(parents=True, exist_ok=True)
     runs.mkdir(parents=True, exist_ok=True)
 
-    default_goal = _default_goal()
+    default_goal = _default_goal(root)
     goal_path = _goal_path(root)
     if force or not goal_path.exists():
         _write_json(goal_path, default_goal)
@@ -576,8 +593,9 @@ def enqueue_gpu_training(
         resume = _resolve_existing_path(root, resume, label="Resume checkpoint")
 
     gate_name = f"train-gpu-deep-cfr-{timestamp}-{_slug(prefix)}"
+    python = _project_python(root)
     command = [
-        sys.executable,
+        python,
         "scripts/poker_autoresearch_train.py",
         "--n-iterations",
         str(n_iterations),
@@ -652,8 +670,9 @@ def enqueue_candidate_comparison(
         f"eval-candidate-compare-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(candidate.stem)}"
     )
+    python = _project_python(root)
     command = [
-        sys.executable,
+        python,
         "scripts/poker_autoresearch_eval.py",
         "--checkpoint",
         str(candidate),
@@ -714,8 +733,9 @@ def enqueue_slumbot_smoke(
         f"slumbot-candidate-smoke-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(model_path.stem)}"
     )
+    python = _project_python(root)
     command = [
-        sys.executable,
+        python,
         "scripts/poker_autoresearch_slumbot.py",
         "--model",
         str(model_path),
@@ -775,8 +795,9 @@ def enqueue_resolver_benchmark(
         f"resolver-candidate-benchmark-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(model_path.stem)}"
     )
+    python = _project_python(root)
     command = [
-        sys.executable,
+        python,
         "scripts/poker_resolver_benchmark.py",
         "--checkpoint",
         str(model_path),

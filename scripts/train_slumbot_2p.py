@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
 
 # Suppress noisy numba CUDA driver logging before import.
 logging.getLogger('numba').setLevel(logging.WARNING)
@@ -15,6 +16,10 @@ logging.getLogger('numba.cuda').setLevel(logging.WARNING)
 import torch
 
 sys.stdout.reconfigure(line_buffering=True)
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from cuda_env import configure_numba_cuda_env
 
