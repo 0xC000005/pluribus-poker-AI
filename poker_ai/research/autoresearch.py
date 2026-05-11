@@ -20,11 +20,24 @@ from typing import Callable, Iterable, Sequence
 
 SESSION_DIR = "autoresearch-session"
 RUNS_DIR = "poker_runs"
+REVIEWS_DIR = "poker_reviews"
 GOAL_FILE = "poker_goal.json"
 STATE_FILE = "poker_state.json"
 KNOBS_FILE = "poker_knobs.tsv"
 STOP_FILE = "STOP"
 RESEARCH_LOG = "RESEARCH_LOG.md"
+ALLOWED_REVIEW_DECISIONS = {"proceed", "revise", "abandon", "gather_more_evidence"}
+KNOB_COLUMNS = [
+    "name",
+    "status",
+    "default",
+    "failure_class",
+    "mechanism",
+    "rationale",
+    "removal_criterion",
+    "created_at",
+    "retired_at",
+]
 
 
 @dataclass(frozen=True)
@@ -63,6 +76,10 @@ def _runs_path(root: Path) -> Path:
     return _session(root) / RUNS_DIR
 
 
+def _reviews_path(root: Path) -> Path:
+    return _session(root) / REVIEWS_DIR
+
+
 def _stop_path(root: Path) -> Path:
     return _session(root) / STOP_FILE
 
@@ -78,6 +95,85 @@ def _read_json(path: Path) -> dict:
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _append_missing(items: list, defaults: list) -> list:
+    seen = set(items)
+    for item in defaults:
+        if item not in seen:
+            items.append(item)
+            seen.add(item)
+    return items
+
+
+def _merge_default_dict(existing: dict, defaults: dict) -> dict:
+    for key, default_value in defaults.items():
+        if key not in existing:
+            existing[key] = default_value
+            continue
+        if isinstance(existing[key], dict) and isinstance(default_value, dict):
+            _merge_default_dict(existing[key], default_value)
+        elif isinstance(existing[key], list) and isinstance(default_value, list):
+            _append_missing(existing[key], default_value)
+    return existing
+
+
+def _sync_goal_defaults(goal: dict, default_goal: dict) -> dict:
+    for key, default_value in default_goal.items():
+        if key == "gates":
+            goal.setdefault("gates", {})
+            for gate_name, gate_config in default_value.items():
+                if gate_name not in goal["gates"]:
+                    goal["gates"][gate_name] = gate_config
+                    continue
+                existing = goal["gates"][gate_name]
+                existing.setdefault("description", gate_config.get("description", ""))
+                existing.setdefault("timeout_seconds", gate_config.get("timeout_seconds"))
+                existing.setdefault("commands", [])
+                existing_commands = {tuple(command) for command in existing["commands"]}
+                for command in gate_config.get("commands", []):
+                    if tuple(command) not in existing_commands:
+                        existing["commands"].append(command)
+                        existing_commands.add(tuple(command))
+            continue
+        if key == "constraints":
+            goal[key] = _append_missing(list(goal.get(key, [])), default_value)
+            continue
+        if isinstance(default_value, dict):
+            _merge_default_dict(goal.setdefault(key, {}), default_value)
+            continue
+        goal.setdefault(key, default_value)
+    return goal
+
+
+def _migrate_knobs_file(path: Path) -> None:
+    if not path.exists() or not path.read_text(encoding="utf-8").strip():
+        path.write_text("\t".join(KNOB_COLUMNS) + "\n", encoding="utf-8")
+        return
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = lines[0].split("\t") if lines else []
+    if header == KNOB_COLUMNS:
+        return
+
+    migrated = ["\t".join(KNOB_COLUMNS)]
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        record = dict(zip(header, line.split("\t"), strict=False))
+        row = {
+            "name": record.get("name", ""),
+            "status": record.get("status") or "active",
+            "default": record.get("default", ""),
+            "failure_class": record.get("failure_class", ""),
+            "mechanism": record.get("mechanism", ""),
+            "rationale": record.get("rationale", ""),
+            "removal_criterion": record.get("removal_criterion", ""),
+            "created_at": record.get("created_at", ""),
+            "retired_at": record.get("retired_at", ""),
+        }
+        migrated.append("\t".join(_tsv_clean(row.get(column, "")) for column in KNOB_COLUMNS))
+    path.write_text("\n".join(migrated) + "\n", encoding="utf-8")
 
 
 def _project_python(root: str | Path | None = None) -> str:
@@ -108,7 +204,45 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "do not add opponent-specific or street-specific human strategy rules",
             "run Tier 0 integrity before promoting any result",
             "classify every failed or inconclusive cycle",
+            "batch commits by research objective rather than by individual gate",
+            "run methodology review before method, promotion, or persistent knob changes",
         ],
+        "commit_policy": {
+            "mode": "batch_by_research_objective",
+            "commit_during_continuous": False,
+            "natural_boundaries": [
+                "workflow feature complete",
+                "experiment batch complete",
+                "methodology review complete",
+                "documentation synchronized",
+            ],
+            "required_commit_body": [
+                "objective",
+                "files changed",
+                "tests or gates run",
+                "key result",
+                "review or related-work status",
+            ],
+        },
+        "review_policy": {
+            "required_for": [
+                "methodology_review_required",
+                "checkpoint promotion",
+                "architecture or objective change",
+                "evaluation protocol change",
+                "persistent research knob addition",
+                "surprising or contradictory result interpretation",
+            ],
+            "requires_independent_verifier": True,
+            "requires_related_work": True,
+        },
+        "knob_policy": {
+            "max_active_knobs": 5,
+            "rule": (
+                "Every persistent knob needs a mechanism, one primary variable, "
+                "and a removal criterion. Broad sweeps are rejected."
+            ),
+        },
         "primary_metric": "lower_95_ci_mbb_per_hand_vs_incumbent",
         "hard_stop_conditions": [
             "STOP file exists",
@@ -323,8 +457,10 @@ def init_state(root: str | Path, force: bool = False) -> dict:
     root = Path(root)
     session = _session(root)
     runs = _runs_path(root)
+    reviews = _reviews_path(root)
     session.mkdir(parents=True, exist_ok=True)
     runs.mkdir(parents=True, exist_ok=True)
+    reviews.mkdir(parents=True, exist_ok=True)
 
     default_goal = _default_goal(root)
     goal_path = _goal_path(root)
@@ -332,21 +468,7 @@ def init_state(root: str | Path, force: bool = False) -> dict:
         _write_json(goal_path, default_goal)
     else:
         goal = _read_json(goal_path)
-        goal.setdefault("gates", {})
-        for gate_name, gate_config in default_goal["gates"].items():
-            if gate_name not in goal["gates"]:
-                goal["gates"][gate_name] = gate_config
-                continue
-            existing = goal["gates"][gate_name]
-            existing.setdefault("description", gate_config.get("description", ""))
-            existing.setdefault("timeout_seconds", gate_config.get("timeout_seconds"))
-            existing.setdefault("commands", [])
-            existing_commands = {tuple(command) for command in existing["commands"]}
-            for command in gate_config.get("commands", []):
-                if tuple(command) not in existing_commands:
-                    existing["commands"].append(command)
-                    existing_commands.add(tuple(command))
-        _write_json(goal_path, goal)
+        _write_json(goal_path, _sync_goal_defaults(goal, default_goal))
 
     state_path = _state_path(root)
     if force or not state_path.exists():
@@ -354,10 +476,9 @@ def init_state(root: str | Path, force: bool = False) -> dict:
 
     knobs = _knobs_path(root)
     if force or not knobs.exists():
-        knobs.write_text(
-            "name\tdefault\tfailure_class\trationale\tremoval_criterion\n",
-            encoding="utf-8",
-        )
+        knobs.write_text("\t".join(KNOB_COLUMNS) + "\n", encoding="utf-8")
+    else:
+        _migrate_knobs_file(knobs)
 
     log = _log_path(root)
     if force or not log.exists():
@@ -378,6 +499,7 @@ def readiness_report(root: str | Path) -> dict:
         _goal_path(root),
         _state_path(root),
         _knobs_path(root),
+        _reviews_path(root),
         _runs_path(root),
         _log_path(root),
     ]
@@ -499,6 +621,26 @@ def _slug(text: str) -> str:
     return "-".join(parts[:8]) or "cycle"
 
 
+def _tsv_clean(value: str) -> str:
+    return str(value).replace("\t", " ").replace("\n", " ").strip()
+
+
+def _looks_like_broad_sweep(*values: str) -> bool:
+    text = " ".join(str(value).lower() for value in values)
+    if any(
+        marker in text
+        for marker in (
+            "grid search",
+            "hyperparameter sweep",
+            "parameter sweep",
+            "broad sweep",
+        )
+    ):
+        return True
+    default = str(values[0]).strip()
+    return any(marker in default for marker in ("[", "]", "{", "}", ",")) or ".." in default
+
+
 def _unique_gate_name(root: Path, base_name: str) -> str:
     goal_path = _goal_path(root)
     if not goal_path.exists():
@@ -510,6 +652,80 @@ def _unique_gate_name(root: Path, base_name: str) -> str:
     while f"{base_name}-{suffix}" in existing:
         suffix += 1
     return f"{base_name}-{suffix}"
+
+
+def _unique_child_dir(parent: Path, base_name: str) -> Path:
+    candidate = parent / base_name
+    if not candidate.exists():
+        return candidate
+    suffix = 2
+    while (parent / f"{base_name}-{suffix}").exists():
+        suffix += 1
+    return parent / f"{base_name}-{suffix}"
+
+
+def register_research_knob(
+    root: str | Path,
+    *,
+    name: str,
+    default: str,
+    failure_class: str,
+    mechanism: str,
+    rationale: str,
+    removal_criterion: str,
+    max_active: int | None = None,
+) -> dict:
+    """Register one persistent research knob with a mechanism and budget."""
+    fields = {
+        "name": name,
+        "default": default,
+        "failure_class": failure_class,
+        "mechanism": mechanism,
+        "rationale": rationale,
+        "removal_criterion": removal_criterion,
+    }
+    missing = [key for key, value in fields.items() if not str(value).strip()]
+    if missing:
+        raise ValueError(f"Missing required knob fields: {', '.join(missing)}")
+    if _looks_like_broad_sweep(default, mechanism, rationale):
+        raise ValueError(
+            "Research knobs must define one mechanism with a single default, "
+            "not a broad sweep."
+        )
+
+    root = Path(root)
+    goal = _read_json(_goal_path(root))
+    budget = int(max_active or goal.get("knob_policy", {}).get("max_active_knobs", 5))
+    knob_path = _knobs_path(root)
+    _migrate_knobs_file(knob_path)
+    lines = knob_path.read_text(encoding="utf-8").splitlines()
+    header = lines[0].split("\t") if lines else []
+    records = [dict(zip(header, line.split("\t"), strict=False)) for line in lines[1:] if line]
+    active = [record for record in records if record.get("status", "active") == "active"]
+    if any(record.get("name") == name for record in active):
+        raise RuntimeError(f"Active research knob already exists: {name}")
+    if len(active) >= budget:
+        raise RuntimeError(
+            f"Cannot add {name}: active research knob budget is {budget}."
+        )
+
+    row = {
+        "name": name,
+        "status": "active",
+        "default": default,
+        "failure_class": failure_class,
+        "mechanism": mechanism,
+        "rationale": rationale,
+        "removal_criterion": removal_criterion,
+        "created_at": _now(),
+        "retired_at": "",
+    }
+    if not header or "status" not in header:
+        header = KNOB_COLUMNS
+        knob_path.write_text("\t".join(header) + "\n", encoding="utf-8")
+    with knob_path.open("a", encoding="utf-8") as handle:
+        handle.write("\t".join(_tsv_clean(row.get(column, "")) for column in header) + "\n")
+    return row
 
 
 def new_cycle(
@@ -569,6 +785,165 @@ def enqueue_cycle(
     state["updated_at"] = _now()
     _write_json(_state_path(root), state)
     return item
+
+
+def _write_methodology_review_templates(
+    review_dir: Path,
+    *,
+    subject: str,
+    trigger: str,
+    claim: str,
+) -> None:
+    review_dir.mkdir(parents=True, exist_ok=True)
+    (review_dir / "review.md").write_text(
+        "# Independent Verification\n\n"
+        f"Subject: {subject}\n\n"
+        f"Trigger: {trigger}\n\n"
+        f"Claim under review: {claim}\n\n"
+        "Required process:\n"
+        "- Invoke the independent verifier before accepting the claim.\n"
+        "- Inspect source files and artifacts directly.\n"
+        "- Separate code bugs, measurement flaws, methodology flaws, and reporting flaws.\n\n"
+        "Verdict: PENDING\n\n"
+        "Findings:\n"
+        "- TODO\n",
+        encoding="utf-8",
+    )
+    (review_dir / "related_work.md").write_text(
+        "# Related Work\n\n"
+        f"Diagnostic question: {claim}\n\n"
+        "Required sources:\n"
+        "- TODO: add at least one primary source with a URL.\n\n"
+        "Transfers to this codebase:\n"
+        "- TODO\n\n"
+        "Does not transfer:\n"
+        "- TODO\n\n"
+        "Smallest local test:\n"
+        "- TODO\n",
+        encoding="utf-8",
+    )
+    _write_json(
+        review_dir / "decision.json",
+        {
+            "decision": "pending",
+            "reason": "PENDING",
+            "sources": [],
+        },
+    )
+
+
+def enqueue_methodology_review(
+    root: str | Path,
+    *,
+    subject: str,
+    trigger: str,
+    claim: str,
+    timeout_seconds: int = 600,
+) -> dict:
+    """Create a methodology review bundle and queue its completion gate."""
+    root = Path(root)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    review_dir = _unique_child_dir(
+        _reviews_path(root),
+        f"{timestamp}-{_slug(subject)}",
+    )
+    _write_methodology_review_templates(
+        review_dir,
+        subject=subject,
+        trigger=trigger,
+        claim=claim,
+    )
+
+    gate_name = _unique_gate_name(
+        root,
+        f"methodology-review-{timestamp}-{_slug(subject)}",
+    )
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/poker_methodology_review.py",
+        "--review-dir",
+        str(review_dir),
+        "--require-complete",
+    ]
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Validate that independent verification and related-work review "
+            "artifacts are complete before acting on a methodology decision."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+    }
+    _write_json(_goal_path(root), goal)
+    item = enqueue_cycle(
+        root,
+        hypothesis=(
+            f"Methodology review for {subject} should verify the claim and "
+            "include related work before the next research action."
+        ),
+        cycle_type="methodology_review",
+        failure_class="eval_invalid",
+        gate=gate_name,
+    )
+    item["review_dir"] = str(review_dir)
+    item["requires_independent_verifier"] = True
+    item["requires_related_work"] = True
+    state = _read_json(_state_path(root))
+    state["hypothesis_queue"][-1]["review_dir"] = str(review_dir)
+    state["hypothesis_queue"][-1]["requires_independent_verifier"] = True
+    state["hypothesis_queue"][-1]["requires_related_work"] = True
+    state["updated_at"] = _now()
+    _write_json(_state_path(root), state)
+    return item
+
+
+def validate_methodology_review(review_dir: str | Path) -> dict:
+    """Validate independent-verifier, related-work, and decision artifacts."""
+    review_dir = Path(review_dir)
+    errors: list[str] = []
+    review_path = review_dir / "review.md"
+    related_path = review_dir / "related_work.md"
+    decision_path = review_dir / "decision.json"
+    for path in (review_path, related_path, decision_path):
+        if not path.exists():
+            errors.append(f"Missing required artifact: {path.name}")
+
+    review_text = review_path.read_text(encoding="utf-8") if review_path.exists() else ""
+    if "PENDING" in review_text or "TODO" in review_text:
+        errors.append("review.md is still pending")
+    if "Verdict:" not in review_text:
+        errors.append("review.md must include a Verdict line")
+
+    related_text = related_path.read_text(encoding="utf-8") if related_path.exists() else ""
+    if "PENDING" in related_text or "TODO" in related_text:
+        errors.append("related_work.md is still pending")
+    if "http://" not in related_text and "https://" not in related_text:
+        errors.append("related_work.md must cite at least one source URL")
+
+    decision: dict = {}
+    if decision_path.exists():
+        try:
+            decision = _read_json(decision_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"decision.json is invalid JSON: {exc}")
+    if decision:
+        if decision.get("decision") not in ALLOWED_REVIEW_DECISIONS:
+            errors.append(
+                "decision.json decision must be one of: "
+                + ", ".join(sorted(ALLOWED_REVIEW_DECISIONS))
+            )
+        if not str(decision.get("reason", "")).strip() or decision.get("reason") == "PENDING":
+            errors.append("decision.json must include a non-pending reason")
+        if not decision.get("sources"):
+            errors.append("decision.json must include at least one source")
+
+    return {
+        "passed": not errors,
+        "review_dir": str(review_dir),
+        "errors": errors,
+        "decision": decision.get("decision"),
+    }
 
 
 def _resolve_existing_path(root: Path, path: str | Path, *, label: str) -> Path:
@@ -952,13 +1327,42 @@ def append_research_log(
     failure_class: str,
     summary: str,
     metrics: dict,
+    metrics_path: str | Path | None = None,
 ) -> None:
     root = Path(root)
     log = _log_path(root)
     if not log.exists():
         log.write_text("# Research Log\n\n", encoding="utf-8")
 
-    metric_summary = json.dumps(metrics, sort_keys=True)
+    key_metrics = {"passed": metrics.get("passed"), "gate": metrics.get("gate")}
+    payload = _first_stdout_json(metrics)
+    if payload:
+        for key in (
+            "mode",
+            "avg_chips_per_hand",
+            "lower95_chips_per_hand",
+            "paired_delta_lower95_chips_per_hand_across_seeds",
+            "ci95_chips_per_hand",
+            "mbb_per_hand",
+            "iters_per_hour",
+            "traversals_per_second",
+            "avg_iter_seconds",
+            "seconds_per_hand",
+            "strategy_source",
+            "decision",
+        ):
+            if key in payload:
+                key_metrics[key] = payload[key]
+    metrics_location = "not recorded"
+    if metrics_path is not None:
+        path = Path(metrics_path)
+        if path.is_absolute():
+            try:
+                metrics_location = str(path.relative_to(root))
+            except ValueError:
+                metrics_location = str(path)
+        else:
+            metrics_location = str(path)
     entry = (
         f"## {cycle['run_id']} - {outcome}\n\n"
         f"- Timestamp: {_now()}\n"
@@ -967,7 +1371,8 @@ def append_research_log(
         f"- Hypothesis: {cycle['hypothesis']}\n"
         f"- Failure class: {failure_class}\n"
         f"- Summary: {summary}\n"
-        f"- Metrics: `{metric_summary}`\n\n"
+        f"- Metrics file: {metrics_location}\n"
+        f"- Key metrics: `{json.dumps(key_metrics, sort_keys=True)}`\n\n"
     )
     with log.open("a", encoding="utf-8") as handle:
         handle.write(entry)
@@ -1011,6 +1416,7 @@ def close_cycle(
         failure_class=failure_class,
         summary=summary,
         metrics=metrics,
+        metrics_path=metrics_path,
     )
     return closed
 

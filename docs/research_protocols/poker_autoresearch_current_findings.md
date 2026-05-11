@@ -234,6 +234,21 @@ Live solver backend status:
   improvement method, until either replay buffers are serialized or the trainer
   intentionally supports warm-started value-network updates.
 
+Workflow governance status:
+
+- Autoresearch state now carries explicit commit, review, and knob policies.
+  Existing sessions are migrated by `python scripts/poker_autoresearch.py init`
+  without clearing history.
+- Methodology-review bundles are queueable with `enqueue-review` and validated
+  by `scripts/poker_methodology_review.py --require-complete`. A completed
+  review must include independent-verifier findings, related work with source
+  URLs, and a decision file.
+- Persistent knobs are registered through `add-knob`, require a mechanism and
+  removal criterion, and reject broad sweep-shaped defaults. This keeps the
+  workflow focused on falsifying mechanisms instead of benchmark tuning.
+- New research-log entries record a metrics artifact path plus key metrics
+  instead of pasting full raw command JSON into `RESEARCH_LOG.md`.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.
@@ -281,3 +296,7 @@ script passes all 10 checks and is now part of Tier 0.
 6. Do not spend engineering time forcing the current torch-CUDA solver path for
    live play; the principled GPU step is a fused CFR backend following the
    matrix/sparse-operator direction, with range pruning and caching retained.
+7. Before changing the training objective, evaluation ladder, promotion rule,
+   or persistent knob set, run `enqueue-review`, complete related-work review,
+   and commit only after implementation, tests, docs, and log updates are
+   batched into one research-objective change.

@@ -76,12 +76,26 @@ python scripts/poker_resolver_benchmark.py --checkpoint models/slumbot_2p_iter10
 python scripts/poker_autoresearch.py gate eval-resolver-fixed-states
 ```
 
+Autoresearch governance:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-review --subject "New search objective" --trigger method_change --claim "The objective should improve Slumbot transfer."
+python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/<review_id> --require-complete
+python scripts/poker_autoresearch.py add-knob --name search_target_mix --default 0.0 --failure-class search_quality --mechanism "Test whether search-distilled targets reduce live transfer loss." --rationale "One variable isolates the target mechanism." --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."
+```
+
 ## Development Rules
 
 - Treat full-deck Deep CFR and Slumbot parity as the source of truth.
 - Avoid new hand-crafted poker heuristics; prefer learned policies, regret
   matching, and principled search.
+- Before method, evaluation, promotion, or persistent-knob changes, complete a
+  methodology review with independent verification and related work.
+- Add research knobs only through `add-knob`; keep one mechanism and one
+  primary variable, and avoid broad sweeps.
 - For performance work, report `iters/hour`, `samples/sec`, and
   `train sec/iter` with the exact command.
+- Batch commits by research objective; do not commit every individual file edit
+  or commit from continuous autoresearch mode.
 - Do not commit generated checkpoints from `models/` or lookup-table artifacts
   from `research/`.

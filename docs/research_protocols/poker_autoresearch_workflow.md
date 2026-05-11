@@ -1,6 +1,7 @@
 # Poker Autoresearch Workflow
 
-Status: approved and implemented for safe evaluation/logging automation.
+Status: approved and implemented for safe evaluation/logging automation, with
+methodology-review and knob-governance gates.
 
 ## Objective
 
@@ -33,6 +34,41 @@ Do not run training merely because more training looks productive. Each run
 must answer a specific question about strategy quality, evaluation hardness,
 compute throughput, representation quality, or search.
 
+## Commit Policy
+
+Do not commit after every small file edit or individual gate. Batch changes by
+research objective and commit only at natural boundaries: workflow feature
+complete, experiment batch complete, methodology review complete, or
+documentation synchronized. Commit messages should include the objective, files
+changed, tests or gates run, key result, and review or related-work status.
+
+Continuous mode must not commit autonomously. It may produce run artifacts,
+metrics, queue entries, and log entries; a human or supervising agent should
+review the batch before committing.
+
+## Methodology Review Gate
+
+Run a methodology review before changing the learning method, evaluation
+protocol, checkpoint-promotion rule, or any persistent research knob. The gate
+creates a review bundle under `autoresearch-session/poker_reviews/` with:
+
+- `review.md`: independent-verifier findings based on local files/artifacts.
+- `related_work.md`: at least one primary source URL and a transfer analysis.
+- `decision.json`: one of `proceed`, `revise`, `abandon`, or
+  `gather_more_evidence`.
+
+The validator rejects pending `TODO`/`PENDING` review files and decisions
+without sources. When the independent verifier is invoked, related-work review
+is mandatory.
+
+## Research Knob Governance
+
+Persistent knobs are allowed only when they test one named mechanism. Each knob
+must record a single default, failure class, mechanism, rationale, and removal
+criterion in `poker_knobs.tsv`. Broad sweeps and list-shaped defaults are
+rejected. Keep at most five active knobs unless the goal file is deliberately
+changed after methodology review.
+
 ## Research State
 
 The approved implementation should create local resumability state under
@@ -41,8 +77,10 @@ The approved implementation should create local resumability state under
 - `poker_goal.json`: durable objective, constraints, hard stop conditions.
 - `poker_state.json`: current phase, incumbent checkpoint, last verified
   metrics, active hypothesis, and next queue.
-- `poker_knobs.tsv`: every new knob with default, failure class, rationale, and
-  removal criterion.
+- `poker_knobs.tsv`: every new knob with status, default, failure class,
+  mechanism, rationale, and removal criterion.
+- `poker_reviews/`: methodology-review bundles with verifier notes, related
+  work, and decisions.
 - `poker_runs/`: ignored run artifacts, configs, raw logs, metrics JSON, and
   Slumbot transcripts.
 
@@ -108,7 +146,7 @@ Every failed or inconclusive cycle assigns one primary class:
 Only diagnosed failure classes justify changing architecture, abstraction,
 training objective, solver behavior, or evaluation protocol.
 
-## Literature Gate
+## Literature And Review Gate
 
 Online research is required before adopting a new RL/search method, changing the
 core Deep CFR family, adding public-belief search, or promoting an architecture
@@ -123,6 +161,10 @@ as a mainline direction. The literature note must state:
 
 Method changes should be classified as `canonical`, `supported_adjacent`, or
 `speculative_local_heuristic`.
+
+Use `enqueue-review` for any change that needs independent verification or
+related work. This keeps review artifacts in the workflow queue instead of
+burying them in chat.
 
 ## Implemented Automation
 
@@ -154,6 +196,20 @@ python scripts/poker_autoresearch.py enqueue \
   --cycle-type experiment \
   --failure-class eval_invalid \
   --gate tier0
+python scripts/poker_autoresearch.py enqueue-review \
+  --subject "New search objective" \
+  --trigger method_change \
+  --claim "The proposed objective should improve Slumbot transfer."
+python scripts/poker_methodology_review.py \
+  --review-dir autoresearch-session/poker_reviews/<review_id> \
+  --require-complete
+python scripts/poker_autoresearch.py add-knob \
+  --name search_target_mix \
+  --default 0.0 \
+  --failure-class search_quality \
+  --mechanism "Test whether search-distilled targets reduce live transfer loss." \
+  --rationale "One variable isolates the target mechanism." \
+  --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."
 python scripts/poker_autoresearch.py enqueue-compare \
   --candidate models/candidate.pt \
   --n-games 500 \
@@ -189,9 +245,12 @@ Local generated state is under `autoresearch-session/`:
 - `poker_goal.json`: objective, constraints, gate commands, hard stops.
 - `poker_state.json`: incumbent, active cycle, queue, history, last metrics.
 - `poker_knobs.tsv`: knob ledger.
+- `poker_reviews/`: methodology-review artifacts.
 - `poker_runs/`: ignored cycle artifacts and `metrics.json` files.
 
-The runner appends cycle summaries to `RESEARCH_LOG.md`.
+The runner appends cycle summaries to `RESEARCH_LOG.md`. New entries include a
+metrics file path and a short key-metrics JSON summary instead of embedding
+full raw command logs.
 When a gate command prints JSON, the runner stores it under
 `commands[].stdout_json` in the cycle `metrics.json`.
 `eval-local-confidence` uses 1,000 fixed-seed games to reduce noise relative to
@@ -236,6 +295,9 @@ Stop and ask for review if:
 - Tier 0 integrity fails;
 - Slumbot credentials, network access, or API limits block evaluation;
 - a proposed change modifies multiple research axes in one cycle;
+- a method, evaluation, promotion, or knob change has no completed methodology
+  review;
+- a knob addition looks like a broad sweep rather than a mechanism test;
 - a run would overwrite the incumbent checkpoint without an explicit backup;
 - the workflow wants to add hand-crafted opponent or street rules;
 - compute cost or runtime exceeds the configured local budget.

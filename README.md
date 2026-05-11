@@ -113,6 +113,36 @@ Use `--compare-strategy-source policy-head` only when both candidate and
 incumbent checkpoints contain trained `policy_head` weights; legacy incumbents
 must stay on `regret` comparisons.
 
+## Autoresearch Governance
+
+Use the autoresearch workflow for unattended experiments and methodology
+changes. It records resumable state under `autoresearch-session/` and appends
+concise entries to `RESEARCH_LOG.md`.
+
+```bash
+python scripts/poker_autoresearch.py init
+python scripts/poker_autoresearch.py status
+python scripts/poker_autoresearch.py continuous --sleep-seconds 30
+```
+
+Before changing a method, evaluation protocol, promotion rule, or persistent
+research knob, queue a methodology review. Completing the review requires
+independent-verifier notes, related work with source URLs, and a decision file:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-review \
+  --subject "New search objective" \
+  --trigger method_change \
+  --claim "The objective should improve Slumbot transfer."
+python scripts/poker_methodology_review.py \
+  --review-dir autoresearch-session/poker_reviews/<review_id> \
+  --require-complete
+```
+
+Register persistent knobs through `add-knob`, not ad hoc config drift. Each
+knob needs one mechanism, one default, one failure class, and a removal
+criterion; broad sweeps are intentionally rejected.
+
 ## Playing Slumbot
 
 ```bash

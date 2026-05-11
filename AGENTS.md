@@ -19,6 +19,9 @@
 - Autoresearch status: `python scripts/poker_autoresearch.py status`
 - Autoresearch comparison gate: `python scripts/poker_autoresearch.py gate eval-incumbent-self-compare`
 - Autoresearch head-to-head gate: `python scripts/poker_autoresearch.py gate eval-head-to-head-self-compare`
+- Queue methodology review: `python scripts/poker_autoresearch.py enqueue-review --subject "New search objective" --trigger method_change --claim "The objective should improve Slumbot transfer."`
+- Validate methodology review: `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/<review_id> --require-complete`
+- Register research knob: `python scripts/poker_autoresearch.py add-knob --name search_target_mix --default 0.0 --failure-class search_quality --mechanism "Test whether search-distilled targets reduce live transfer loss." --rationale "One variable isolates the target mechanism." --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."`
 - Queue GPU candidate training: `python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --prefix candidate_gpu --save-every 25 --auto-compare`
 - Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
 - Resolver benchmark CLI: `python scripts/poker_resolver_benchmark.py --checkpoint models/candidate.pt --solver-iterations 25 --solver-backend auto`
@@ -37,11 +40,15 @@
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
 - For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
 - Use `--compare-strategy-source policy-head` only when both candidate and incumbent checkpoints include trained `policy_head` weights; legacy checkpoints must use regret matching.
+- For method, evaluation-protocol, checkpoint-promotion, or persistent-knob changes, enqueue and complete a methodology review. The review must include independent-verifier findings and related work with source URLs.
+- Add persistent knobs only through `add-knob`; each needs one mechanism, one default, one failure class, and a removal criterion. Do not use broad hyperparameter sweeps as research progress.
 - Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment; the 2,500-slot mode was much slower and not better in the first local gate.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
 
 ## Commit & Pull Request Guidelines
-- Use concise imperative commit subjects and focused diffs.
+- Use concise imperative commit subjects and focused diffs. Batch commits by research objective; do not commit every small file edit or commit from continuous autoresearch mode.
+- Commit bodies for research changes should mention objective, files changed, tests/gates run, key result, and review or related-work status.
+- When a task changes documentation or research methodology, append a concise `RESEARCH_LOG.md` entry or close the workflow cycle through the autoresearch log path; do not paste raw command JSON into the log.
 - In PRs, include: what changed, why, exact test commands run, and benchmark deltas for trainer/kernel changes.
 - Call out environment flags when relevant (for example `POKER_AI_COMPILE_VALUE_NET=1`, `LUT_DIR`, `TESTING_SUITE`).

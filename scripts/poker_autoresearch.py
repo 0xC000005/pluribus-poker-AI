@@ -18,12 +18,14 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     continuous,
     enqueue_candidate_comparison,
     enqueue_gpu_training,
+    enqueue_methodology_review,
     enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
     init_state,
     new_cycle,
     readiness_report,
+    register_research_knob,
     run_gate,
     set_incumbent,
 )
@@ -126,6 +128,26 @@ def build_parser() -> argparse.ArgumentParser:
     resolver.add_argument("--max-cases", type=int)
     resolver.add_argument("--device", default="auto")
     resolver.add_argument("--timeout-seconds", type=int, default=1200)
+
+    review = subparsers.add_parser(
+        "enqueue-review",
+        help="Create and queue a methodology review gate with verifier and related-work artifacts.",
+    )
+    review.add_argument("--subject", required=True)
+    review.add_argument("--trigger", required=True)
+    review.add_argument("--claim", required=True)
+    review.add_argument("--timeout-seconds", type=int, default=600)
+
+    knob = subparsers.add_parser(
+        "add-knob",
+        help="Register one persistent research knob with a mechanism and removal criterion.",
+    )
+    knob.add_argument("--name", required=True)
+    knob.add_argument("--default", required=True)
+    knob.add_argument("--failure-class", required=True)
+    knob.add_argument("--mechanism", required=True)
+    knob.add_argument("--rationale", required=True)
+    knob.add_argument("--removal-criterion", required=True)
 
     train = subparsers.add_parser(
         "enqueue-train",
@@ -270,6 +292,32 @@ def main(argv: list[str] | None = None) -> int:
                 max_cases=args.max_cases,
                 device=args.device,
                 timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-review":
+        _emit(
+            enqueue_methodology_review(
+                root,
+                subject=args.subject,
+                trigger=args.trigger,
+                claim=args.claim,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "add-knob":
+        _emit(
+            register_research_knob(
+                root,
+                name=args.name,
+                default=args.default,
+                failure_class=args.failure_class,
+                mechanism=args.mechanism,
+                rationale=args.rationale,
+                removal_criterion=args.removal_criterion,
             )
         )
         return 0

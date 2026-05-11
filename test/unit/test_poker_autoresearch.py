@@ -11,12 +11,14 @@ from poker_ai.research.autoresearch import (
     continuous,
     enqueue_candidate_comparison,
     enqueue_gpu_training,
+    enqueue_methodology_review,
     enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
     init_state,
     new_cycle,
     readiness_report,
+    register_research_knob,
     run_gate,
     set_incumbent,
 )
@@ -54,6 +56,7 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert (session / "poker_state.json").is_file()
     assert (session / "poker_knobs.tsv").is_file()
     assert (session / "poker_runs").is_dir()
+    assert (session / "poker_reviews").is_dir()
     assert (tmp_path / "RESEARCH_LOG.md").is_file()
 
     state = _read_json(session / "poker_state.json")
@@ -72,6 +75,9 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "eval-resolver-fixed-states" in goal["gates"]
     assert "slumbot-smoke" in goal["gates"]
     assert "slumbot-solver-smoke" in goal["gates"]
+    assert goal["commit_policy"]["mode"] == "batch_by_research_objective"
+    assert "methodology_review_required" in goal["review_policy"]["required_for"]
+    assert goal["knob_policy"]["max_active_knobs"] == 5
 
 
 def test_init_state_prefers_repo_venv_python_for_default_gates(tmp_path):
@@ -104,6 +110,37 @@ def test_init_state_syncs_missing_default_gates_without_overwriting_history(tmp_
     synced_state = _read_json(state_path)
     assert "eval-local-confidence" in synced_goal["gates"]
     assert synced_state["history"] == [{"run_id": "kept"}]
+
+
+def test_init_state_migrates_existing_policy_and_knob_files(tmp_path):
+    init_state(tmp_path)
+    goal_path = tmp_path / "autoresearch-session" / "poker_goal.json"
+    goal = _read_json(goal_path)
+    del goal["commit_policy"]
+    del goal["review_policy"]
+    del goal["knob_policy"]
+    goal["constraints"] = goal["constraints"][:1]
+    goal_path.write_text(json.dumps(goal), encoding="utf-8")
+    knob_path = tmp_path / "autoresearch-session" / "poker_knobs.tsv"
+    knob_path.write_text(
+        "name\tdefault\tfailure_class\trationale\tremoval_criterion\n"
+        "legacy\t1\tstrategy_quality\told rationale\tretire when false\n",
+        encoding="utf-8",
+    )
+
+    init_state(tmp_path)
+
+    migrated_goal = _read_json(goal_path)
+    assert migrated_goal["commit_policy"]["mode"] == "batch_by_research_objective"
+    assert migrated_goal["review_policy"]["requires_related_work"] is True
+    assert migrated_goal["knob_policy"]["max_active_knobs"] == 5
+    assert (
+        "run methodology review before method, promotion, or persistent knob changes"
+        in migrated_goal["constraints"]
+    )
+    knob_lines = knob_path.read_text(encoding="utf-8").splitlines()
+    assert knob_lines[0].startswith("name\tstatus\tdefault\tfailure_class\tmechanism")
+    assert knob_lines[1].startswith("legacy\tactive\t1\tstrategy_quality\t")
 
 
 def test_init_state_syncs_missing_default_commands_without_overwriting_history(tmp_path):
@@ -206,6 +243,33 @@ def test_new_and_close_cycle_update_state_and_research_log(tmp_path):
     assert closed_state["last_metrics"]["passed"] is True
     log_text = (tmp_path / "RESEARCH_LOG.md").read_text(encoding="utf-8")
     assert "Tier 0 integrity gate passed." in log_text
+    assert "- Metrics file:" in log_text
+    assert '"commands"' not in log_text
+
+
+def test_close_cycle_accepts_external_metrics_path(tmp_path):
+    init_state(tmp_path)
+    cycle = new_cycle(
+        tmp_path,
+        hypothesis="External metrics artifacts can still be referenced.",
+        cycle_type="experiment",
+        failure_class="eval_invalid",
+        gate="tier0",
+    )
+    external_metrics = tmp_path.parent / "external_metrics.json"
+    external_metrics.write_text(json.dumps({"passed": True, "gate": "tier0"}), encoding="utf-8")
+
+    close_cycle(
+        tmp_path,
+        cycle["run_id"],
+        outcome="passed",
+        failure_class="none",
+        metrics_path=external_metrics,
+        summary="External metrics path recorded.",
+    )
+
+    log_text = (tmp_path / "RESEARCH_LOG.md").read_text(encoding="utf-8")
+    assert str(external_metrics) in log_text
 
 
 def test_continuous_processes_one_queued_cycle_and_honors_stop_file(tmp_path):
@@ -255,6 +319,133 @@ def test_enqueue_cycle_adds_work_without_opening_active_cycle(tmp_path):
     assert state["active_cycle"] is None
     assert state["hypothesis_queue"][-1]["id"] == queued["id"]
     assert state["hypothesis_queue"][-1]["hypothesis"] == "Run Tier 0 again after queue support."
+
+
+def test_enqueue_methodology_review_creates_templates_and_related_work_gate(tmp_path):
+    init_state(tmp_path)
+
+    queued = enqueue_methodology_review(
+        tmp_path,
+        subject="Policy-head Slumbot transfer interpretation",
+        trigger="surprising_slumbot_result",
+        claim="The policy-head checkpoint transfers to Slumbot.",
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    gate = goal["gates"][queued["gate"]]
+    command = gate["commands"][0]
+    review_dir = Path(queued["review_dir"])
+    assert queued["gate"].startswith("methodology-review-")
+    assert queued["requires_independent_verifier"] is True
+    assert queued["requires_related_work"] is True
+    assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
+    assert (review_dir / "review.md").is_file()
+    assert (review_dir / "related_work.md").is_file()
+    assert (review_dir / "decision.json").is_file()
+    assert "scripts/poker_methodology_review.py" in command
+    assert "--require-complete" in command
+
+
+def test_methodology_review_validator_requires_independent_review_and_related_work(tmp_path):
+    init_state(tmp_path)
+    queued = enqueue_methodology_review(
+        tmp_path,
+        subject="New search objective",
+        trigger="method_change",
+        claim="Changing the search target is justified.",
+    )
+    review_dir = Path(queued["review_dir"])
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_methodology_review.py"
+
+    pending = subprocess.run(
+        [sys.executable, str(script), "--review-dir", str(review_dir), "--require-complete"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert pending.returncode == 1
+    assert "review.md is still pending" in pending.stderr
+
+    (review_dir / "review.md").write_text(
+        "# Independent Verification\n\n"
+        "Verdict: PARTIAL\n\n"
+        "Checked actual artifacts and found mixed support.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "related_work.md").write_text(
+        "# Related Work\n\n"
+        "- [Deep CFR](https://arxiv.org/abs/1811.00164): canonical baseline.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "decision.json").write_text(
+        json.dumps(
+            {
+                "decision": "gather_more_evidence",
+                "reason": "Local and live evidence disagree.",
+                "sources": ["https://arxiv.org/abs/1811.00164"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    complete = subprocess.run(
+        [sys.executable, str(script), "--review-dir", str(review_dir), "--require-complete"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert complete.returncode == 0
+    assert json.loads(complete.stdout)["passed"] is True
+
+
+def test_register_research_knob_requires_mechanism_and_enforces_budget(tmp_path):
+    init_state(tmp_path)
+
+    for i in range(5):
+        register_research_knob(
+            tmp_path,
+            name=f"knob_{i}",
+            default="1",
+            failure_class="strategy_quality",
+            mechanism="Test one isolated mechanism.",
+            rationale="Needed to isolate a falsifiable failure mode.",
+            removal_criterion="Retire if the mechanism is falsified.",
+        )
+
+    try:
+        register_research_knob(
+            tmp_path,
+            name="knob_5",
+            default="1",
+            failure_class="strategy_quality",
+            mechanism="Would exceed active knob budget.",
+            rationale="This should be rejected.",
+            removal_criterion="N/A",
+        )
+    except RuntimeError as exc:
+        assert "active research knob budget" in str(exc)
+    else:
+        raise AssertionError("Expected active knob budget enforcement.")
+
+
+def test_register_research_knob_rejects_sweep_shaped_defaults(tmp_path):
+    init_state(tmp_path)
+
+    try:
+        register_research_knob(
+            tmp_path,
+            name="optimizer_grid",
+            default="[0.0001,0.001,0.01]",
+            failure_class="train_fit",
+            mechanism="Hyperparameter sweep over optimizer settings.",
+            rationale="This would tune a benchmark instead of testing a mechanism.",
+            removal_criterion="Retire after best value is found.",
+        )
+    except ValueError as exc:
+        assert "single default" in str(exc)
+    else:
+        raise AssertionError("Expected sweep-shaped default to be rejected.")
 
 
 def test_enqueue_candidate_comparison_creates_named_gate_from_incumbent(tmp_path):
@@ -709,6 +900,84 @@ def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--max-cases" in goal["gates"][queued["gate"]]["commands"][0]
+
+
+def test_cli_enqueue_review_creates_review_gate(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-review",
+            "--subject",
+            "New search objective",
+            "--trigger",
+            "method_change",
+            "--claim",
+            "The new search objective is justified.",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    assert Path(queued["review_dir"]).is_dir()
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    assert queued["gate"] in goal["gates"]
+
+
+def test_cli_add_knob_records_governed_knob(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "add-knob",
+            "--name",
+            "search_target_mix",
+            "--default",
+            "0.0",
+            "--failure-class",
+            "search_quality",
+            "--mechanism",
+            "Test whether search-distilled targets reduce live transfer loss.",
+            "--rationale",
+            "One variable isolates the search target mechanism.",
+            "--removal-criterion",
+            "Retire if Slumbot transfer remains negative after confirmation.",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["name"] == "search_target_mix"
+    knob_text = (tmp_path / "autoresearch-session" / "poker_knobs.tsv").read_text(
+        encoding="utf-8"
+    )
+    assert "search_target_mix" in knob_text
 
 
 def test_cli_enqueue_train_creates_gate(tmp_path):
