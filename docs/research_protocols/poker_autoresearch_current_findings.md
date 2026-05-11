@@ -122,10 +122,17 @@ GPU training readiness:
 - Added `scripts/cuda_env.py` so training entrypoints set `CUDA_HOME` and
   `NUMBA_FORCE_CUDA_CC=8.6` inside Python before importing Numba. Shell-level
   env overrides made CUDA invisible here.
+- Autoresearch gates now prefer the repository `.venv/bin/python` (falling back
+  to `CONDA_PREFIX/bin/python`) because a stale `VIRTUAL_ENV` from another repo
+  can expose Torch CUDA while missing the pip NVVM package needed by Numba.
 - One-iteration corrected-legality Slumbot GPU training smoke passed with
   `device=cuda`, `traverse=2.3s`, `train=0.6s`, and saved
   `models/autoresearch_minraise_smoke/corrected_minraise_final.pt` without
   overwriting existing checkpoints.
+- JSON-emitting autoresearch GPU train gate passed after the Python selection
+  fix: `device=cuda`, `avg_iter_seconds=4.114`, `iters_per_hour=875.087`,
+  `traversals_per_second=2.43`, checkpoint
+  `models/autoresearch_gpu_20260511T162934Z/gpu_smoke_fixed_final.pt`.
 - A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
   replay cache consumed most of the 8GB card. The trainer now skips the GPU
   replay cache when its estimated tensor footprint would exceed a safe fraction
