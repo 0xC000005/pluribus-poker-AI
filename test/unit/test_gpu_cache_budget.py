@@ -7,6 +7,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     _MultiBufferView,
     _gpu_cache_budget_allows,
     _gpu_cache_nbytes,
+    _traversal_batch_size,
 )
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 
@@ -52,6 +53,22 @@ def test_compact_gpu_cache_budget_accepts_20m_samples_on_8g_budget():
         safety_fraction=0.75,
         sample_dtype_bytes=_GPU_CACHE_COMPACT_SAMPLE_BYTES,
     )
+
+
+def test_traversal_batch_size_keeps_fixed_pool_with_more_slots_per_traversal():
+    assert _traversal_batch_size(
+        n_traversals=2_000,
+        pool_max_slots=1_000_000,
+        slots_per_traversal=2_500,
+    ) == 400
+
+
+def test_traversal_batch_size_caps_to_requested_traversals():
+    assert _traversal_batch_size(
+        n_traversals=200,
+        pool_max_slots=1_000_000,
+        slots_per_traversal=2_500,
+    ) == 200
 
 
 def test_release_workspace_for_training_drops_traversal_workspace():

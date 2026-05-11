@@ -168,6 +168,15 @@ GPU training readiness:
   every emitted checkpoint after the training gate passes. This is now the
   preferred unattended mode because current results are non-monotonic across
   training length.
+- The 175-iteration checkpointed curve still failed extended confirmation:
+  the final checkpoint moved from a near-miss 3,000-game comparison to
+  `avg_chips_per_hand=-17.650`, lower95 `-31.220` over 6,000 games.
+- Training logs showed frequent traversal pool exhaustion with the old
+  `500` slots/traversal assumption, often reporting more than 300% pool use.
+  This demotes traverser nodes into sampled actions and can discard regret
+  samples. The GPU trainer now keeps about a 1M-slot workspace but reduces
+  traversal chunk size and budgets `2,500` slots/traversal to preserve more
+  search signal without increasing peak workspace size.
 - A larger 10M-buffer run failed at iteration 13 with CUDA OOM because the GPU
   replay cache consumed most of the 8GB card. The trainer now skips the GPU
   replay cache when its estimated tensor footprint would exceed a safe fraction

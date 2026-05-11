@@ -59,6 +59,26 @@ _GPU_CACHE_FLOAT32_SAMPLE_BYTES = 4
 _GPU_CACHE_COMPACT_SAMPLE_BYTES = 2
 _GPU_CACHE_ITERATION_BYTES = 4
 _GPU_CACHE_SAFETY_FRACTION = 0.75
+_DEFAULT_TRAVERSAL_POOL_MAX_SLOTS = 1_000_000
+_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 2_500
+
+
+def _traversal_batch_size(
+    *,
+    n_traversals: int,
+    pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
+    slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
+) -> int:
+    """Choose traversal chunk size from a fixed slot budget.
+
+    The old fixed 500 slots/traversal caused frequent pool exhaustion in
+    heads-up full-deck runs. Keeping the total workspace size stable while
+    giving each traversal more fork slots preserves more regret samples.
+    """
+    n_traversals = max(1, int(n_traversals))
+    pool_max_slots = max(1, int(pool_max_slots))
+    slots_per_traversal = max(1, int(slots_per_traversal))
+    return max(1, min(n_traversals, pool_max_slots // slots_per_traversal))
 
 
 def _gpu_cache_nbytes(
@@ -324,9 +344,11 @@ class _GPUTraverseWorkspace:
         max_traversals: int,
         n_players: int,
         initial_chips: int,
+        slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
     ):
         self.max_traversals = max_traversals
-        self.max_pool = max_traversals * 500
+        self.slots_per_traversal = max(1, int(slots_per_traversal))
+        self.max_pool = max_traversals * self.slots_per_traversal
         self.n_players = n_players
         self.initial_chips = initial_chips
 
@@ -404,8 +426,9 @@ class _GPUTraverseWorkspace:
             self.d_preflop, self.initial_chips,
         )
 
-        # Reset traversal bookkeeping for dynamic pool range.
-        max_pool = n_traversals * 500
+        # Reset traversal bookkeeping for the whole reusable pool so stale
+        # metadata from a larger previous chunk cannot be reached after forks.
+        max_pool = self.max_pool
         reset_blocks = (max_pool + threads - 1) // threads
         reset_traversal_state_kernel[reset_blocks, threads](
             self.d_parent_idx,
@@ -604,7 +627,7 @@ def gpu_traverse_for_player(
 
     value_net.eval()
 
-    max_pool = n_traversals * 500
+    max_pool = workspace.max_pool
     threads = 256
     blocks_pool = (max_pool + threads - 1) // threads
     zero_i32 = np.array([0], dtype=np.int32)
@@ -826,6 +849,8 @@ class GPUDeepCFRTrainer:
         auto_scale_train_schedule: bool = True,
         train_batch_target: int = 8192,
         release_workspace_before_training: bool = True,
+        traversal_pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
+        traversal_slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
     ):
         self.n_players = n_players
         self.initial_chips = initial_chips
@@ -838,6 +863,8 @@ class GPUDeepCFRTrainer:
         self.auto_scale_train_schedule = auto_scale_train_schedule
         self.train_batch_target = train_batch_target
         self.release_workspace_before_training = release_workspace_before_training
+        self.traversal_pool_max_slots = max(1, int(traversal_pool_max_slots))
+        self.traversal_slots_per_traversal = max(1, int(traversal_slots_per_traversal))
 
         if device is None:
             self.device = torch.device(
@@ -862,26 +889,32 @@ class GPUDeepCFRTrainer:
         self.iteration += 1
         self.value_net.eval()
 
-        # Batch traversals to keep GPU pool memory manageable.
-        # Pool = TRAV_BATCH * 500 slots = 1M for batch=2000. ~2GB VRAM.
-        TRAV_BATCH = 2000
+        # Batch traversals to keep GPU pool memory manageable while giving
+        # each traversal enough fork slots to avoid demoting traverser nodes.
+        trav_batch = _traversal_batch_size(
+            n_traversals=self.n_traversals,
+            pool_max_slots=self.traversal_pool_max_slots,
+            slots_per_traversal=self.traversal_slots_per_traversal,
+        )
         if (
             self._workspace is None
-            or self._workspace.max_traversals < TRAV_BATCH
+            or self._workspace.max_traversals < trav_batch
             or self._workspace.n_players != self.n_players
             or self._workspace.initial_chips != self.initial_chips
+            or self._workspace.slots_per_traversal != self.traversal_slots_per_traversal
         ):
             self._workspace = _GPUTraverseWorkspace(
-                max_traversals=TRAV_BATCH,
+                max_traversals=trav_batch,
                 n_players=self.n_players,
                 initial_chips=self.initial_chips,
+                slots_per_traversal=self.traversal_slots_per_traversal,
             )
 
         t0 = _time.perf_counter()
         for player_i in range(self.n_players):
             remaining = self.n_traversals
             while remaining > 0:
-                chunk = min(remaining, TRAV_BATCH)
+                chunk = min(remaining, trav_batch)
                 gpu_traverse_for_player(
                     traverser=player_i,
                     n_traversals=chunk,
