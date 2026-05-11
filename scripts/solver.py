@@ -13,7 +13,13 @@ import torch
 
 from poker_ai.poker.evaluation.eval_card import EvaluationCard
 from poker_ai.poker.evaluation.evaluator import Evaluator
-from fast_cfr import build_tree_arrays, solve_cfr, solve_cfr_torch, get_average_strategy
+from fast_cfr import (
+    build_tree_arrays,
+    get_average_strategy,
+    prune_hands,
+    solve_cfr,
+    solve_cfr_torch,
+)
 
 BIG_BLIND = 100
 # Use full training RAISE_FRACTIONS mapping for action indices 2..7.
@@ -65,7 +71,8 @@ class Node:
 class StreetSolver:
     """Range-vs-range CFR+ solver for a single street."""
 
-    def __init__(self, board, pot, hero_stack, villain_stack, hero_first):
+    def __init__(self, board, pot, hero_stack, villain_stack, hero_first,
+                 active_indices=None):
         self.board = board
         self.pot_start = pot
         self.hero_stack_start = hero_stack
@@ -74,7 +81,11 @@ class StreetSolver:
 
         # Enumerate possible hands (excluding board cards).
         remaining = sorted(set(range(52)) - set(board))
-        self.hands = list(itertools.combinations(remaining, 2))
+        all_hands = list(itertools.combinations(remaining, 2))
+        if active_indices is None:
+            self.hands = all_hands
+        else:
+            self.hands = [all_hands[int(i)] for i in active_indices]
         self.n = len(self.hands)
         self.hand_to_idx = {h: i for i, h in enumerate(self.hands)}
 
@@ -298,16 +309,29 @@ class StreetSolver:
 
 def solve_street(
     our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
-    action_str='', n_iterations=100, villain_range=None,
-    backend='cpu', device=None,
+    action_str='', n_iterations=100, hero_range=None, villain_range=None,
+    backend='cpu', device=None, range_prune_threshold=0.0,
 ):
     """Solve a street (turn or river) and return action.
 
     Returns (solver_action_idx, strategy_dict, solver, node).
     """
+    active_indices = None
+    if range_prune_threshold > 0 and (hero_range is not None or villain_range is not None):
+        remaining = sorted(set(range(52)) - set(board_idx))
+        full_hands = list(itertools.combinations(remaining, 2))
+        _, active_indices, hero_range, villain_range = prune_hands(
+            full_hands,
+            hero_range=hero_range,
+            villain_range=villain_range,
+            keep_hand=tuple(sorted(our_cards_idx)),
+            threshold=range_prune_threshold,
+        )
+
     solver = StreetSolver(
-        board_idx, pot, hero_stack, villain_stack, hero_first)
-    solver.solve(n_iterations, villain_range=villain_range,
+        board_idx, pot, hero_stack, villain_stack, hero_first,
+        active_indices=active_indices)
+    solver.solve(n_iterations, hero_range=hero_range, villain_range=villain_range,
                  backend=backend, device=device)
 
     nav = _parse_nav(action_str, solver)

@@ -4,7 +4,7 @@
 - `poker_ai/deep_cfr/` is the active full-deck Deep CFR stack. Key files: `deep_cfr.py` (reference loop), `networks.py` (advantage/policy heads), `buffer.py`, and `cuda/` (Numba kernels + `GPUDeepCFRTrainer`).
 - `poker_ai/research/` contains the autoresearch workflow primitives, local evaluation helpers, fixed-state resolver benchmarks, promotion blockers, and Slumbot smoke parsers.
 - `poker_ai/games/full_deck/` is the canonical 52-card state and feature encoder used for parity checks.
-- `scripts/` contains runnable entrypoints: `run_gpu_deep_cfr.py`, `train_slumbot_2p.py`, `play_slumbot.py`, `solver.py`, and diagnostics.
+- `scripts/` contains runnable entrypoints: `run_gpu_deep_cfr.py`, `train_slumbot_2p.py`, `play_slumbot.py`, `solver.py`, and diagnostics. Live turn/river solving uses learned range-pruning before CFR.
 - `test/unit/` holds fast regression tests such as `test_network_mask.py`, `test_legal_mask_parity.py`, and `test_slumbot_mapping.py`.
 - `models/` and `research/` are local artifact directories for checkpoints/LUT data; keep generated binaries out of git. Legacy short-deck/tabular code remains for reference only.
 

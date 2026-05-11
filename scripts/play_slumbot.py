@@ -740,7 +740,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         remaining = sorted(set(range(52)) - set(board_idx))
         all_hands = list(itertools.combinations(remaining, 2))
         all_hand_to_idx = {h: i for i, h in enumerate(all_hands)}
-        _, villain_range = tracker.get_solver_ranges(all_hands, all_hand_to_idx)
+        hero_range, villain_range = tracker.get_solver_ranges(all_hands, all_hand_to_idx)
 
     # Cache key: street, board, action string for this street, stacks, hero_first.
     cache_key = (
@@ -780,8 +780,10 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     solver_action, strategy, solver, node = solve_street(
         our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
         action_str=street_str, n_iterations=iters,
+        hero_range=hero_range,
         villain_range=villain_range,
         backend=solver_backend,
+        range_prune_threshold=1e-4,
     )
 
     # Convert solver action to Slumbot format.

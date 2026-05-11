@@ -20,7 +20,8 @@ recommended path for new work.
 - `scripts/play_slumbot.py` maps the learned 9-action policy to Slumbot's API
   and optionally uses the turn/river solver.
 - `scripts/solver.py` and `scripts/fast_cfr.py` implement the turn/river
-  range-vs-range CFR+ solver.
+  range-vs-range CFR+ solver. Live Slumbot solving prunes low-probability
+  hands using the learned range tracker before CFR.
 - `scripts/poker_resolver_benchmark.py` runs fixed public-state diagnostics for
   blueprint-vs-resolver legality, latency, action drift, and learned-advantage
   proxies before spending live Slumbot hands.
