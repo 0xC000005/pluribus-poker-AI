@@ -201,7 +201,9 @@ Use `enqueue-slumbot` only for sparse live checks after local comparison says a
 candidate is interesting. It creates a one-off live smoke gate and records
 Slumbot chips/hand, CI, elapsed seconds, seconds/hand, action mix, increment
 mix, policy/solver/fallback decision counts, parse/API errors, and
-action-mapping drift.
+action-mapping drift. Solver-enabled runs also record solver latency, cache
+hits, active hand count after learned range pruning, full hand count, and prune
+ratio when the wrapper emits those diagnostics.
 `slumbot-smoke` runs five live Slumbot hands with greedy, no-all-in, no-solver
 diagnostic settings and parses the final chips/hand summary into JSON.
 The Slumbot wrapper also emits `elapsed_seconds` and `seconds_per_hand` so

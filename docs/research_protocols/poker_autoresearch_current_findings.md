@@ -1,6 +1,6 @@
 # Poker Autoresearch Current Findings
 
-Date: 2026-05-10
+Date: 2026-05-11
 
 ## Incumbent
 
@@ -23,6 +23,9 @@ Date: 2026-05-10
 - `slumbot-smoke`: passed live API integration with solver/all-in disabled.
 - `slumbot-solver-smoke`: passed live API integration with turn/river solver
   enabled and all-in disabled.
+- `eval-resolver-fixed-states`: passed fixed public-state resolver legality
+  and latency diagnostics for CPU, experimental torch-CUDA, and default auto
+  backend selection.
 
 ## Metric Snapshot
 
@@ -39,6 +42,9 @@ Live Slumbot diagnostic smokes:
 - Solver smoke runtime: `84.98` seconds for 10 hands.
 - Runtime-metric no-solver smoke: `-308` chips/hand over 5 hands,
   `3.669` elapsed seconds, `0.734` seconds/hand.
+- Policy-head sampled solver smoke, no-all-in, 50 hands: `-432` chips/hand,
+  CI `1576`, zero parse/API errors, mapping drift mean `0.001`, and
+  `5.249` seconds/hand after learned range pruning.
 
 Local incumbent comparison:
 
@@ -80,6 +86,10 @@ Slumbot diagnostic instrumentation:
 - Pre-min-raise-fix paired 20-hand no-solver smokes showed the issue clearly:
   `iter1000` produced 26 bet increments with mapping drift mean `0.119` and
   max `0.911`, while `iter900` was fold-heavy with zero mapping drift.
+- Live solver diagnostics now emit solver call count, mean/max solver latency,
+  solver cache hits, active hand count after range pruning, full hand count,
+  and mean prune ratio. These fields are parsed into autoresearch JSON for
+  future performance gates.
 
 Resolved workflow issue: `action_mapping`.
 
@@ -117,6 +127,20 @@ GPU training readiness:
   replay cache when its estimated tensor footprint would exceed a safe fraction
   of free GPU memory, falling back to host sampling instead of crashing.
 
+Live solver backend status:
+
+- The torch-CUDA street-solver backend is implemented but remains
+  experimental. Clean A/B showed it is slower than NumPy CPU for the current
+  Python-driven CFR recurrence: fixed resolver average latency was about
+  `4174 ms` with torch-CUDA versus `2360 ms` with CPU, and direct river tests
+  were roughly 2x slower on torch-CUDA across 25, 100, and 250 iterations.
+- Default `--solver-backend auto` intentionally stays on CPU until the CFR
+  recurrence is fused into coarse GPU kernels or matrix/sparse operations.
+  Forcing torch-CUDA is useful only as a regression benchmark today.
+- Learned range pruning is the current confirmed live-search speed path. In a
+  concentrated-range river benchmark, pruning reduced a 1081-hand solve to 2
+  active hands and cut wall time from about `2.03s` to `0.53s`.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.
@@ -129,10 +153,11 @@ random-opponent performance is too weak as the main promotion metric.
 
 Secondary failure class: `search_quality`.
 
-The solver-enabled smoke took about 8.5 seconds per hand at the current 10-hand
-setting. This is acceptable for a diagnostic smoke but too slow to use casually
-inside every unattended iteration. Slumbot search needs separate latency,
-cache, and quality gates.
+The original solver-enabled smoke took about 8.5 seconds per hand at the
+10-hand setting. Policy-head sampled play with learned range pruning reduced
+the latest 50-hand solver smoke to `5.249` seconds/hand, but this is still too
+slow to use casually inside every unattended iteration. Slumbot search needs
+separate latency, cache, active-hand-count, and quality gates.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -156,3 +181,6 @@ script passes all 10 checks and is now part of Tier 0.
    incumbent and candidate checkpoints.
 5. Train a fresh corrected-legality checkpoint and compare it locally before
    spending more Slumbot hands.
+6. Do not spend engineering time forcing the current torch-CUDA solver path for
+   live play; the principled GPU step is a fused CFR backend following the
+   matrix/sparse-operator direction, with range pruning and caching retained.
