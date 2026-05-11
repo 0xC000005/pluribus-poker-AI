@@ -17,6 +17,7 @@ Optimizations over the original version:
 
 from __future__ import annotations
 
+import gc
 import logging
 import time
 from typing import List
@@ -54,18 +55,39 @@ from poker_ai.deep_cfr.cuda.action_kernels import (
 
 logger = logging.getLogger("poker_ai.deep_cfr.cuda.gpu_trainer")
 
+_GPU_CACHE_FLOAT32_SAMPLE_BYTES = 4
+_GPU_CACHE_COMPACT_SAMPLE_BYTES = 2
+_GPU_CACHE_ITERATION_BYTES = 4
+_GPU_CACHE_SAFETY_FRACTION = 0.75
 
-def _gpu_cache_nbytes(n_samples: int) -> int:
-    return int(n_samples) * (N_FEATURES + 1 + N_ACTIONS) * 4
+
+def _gpu_cache_nbytes(
+    n_samples: int,
+    *,
+    sample_dtype_bytes: int = _GPU_CACHE_FLOAT32_SAMPLE_BYTES,
+    iteration_dtype_bytes: int = _GPU_CACHE_ITERATION_BYTES,
+) -> int:
+    sample_bytes = (N_FEATURES + N_ACTIONS) * int(sample_dtype_bytes)
+    return int(n_samples) * (sample_bytes + int(iteration_dtype_bytes))
 
 
 def _gpu_cache_budget_allows(
     *,
     n_samples: int,
     free_bytes: int,
-    safety_fraction: float = 0.60,
+    safety_fraction: float = _GPU_CACHE_SAFETY_FRACTION,
+    sample_dtype_bytes: int = _GPU_CACHE_FLOAT32_SAMPLE_BYTES,
+    iteration_dtype_bytes: int = _GPU_CACHE_ITERATION_BYTES,
 ) -> bool:
-    return _gpu_cache_nbytes(n_samples) <= int(float(free_bytes) * safety_fraction)
+    return _gpu_cache_nbytes(
+        n_samples,
+        sample_dtype_bytes=sample_dtype_bytes,
+        iteration_dtype_bytes=iteration_dtype_bytes,
+    ) <= int(float(free_bytes) * safety_fraction)
+
+
+def _torch_dtype_nbytes(dtype: torch.dtype) -> int:
+    return torch.empty((), dtype=dtype).element_size()
 
 
 class _MultiBufferView:
@@ -75,15 +97,25 @@ class _MultiBufferView:
     Implements the same sample_batch() interface as ReservoirBuffer.
     """
 
-    def __init__(self, buffers: list):
+    def __init__(
+        self,
+        buffers: list,
+        *,
+        gpu_cache_sample_dtype: torch.dtype = torch.float16,
+        gpu_cache_safety_fraction: float = _GPU_CACHE_SAFETY_FRACTION,
+    ):
         self.buffers = [b for b in buffers if b.size > 0]
         self.size = sum(b.size for b in self.buffers)
+        self._gpu_cache_sample_dtype = gpu_cache_sample_dtype
+        self._gpu_cache_safety_fraction = gpu_cache_safety_fraction
         self._gpu_cache_device: torch.device | None = None
         self._gpu_cache_sig: tuple[tuple[int, int], ...] | None = None
         self._gpu_features: torch.Tensor | None = None
         self._gpu_iterations: torch.Tensor | None = None
         self._gpu_advantages: torch.Tensor | None = None
         self._gpu_cache_disabled = False
+        self._gpu_cache_budget_rejected_sig: tuple | None = None
+        self._expected_sample_budget: int | None = None
 
     def __len__(self):
         return self.size
@@ -93,6 +125,9 @@ class _MultiBufferView:
             (int(buf.size), int(getattr(buf, "_n_seen", buf.size)))
             for buf in self.buffers
         )
+
+    def set_expected_sample_budget(self, n_samples: int):
+        self._expected_sample_budget = max(0, int(n_samples))
 
     def _try_build_gpu_cache(self, device: torch.device) -> bool:
         if self._gpu_cache_disabled:
@@ -108,28 +143,54 @@ class _MultiBufferView:
             return True
 
         try:
+            sample_dtype = (
+                self._gpu_cache_sample_dtype
+                if device.type == "cuda"
+                else torch.float32
+            )
+            sample_dtype_bytes = _torch_dtype_nbytes(sample_dtype)
+            if (
+                self._expected_sample_budget is not None
+                and self._expected_sample_budget < self.size
+            ):
+                return False
+            budget_rejected_sig = (
+                device.type,
+                device.index,
+                sig,
+                sample_dtype_bytes,
+            )
             if device.type == "cuda":
+                if self._gpu_cache_budget_rejected_sig == budget_rejected_sig:
+                    return False
                 free_bytes, _ = torch.cuda.mem_get_info(device)
                 if not _gpu_cache_budget_allows(
                     n_samples=self.size,
                     free_bytes=free_bytes,
+                    safety_fraction=self._gpu_cache_safety_fraction,
+                    sample_dtype_bytes=sample_dtype_bytes,
                 ):
                     logger.warning(
-                        "Skipping GPU replay cache: %d samples need %.2f GiB and "
+                        "Skipping GPU replay cache: %d samples need %.2f GiB "
+                        "with %s feature/advantage tensors and "
                         "current free memory is %.2f GiB.",
                         self.size,
-                        _gpu_cache_nbytes(self.size) / (1024**3),
+                        _gpu_cache_nbytes(
+                            self.size,
+                            sample_dtype_bytes=sample_dtype_bytes,
+                        ) / (1024**3),
+                        str(sample_dtype).replace("torch.", ""),
                         free_bytes / (1024**3),
                     )
-                    self._gpu_cache_disabled = True
+                    self._gpu_cache_budget_rejected_sig = budget_rejected_sig
                     return False
 
             feat = torch.empty(
-                (self.size, N_FEATURES), dtype=torch.float32, device=device
+                (self.size, N_FEATURES), dtype=sample_dtype, device=device
             )
             iters = torch.empty((self.size,), dtype=torch.float32, device=device)
             advs = torch.empty(
-                (self.size, N_ACTIONS), dtype=torch.float32, device=device
+                (self.size, N_ACTIONS), dtype=sample_dtype, device=device
             )
 
             cursor = 0
@@ -150,6 +211,7 @@ class _MultiBufferView:
             self._gpu_advantages = advs
             self._gpu_cache_device = device
             self._gpu_cache_sig = sig
+            self._gpu_cache_budget_rejected_sig = None
             return True
         except RuntimeError as exc:
             if "out of memory" in str(exc).lower():
@@ -163,6 +225,18 @@ class _MultiBufferView:
                 torch.cuda.empty_cache()
                 return False
             raise
+
+    def release_gpu_cache(self):
+        """Release cached replay tensors before returning to Numba traversal."""
+        cache_device = self._gpu_cache_device
+        self._gpu_features = None
+        self._gpu_iterations = None
+        self._gpu_advantages = None
+        self._gpu_cache_device = None
+        self._gpu_cache_sig = None
+        self._gpu_cache_budget_rejected_sig = None
+        if cache_device is not None and cache_device.type == "cuda":
+            torch.cuda.empty_cache()
 
     def sample_batch(self, batch_size, device=None):
         """Sample a batch and write directly into preallocated torch tensors."""
@@ -731,6 +805,7 @@ class GPUDeepCFRTrainer:
         initial_chips: int = 10000,
         auto_scale_train_schedule: bool = True,
         train_batch_target: int = 8192,
+        release_workspace_before_training: bool = True,
     ):
         self.n_players = n_players
         self.initial_chips = initial_chips
@@ -742,6 +817,7 @@ class GPUDeepCFRTrainer:
         self.n_traversals = n_traversals
         self.auto_scale_train_schedule = auto_scale_train_schedule
         self.train_batch_target = train_batch_target
+        self.release_workspace_before_training = release_workspace_before_training
 
         if device is None:
             self.device = torch.device(
@@ -800,6 +876,9 @@ class GPUDeepCFRTrainer:
                 remaining -= chunk
         t1 = _time.perf_counter()
 
+        if self.release_workspace_before_training:
+            self._release_workspace_for_training()
+
         # Combine buffers and retrain.
         combined = self._combine_buffers()
         if len(combined) > 0:
@@ -825,17 +904,36 @@ class GPUDeepCFRTrainer:
                         sample_budget,
                     )
                     self._schedule_logged = True
-            self.value_net = train_value_network(
-                buffer=combined,
-                hidden_dim=self.hidden_dim,
-                n_epochs=train_steps,
-                batch_size=train_batch,
-                lr=self.lr,
-                device=self.device,
-                n_layers=self.n_layers,
-            )
+            if hasattr(combined, "set_expected_sample_budget"):
+                combined.set_expected_sample_budget(train_batch * train_steps)
+            try:
+                self.value_net = train_value_network(
+                    buffer=combined,
+                    hidden_dim=self.hidden_dim,
+                    n_epochs=train_steps,
+                    batch_size=train_batch,
+                    lr=self.lr,
+                    device=self.device,
+                    n_layers=self.n_layers,
+                )
+            finally:
+                if hasattr(combined, "release_gpu_cache"):
+                    combined.release_gpu_cache()
         t2 = _time.perf_counter()
         print(f"  [profile] traverse={t1-t0:.1f}s  train={t2-t1:.1f}s")
+
+    def _release_workspace_for_training(self):
+        """Drop traversal buffers before replay-cache allocation/training."""
+        if self._workspace is None:
+            return
+        self._workspace = None
+        gc.collect()
+        if self.device.type == "cuda":
+            try:
+                cuda.current_context().deallocations.clear()
+            except Exception:
+                logger.debug("Could not flush Numba CUDA deallocations.", exc_info=True)
+            torch.cuda.empty_cache()
 
     def _combine_buffers(self) -> ReservoirBuffer:
         """Create a lightweight view that samples from all player buffers.

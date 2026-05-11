@@ -256,6 +256,13 @@ def train_value_network(
         features, iterations, advantages = buffer.sample_batch(
             batch_size, device
         )
+        # Compact GPU replay caches may store targets in half precision to fit
+        # larger buffers in VRAM. Keep loss targets in fp32 for stable scaling.
+        if advantages.dtype != torch.float32:
+            advantages = advantages.float()
+        if iterations.dtype != torch.float32:
+            iterations = iterations.float()
+
         # Weight samples by iteration (linear CFR weighting).
         # Later iterations get higher weight.
         weights = iterations / iterations.max().clamp(min=1)
