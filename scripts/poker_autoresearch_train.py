@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             trainer = GPUDeepCFRTrainer.load(args.resume, device=device)
             trainer.n_traversals = args.n_traversals
             trainer.n_training_steps = args.n_training_steps
+            trainer.batch_size = args.batch_size
         else:
             trainer = GPUDeepCFRTrainer(
                 n_players=2,
