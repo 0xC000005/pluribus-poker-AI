@@ -174,6 +174,19 @@ GPU training readiness:
   silently using a randomly initialized head. The current recorded incumbent
   `models/slumbot_2p_iter1000.pt` is legacy, so policy-head comparisons require
   first promoting or explicitly selecting a policy-head-capable incumbent.
+- Reducing value-network optimization to 500 training steps improved throughput
+  but did not improve strategy quality. The 100-iteration 4x512 run completed
+  in `616.236s` (`avg_iter_seconds=6.162`, `iters_per_hour=584.201`,
+  `traversals_per_second=324.551`). Against the legacy incumbent under regret
+  matching, `iter_50` was a near miss (`avg_chips_per_hand=3.268`, lower95
+  `-6.541` over 18,000 games), while `iter_100`/final regressed
+  (`avg_chips_per_hand=-14.295`, lower95 `-21.486`). This suggests optimizer
+  step count is not the main remaining strategy-quality bottleneck.
+- Policy-head local comparison produced a strong positive signal between two
+  newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
+  beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
+  `61.924` over 18,000 duplicate-swapped games. This should be treated as a
+  policy-head diagnostic, not promotion evidence against the legacy incumbent.
 - The 175-iteration checkpointed curve still failed extended confirmation:
   the final checkpoint moved from a near-miss 3,000-game comparison to
   `avg_chips_per_hand=-17.650`, lower95 `-31.220` over 6,000 games.
