@@ -21,6 +21,12 @@ _INCREMENTS_RE = re.compile(r"Increments:\s+(?P<mix>.+)")
 _MAPPING_DRIFT_RE = re.compile(
     r"Mapping drift:\s+n=(?P<n>\d+)\s+mean=(?P<mean>[0-9.]+)\s+max=(?P<max>[0-9.]+)"
 )
+_SOLVER_PERF_RE = re.compile(
+    r"Solver perf:\s+n=(?P<n>\d+)\s+mean_ms=(?P<mean_ms>[0-9.]+)\s+"
+    r"max_ms=(?P<max_ms>[0-9.]+)\s+cache_hits=(?P<cache_hits>\d+)\s+"
+    r"mean_hands=(?P<mean_hands>[0-9.]+)/(?P<mean_full_hands>[0-9.]+)\s+"
+    r"prune_ratio=(?P<prune_ratio>[0-9.]+)"
+)
 
 
 def _parse_key_value_counts(text: str) -> dict[str, int]:
@@ -79,6 +85,19 @@ def parse_slumbot_summary(output: str) -> dict:
                 "mapping_drift_n": int(mapping_drift.group("n")),
                 "mapping_drift_mean": float(mapping_drift.group("mean")),
                 "mapping_drift_max": float(mapping_drift.group("max")),
+            }
+        )
+    solver_perf = _SOLVER_PERF_RE.search(output)
+    if solver_perf:
+        metrics.update(
+            {
+                "solver_latency_n": int(solver_perf.group("n")),
+                "solver_latency_mean_ms": float(solver_perf.group("mean_ms")),
+                "solver_latency_max_ms": float(solver_perf.group("max_ms")),
+                "solver_cache_hits": int(solver_perf.group("cache_hits")),
+                "solver_mean_hands": float(solver_perf.group("mean_hands")),
+                "solver_mean_full_hands": float(solver_perf.group("mean_full_hands")),
+                "solver_mean_prune_ratio": float(solver_perf.group("prune_ratio")),
             }
         )
     return metrics

@@ -42,6 +42,7 @@ FINAL: 2 hands | -100 chips
   Action mix: fold=0 call/chk=2 r0.25x=1 r0.5x=0 r0.75x=0 r1.0x=0 r1.5x=0 r2.0x=0 all-in=0 solver=1
   Increments: f=0 k=1 c=1 b=2
   Mapping drift: n=3 mean=0.125 max=0.250
+  Solver perf: n=2 mean_ms=125.5 max_ms=160.0 cache_hits=1 mean_hands=20.0/100.0 prune_ratio=0.2000
 ============================================================
 """
 
@@ -58,3 +59,10 @@ FINAL: 2 hands | -100 chips
     assert metrics["mapping_drift_n"] == 3
     assert metrics["mapping_drift_mean"] == 0.125
     assert metrics["mapping_drift_max"] == 0.25
+    assert metrics["solver_latency_n"] == 2
+    assert metrics["solver_latency_mean_ms"] == 125.5
+    assert metrics["solver_latency_max_ms"] == 160.0
+    assert metrics["solver_cache_hits"] == 1
+    assert metrics["solver_mean_hands"] == 20.0
+    assert metrics["solver_mean_full_hands"] == 100.0
+    assert metrics["solver_mean_prune_ratio"] == 0.2
