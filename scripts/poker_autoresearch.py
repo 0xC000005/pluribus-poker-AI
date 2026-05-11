@@ -132,6 +132,8 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--hidden-dim", type=int, default=512)
     train.add_argument("--n-layers", type=int, default=4)
     train.add_argument("--batch-size", type=int, default=4096)
+    train.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
+    train.add_argument("--traversal-slots-per-traversal", type=int, default=500)
     train.add_argument("--save-dir")
     train.add_argument("--prefix", default="candidate")
     train.add_argument("--save-every", type=int, default=0)
@@ -270,6 +272,8 @@ def main(argv: list[str] | None = None) -> int:
                 hidden_dim=args.hidden_dim,
                 n_layers=args.n_layers,
                 batch_size=args.batch_size,
+                traversal_pool_max_slots=args.traversal_pool_max_slots,
+                traversal_slots_per_traversal=args.traversal_slots_per_traversal,
                 save_dir=args.save_dir,
                 prefix=args.prefix,
                 save_every=args.save_every,

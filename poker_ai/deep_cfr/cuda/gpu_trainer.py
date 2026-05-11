@@ -60,7 +60,7 @@ _GPU_CACHE_COMPACT_SAMPLE_BYTES = 2
 _GPU_CACHE_ITERATION_BYTES = 4
 _GPU_CACHE_SAFETY_FRACTION = 0.75
 _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS = 1_000_000
-_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 2_500
+_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 500
 
 
 def _traversal_batch_size(
@@ -71,9 +71,9 @@ def _traversal_batch_size(
 ) -> int:
     """Choose traversal chunk size from a fixed slot budget.
 
-    The old fixed 500 slots/traversal caused frequent pool exhaustion in
-    heads-up full-deck runs. Keeping the total workspace size stable while
-    giving each traversal more fork slots preserves more regret samples.
+    Increasing ``slots_per_traversal`` reduces pool exhaustion by shrinking
+    traversal chunks under the same workspace cap. The default preserves the
+    faster historical 2,000-traversal chunks.
     """
     n_traversals = max(1, int(n_traversals))
     pool_max_slots = max(1, int(pool_max_slots))

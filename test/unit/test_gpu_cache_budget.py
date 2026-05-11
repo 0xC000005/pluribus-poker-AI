@@ -63,6 +63,10 @@ def test_traversal_batch_size_keeps_fixed_pool_with_more_slots_per_traversal():
     ) == 400
 
 
+def test_traversal_batch_size_default_preserves_fast_two_thousand_traversal_chunk():
+    assert _traversal_batch_size(n_traversals=2_000) == 2_000
+
+
 def test_traversal_batch_size_caps_to_requested_traversals():
     assert _traversal_batch_size(
         n_traversals=200,

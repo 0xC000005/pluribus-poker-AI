@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=4096)
+    parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
+    parser.add_argument("--traversal-slots-per-traversal", type=int, default=500)
     parser.add_argument("--save-dir", default="models/autoresearch_gpu")
     parser.add_argument("--prefix", default="candidate")
     parser.add_argument(
@@ -63,6 +65,8 @@ def main(argv: list[str] | None = None) -> int:
             trainer.n_traversals = args.n_traversals
             trainer.n_training_steps = args.n_training_steps
             trainer.batch_size = args.batch_size
+            trainer.traversal_pool_max_slots = args.traversal_pool_max_slots
+            trainer.traversal_slots_per_traversal = args.traversal_slots_per_traversal
         else:
             trainer = GPUDeepCFRTrainer(
                 n_players=2,
@@ -75,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 lr=0.001,
                 device=device,
+                traversal_pool_max_slots=args.traversal_pool_max_slots,
+                traversal_slots_per_traversal=args.traversal_slots_per_traversal,
             )
 
         save_dir = Path(args.save_dir)
@@ -127,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
             "n_traversals": int(args.n_traversals),
             "n_training_steps": int(args.n_training_steps),
             "batch_size": int(args.batch_size),
+            "traversal_pool_max_slots": int(args.traversal_pool_max_slots),
+            "traversal_slots_per_traversal": int(args.traversal_slots_per_traversal),
             "save_every": int(args.save_every),
             "hidden_dim": int(args.hidden_dim),
             "n_layers": int(args.n_layers),

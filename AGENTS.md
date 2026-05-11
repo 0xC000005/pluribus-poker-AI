@@ -36,6 +36,7 @@
 - For any action-space, feature, or mapping change, add/update parity tests and include regression coverage.
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
 - For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
+- Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment; the 2,500-slot mode was much slower and not better in the first local gate.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
 

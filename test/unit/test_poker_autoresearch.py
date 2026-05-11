@@ -394,6 +394,8 @@ def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_pa
         save_dir="models/train_gate",
         prefix="probe",
         save_every=2,
+        traversal_slots_per_traversal=2500,
+        traversal_pool_max_slots=1_000_000,
         auto_compare=True,
         compare_n_games=7,
         compare_seeds="1,2",
@@ -407,6 +409,10 @@ def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_pa
     queued_item = state["hypothesis_queue"][-1]
     assert "--save-every" in command
     assert "2" in command
+    assert "--traversal-slots-per-traversal" in command
+    assert "2500" in command
+    assert "--traversal-pool-max-slots" in command
+    assert "1000000" in command
     assert queued_item["postprocess"] == {
         "type": "compare_training_checkpoints",
         "n_games": 7,
