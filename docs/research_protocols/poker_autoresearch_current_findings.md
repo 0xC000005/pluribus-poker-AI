@@ -49,6 +49,13 @@ Live Slumbot diagnostic smokes:
   no-all-in, 30 hands: `-1272` chips/hand, CI `1845`, `5.416` seconds/hand,
   12 solver calls, mean solver latency `12229.1 ms`, mean active hands
   `1017.2/1108.4`, prune ratio `0.9178`, and no parse/API errors.
+- Restored-history 200x2k 4x512 checkpoint, solver enabled, 100 hands:
+  `+31` chips/hand, CI `678`, `10.175` seconds/hand, 45 solver calls, mean
+  solver latency `21481 ms`, and zero parse/API errors. This is positive but
+  too noisy and too slow for confirmation.
+- Same checkpoint, no solver, 100 hands: `+255` chips/hand, CI `260`,
+  `0.529` seconds/hand. The 500-hand no-solver follow-up reversed to `-45`
+  chips/hand, CI `240`, `0.484` seconds/hand. Treat the 100-hand win as noise.
 
 Local incumbent comparison:
 
@@ -169,6 +176,22 @@ GPU training readiness:
   now require a positive lower 95% bound; finite negative bounds are rejection
   evidence, not pass conditions. This is now the preferred unattended mode
   because current results are non-monotonic across training length.
+- Restored-history observation is now the default for new Deep CFR checkpoints.
+  A toy 5-iteration A/B beat the masked-history compatibility control locally,
+  but fixed-state resolver drift did not improve, so it was not a Slumbot
+  candidate. Scaling the same mechanism to 200 iterations, 2000 traversals, and
+  1000 training steps with a 4x512 net produced the first restored-history
+  local pass: `avg_iter_seconds=8.255`, `iters_per_hour=436.079`,
+  `traversals_per_second=242.264`; checkpoints at 50, 100, and 150 iterations
+  failed incumbent H2H, while `iter_200`/final passed with
+  `avg_chips_per_hand=57.080`, lower95 `49.961` over 3000 duplicate-swapped
+  games.
+- The restored-history 200x2k final checkpoint passed the full local
+  falsification ladder: objective audit clean except `RESEARCH_LOG.md`, H2H
+  lower95 positive, fixed-state resolver legality clean, mean resolver action
+  L1 drift `1.375`, policy-head drift `0.632`, and no illegal fixed cases.
+  The resolver benchmark remains diagnostic only; live Slumbot confirmation is
+  still inconclusive and solver latency is the current practical bottleneck.
 - Local evaluation can now choose `--strategy-source regret` or
   `--strategy-source policy-head`. Policy-head evaluation is guarded so legacy
   checkpoints without trained `policy_head` weights are rejected instead of

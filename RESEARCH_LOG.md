@@ -1433,3 +1433,123 @@
 - Summary: Hardened one-off and auto-queued candidate comparison gates by always passing --require-positive-lower95 and by making the eval JSON emit passed=false with a comparison_requires_positive_lower95 blocker when the stricter confidence gate fails. Replayed the restored_history_4x512 final comparison: avg +7.35 chips/hand but lower95 -27.17 now exits nonzero and is rejected, so the earlier auto-compare pass labels should be treated as stale finite-evaluation results, not improvement evidence.
 - Metrics file: autoresearch-session/eval_hardness/lower95_gate_fix_20260512.json
 - Key metrics: `{"decision": "proceed", "gate": "candidate-auto-comparison-requires-positive-lower95", "passed": true}`
+## 20260512T223611Z-candidate-checkpoint-restored-history-4x512-final-pt-should - failed
+
+- Timestamp: 2026-05-12T22:36:12Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260512T223603Z-restored-history-4x512-final
+- Hypothesis: Candidate checkpoint restored_history_4x512_final.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260512T223603Z-restored-history-4x512-final failed.
+- Metrics file: autoresearch-session/poker_runs/20260512T223611Z-candidate-checkpoint-restored-history-4x512-final-pt-should/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -41.95633333333333, "gate": "eval-candidate-compare-20260512T223603Z-restored-history-4x512-final", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -68.2881924955126, "passed": false, "strategy_source": "regret"}`
+
+## 20260512T223702Z-gpu-deep-cfr-training-should-produce-restored-history - passed
+
+- Timestamp: 2026-05-12T23:04:35Z
+- Type: experiment
+- Gate: train-gpu-deep-cfr-20260512T223657Z-restored-history-200x2k-4x512
+- Hypothesis: GPU Deep CFR training should produce restored_history_200x2k_4x512_final.pt with machine-readable throughput metrics.
+- Failure class: none
+- Summary: Gate train-gpu-deep-cfr-20260512T223657Z-restored-history-200x2k-4x512 passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T223702Z-gpu-deep-cfr-training-should-produce-restored-history/metrics.json
+- Key metrics: `{"avg_iter_seconds": 8.255, "gate": "train-gpu-deep-cfr-20260512T223657Z-restored-history-200x2k-4x512", "iters_per_hour": 436.079, "mode": "autoresearch_gpu_deep_cfr_train", "passed": true, "traversals_per_second": 242.264}`
+
+## 20260512T230435Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-50 - failed
+
+- Timestamp: 2026-05-12T23:04:36Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-50
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_iter_50.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-50 failed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230435Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-50/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -19.317999999999998, "gate": "eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-50", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -54.472124982069076, "passed": false, "strategy_source": "regret"}`
+
+## 20260512T230456Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-100 - failed
+
+- Timestamp: 2026-05-12T23:04:57Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-100
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_iter_100.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-100 failed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230456Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-100/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -41.73133333333334, "gate": "eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-100", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -130.02656707473477, "passed": false, "strategy_source": "regret"}`
+
+## 20260512T230525Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-150 - failed
+
+- Timestamp: 2026-05-12T23:05:26Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-150
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_iter_150.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-150 failed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230525Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-150/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -70.04133333333333, "gate": "eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-150", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -152.43023755073818, "passed": false, "strategy_source": "regret"}`
+
+## 20260512T230542Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-200 - passed
+
+- Timestamp: 2026-05-12T23:05:43Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-200
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_iter_200.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: none
+- Summary: Gate eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-200 passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230542Z-candidate-checkpoint-restored-history-200x2k-4x512-iter-200/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 57.07966666666667, "gate": "eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-iter-200", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": 49.96091920465405, "passed": true, "strategy_source": "regret"}`
+
+## 20260512T230543Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt - passed
+
+- Timestamp: 2026-05-12T23:05:45Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-final
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_final.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: none
+- Summary: Gate eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-final passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230543Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 57.07966666666667, "gate": "eval-candidate-compare-20260512T230435Z-restored-history-200x2k-4x512-final", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": 49.96091920465405, "passed": true, "strategy_source": "regret"}`
+
+## 20260512T230620Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt - passed
+
+- Timestamp: 2026-05-12T23:06:32Z
+- Type: falsification
+- Gate: falsification-ladder-20260512T230613Z-restored-history-200x2k-4x512-final
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_final.pt should survive falsification of mechanism: restored public betting-history observation plus longer Deep CFR training improves incumbent regret-policy play without changing action abstractions
+- Failure class: none
+- Summary: Gate falsification-ladder-20260512T230613Z-restored-history-200x2k-4x512-final passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230620Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt/metrics.json
+- Key metrics: `{"gate": "falsification-ladder-20260512T230613Z-restored-history-200x2k-4x512-final", "passed": true}`
+
+## 20260512T230709Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt - passed
+
+- Timestamp: 2026-05-12T23:24:06Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260512T230703Z-restored-history-200x2k-4x512-final
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_final.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: Gate slumbot-candidate-smoke-20260512T230703Z-restored-history-200x2k-4x512-final passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T230709Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 31, "ci95_chips_per_hand": 678, "gate": "slumbot-candidate-smoke-20260512T230703Z-restored-history-200x2k-4x512-final", "mbb_per_hand": 310, "passed": true, "seconds_per_hand": 10.175}`
+
+## 20260512T232456Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt - passed
+
+- Timestamp: 2026-05-12T23:25:49Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260512T232453Z-restored-history-200x2k-4x512-final
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_final.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: Gate slumbot-candidate-smoke-20260512T232453Z-restored-history-200x2k-4x512-final passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T232456Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 255, "ci95_chips_per_hand": 260, "gate": "slumbot-candidate-smoke-20260512T232453Z-restored-history-200x2k-4x512-final", "mbb_per_hand": 2548, "passed": true, "seconds_per_hand": 0.529}`
+
+## 20260512T232609Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt - passed
+
+- Timestamp: 2026-05-12T23:30:11Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260512T232606Z-restored-history-200x2k-4x512-final
+- Hypothesis: Candidate checkpoint restored_history_200x2k_4x512_final.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: Gate slumbot-candidate-smoke-20260512T232606Z-restored-history-200x2k-4x512-final passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T232609Z-candidate-checkpoint-restored-history-200x2k-4x512-final-pt/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -45, "ci95_chips_per_hand": 240, "gate": "slumbot-candidate-smoke-20260512T232606Z-restored-history-200x2k-4x512-final", "mbb_per_hand": -454, "passed": true, "seconds_per_hand": 0.484}`
