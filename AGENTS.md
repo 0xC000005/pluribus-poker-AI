@@ -46,7 +46,7 @@
 - For method, evaluation-protocol, checkpoint-promotion, or persistent-knob changes, enqueue and complete a methodology review. The review must include independent-verifier findings, related work with source URLs, and a benchmark-hacking audit.
 - Treat evaluation harnesses, Slumbot adapters, solver benchmarks, promotion logic, parsers, seed lists, and parity tests as protected surfaces. Changes to them require a completed review and objective-drift audit.
 - Use sub-agents as a review team when available: verifier for `review.md`, literature scout for `related_work.md`, benchmark auditor for `benchmark_audit.md`, and research lead for `decision.json`.
-- Before spending Slumbot confidence hands on a candidate, queue a falsification ladder. It runs objective-drift audit, duplicate-swapped incumbent comparison, and fixed-state resolver diagnostics.
+- Before spending Slumbot confidence hands on a candidate, queue a falsification ladder. It runs objective-drift audit, duplicate-swapped incumbent comparison requiring positive lower95, and fixed-state resolver diagnostics.
 - Add persistent knobs only through `add-knob`; each needs one mechanism, one default, one failure class, and a removal criterion. Do not use broad hyperparameter sweeps as research progress.
 - Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment; the 2,500-slot mode was much slower and not better in the first local gate.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.

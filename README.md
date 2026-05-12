@@ -154,7 +154,8 @@ python scripts/poker_objective_audit.py --base-ref HEAD
 
 Before spending Slumbot confirmation hands on a candidate, queue the local
 falsification ladder. It runs objective-drift audit, duplicate-swapped
-incumbent comparison, and fixed-state resolver diagnostics:
+incumbent comparison with a required positive lower 95% bound, and fixed-state
+resolver diagnostics:
 
 ```bash
 python scripts/poker_autoresearch.py enqueue-falsification \

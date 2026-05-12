@@ -434,3 +434,51 @@ def test_eval_cli_runs_head_to_head_self_compare(tmp_path):
     assert metrics["mode"] == "duplicate_swapped_head_to_head"
     assert metrics["avg_chips_per_hand"] == 0.0
     assert metrics["promotable"] is False
+
+
+def test_eval_cli_can_require_positive_head_to_head_lower95(tmp_path):
+    checkpoint = {
+        "iteration": 6,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 1000,
+        "value_net": {
+            "net.0.weight": torch.randn(16, N_FEATURES),
+            "net.0.bias": torch.randn(16),
+            "net.2.weight": torch.randn(N_ACTIONS, 16),
+            "net.2.bias": torch.randn(N_ACTIONS),
+        },
+    }
+    candidate_path = tmp_path / "candidate.pt"
+    baseline_path = tmp_path / "baseline.pt"
+    torch.save(checkpoint, candidate_path)
+    torch.save(checkpoint, baseline_path)
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch_eval.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--checkpoint",
+            str(candidate_path),
+            "--baseline-checkpoint",
+            str(baseline_path),
+            "--head-to-head",
+            "--require-positive-lower95",
+            "--n-games",
+            "4",
+            "--device",
+            "cpu",
+            "--seeds",
+            "31,32",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "positive lower95" in result.stderr
+    metrics = json.loads(result.stdout)
+    assert metrics["paired_delta_lower95_chips_per_hand_across_seeds"] == 0.0

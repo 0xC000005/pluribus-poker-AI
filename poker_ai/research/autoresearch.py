@@ -1505,6 +1505,7 @@ def enqueue_falsification_ladder(
         "--seeds",
         seeds,
         "--head-to-head",
+        "--require-positive-lower95",
     ]
     if strategy_source != "regret":
         compare_command.extend(["--strategy-source", strategy_source])

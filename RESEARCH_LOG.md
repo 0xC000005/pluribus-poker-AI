@@ -981,3 +981,36 @@
 - Summary: Gate falsification-ladder-20260512T191526Z-slumbot-2p-iter1000 passed.
 - Metrics file: autoresearch-session/poker_runs/20260512T191532Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-survive/metrics.json
 - Key metrics: `{"gate": "falsification-ladder-20260512T191526Z-slumbot-2p-iter1000", "passed": true}`
+
+## 20260512T191855Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt - passed
+
+- Timestamp: 2026-05-12T19:19:03Z
+- Type: falsification
+- Gate: falsification-ladder-20260512T191849Z-trainsteps500-4x512-100x2k-iter-50
+- Hypothesis: Candidate checkpoint trainsteps500_4x512_100x2k_iter_50.pt should survive falsification of mechanism: reduced value-network optimizer steps improve early-iteration transfer without overfitting local diagnostics
+- Failure class: none
+- Summary: Gate falsification-ladder-20260512T191849Z-trainsteps500-4x512-100x2k-iter-50 passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T191855Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt/metrics.json
+- Key metrics: `{"gate": "falsification-ladder-20260512T191849Z-trainsteps500-4x512-100x2k-iter-50", "passed": true}`
+
+## 20260512T192210Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt - failed
+
+- Timestamp: 2026-05-12T19:22:18Z
+- Type: falsification
+- Gate: falsification-ladder-20260512T192203Z-trainsteps500-4x512-100x2k-iter-50
+- Hypothesis: Candidate checkpoint trainsteps500_4x512_100x2k_iter_50.pt should survive falsification of mechanism: reduced value-network optimizer steps improve early-iteration transfer without overfitting local diagnostics
+- Failure class: strategy_quality
+- Summary: Gate falsification-ladder-20260512T192203Z-trainsteps500-4x512-100x2k-iter-50 failed.
+- Metrics file: autoresearch-session/poker_runs/20260512T192210Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt/metrics.json
+- Key metrics: `{"gate": "falsification-ladder-20260512T192203Z-trainsteps500-4x512-100x2k-iter-50", "passed": false}`
+
+## 20260512T192218Z-falsification-ladder-semantics-fix - passed
+
+- Timestamp: 2026-05-12T19:22:18Z
+- Type: implementation
+- Gate: falsification-ladder
+- Hypothesis: The falsification ladder must fail when candidate-vs-incumbent lower95 is not positive, even if the evaluator command runs successfully.
+- Failure class: none
+- Summary: Added `--require-positive-lower95` to local evaluation and wired falsification comparison commands to use it. The previously near-miss `trainsteps500_4x512_100x2k_iter_50.pt` candidate now fails with lower95 `-15.59`, which is the intended blocker before Slumbot spend.
+- Metrics file: autoresearch-session/poker_runs/20260512T192210Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt/metrics.json
+- Key metrics: `{"passed": true, "corrected_false_pass": true, "candidate_lower95": -15.591476176590053}`

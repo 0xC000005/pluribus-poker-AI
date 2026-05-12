@@ -676,6 +676,7 @@ def test_enqueue_falsification_ladder_creates_countertest_gate(tmp_path):
     assert "poker_ai/deep_cfr/networks.py" in commands[0]
     assert "scripts/poker_autoresearch_eval.py" in commands[1]
     assert "--head-to-head" in commands[1]
+    assert "--require-positive-lower95" in commands[1]
     assert "--strategy-source" in commands[1]
     assert "policy-head" in commands[1]
     assert "24" in commands[1]

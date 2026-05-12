@@ -96,6 +96,19 @@ def _evaluate_head_to_head(
     return aggregate_seed_runs(runs)
 
 
+def _lower95_metric(metrics: dict) -> float | None:
+    for key in (
+        "paired_delta_lower95_chips_per_hand_across_seeds",
+        "lower95_chips_per_hand_across_seeds",
+        "paired_delta_lower95_chips_per_hand",
+        "lower95_chips_per_hand",
+    ):
+        value = metrics.get(key)
+        if value is not None:
+            return float(value)
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate a checkpoint against random play.")
     parser.add_argument("--checkpoint", required=True)
@@ -123,6 +136,11 @@ def main(argv: list[str] | None = None) -> int:
         default="regret",
         help="Use advantage regret matching or the trained average-strategy policy head.",
     )
+    parser.add_argument(
+        "--require-positive-lower95",
+        action="store_true",
+        help="Fail unless the comparison lower 95% confidence bound is positive.",
+    )
     args = parser.parse_args(argv)
 
     device = _device(args.device)
@@ -144,6 +162,14 @@ def main(argv: list[str] | None = None) -> int:
             strategy_source=args.strategy_source,
         )
         print(json.dumps(metrics, indent=2, sort_keys=True))
+        if args.require_positive_lower95:
+            lower95 = _lower95_metric(metrics)
+            if lower95 is None or lower95 <= 0:
+                print(
+                    f"comparison did not clear positive lower95 requirement: {lower95}",
+                    file=sys.stderr,
+                )
+                return 1
         return 0 if metrics["passed"] else 1
 
     metrics = _evaluate_checkpoint(
@@ -167,6 +193,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         metrics = compare_checkpoint_metrics(metrics, baseline)
     print(json.dumps(metrics, indent=2, sort_keys=True))
+    if args.require_positive_lower95:
+        lower95 = _lower95_metric(metrics)
+        if lower95 is None or lower95 <= 0:
+            print(
+                f"comparison did not clear positive lower95 requirement: {lower95}",
+                file=sys.stderr,
+            )
+            return 1
     return 0 if metrics["passed"] else 1
 
 

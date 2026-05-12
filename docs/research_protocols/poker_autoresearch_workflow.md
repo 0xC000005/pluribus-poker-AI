@@ -105,11 +105,14 @@ python scripts/poker_autoresearch.py enqueue-falsification \
 The ladder currently runs:
 
 - objective-drift audit;
-- duplicate-swapped candidate-vs-incumbent comparison;
+- duplicate-swapped candidate-vs-incumbent comparison requiring positive lower
+  95% confidence bound;
 - fixed-state resolver diagnostics.
 
 Passing the ladder is still not promotion. It means the candidate survived the
-cheap counter-tests and may justify sparse live Slumbot confirmation.
+cheap counter-tests and may justify sparse live Slumbot confirmation. A
+candidate with `promotable=false` or non-positive comparison lower bound should
+fail this ladder even if the evaluator itself ran successfully.
 
 ## Research Knob Governance
 

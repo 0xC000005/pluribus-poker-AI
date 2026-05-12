@@ -251,7 +251,8 @@ Workflow governance status:
   and parity tests.
 - The POPPER-inspired falsification ladder is now the expected local
   counter-test before Slumbot confidence spend. It runs objective-drift audit,
-  duplicate-swapped incumbent comparison, and fixed-state resolver diagnostics.
+  duplicate-swapped incumbent comparison with a required positive lower 95%
+  bound, and fixed-state resolver diagnostics.
 - Persistent knobs are registered through `add-knob`, require a mechanism and
   removal criterion, and reject broad sweep-shaped defaults. This keeps the
   workflow focused on falsifying mechanisms instead of benchmark tuning.
