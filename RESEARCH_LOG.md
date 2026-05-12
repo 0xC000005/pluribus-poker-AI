@@ -1282,3 +1282,24 @@
 - Summary: Gate methodology-review-20260512T212955Z-native-deep-cfr-average-strategy-targets passed.
 - Metrics file: autoresearch-session/poker_runs/20260512T213249Z-methodology-review-for-native-deep-cfr-average-strategy/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "methodology-review-20260512T212955Z-native-deep-cfr-average-strategy-targets", "passed": true}`
+## 20260512T213857Z-methodology-review-for-traversal-collected-average-strategy-memory - passed
+
+- Timestamp: 2026-05-12T21:38:57Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T213750Z-traversal-collected-average-strategy-memory
+- Hypothesis: Methodology review for Traversal-collected average strategy memory should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T213750Z-traversal-collected-average-strategy-memory passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T213857Z-methodology-review-for-traversal-collected-average-strategy-memory/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T213750Z-traversal-collected-average-strategy-memory", "passed": true}`
+
+## 20260512T215005Z-traversal-collected-average-strategy-memory - failed
+
+- Timestamp: 2026-05-12T21:50:05Z
+- Type: experiment
+- Gate: traversal-collected-average-strategy-memory-ab
+- Hypothesis: Traversal-collected legal-mask average-strategy targets should give the policy head a more faithful blueprint policy than regret-derived auxiliary labels.
+- Failure class: strategy_quality
+- Summary: Added opt-in traversal-collected average-strategy memory for CPU and CUDA Deep CFR, then ran a matched 5-iteration GPU A/B. The machinery collected 20,000 legal-mask policy targets and did not slow the tiny training gate, but `--average-strategy-weight 0.1` worsened policy-head top-action collapse and lost duplicate-swapped policy-head H2H against the legacy control. Leave this path disabled by default until the target weighting or sampling mechanism is redesigned.
+- Metrics file: autoresearch-session/avg_strategy_memory_ab/avg_strategy_memory_ab_20260512.json
+- Key metrics: `{"passed": false, "control_iters_per_hour": 4181.0, "candidate_iters_per_hour": 4425.383, "candidate_average_strategy_target_size": 20000, "control_dominant_top_action_rate": 0.788086, "candidate_dominant_top_action_rate": 0.974609, "policy_head_h2h_avg": -194.123333, "policy_head_h2h_lower95": -298.212526}`

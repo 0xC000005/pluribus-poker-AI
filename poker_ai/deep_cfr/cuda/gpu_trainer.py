@@ -31,7 +31,7 @@ from poker_ai.deep_cfr.buffer import ReservoirBuffer
 from poker_ai.deep_cfr.deep_cfr import regret_match, train_value_network
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from poker_ai.deep_cfr.networks import ValueNetwork
-from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
+from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer, PolicyReservoirBuffer
 
 from poker_ai.deep_cfr.cuda.lookup_tables import get_gpu_tables, FLUSH_SIZE, UNSUITED_SIZE
 from poker_ai.deep_cfr.cuda.game_state import (
@@ -50,6 +50,7 @@ from poker_ai.deep_cfr.cuda.action_kernels import (
     fork_kernel,
     copy_from_parent_kernel,
     propagate_kernel,
+    collect_policy_targets_kernel,
     reset_traversal_state_kernel,
     count_nonterminal_kernel,
 )
@@ -62,6 +63,7 @@ _GPU_CACHE_ITERATION_BYTES = 4
 _GPU_CACHE_SAFETY_FRACTION = 0.75
 _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS = 1_000_000
 _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 500
+_DEFAULT_POLICY_SLOTS_PER_TRAVERSAL = 64
 
 
 def _traversal_batch_size(
@@ -346,10 +348,16 @@ class _GPUTraverseWorkspace:
         n_players: int,
         initial_chips: int,
         slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
+        policy_slots_per_traversal: int = _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL,
     ):
         self.max_traversals = max_traversals
         self.slots_per_traversal = max(1, int(slots_per_traversal))
         self.max_pool = max_traversals * self.slots_per_traversal
+        self.policy_slots_per_traversal = max(1, int(policy_slots_per_traversal))
+        self.policy_capacity = min(
+            self.max_pool,
+            max_traversals * self.policy_slots_per_traversal,
+        )
         self.n_players = n_players
         self.initial_chips = initial_chips
 
@@ -401,6 +409,16 @@ class _GPUTraverseWorkspace:
         # Collected samples.
         self.d_collected_features = cuda.device_array((self.max_pool, N_FEATURES), dtype=np.float32)
         self.d_collected_regrets = cuda.device_array((self.max_pool, N_ACTIONS), dtype=np.float32)
+        self.d_policy_features = cuda.device_array(
+            (self.policy_capacity, N_FEATURES), dtype=np.float32
+        )
+        self.d_policy_masks = cuda.device_array(
+            (self.policy_capacity, N_ACTIONS), dtype=np.float32
+        )
+        self.d_policy_targets = cuda.device_array(
+            (self.policy_capacity, N_ACTIONS), dtype=np.float32
+        )
+        self.d_n_policy_collected = cuda.device_array(1, dtype=np.int32)
 
     def reset(self, n_traversals: int):
         """Reset game + traversal state for a new traversal batch."""
@@ -443,6 +461,7 @@ class _GPUTraverseWorkspace:
 
         self.d_next_free.copy_to_device(np.array([n_traversals], dtype=np.int32))
         self.d_n_collected.copy_to_device(np.array([0], dtype=np.int32))
+        self.d_n_policy_collected.copy_to_device(np.array([0], dtype=np.int32))
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +630,7 @@ def gpu_traverse_for_player(
     device: torch.device,
     initial_chips: int = 10000,
     workspace: _GPUTraverseWorkspace | None = None,
+    policy_buffer: PolicyReservoirBuffer | None = None,
 ):
     """Run n_traversals game tree traversals on GPU for one player.
 
@@ -653,6 +673,10 @@ def gpu_traverse_for_player(
     d_n_collected = workspace.d_n_collected
     d_collected_features = workspace.d_collected_features
     d_collected_regrets = workspace.d_collected_regrets
+    d_policy_features = workspace.d_policy_features
+    d_policy_masks = workspace.d_policy_masks
+    d_policy_targets = workspace.d_policy_targets
+    d_n_policy_collected = workspace.d_n_policy_collected
     d_active_count = workspace.d_active_count
     d_preflop = workspace.d_preflop
     d_postflop = workspace.d_postflop
@@ -715,6 +739,16 @@ def gpu_traverse_for_player(
             n_players, traverser, d_preflop, d_postflop,
             rng_states, d_actions_gpu, d_is_traverser, n_active,
         )
+        if policy_buffer is not None:
+            collect_policy_targets_kernel[blocks_active, threads](
+                d_features, d_masks, d_strategies,
+                batch.stage, batch.player_i_index,
+                n_players, traverser, d_preflop, d_postflop,
+                d_policy_features, d_policy_masks, d_policy_targets,
+                d_n_policy_collected,
+                workspace.policy_capacity,
+                n_active,
+            )
         # 4. GPU: compute winners for terminals.
         compute_winners_kernel[blocks_active, threads](
             batch.chips, batch.bets, batch.active,
@@ -819,13 +853,33 @@ def gpu_traverse_for_player(
         h_features = d_collected_features[:n_collected].copy_to_host()
         h_regrets = d_collected_regrets[:n_collected].copy_to_host()
         buffer.add_batch(h_features, iteration, h_regrets, n_collected)
+    if policy_buffer is not None:
+        n_policy = min(
+            int(d_n_policy_collected.copy_to_host()[0]),
+            workspace.policy_capacity,
+        )
+        if n_policy > 0:
+            h_policy_features = d_policy_features[:n_policy].copy_to_host()
+            h_policy_masks = d_policy_masks[:n_policy].copy_to_host()
+            h_policy_targets = d_policy_targets[:n_policy].copy_to_host()
+            policy_buffer.add_batch(
+                h_policy_features,
+                h_policy_masks,
+                h_policy_targets,
+                float(max(iteration, 1)),
+                n_policy,
+            )
 
     final_next_free = int(d_next_free.copy_to_host()[0])
     if n_traversals >= 1000:
         print(f"    [pool] used {final_next_free}/{max_pool} slots "
               f"({final_next_free/max_pool*100:.0f}%), "
               f"{final_next_free/n_traversals:.0f} per trav, "
-              f"{n_collected} samples")
+              f"{n_collected} regret samples")
+        if policy_buffer is not None:
+            n_policy_seen = int(d_n_policy_collected.copy_to_host()[0])
+            print(f"    [policy] collected {min(n_policy_seen, workspace.policy_capacity)}"
+                  f"/{workspace.policy_capacity} targets")
 
 
 # ---------------------------------------------------------------------------
@@ -852,9 +906,13 @@ class GPUDeepCFRTrainer:
         release_workspace_before_training: bool = True,
         traversal_pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
         traversal_slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
+        policy_slots_per_traversal: int = _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL,
         policy_target_buffer: PolicyTargetBuffer | None = None,
         policy_target_weight: float = 0.0,
         policy_target_batch_size: int | None = None,
+        average_strategy_memory_capacity: int | None = None,
+        average_strategy_weight: float = 0.0,
+        average_strategy_batch_size: int | None = None,
     ):
         self.n_players = n_players
         self.initial_chips = initial_chips
@@ -869,9 +927,15 @@ class GPUDeepCFRTrainer:
         self.release_workspace_before_training = release_workspace_before_training
         self.traversal_pool_max_slots = max(1, int(traversal_pool_max_slots))
         self.traversal_slots_per_traversal = max(1, int(traversal_slots_per_traversal))
+        self.policy_slots_per_traversal = max(1, int(policy_slots_per_traversal))
         self.policy_target_buffer = policy_target_buffer
         self.policy_target_weight = float(policy_target_weight)
         self.policy_target_batch_size = policy_target_batch_size
+        self.average_strategy_weight = float(average_strategy_weight)
+        self.average_strategy_batch_size = average_strategy_batch_size
+        self.strategy_buffer = PolicyReservoirBuffer(
+            int(average_strategy_memory_capacity or buffer_capacity)
+        )
 
         if device is None:
             self.device = torch.device(
@@ -909,12 +973,14 @@ class GPUDeepCFRTrainer:
             or self._workspace.n_players != self.n_players
             or self._workspace.initial_chips != self.initial_chips
             or self._workspace.slots_per_traversal != self.traversal_slots_per_traversal
+            or self._workspace.policy_slots_per_traversal != self.policy_slots_per_traversal
         ):
             self._workspace = _GPUTraverseWorkspace(
                 max_traversals=trav_batch,
                 n_players=self.n_players,
                 initial_chips=self.initial_chips,
                 slots_per_traversal=self.traversal_slots_per_traversal,
+                policy_slots_per_traversal=self.policy_slots_per_traversal,
             )
 
         t0 = _time.perf_counter()
@@ -932,6 +998,9 @@ class GPUDeepCFRTrainer:
                     device=self.device,
                     initial_chips=self.initial_chips,
                     workspace=self._workspace,
+                    policy_buffer=(
+                        self.strategy_buffer if self.average_strategy_weight > 0 else None
+                    ),
                 )
                 remaining -= chunk
         t1 = _time.perf_counter()
@@ -978,6 +1047,9 @@ class GPUDeepCFRTrainer:
                     policy_target_buffer=self.policy_target_buffer,
                     policy_target_weight=self.policy_target_weight,
                     policy_target_batch_size=self.policy_target_batch_size,
+                    average_strategy_buffer=self.strategy_buffer,
+                    average_strategy_weight=self.average_strategy_weight,
+                    average_strategy_batch_size=self.average_strategy_batch_size,
                 )
             finally:
                 if hasattr(combined, "release_gpu_cache"):
@@ -1026,6 +1098,8 @@ class GPUDeepCFRTrainer:
                     int(self.policy_target_buffer.size)
                     if self.policy_target_buffer is not None else 0
                 ),
+                "average_strategy_target_size": int(self.strategy_buffer.size),
+                "average_strategy_weight": self.average_strategy_weight,
                 "buffer_sizes": [len(b) for b in self.buffers],
             },
             path,

@@ -113,6 +113,130 @@ class PolicyTargetBuffer:
         return PolicyTargetBatch(features, legal_masks, target_probs, weights)
 
 
+class PolicyReservoirBuffer:
+    """Reservoir-sampled mutable policy-target memory."""
+
+    def __init__(self, capacity: int = 2_000_000):
+        self.capacity = int(capacity)
+        self.features = np.zeros((self.capacity, N_FEATURES), dtype=np.float32)
+        self.legal_masks = np.zeros((self.capacity, N_ACTIONS), dtype=np.float32)
+        self.target_probs = np.zeros((self.capacity, N_ACTIONS), dtype=np.float32)
+        self.weights = np.zeros(self.capacity, dtype=np.float32)
+        self.size = 0
+        self._n_seen = 0
+
+    def add(
+        self,
+        features: np.ndarray,
+        legal_mask: np.ndarray,
+        target_probs: np.ndarray,
+        weight: float = 1.0,
+    ) -> None:
+        self.add_batch(
+            np.asarray(features, dtype=np.float32).reshape(1, N_FEATURES),
+            np.asarray(legal_mask, dtype=np.float32).reshape(1, N_ACTIONS),
+            np.asarray(target_probs, dtype=np.float32).reshape(1, N_ACTIONS),
+            np.asarray([weight], dtype=np.float32),
+            1,
+        )
+
+    def add_batch(
+        self,
+        features_batch: np.ndarray,
+        legal_masks_batch: np.ndarray,
+        target_probs_batch: np.ndarray,
+        weights_batch: np.ndarray | float,
+        count: int,
+    ) -> None:
+        count = int(count)
+        if count <= 0:
+            return
+        features_batch = np.asarray(features_batch[:count], dtype=np.float32)
+        legal_masks_batch = (np.asarray(legal_masks_batch[:count], dtype=np.float32) > 0).astype(
+            np.float32
+        )
+        target_probs_batch = _normalize_targets(
+            np.asarray(target_probs_batch[:count], dtype=np.float32),
+            legal_masks_batch,
+        )
+        if np.isscalar(weights_batch):
+            weights = np.full(count, float(weights_batch), dtype=np.float32)
+        else:
+            weights = np.asarray(weights_batch[:count], dtype=np.float32)
+        if features_batch.shape != (count, N_FEATURES):
+            raise ValueError(f"features_batch must have shape ({count}, {N_FEATURES})")
+        if legal_masks_batch.shape != (count, N_ACTIONS):
+            raise ValueError(f"legal_masks_batch must have shape ({count}, {N_ACTIONS})")
+        if target_probs_batch.shape != (count, N_ACTIONS):
+            raise ValueError(f"target_probs_batch must have shape ({count}, {N_ACTIONS})")
+        if weights.shape != (count,):
+            raise ValueError(f"weights_batch must have shape ({count},)")
+        if np.any(legal_masks_batch.sum(axis=1) <= 0):
+            raise ValueError("each policy target needs at least one legal action")
+
+        n_direct = 0
+        if self.size < self.capacity:
+            n_direct = min(count, self.capacity - self.size)
+            start = self.size
+            end = start + n_direct
+            self.features[start:end] = features_batch[:n_direct]
+            self.legal_masks[start:end] = legal_masks_batch[:n_direct]
+            self.target_probs[start:end] = target_probs_batch[:n_direct]
+            self.weights[start:end] = weights[:n_direct]
+            self.size += n_direct
+            self._n_seen += n_direct
+
+        n_reservoir = count - n_direct
+        if n_reservoir > 0:
+            n_seen_base = self._n_seen
+            n_seen_values = n_seen_base + np.arange(1, n_reservoir + 1)
+            rand_idx = (np.random.random(n_reservoir) * n_seen_values).astype(np.int64)
+            keep_positions = np.where(rand_idx < self.capacity)[0]
+            if keep_positions.size:
+                src_indices = n_direct + keep_positions
+                dst_indices = rand_idx[keep_positions]
+                self.features[dst_indices] = features_batch[src_indices]
+                self.legal_masks[dst_indices] = legal_masks_batch[src_indices]
+                self.target_probs[dst_indices] = target_probs_batch[src_indices]
+                self.weights[dst_indices] = weights[src_indices]
+            self._n_seen += n_reservoir
+
+    def sample_batch(
+        self,
+        batch_size: int,
+        device: torch.device | None = None,
+    ) -> PolicyTargetBatch:
+        if self.size <= 0:
+            raise ValueError("empty policy target reservoir")
+        n = min(int(batch_size), self.size)
+        indices = np.random.randint(0, self.size, size=n)
+        batch = PolicyTargetBatch(
+            features=torch.from_numpy(self.features[indices]),
+            legal_masks=torch.from_numpy(self.legal_masks[indices]),
+            target_probs=torch.from_numpy(self.target_probs[indices]),
+            weights=torch.from_numpy(self.weights[indices]),
+        )
+        if device is None:
+            return batch
+        return PolicyTargetBatch(
+            features=batch.features.to(device),
+            legal_masks=batch.legal_masks.to(device),
+            target_probs=batch.target_probs.to(device),
+            weights=batch.weights.to(device),
+        )
+
+    def to_policy_target_buffer(self) -> PolicyTargetBuffer:
+        return PolicyTargetBuffer(
+            self.features[:self.size],
+            self.legal_masks[:self.size],
+            self.target_probs[:self.size],
+            self.weights[:self.size],
+        )
+
+    def __len__(self) -> int:
+        return self.size
+
+
 def masked_policy_cross_entropy(
     logits: torch.Tensor,
     legal_masks: torch.Tensor,

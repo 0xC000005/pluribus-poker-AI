@@ -22,6 +22,7 @@ from poker_ai.deep_cfr.buffer import ReservoirBuffer
 from poker_ai.deep_cfr.networks import ValueNetwork
 from poker_ai.deep_cfr.policy_targets import (
     PolicyTargetBuffer,
+    PolicyReservoirBuffer,
     masked_policy_cross_entropy,
 )
 from poker_ai.games.full_deck.state import (
@@ -75,6 +76,7 @@ def traverse(
     buffer: ReservoirBuffer,
     iteration: int,
     device: torch.device,
+    strategy_buffer: PolicyReservoirBuffer | None = None,
 ) -> float:
     """External-sampling MCCFR traversal.
 
@@ -113,7 +115,7 @@ def traverse(
     if not state.current_player.is_active:
         return traverse(
             state.apply_action(None), traverser, value_net, buffer,
-            iteration, device,
+            iteration, device, strategy_buffer,
         )
 
     features = state.to_feature_vector()
@@ -132,6 +134,7 @@ def traverse(
             child_state = state.apply_action(action)
             action_values[action] = traverse(
                 child_state, traverser, value_net, buffer, iteration, device,
+                strategy_buffer,
             )
 
         # Compute counterfactual regrets.
@@ -163,6 +166,13 @@ def traverse(
             torch.from_numpy(features), device
         ).cpu().numpy()
         strategy = regret_match(advantages_pred, legal_mask)
+        if strategy_buffer is not None:
+            strategy_buffer.add(
+                features,
+                legal_mask,
+                strategy,
+                weight=float(max(iteration, 1)),
+            )
 
         # Sample action.
         action_probs = [strategy[ACTION_TO_INDEX[a]] for a in legal_actions]
@@ -173,6 +183,7 @@ def traverse(
         child_state = state.apply_action(action)
         return traverse(
             child_state, traverser, value_net, buffer, iteration, device,
+            strategy_buffer,
         )
 
 
@@ -189,6 +200,9 @@ def train_value_network(
     policy_target_buffer: PolicyTargetBuffer | None = None,
     policy_target_weight: float = 0.0,
     policy_target_batch_size: int | None = None,
+    average_strategy_buffer: PolicyTargetBuffer | PolicyReservoirBuffer | None = None,
+    average_strategy_weight: float = 0.0,
+    average_strategy_batch_size: int | None = None,
 ) -> ValueNetwork:
     """Train a new value network from scratch on the buffer contents.
 
@@ -264,6 +278,13 @@ def train_value_network(
         and getattr(policy_target_buffer, "size", 0) > 0
     )
     policy_target_batch_size = int(policy_target_batch_size or batch_size)
+    average_strategy_weight = float(average_strategy_weight)
+    use_average_strategy_targets = (
+        average_strategy_buffer is not None
+        and average_strategy_weight > 0
+        and getattr(average_strategy_buffer, "size", 0) > 0
+    )
+    average_strategy_batch_size = int(average_strategy_batch_size or batch_size)
 
     net.train()
     total_loss = 0.0
@@ -291,15 +312,30 @@ def train_value_network(
             # Advantage loss (MSE on regrets).
             loss_adv = (weights * (adv_pred - advantages) ** 2).mean()
 
-            # Policy loss: target = regret-matching(advantages_target) without mask.
-            # Convert target regrets to non-negative and normalize per sample.
-            with torch.no_grad():
-                pos = torch.clamp(advantages, min=0.0)
-                denom = pos.sum(dim=1, keepdim=True).clamp(min=1e-8)
-                policy_target = pos / denom
-            logp = torch.log_softmax(pol_logits, dim=1)
-            loss_pol = -(weights * (policy_target * logp).sum(dim=1)).mean()
-            loss = loss_adv + 0.1 * loss_pol
+            loss = loss_adv
+            if use_average_strategy_targets:
+                avg_batch = average_strategy_buffer.sample_batch(
+                    average_strategy_batch_size,
+                    device,
+                )
+                _, avg_logits = net.forward_with_policy(avg_batch.features)
+                loss_avg = masked_policy_cross_entropy(
+                    avg_logits,
+                    avg_batch.legal_masks,
+                    avg_batch.target_probs,
+                    weights=avg_batch.weights,
+                )
+                loss = loss + average_strategy_weight * loss_avg
+            else:
+                # Fallback for legacy runs without traversal-collected strategy
+                # memory: train a weak policy head from positive sampled regrets.
+                with torch.no_grad():
+                    pos = torch.clamp(advantages, min=0.0)
+                    denom = pos.sum(dim=1, keepdim=True).clamp(min=1e-8)
+                    policy_target = pos / denom
+                logp = torch.log_softmax(pol_logits, dim=1)
+                loss_pol = -(weights * (policy_target * logp).sum(dim=1)).mean()
+                loss = loss + 0.1 * loss_pol
             if use_policy_targets:
                 target_batch = policy_target_buffer.sample_batch(
                     policy_target_batch_size,
@@ -372,6 +408,9 @@ class DeepCFRTrainer:
         policy_target_buffer: PolicyTargetBuffer | None = None,
         policy_target_weight: float = 0.0,
         policy_target_batch_size: int | None = None,
+        average_strategy_memory_capacity: int | None = None,
+        average_strategy_weight: float = 0.0,
+        average_strategy_batch_size: int | None = None,
     ):
         self.n_players = n_players
         self.hidden_dim = hidden_dim
@@ -382,6 +421,11 @@ class DeepCFRTrainer:
         self.policy_target_buffer = policy_target_buffer
         self.policy_target_weight = float(policy_target_weight)
         self.policy_target_batch_size = policy_target_batch_size
+        self.average_strategy_weight = float(average_strategy_weight)
+        self.average_strategy_batch_size = average_strategy_batch_size
+        self.strategy_buffer = PolicyReservoirBuffer(
+            int(average_strategy_memory_capacity or buffer_capacity)
+        )
 
         if device is None:
             self.device = torch.device(
@@ -420,6 +464,9 @@ class DeepCFRTrainer:
                     buffer=self.buffers[player_i],
                     iteration=self.iteration,
                     device=self.device,
+                    strategy_buffer=(
+                        self.strategy_buffer if self.average_strategy_weight > 0 else None
+                    ),
                 )
 
         # Combine all player buffers for training.
@@ -436,6 +483,9 @@ class DeepCFRTrainer:
                 policy_target_buffer=self.policy_target_buffer,
                 policy_target_weight=self.policy_target_weight,
                 policy_target_batch_size=self.policy_target_batch_size,
+                average_strategy_buffer=self.strategy_buffer,
+                average_strategy_weight=self.average_strategy_weight,
+                average_strategy_batch_size=self.average_strategy_batch_size,
             )
 
     def _combine_buffers(self) -> ReservoirBuffer:
@@ -479,6 +529,8 @@ class DeepCFRTrainer:
                 "iteration": self.iteration,
                 "n_players": self.n_players,
                 "hidden_dim": self.hidden_dim,
+                "average_strategy_target_size": int(self.strategy_buffer.size),
+                "average_strategy_weight": self.average_strategy_weight,
                 "buffer_sizes": [len(b) for b in self.buffers],
             },
             path,

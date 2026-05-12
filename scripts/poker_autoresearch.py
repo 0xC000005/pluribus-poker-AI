@@ -201,6 +201,10 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--batch-size", type=int, default=4096)
     train.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     train.add_argument("--traversal-slots-per-traversal", type=int, default=500)
+    train.add_argument("--policy-slots-per-traversal", type=int, default=64)
+    train.add_argument("--average-strategy-weight", type=float, default=0.0)
+    train.add_argument("--average-strategy-memory-capacity", type=int, default=0)
+    train.add_argument("--average-strategy-batch-size", type=int, default=0)
     train.add_argument("--search-targets")
     train.add_argument("--search-target-weight", type=float, default=0.0)
     train.add_argument("--search-target-batch-size", type=int, default=0)
@@ -406,6 +410,10 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 traversal_pool_max_slots=args.traversal_pool_max_slots,
                 traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+                policy_slots_per_traversal=args.policy_slots_per_traversal,
+                average_strategy_weight=args.average_strategy_weight,
+                average_strategy_memory_capacity=args.average_strategy_memory_capacity,
+                average_strategy_batch_size=args.average_strategy_batch_size,
                 search_targets=args.search_targets,
                 search_target_weight=args.search_target_weight,
                 search_target_batch_size=args.search_target_batch_size,

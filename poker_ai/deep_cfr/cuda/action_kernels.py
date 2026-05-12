@@ -7,6 +7,7 @@ Kernels:
   fork_kernel: allocate children for traverser nodes (replaces CPU fork loop)
   copy_from_parent_kernel: copy game state from parent to child slots
   propagate_kernel: propagate terminal values up tree, collect regret samples
+  collect_policy_targets_kernel: collect legal policy targets from opponent nodes
 """
 
 from numba import cuda, int8, int32, float32
@@ -189,6 +190,54 @@ def classify_and_sample_kernel(
             chosen = int8(a)
             break
     out_actions[gid] = chosen
+
+
+@cuda.jit
+def collect_policy_targets_kernel(
+    features,            # (N, 126) float32
+    legal_masks,         # (N, 9) float32
+    strategies,          # (N, 9) float32
+    stages,              # (N,) int8
+    player_i_indices,    # (N,) int8
+    n_players,           # int32
+    traverser,           # int32
+    preflop_order,       # (n_players,) int8
+    postflop_order,      # (n_players,) int8
+    collected_features,  # (policy_capacity, 126) float32
+    collected_masks,     # (policy_capacity, 9) float32
+    collected_targets,   # (policy_capacity, 9) float32
+    n_collected,         # (1,) int32
+    policy_capacity,     # int32
+    n_games,             # int32
+):
+    """Collect opponent-node strategy targets for average-policy training."""
+    gid = cuda.grid(1)
+    if gid >= n_games:
+        return
+    if stages[gid] >= int8(4):
+        return
+
+    n_legal = float32(0.0)
+    for a in range(N_ACTIONS):
+        n_legal += legal_masks[gid, a]
+    if n_legal <= float32(0.0):
+        return
+
+    pi = _current_player_ak(
+        player_i_indices[gid], stages[gid], n_players,
+        preflop_order, postflop_order,
+    )
+    if pi == traverser:
+        return
+
+    out_idx = cuda.atomic.add(n_collected, 0, int32(1))
+    if out_idx >= policy_capacity:
+        return
+    for f in range(N_FEATURES):
+        collected_features[out_idx, f] = features[gid, f]
+    for a in range(N_ACTIONS):
+        collected_masks[out_idx, a] = legal_masks[gid, a]
+        collected_targets[out_idx, a] = strategies[gid, a]
 
 
 # ---------------------------------------------------------------------------

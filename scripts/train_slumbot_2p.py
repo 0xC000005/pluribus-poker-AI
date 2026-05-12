@@ -37,6 +37,8 @@ def build_parser():
     parser.add_argument('--hidden-dim', type=int, default=256)
     parser.add_argument('--n-layers', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=4096)
+    parser.add_argument('--average-strategy-weight', type=float, default=0.0)
+    parser.add_argument('--policy-slots-per-traversal', type=int, default=64)
     parser.add_argument('--save-dir', type=str, default='models')
     parser.add_argument('--prefix', type=str, default='slumbot_2p')
     parser.add_argument('--eval-every', type=int, default=50)
@@ -57,6 +59,8 @@ def main():
         trainer = GPUDeepCFRTrainer.load(args.resume, device=device)
         trainer.n_traversals = args.n_traversals
         trainer.n_training_steps = args.n_training_steps
+        trainer.average_strategy_weight = args.average_strategy_weight
+        trainer.policy_slots_per_traversal = args.policy_slots_per_traversal
         print(f"Resumed from iteration {trainer.iteration}")
     else:
         trainer = GPUDeepCFRTrainer(
@@ -70,6 +74,8 @@ def main():
             batch_size=args.batch_size,
             lr=0.001,
             device=device,
+            average_strategy_weight=args.average_strategy_weight,
+            policy_slots_per_traversal=args.policy_slots_per_traversal,
         )
 
     os.makedirs(args.save_dir, exist_ok=True)
@@ -79,6 +85,7 @@ def main():
 
     print(f"Config: {n_iterations} iters, {trainer.n_traversals} trav, "
           f"{trainer.n_training_steps} steps, batch={trainer.batch_size}, "
+          f"avg-strategy-weight={trainer.average_strategy_weight}, "
           f"buf={args.buffer_capacity//1_000_000}M, chips={trainer.initial_chips}, "
           f"device={trainer.device}")
     print()

@@ -39,6 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--search-target-weight", type=float, default=0.0)
     parser.add_argument("--search-target-batch-size", type=int, default=0)
+    parser.add_argument("--average-strategy-weight", type=float, default=0.0)
+    parser.add_argument("--average-strategy-memory-capacity", type=int, default=0)
+    parser.add_argument("--average-strategy-batch-size", type=int, default=0)
+    parser.add_argument("--policy-slots-per-traversal", type=int, default=64)
     parser.add_argument("--save-dir", default="models/autoresearch_gpu")
     parser.add_argument("--prefix", default="candidate")
     parser.add_argument(
@@ -84,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
             trainer.policy_target_buffer = search_target_buffer
             trainer.policy_target_weight = args.search_target_weight
             trainer.policy_target_batch_size = search_target_batch_size
+            trainer.average_strategy_weight = args.average_strategy_weight
+            trainer.average_strategy_batch_size = args.average_strategy_batch_size or None
+            trainer.policy_slots_per_traversal = args.policy_slots_per_traversal
         else:
             trainer = GPUDeepCFRTrainer(
                 n_players=2,
@@ -98,9 +105,15 @@ def main(argv: list[str] | None = None) -> int:
                 device=device,
                 traversal_pool_max_slots=args.traversal_pool_max_slots,
                 traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+                policy_slots_per_traversal=args.policy_slots_per_traversal,
                 policy_target_buffer=search_target_buffer,
                 policy_target_weight=args.search_target_weight,
                 policy_target_batch_size=search_target_batch_size,
+                average_strategy_memory_capacity=(
+                    args.average_strategy_memory_capacity or None
+                ),
+                average_strategy_weight=args.average_strategy_weight,
+                average_strategy_batch_size=args.average_strategy_batch_size or None,
             )
 
         save_dir = Path(args.save_dir)
@@ -135,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         elapsed = time.monotonic() - started
         buffer_size = sum(len(buffer) for buffer in trainer.buffers)
+        average_strategy_target_size = int(trainer.strategy_buffer.size)
 
         eval_chips = None
         if args.eval_games > 0:
@@ -155,12 +169,15 @@ def main(argv: list[str] | None = None) -> int:
             "batch_size": int(args.batch_size),
             "traversal_pool_max_slots": int(args.traversal_pool_max_slots),
             "traversal_slots_per_traversal": int(args.traversal_slots_per_traversal),
+            "policy_slots_per_traversal": int(args.policy_slots_per_traversal),
             "search_targets": str(args.search_targets),
             "search_target_weight": float(args.search_target_weight),
             "search_target_size": (
                 int(search_target_buffer.size)
                 if search_target_buffer is not None else 0
             ),
+            "average_strategy_weight": float(args.average_strategy_weight),
+            "average_strategy_target_size": average_strategy_target_size,
             "save_every": int(args.save_every),
             "hidden_dim": int(args.hidden_dim),
             "n_layers": int(args.n_layers),

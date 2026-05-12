@@ -2,10 +2,11 @@ import numpy as np
 import torch
 
 from poker_ai.deep_cfr.buffer import ReservoirBuffer
-from poker_ai.deep_cfr.deep_cfr import train_value_network
+from poker_ai.deep_cfr.deep_cfr import DeepCFRTrainer, train_value_network
 from poker_ai.deep_cfr.networks import ValueNetwork
 from poker_ai.deep_cfr.policy_targets import (
     PolicyTargetBuffer,
+    PolicyReservoirBuffer,
     masked_policy_cross_entropy,
 )
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
@@ -106,6 +107,26 @@ def test_policy_target_buffer_masks_and_normalizes_targets():
     np.testing.assert_allclose(buffer.target_probs[1, 3], 1.0)
 
 
+def test_policy_reservoir_buffer_masks_normalizes_and_samples():
+    buffer = PolicyReservoirBuffer(4)
+    features = np.zeros((3, N_FEATURES), dtype=np.float32)
+    legal_masks = np.zeros((3, N_ACTIONS), dtype=np.float32)
+    legal_masks[:, [1, 2]] = 1.0
+    target_probs = np.zeros((3, N_ACTIONS), dtype=np.float32)
+    target_probs[:, 2] = 3.0
+    target_probs[:, 8] = 7.0
+
+    buffer.add_batch(features, legal_masks, target_probs, np.array([1, 2, 3]), 3)
+
+    assert buffer.size == 3
+    np.testing.assert_allclose(buffer.target_probs[:3].sum(axis=1), np.ones(3))
+    np.testing.assert_allclose(buffer.target_probs[:3, 2], np.ones(3))
+    np.testing.assert_allclose(buffer.target_probs[:3, 8], np.zeros(3))
+    batch = buffer.sample_batch(2, torch.device("cpu"))
+    assert batch.features.shape[1] == N_FEATURES
+    assert batch.legal_masks.shape[1] == N_ACTIONS
+
+
 def test_masked_policy_cross_entropy_ignores_illegal_logits():
     logits = torch.zeros((1, N_ACTIONS), requires_grad=True)
     legal_masks = torch.zeros((1, N_ACTIONS))
@@ -154,6 +175,63 @@ def test_train_value_network_accepts_search_policy_targets():
         advantages_out, policy_logits = net.forward_with_policy(torch.zeros(N_FEATURES))
     assert torch.isfinite(advantages_out).all()
     assert torch.isfinite(policy_logits).all()
+
+
+def test_train_value_network_accepts_average_strategy_memory():
+    buffer = ReservoirBuffer(8)
+    features = np.zeros(N_FEATURES, dtype=np.float32)
+    advantages = np.zeros(N_ACTIONS, dtype=np.float32)
+    advantages[1] = 0.1
+    for _ in range(8):
+        buffer.add(features, 1, advantages)
+
+    strategy_memory = PolicyReservoirBuffer(4)
+    legal_mask = np.zeros(N_ACTIONS, dtype=np.float32)
+    legal_mask[[1, 2]] = 1.0
+    target = np.zeros(N_ACTIONS, dtype=np.float32)
+    target[1] = 0.25
+    target[2] = 0.75
+    for _ in range(4):
+        strategy_memory.add(features, legal_mask, target, weight=2.0)
+
+    net = train_value_network(
+        buffer,
+        hidden_dim=16,
+        n_layers=1,
+        n_epochs=2,
+        batch_size=4,
+        device=torch.device("cpu"),
+        average_strategy_buffer=strategy_memory,
+        average_strategy_weight=0.1,
+    )
+
+    with torch.no_grad():
+        advantages_out, policy_logits = net.forward_with_policy(torch.zeros(N_FEATURES))
+    assert torch.isfinite(advantages_out).all()
+    assert torch.isfinite(policy_logits).all()
+
+
+def test_deep_cfr_trainer_collects_average_strategy_targets():
+    trainer = DeepCFRTrainer(
+        n_players=2,
+        buffer_capacity=128,
+        hidden_dim=16,
+        batch_size=16,
+        n_training_steps=1,
+        n_traversals=2,
+        device=torch.device("cpu"),
+        average_strategy_memory_capacity=128,
+        average_strategy_weight=0.1,
+    )
+
+    trainer.run_iteration()
+
+    assert trainer.strategy_buffer.size > 0
+    np.testing.assert_allclose(
+        trainer.strategy_buffer.target_probs[: trainer.strategy_buffer.size].sum(axis=1),
+        np.ones(trainer.strategy_buffer.size),
+        atol=1e-6,
+    )
 
 
 def test_evaluate_search_targets_reports_policy_fit(tmp_path):

@@ -1091,6 +1091,10 @@ def enqueue_gpu_training(
     batch_size: int = 4096,
     traversal_pool_max_slots: int = 1_000_000,
     traversal_slots_per_traversal: int = 500,
+    policy_slots_per_traversal: int = 64,
+    average_strategy_weight: float = 0.0,
+    average_strategy_memory_capacity: int = 0,
+    average_strategy_batch_size: int = 0,
     search_targets: str | Path | None = None,
     search_target_weight: float = 0.0,
     search_target_batch_size: int = 0,
@@ -1149,6 +1153,14 @@ def enqueue_gpu_training(
         str(traversal_pool_max_slots),
         "--traversal-slots-per-traversal",
         str(traversal_slots_per_traversal),
+        "--policy-slots-per-traversal",
+        str(policy_slots_per_traversal),
+        "--average-strategy-weight",
+        str(average_strategy_weight),
+        "--average-strategy-memory-capacity",
+        str(average_strategy_memory_capacity),
+        "--average-strategy-batch-size",
+        str(average_strategy_batch_size),
         "--search-target-weight",
         str(search_target_weight),
         "--search-target-batch-size",
@@ -1177,6 +1189,7 @@ def enqueue_gpu_training(
         "commands": [command],
         "search_target_weight": float(search_target_weight),
         "search_targets": str(search_targets) if search_targets else "",
+        "average_strategy_weight": float(average_strategy_weight),
     }
     _write_json(_goal_path(root), goal)
     postprocess = None
