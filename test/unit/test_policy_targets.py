@@ -10,7 +10,11 @@ from poker_ai.deep_cfr.policy_targets import (
 )
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.search_target_eval import evaluate_search_targets
-from poker_ai.research.search_targets import sample_resolver_cases
+from poker_ai.research.resolver_benchmark import ResolverBenchmarkCase
+from poker_ai.research.search_targets import (
+    build_resolver_policy_targets,
+    sample_resolver_cases,
+)
 
 
 def test_sample_resolver_cases_produces_valid_turn_river_states():
@@ -130,3 +134,45 @@ def test_evaluate_search_targets_reports_policy_fit(tmp_path):
     assert metrics["has_policy_head"] is True
     assert np.isfinite(metrics["mean_l1"])
     assert np.isfinite(metrics["mean_kl"])
+
+
+def test_belief_conditioned_policy_targets_record_range_diagnostics(tmp_path):
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "range_checkpoint.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 3,
+        },
+        checkpoint,
+    )
+    case = ResolverBenchmarkCase(
+        label="belief-turn-open",
+        hole_cards=("Ac", "Kd"),
+        board=("2c", "7d", "Jh", "4s"),
+        action_str="ck/kk/",
+        client_pos=0,
+        source="unit",
+    )
+
+    buffer, metadata = build_resolver_policy_targets(
+        [case],
+        solver_iterations=1,
+        solver_backend="cpu",
+        range_checkpoint=checkpoint,
+        range_strategy_source="regret",
+        range_device="cpu",
+    )
+
+    assert buffer.size == 1
+    assert metadata["mode"] == "belief_conditioned_resolver_policy_targets"
+    assert metadata["range_enabled"] is True
+    assert metadata["range_checkpoint_iteration"] == 3
+    assert metadata["target_allin_rate"] in (0.0, 1.0)
+    record = metadata["records"][0]
+    assert record["range_mode"] == "belief_conditioned"
+    assert record["hero_range_support"] > 0
+    assert record["villain_range_support"] > 0
+    assert record["solver_n_hands"] <= record["solver_full_n_hands"]

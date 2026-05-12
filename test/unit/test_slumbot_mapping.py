@@ -1,7 +1,10 @@
 import sys
 from pathlib import Path
 
+import torch
+
 from scripts.range_tracker import (
+    RangeTracker,
     map_slumbot_action_to_idx,
     _parse_action,
     SMALL_BLIND,
@@ -18,6 +21,7 @@ from play_slumbot import (
     get_legal_mask_from_parsed,
     parse_action,
 )
+from solver import StreetSolver
 
 
 def test_soft_mapping_between_buckets():
@@ -93,3 +97,32 @@ def test_legal_slumbot_raises_round_trip_to_intended_bucket():
         )
         intended_weight = sum(weight for idx, weight in mapped if idx == action_idx)
         assert intended_weight >= 0.95
+
+
+def test_range_tracker_maps_positive_hero_mass_to_actual_hand():
+    our_cards = [0, 1]
+    board = [8, 12, 16, 20]
+    net = torch.nn.Linear(126, 9)
+    tracker = RangeTracker(our_cards, net, torch.device("cpu"))
+    tracker.update_board(board)
+    solver = StreetSolver(
+        board,
+        pot=200,
+        hero_stack=19850,
+        villain_stack=19950,
+        hero_first=True,
+    )
+
+    hero_range, villain_range = tracker.get_solver_ranges(
+        solver.hands,
+        solver.hand_to_idx,
+    )
+    actual_hand = tuple(sorted(our_cards))
+    actual_idx = solver.hand_to_idx[actual_hand]
+
+    assert actual_hand in tracker.hero_hand_to_idx
+    assert actual_hand not in tracker.opponent_hand_to_idx
+    assert hero_range[actual_idx] > 0.0
+    assert villain_range[actual_idx] == 0.0
+    assert abs(float(hero_range.sum()) - 1.0) < 1e-9
+    assert abs(float(villain_range.sum()) - 1.0) < 1e-9

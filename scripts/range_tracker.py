@@ -456,10 +456,11 @@ class RangeTracker:
     updated after each observed action using the blueprint strategy.
 
     Attributes:
-        hands: List of (c1, c2) tuples — all possible opponent hands.
-        hand_to_idx: Dict mapping hand tuple → index.
-        opponent_range: ndarray (n_hands,) — P(opponent has hand_i).
-        hero_range: ndarray (n_hands,) — P(hero has hand_i) from opponent's view.
+        opponent_hands: possible opponent hands, excluding our actual cards.
+        hero_hands: possible hero hands from opponent's view, including our
+            actual cards until public board cards make hands impossible.
+        opponent_range: ndarray — P(opponent has opponent_hands[i]).
+        hero_range: ndarray — P(hero has hero_hands[i]) from opponent's view.
     """
 
     def __init__(self, our_cards_idx, value_net, device, strategy_source="regret"):
@@ -473,18 +474,28 @@ class RangeTracker:
         self.device = device
         self.strategy_source = strategy_source
 
-        # All possible hands for the opponent (excluding our cards).
-        remaining = sorted(set(range(52)) - set(our_cards_idx))
-        self.hands = list(itertools.combinations(remaining, 2))
-        self.n = len(self.hands)
-        self.hand_to_idx = {h: i for i, h in enumerate(self.hands)}
+        # The opponent cannot hold our actual cards. The opponent's belief
+        # about our hand must still include them, otherwise the subgame solver
+        # assigns zero reach to the exact hand whose strategy we query.
+        opponent_cards = sorted(set(range(52)) - set(our_cards_idx))
+        self.opponent_hands = list(itertools.combinations(opponent_cards, 2))
+        self.hero_hands = list(itertools.combinations(range(52), 2))
+        self.opponent_hand_to_idx = {
+            h: i for i, h in enumerate(self.opponent_hands)
+        }
+        self.hero_hand_to_idx = {h: i for i, h in enumerate(self.hero_hands)}
+
+        # Backward-compatible aliases for callers that inspect opponent hands.
+        self.hands = self.opponent_hands
+        self.hand_to_idx = self.opponent_hand_to_idx
+        self.n = len(self.opponent_hands)
+        self.hero_n = len(self.hero_hands)
 
         # Opponent range: starts uniform.
         self.opponent_range = np.ones(self.n, dtype=np.float64) / self.n
 
-        # Hero range: starts uniform over the same hand set.
-        # This represents what the opponent thinks we could have.
-        self.hero_range = np.ones(self.n, dtype=np.float64) / self.n
+        # Hero range: starts uniform over the opponent's public belief support.
+        self.hero_range = np.ones(self.hero_n, dtype=np.float64) / self.hero_n
 
         # Track which board cards have been revealed.
         self.board_cards = []
@@ -495,9 +506,11 @@ class RangeTracker:
             if c in self.board_cards:
                 continue
             self.board_cards.append(c)
-            for i, hand in enumerate(self.hands):
+            for i, hand in enumerate(self.opponent_hands):
                 if c in hand:
                     self.opponent_range[i] = 0.0
+            for i, hand in enumerate(self.hero_hands):
+                if c in hand:
                     self.hero_range[i] = 0.0
         # Renormalize.
         os = self.opponent_range.sum()
@@ -517,7 +530,7 @@ class RangeTracker:
         action_data: list of (idx, weight) from map_slumbot_action_to_idx.
         """
         strategies = self._batch_blueprint(
-            self.hands, board_idx, action_str_before, opp_pos, parsed_before)
+            self.opponent_hands, board_idx, action_str_before, opp_pos, parsed_before)
 
         # Weighted likelihood
         likelihood = np.zeros(self.n, dtype=np.float32)
@@ -539,9 +552,9 @@ class RangeTracker:
         Same Bayes rule but applied to the hero range.
         """
         strategies = self._batch_blueprint(
-            self.hands, board_idx, action_str_before, hero_pos, parsed_before)
+            self.hero_hands, board_idx, action_str_before, hero_pos, parsed_before)
 
-        likelihood = np.zeros(self.n, dtype=np.float32)
+        likelihood = np.zeros(self.hero_n, dtype=np.float32)
         for idx, weight in action_data:
             likelihood += strategies[:, idx] * weight
 
@@ -603,10 +616,12 @@ class RangeTracker:
 
         for s_idx, hand in enumerate(solver_hands):
             h = tuple(sorted(hand))
-            t_idx = self.hand_to_idx.get(h)
-            if t_idx is not None:
-                villain_range[s_idx] = self.opponent_range[t_idx]
-                hero_range[s_idx] = self.hero_range[t_idx]
+            opp_idx = self.opponent_hand_to_idx.get(h)
+            if opp_idx is not None:
+                villain_range[s_idx] = self.opponent_range[opp_idx]
+            hero_idx = self.hero_hand_to_idx.get(h)
+            if hero_idx is not None:
+                hero_range[s_idx] = self.hero_range[hero_idx]
 
         # Normalize.
         vs = villain_range.sum()

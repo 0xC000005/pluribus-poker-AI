@@ -3,15 +3,25 @@
 from __future__ import annotations
 
 import json
+import itertools
 import sys
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
+import torch
 
+from poker_ai.games.full_deck.state import N_ACTIONS
 from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
+from poker_ai.research.evaluation import (
+    assert_strategy_source_supported,
+    load_value_network_checkpoint,
+)
 from poker_ai.research.resolver_benchmark import (
     ResolverBenchmarkCase,
+    SolverDecision,
     _solver_decision,
     default_benchmark_cases,
     load_cases_json,
@@ -23,15 +33,28 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from play_slumbot import (  # noqa: E402
+    _compute_bets_before_street,
     build_features,
+    card_str_to_index,
     get_legal_mask_from_parsed,
     parse_action,
 )
+from range_tracker import RangeTracker, update_tracker_from_actions  # noqa: E402
+from solver import solve_street, solver_action_to_slumbot  # noqa: E402
 
 
 _SUITS = ("c", "d", "h", "s")
 _RANKS = tuple("23456789TJQKA")
 _BET_SIZES = (200, 300, 500, 800, 1200, 2000, 4000)
+
+
+@dataclass(frozen=True)
+class _RangeTargetContext:
+    checkpoint: str
+    strategy_source: str
+    device: torch.device
+    value_net: Any
+    checkpoint_metadata: dict[str, Any]
 
 
 def _card_to_str(card: int) -> str:
@@ -136,14 +159,170 @@ def _normalized_legal_target(
     return legal_mask.astype(np.float32) / legal_total
 
 
+def _resolve_device(device: str | torch.device) -> torch.device:
+    if isinstance(device, torch.device):
+        return device
+    if device == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return torch.device(device)
+
+
+def _load_range_target_context(
+    checkpoint: str | Path | None,
+    *,
+    strategy_source: str,
+    device: str | torch.device,
+) -> _RangeTargetContext | None:
+    if checkpoint is None:
+        return None
+    resolved_device = _resolve_device(device)
+    loaded = load_value_network_checkpoint(checkpoint, resolved_device)
+    assert_strategy_source_supported(loaded, strategy_source)
+    return _RangeTargetContext(
+        checkpoint=str(checkpoint),
+        strategy_source=strategy_source,
+        device=resolved_device,
+        value_net=loaded.value_net,
+        checkpoint_metadata=loaded.metadata,
+    )
+
+
+def _range_summary(prefix: str, values: np.ndarray) -> dict[str, float | int]:
+    arr = np.asarray(values, dtype=np.float64)
+    total = float(arr.sum())
+    probs = arr / total if total > 0 else arr
+    positive = probs[probs > 0]
+    entropy = float(-(positive * np.log(positive)).sum()) if positive.size else 0.0
+    denom = float(np.log(max(positive.size, 2))) if positive.size else 1.0
+    sorted_probs = np.sort(probs)[::-1]
+    return {
+        f"{prefix}_support": int(positive.size),
+        f"{prefix}_top1_mass": round(float(sorted_probs[0]) if sorted_probs.size else 0.0, 6),
+        f"{prefix}_top10_mass": round(float(sorted_probs[:10].sum()) if sorted_probs.size else 0.0, 6),
+        f"{prefix}_entropy": round(entropy, 6),
+        f"{prefix}_normalized_entropy": round(entropy / denom if denom > 0 else 0.0, 6),
+    }
+
+
+def _belief_conditioned_solver_decision(
+    case: ResolverBenchmarkCase,
+    parsed: dict,
+    *,
+    solver_iterations: int,
+    solver_backend: str,
+    range_context: _RangeTargetContext,
+    range_prune_threshold: float,
+) -> tuple[SolverDecision | None, dict[str, Any]]:
+    street = int(parsed["st"])
+    if street not in (2, 3):
+        return None, {}
+
+    n_board = 4 if street == 2 else 5
+    board_idx = [card_str_to_index(card) for card in case.board[:n_board]]
+    our_cards_idx = [card_str_to_index(card) for card in case.hole_cards]
+    our_bet_pre, opp_bet_pre = _compute_bets_before_street(
+        case.action_str,
+        case.client_pos,
+        target_street=street,
+    )
+    pot = our_bet_pre + opp_bet_pre
+    hero_stack = 20000 - our_bet_pre
+    villain_stack = 20000 - opp_bet_pre
+    hero_first = case.client_pos == 0
+    street_parts = case.action_str.split("/")
+    street_action = street_parts[street] if len(street_parts) > street else ""
+
+    tracker = RangeTracker(
+        our_cards_idx,
+        range_context.value_net,
+        range_context.device,
+        strategy_source=range_context.strategy_source,
+    )
+    update_tracker_from_actions(tracker, case.action_str, case.client_pos, board_idx)
+
+    remaining = sorted(set(range(52)) - set(board_idx))
+    solver_hands = list(itertools.combinations(remaining, 2))
+    solver_hand_to_idx = {hand: i for i, hand in enumerate(solver_hands)}
+    hero_range, villain_range = tracker.get_solver_ranges(solver_hands, solver_hand_to_idx)
+
+    extra = {
+        "range_mode": "belief_conditioned",
+        "range_prune_threshold": float(range_prune_threshold),
+        **_range_summary("hero_range", hero_range),
+        **_range_summary("villain_range", villain_range),
+    }
+
+    started = time.perf_counter()
+    _, strategy, solver, node = solve_street(
+        our_cards_idx,
+        board_idx,
+        pot,
+        hero_stack,
+        villain_stack,
+        hero_first,
+        action_str=street_action,
+        n_iterations=solver_iterations,
+        hero_range=hero_range,
+        villain_range=villain_range,
+        backend=solver_backend,
+        range_prune_threshold=range_prune_threshold,
+    )
+
+    strategy_vec = np.zeros(N_ACTIONS, dtype=np.float64)
+    if node is None or node.is_terminal:
+        action = 1
+        strategy_vec[1] = 1.0
+        increment = "k" if parsed["last_bet_size"] == 0 else "c"
+        node_terminal = True
+    else:
+        for action_idx, prob in strategy.items():
+            if 0 <= action_idx < len(strategy_vec):
+                strategy_vec[action_idx] = float(prob)
+        total = float(strategy_vec.sum())
+        if total > 0:
+            strategy_vec /= total
+        else:
+            strategy_vec[1] = 1.0
+        action = int(np.argmax(strategy_vec))
+        increment = solver_action_to_slumbot(action, node, solver, parsed)
+        node_terminal = False
+
+    latency_ms = (time.perf_counter() - started) * 1000.0
+    extra["solver_n_hands"] = int(getattr(solver, "n", 0))
+    extra["solver_full_n_hands"] = int(getattr(solver, "full_n", 0))
+    return SolverDecision(action, increment, strategy_vec, latency_ms, node_terminal), extra
+
+
+def _target_summary(targets: np.ndarray) -> dict[str, float]:
+    top_actions = np.argmax(targets, axis=1)
+    entropies = []
+    for target in targets:
+        positive = target[target > 0]
+        entropies.append(float(-(positive * np.log(positive)).sum()) if positive.size else 0.0)
+    return {
+        "target_allin_rate": round(float(np.mean(top_actions == 8)), 6),
+        "mean_target_allin_prob": round(float(np.mean(targets[:, 8])), 6),
+        "mean_target_entropy": round(float(np.mean(entropies)), 6),
+    }
+
+
 def build_resolver_policy_targets(
     cases: Iterable[ResolverBenchmarkCase] | None = None,
     *,
     solver_iterations: int = 25,
     solver_backend: str = "auto",
+    range_checkpoint: str | Path | None = None,
+    range_strategy_source: str = "regret",
+    range_device: str | torch.device = "auto",
+    range_prune_threshold: float = 1e-4,
 ) -> tuple[PolicyTargetBuffer, dict]:
     """Build a small policy-target dataset from deterministic resolver cases."""
     cases = list(default_benchmark_cases() if cases is None else cases)
+    range_context = _load_range_target_context(
+        range_checkpoint,
+        strategy_source=range_strategy_source,
+        device=range_device,
+    )
     features: list[np.ndarray] = []
     legal_masks: list[np.ndarray] = []
     target_probs: list[np.ndarray] = []
@@ -171,12 +350,23 @@ def build_resolver_policy_targets(
             case.action_str,
             case.client_pos,
         ).astype(np.float32)
-        solver = _solver_decision(
-            case,
-            parsed,
-            solver_iterations=solver_iterations,
-            solver_backend=solver_backend,
-        )
+        extra_record: dict[str, Any] = {"range_mode": "uniform"}
+        if range_context is None:
+            solver = _solver_decision(
+                case,
+                parsed,
+                solver_iterations=solver_iterations,
+                solver_backend=solver_backend,
+            )
+        else:
+            solver, extra_record = _belief_conditioned_solver_decision(
+                case,
+                parsed,
+                solver_iterations=solver_iterations,
+                solver_backend=solver_backend,
+                range_context=range_context,
+                range_prune_threshold=range_prune_threshold,
+            )
         if solver is None:
             records.append({"label": case.label, "skipped": "unsupported_street"})
             continue
@@ -200,6 +390,7 @@ def build_resolver_policy_targets(
                     float(-(target[target > 0] * np.log(target[target > 0])).sum()),
                     6,
                 ),
+                **extra_record,
             }
         )
 
@@ -212,13 +403,31 @@ def build_resolver_policy_targets(
         np.stack(target_probs, axis=0),
     )
     metadata = {
-        "mode": "resolver_policy_targets",
+        "mode": (
+            "belief_conditioned_resolver_policy_targets"
+            if range_context is not None
+            else "resolver_policy_targets"
+        ),
         "solver_iterations": int(solver_iterations),
         "solver_backend": solver_backend,
+        "range_enabled": range_context is not None,
         "n_cases": len(cases),
         "n_targets": int(buffer.size),
         "records": records,
+        **_target_summary(buffer.target_probs),
     }
+    if range_context is not None:
+        metadata.update(
+            {
+                "range_checkpoint": range_context.checkpoint,
+                "range_checkpoint_iteration": range_context.checkpoint_metadata.get(
+                    "checkpoint_iteration"
+                ),
+                "range_strategy_source": range_context.strategy_source,
+                "range_device": str(range_context.device),
+                "range_prune_threshold": float(range_prune_threshold),
+            }
+        )
     return buffer, metadata
 
 
@@ -230,6 +439,10 @@ def save_resolver_policy_targets(
     seed: int = 0,
     solver_iterations: int = 25,
     solver_backend: str = "auto",
+    range_checkpoint: str | Path | None = None,
+    range_strategy_source: str = "regret",
+    range_device: str | torch.device = "auto",
+    range_prune_threshold: float = 1e-4,
 ) -> dict:
     if cases_json and sampled_cases:
         raise ValueError("choose either cases_json or sampled_cases, not both")
@@ -246,6 +459,10 @@ def save_resolver_policy_targets(
         cases,
         solver_iterations=solver_iterations,
         solver_backend=solver_backend,
+        range_checkpoint=range_checkpoint,
+        range_strategy_source=range_strategy_source,
+        range_device=range_device,
+        range_prune_threshold=range_prune_threshold,
     )
     output = Path(output)
     buffer.save_npz(output)

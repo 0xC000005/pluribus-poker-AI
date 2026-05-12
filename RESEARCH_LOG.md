@@ -1091,3 +1091,46 @@
 - Summary: Corrected search targets improved target fit and resolver drift but failed local transfer: policy-head all-in rate hit 1.0 and target-vs-control head-to-head lower95 stayed negative under regret and policy-head play.
 - Metrics file: autoresearch-session/search_targets/corrected_search_target_ab_20260512.json
 - Key metrics: `{"passed": false, "target_holdout_top1_match_rate": 0.875, "target_policy_head_allin_rate": 1.0, "target_mean_action_l1_drift": 0.9969, "control_mean_action_l1_drift": 1.1722, "regret_head_to_head_avg_chips_per_hand": -10.872, "regret_head_to_head_lower95": -99.5007, "policy_head_head_to_head_avg_chips_per_hand": -51.8727, "policy_head_head_to_head_lower95": -185.9779}`
+## 20260512T203058Z-methodology-review-for-belief-conditioned-search-target-generation - passed
+
+- Timestamp: 2026-05-12T20:30:58Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T202137Z-belief-conditioned-search-target-generation
+- Hypothesis: Methodology review for Belief-conditioned search target generation should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T202137Z-belief-conditioned-search-target-generation passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T203058Z-methodology-review-for-belief-conditioned-search-target-generation/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T202137Z-belief-conditioned-search-target-generation", "passed": true}`
+
+## 20260512T204116Z-methodology-review-for-rangetracker-hero-range-actual-hand - passed
+
+- Timestamp: 2026-05-12T20:41:16Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T203916Z-rangetracker-hero-range-actual-hand-support
+- Hypothesis: Methodology review for RangeTracker hero range actual-hand support should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T203916Z-rangetracker-hero-range-actual-hand-support passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T204116Z-methodology-review-for-rangetracker-hero-range-actual-hand/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T203916Z-rangetracker-hero-range-actual-hand-support", "passed": true}`
+
+## 20260512T204420Z-belief-conditioned-target-generation-should-use-valid - passed
+
+- Timestamp: 2026-05-12T20:44:20Z
+- Type: implementation
+- Gate: belief-conditioned-target-plumbing-and-range-support
+- Hypothesis: Belief-conditioned target generation should use learned public-belief ranges without assigning zero reach to the hero's actual hand.
+- Failure class: none
+- Summary: Added optional belief-conditioned resolver target generation using the existing `RangeTracker` path and fixed `RangeTracker` to maintain separate opponent and hero hand supports. The actual hero hand now maps to positive hero-range mass while remaining impossible for the opponent range.
+- Metrics file: autoresearch-session/search_targets/belief_range_fix_ab_20260512.json
+- Key metrics: `{"passed": true, "actual_hand_hero_range_mass_before": 0.0, "actual_hand_hero_range_mass_after": 2.544e-07, "villain_range_actual_hand_mass_after": 0.0, "tests": "18 passed"}`
+
+## 20260512T204741Z-belief-conditioned-search-targets-with-valid-hero - failed
+
+- Timestamp: 2026-05-12T20:47:41Z
+- Type: experiment
+- Gate: belief-conditioned-search-target-ab
+- Hypothesis: Belief-conditioned targets with valid hero actual-hand support should improve held-out target fit and local transfer without all-in collapse.
+- Failure class: search_quality
+- Summary: The representation fix was necessary, but the corrected belief-conditioned targets still failed transfer. Target fit improved versus control, yet holdout target all-in rate remained high and the candidate lost to the no-target control under both regret and policy-head play.
+- Metrics file: autoresearch-session/search_targets/belief_range_fix_ab_20260512.json
+- Key metrics: `{"passed": false, "train_target_allin_rate": 0.75, "holdout_target_allin_rate": 0.8125, "candidate_holdout_mean_l1": 0.634443, "control_holdout_mean_l1": 0.714362, "candidate_policy_allin_rate": 1.0, "policy_head_h2h_avg": -211.71, "policy_head_h2h_lower95": -506.3123, "regret_h2h_avg": -196.4933, "regret_h2h_lower95": -463.034}`

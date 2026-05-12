@@ -36,6 +36,27 @@ def main(argv: list[str] | None = None) -> int:
         choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
         default="auto",
     )
+    parser.add_argument(
+        "--range-checkpoint",
+        help="Optional blueprint checkpoint used to generate belief-conditioned ranges.",
+    )
+    parser.add_argument(
+        "--range-strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+        help="Network source used by the range tracker when --range-checkpoint is set.",
+    )
+    parser.add_argument(
+        "--range-device",
+        default="auto",
+        help="Device for range-tracker network inference: auto, cpu, cuda, etc.",
+    )
+    parser.add_argument(
+        "--range-prune-threshold",
+        type=float,
+        default=1e-4,
+        help="Relative hand-range pruning threshold passed to the street solver.",
+    )
     args = parser.parse_args(argv)
 
     from poker_ai.research.search_targets import save_resolver_policy_targets
@@ -47,6 +68,10 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
+        range_checkpoint=args.range_checkpoint,
+        range_strategy_source=args.range_strategy_source,
+        range_device=args.range_device,
+        range_prune_threshold=args.range_prune_threshold,
     )
     print(json.dumps(metadata, indent=2, sort_keys=True))
     return 0
