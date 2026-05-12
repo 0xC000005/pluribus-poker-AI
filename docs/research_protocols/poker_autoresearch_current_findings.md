@@ -222,6 +222,16 @@ GPU training readiness:
   resolver `illegal_case_count` dropped from `2` to `0`; control/target resolver
   benchmarks both pass legality, though strategy drift remains too high for
   promotion.
+- A corrected search-target A/B with 32 train and 16 held-out sampled states at
+  10 solver iterations confirmed the next blocker is target distribution
+  quality, not plumbing. Target training learned the targets (`top1` `0.875`
+  on holdout) and improved resolver drift (`1.172` to `0.997`), but the held-out
+  target set was `0.875` all-in and the policy head selected all-in on every
+  held-out case. Local duplicate-swapped transfer was negative versus control
+  under regret (`-10.872`, lower95 `-99.501`) and policy-head play (`-51.873`,
+  lower95 `-185.978`). Do not scale random public-state/uniform-range targets;
+  move target generation toward gameplay-distributed public states and learned
+  public-belief/range inputs.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

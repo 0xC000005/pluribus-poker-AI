@@ -1080,3 +1080,14 @@
 - Summary: Fixed street-solver action-space parity by omitting under-minimum fractional raise buckets instead of clamping them; sampled holdout resolver illegal cases dropped from 2 to 0.
 - Metrics file: autoresearch-session/search_targets/solver_action_parity_fix_20260512.json
 - Key metrics: `{"passed": true, "control_holdout_illegal_case_count_before": 2, "control_holdout_illegal_case_count_after": 0, "target_holdout_illegal_case_count_before": 2, "target_holdout_illegal_case_count_after": 0, "control_holdout_mean_action_l1_drift_after": 1.225, "target_holdout_mean_action_l1_drift_after": 1.3556}`
+
+## 20260512T201922Z-corrected-sampled-search-targets-should-improve-held-out - failed
+
+- Timestamp: 2026-05-12T20:19:28Z
+- Type: experiment
+- Gate: corrected-search-target-ab
+- Hypothesis: Corrected sampled search targets should improve held-out resolver drift and local head-to-head transfer without all-in collapse.
+- Failure class: search_quality
+- Summary: Corrected search targets improved target fit and resolver drift but failed local transfer: policy-head all-in rate hit 1.0 and target-vs-control head-to-head lower95 stayed negative under regret and policy-head play.
+- Metrics file: autoresearch-session/search_targets/corrected_search_target_ab_20260512.json
+- Key metrics: `{"passed": false, "target_holdout_top1_match_rate": 0.875, "target_policy_head_allin_rate": 1.0, "target_mean_action_l1_drift": 0.9969, "control_mean_action_l1_drift": 1.1722, "regret_head_to_head_avg_chips_per_hand": -10.872, "regret_head_to_head_lower95": -99.5007, "policy_head_head_to_head_avg_chips_per_hand": -51.8727, "policy_head_head_to_head_lower95": -185.9779}`

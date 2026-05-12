@@ -232,6 +232,10 @@ Fixed public-state targets are useful for smoke tests and plumbing checks, but
 they are not a training distribution. Any candidate meant for promotion should
 use sampled train/held-out public states and must still pass the falsification
 ladder before Slumbot confirmation.
+Random public states with uniform ranges are also diagnostic only until their
+target distribution is shown not to collapse to one action. Promotion-oriented
+targets should be drawn from gameplay-distributed states with the best available
+learned public-belief/range estimates.
 
 Direct target fit is not promotion evidence. Evaluate held-out target fit with
 `scripts/eval_search_targets.py`, then cross-check resolver drift and all-in
