@@ -160,4 +160,5 @@ def test_gpu_trainer_load_accepts_legacy_sequential_value_net(tmp_path):
     trainer = GPUDeepCFRTrainer.load(str(path), device=torch.device("cpu"))
 
     assert trainer.iteration == 7
+    assert trainer.use_betting_history is False
     assert trainer.value_net.adv_head.weight.shape == (N_ACTIONS, hidden_dim)

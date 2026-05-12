@@ -1324,3 +1324,25 @@
 - Summary: Added an opt-in standalone average-policy network saved as `average_policy_net` and an explicit `average-policy` strategy source for evaluation and Slumbot paths. The separate model reduced the visible single-action collapse diagnostic versus the auxiliary policy head, but the resulting average policy still lost badly to the default regret-matching control in duplicate-swapped H2H. This suggests the current early-iteration strategy memory is too weak/noisy for direct average-policy play at this budget.
 - Metrics file: autoresearch-session/separate_avg_policy_ab/separate_avg_policy_ab_20260512.json
 - Key metrics: `{"passed": false, "control_iters_per_hour": 4523.003, "candidate_iters_per_hour": 4234.876, "candidate_average_strategy_target_size": 20000, "candidate_dominant_top_action_rate": 0.375, "candidate_top_action_diversity": 5, "mixed_h2h_avg": -238.219444, "mixed_h2h_lower95": -298.836569}`
+
+## 20260512T221119Z-methodology-review-for-restore-betting-history-observation-before - passed
+
+- Timestamp: 2026-05-12T22:11:19Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T221033Z-restore-betting-history-observation-before-learned-sequence-encoder
+- Hypothesis: Methodology review for Restore betting-history observation before learned sequence encoder should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T221033Z-restore-betting-history-observation-before-learned-sequence-encoder passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T221119Z-methodology-review-for-restore-betting-history-observation-before/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T221033Z-restore-betting-history-observation-before-learned-sequence-encoder", "passed": true}`
+
+## 20260512T222118Z-restored-betting-history-observation-should-outperform-the-masked - passed
+
+- Timestamp: 2026-05-12T22:21:23Z
+- Type: experiment
+- Gate: restore-betting-history-observation-ab
+- Hypothesis: Restored betting-history observation should outperform the masked-history compatibility contract before a learned sequence encoder is available.
+- Failure class: history_representation
+- Summary: Restored betting-history features by default with legacy masked-checkpoint compatibility, then ran a matched 5-iteration GPU A/B. The restored-history regret policy strongly beat the masked-history control in duplicate-swapped local H2H (avg +3021.69 chips/hand, lower95 +2677.84 over 1800 games), so masking public action history was an observation-contract bug rather than bitter-lesson alignment. This remains local evidence only; resolver and Slumbot confirmation are still required before promotion.
+- Metrics file: autoresearch-session/history_observation_ab/history_observation_ab_20260512.json
+- Key metrics: `{"avg_iter_seconds": 0.82, "gate": "restore-betting-history-observation-ab", "iters_per_hour": 4391.61, "mode": "autoresearch_gpu_deep_cfr_train", "passed": true, "traversals_per_second": 121.935}`

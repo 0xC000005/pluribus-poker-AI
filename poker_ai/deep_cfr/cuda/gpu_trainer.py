@@ -917,6 +917,7 @@ class GPUDeepCFRTrainer:
         average_strategy_memory_capacity: int | None = None,
         average_strategy_weight: float = 0.0,
         average_strategy_batch_size: int | None = None,
+        use_betting_history: bool = True,
     ):
         self.n_players = n_players
         self.initial_chips = initial_chips
@@ -937,6 +938,7 @@ class GPUDeepCFRTrainer:
         self.policy_target_batch_size = policy_target_batch_size
         self.average_strategy_weight = float(average_strategy_weight)
         self.average_strategy_batch_size = average_strategy_batch_size
+        self.use_betting_history = bool(use_betting_history)
         self.strategy_buffer = PolicyReservoirBuffer(
             int(average_strategy_memory_capacity or buffer_capacity)
         )
@@ -952,10 +954,18 @@ class GPUDeepCFRTrainer:
             ReservoirBuffer(buffer_capacity) for _ in range(n_players)
         ]
         self.value_net = ValueNetwork(
-            N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers
+            N_FEATURES,
+            hidden_dim,
+            N_ACTIONS,
+            n_layers=n_layers,
+            use_betting_history=self.use_betting_history,
         ).to(self.device)
         self.average_policy_net = PolicyNetwork(
-            N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers
+            N_FEATURES,
+            hidden_dim,
+            N_ACTIONS,
+            n_layers=n_layers,
+            use_betting_history=self.use_betting_history,
         ).to(self.device)
         self.has_average_policy_net = False
         self.iteration = 0
@@ -1052,6 +1062,7 @@ class GPUDeepCFRTrainer:
                     lr=self.lr,
                     device=self.device,
                     n_layers=self.n_layers,
+                    use_betting_history=self.use_betting_history,
                     policy_target_buffer=self.policy_target_buffer,
                     policy_target_weight=self.policy_target_weight,
                     policy_target_batch_size=self.policy_target_batch_size,
@@ -1065,6 +1076,7 @@ class GPUDeepCFRTrainer:
                         batch_size=self.average_strategy_batch_size or train_batch,
                         lr=self.lr,
                         device=self.device,
+                        use_betting_history=self.use_betting_history,
                     )
                     self.has_average_policy_net = True
             finally:
@@ -1116,6 +1128,7 @@ class GPUDeepCFRTrainer:
                 ),
                 "average_strategy_target_size": int(self.strategy_buffer.size),
                 "average_strategy_weight": self.average_strategy_weight,
+                "uses_betting_history": self.use_betting_history,
                 "has_average_policy_net": bool(self.has_average_policy_net),
                 "buffer_sizes": [len(b) for b in self.buffers],
                 **(
@@ -1136,6 +1149,7 @@ class GPUDeepCFRTrainer:
             n_layers=checkpoint.get("n_layers", 2),
             initial_chips=checkpoint.get("initial_chips", 10000),
             device=device,
+            use_betting_history=bool(checkpoint.get("uses_betting_history", False)),
         )
         state = _remap_legacy_value_state_dict(checkpoint["value_net"])
         missing, unexpected = trainer.value_net.load_state_dict(state, strict=False)

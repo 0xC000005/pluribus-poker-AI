@@ -36,8 +36,10 @@ clustering, terminal play, and visualisation code are retained for reference.
   `(0.25, 0.5, 0.75, 1.0, 1.5, 2.0)`, and all-in.
 - Feature vector: 126 floats: full-card one-hots, street one-hot, scalar stack
   and pot features, and action-history slots.
-- `ValueNetwork` masks the engineered history slots internally. If action or
-  feature logic changes, keep CPU, fast, CUDA, and Slumbot paths in parity.
+- New checkpoints consume the 12 public betting-history features by default and
+  save `uses_betting_history=true`. Legacy checkpoints without that metadata
+  load with the old masked-history contract. If action or feature logic changes,
+  keep CPU, fast, CUDA, and Slumbot paths in parity.
 
 ## Commands
 
@@ -134,6 +136,10 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
 - Prefer SD-CFR-style checkpoint-mixture diagnostics before adding another
   average-policy trainer; checkpoint selection must be fixed by iteration/glob,
   not by post-hoc benchmark wins.
+- Do not zero betting-history inputs unless a learned sequence encoder is wired
+  through training, evaluation, and Slumbot play. The restored-history contract
+  beat the masked-history compatibility contract in a small local H2H gate, but
+  still needs resolver and Slumbot confirmation before promotion.
 - Before method, evaluation, promotion, or persistent-knob changes, complete a
   methodology review with independent verification, related work, and a
   benchmark-hacking audit.

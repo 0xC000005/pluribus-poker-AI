@@ -1009,7 +1009,14 @@ def main():
     checkpoint = torch.load(args.model, map_location=device, weights_only=False)
     hidden_dim = checkpoint.get('hidden_dim', 256)
     n_layers = checkpoint.get('n_layers', 2)
-    value_net = ValueNetwork(N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers).to(device)
+    uses_betting_history = bool(checkpoint.get('uses_betting_history', False))
+    value_net = ValueNetwork(
+        N_FEATURES,
+        hidden_dim,
+        N_ACTIONS,
+        n_layers=n_layers,
+        use_betting_history=uses_betting_history,
+    ).to(device)
     state = _remap_legacy_state_dict(checkpoint['value_net'])
     missing, unexpected = value_net.load_state_dict(state, strict=False)
     if unexpected:
@@ -1018,7 +1025,11 @@ def main():
     # inference time (forward() returns only adv from trunk+adv_head).
     if checkpoint.get('average_policy_net') is not None:
         average_policy_net = PolicyNetwork(
-            N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers,
+            N_FEATURES,
+            hidden_dim,
+            N_ACTIONS,
+            n_layers=n_layers,
+            use_betting_history=uses_betting_history,
         ).to(device)
         average_policy_net.load_state_dict(checkpoint['average_policy_net'])
         average_policy_net.eval()

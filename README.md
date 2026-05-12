@@ -47,8 +47,10 @@ The model input is a 126-dimensional full-deck feature vector:
 12 action-history summary features
 ```
 
-The `ValueNetwork` masks the engineered history slots internally. Keep feature
-and legal-mask behavior aligned across `full_deck/state.py`,
+New Deep CFR checkpoints consume the 12 public action-history slots by default
+and save `uses_betting_history=true`. Older checkpoints without that metadata
+load with the legacy masked-history path for compatibility. Keep feature and
+legal-mask behavior aligned across `full_deck/state.py`,
 `deep_cfr/fast_state.py`, CUDA kernels, and `scripts/play_slumbot.py`.
 
 ## Setup

@@ -181,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
             "has_average_policy_net": bool(
                 getattr(trainer, "has_average_policy_net", False)
             ),
+            "uses_betting_history": bool(
+                getattr(trainer, "use_betting_history", False)
+            ),
             "save_every": int(args.save_every),
             "hidden_dim": int(args.hidden_dim),
             "n_layers": int(args.n_layers),

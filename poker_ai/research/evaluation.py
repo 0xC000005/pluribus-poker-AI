@@ -61,8 +61,15 @@ def load_value_network_checkpoint(
     n_layers = int(checkpoint.get("n_layers", 2))
     n_players = int(checkpoint.get("n_players", 2))
     initial_chips = int(checkpoint.get("initial_chips", 10000))
+    uses_betting_history = bool(checkpoint.get("uses_betting_history", False))
 
-    value_net = ValueNetwork(N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers).to(device)
+    value_net = ValueNetwork(
+        N_FEATURES,
+        hidden_dim,
+        N_ACTIONS,
+        n_layers=n_layers,
+        use_betting_history=uses_betting_history,
+    ).to(device)
     state = remap_legacy_state_dict(checkpoint["value_net"])
     missing, unexpected = value_net.load_state_dict(state, strict=False)
     allowed_missing = {
@@ -88,6 +95,7 @@ def load_value_network_checkpoint(
             hidden_dim,
             N_ACTIONS,
             n_layers=n_layers,
+            use_betting_history=uses_betting_history,
         ).to(device)
         average_policy_net.load_state_dict(checkpoint["average_policy_net"])
         average_policy_net.eval()
@@ -106,6 +114,7 @@ def load_value_network_checkpoint(
             "initial_chips": initial_chips,
             "has_policy_head": has_policy_head,
             "has_average_policy_net": average_policy_net is not None,
+            "uses_betting_history": uses_betting_history,
         },
         average_policy_net=average_policy_net,
     )

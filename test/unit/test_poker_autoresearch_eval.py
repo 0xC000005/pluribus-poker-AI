@@ -68,6 +68,7 @@ def test_load_value_network_checkpoint_accepts_legacy_sequential_keys(tmp_path):
     assert loaded.metadata["n_players"] == 2
     assert loaded.metadata["initial_chips"] == 20000
     assert loaded.metadata["has_policy_head"] is False
+    assert loaded.metadata["uses_betting_history"] is False
     assert loaded.value_net.hidden_dim == 16
 
 
@@ -82,6 +83,7 @@ def test_load_value_network_checkpoint_loads_average_policy_net(tmp_path):
         "hidden_dim": 16,
         "n_layers": 1,
         "initial_chips": 20000,
+        "uses_betting_history": True,
         "value_net": value_net.state_dict(),
         "average_policy_net": average_policy_net.state_dict(),
     }
@@ -91,6 +93,7 @@ def test_load_value_network_checkpoint_loads_average_policy_net(tmp_path):
     loaded = load_value_network_checkpoint(path, torch.device("cpu"))
 
     assert loaded.metadata["has_average_policy_net"] is True
+    assert loaded.metadata["uses_betting_history"] is True
     assert loaded.average_policy_net is not None
     assert getattr(loaded.value_net, "average_policy_net") is loaded.average_policy_net
 

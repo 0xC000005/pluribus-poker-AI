@@ -198,6 +198,7 @@ def train_value_network(
     lr: float = 0.001,
     device: torch.device | None = None,
     n_layers: int = 2,
+    use_betting_history: bool = True,
     policy_target_buffer: PolicyTargetBuffer | None = None,
     policy_target_weight: float = 0.0,
     policy_target_batch_size: int | None = None,
@@ -239,7 +240,11 @@ def train_value_network(
         torch.set_float32_matmul_precision("high")
 
     net = ValueNetwork(
-        input_dim, hidden_dim, output_dim, n_layers=n_layers
+        input_dim,
+        hidden_dim,
+        output_dim,
+        n_layers=n_layers,
+        use_betting_history=use_betting_history,
     ).to(device)
 
     use_cuda = device.type == "cuda"
@@ -412,6 +417,7 @@ class DeepCFRTrainer:
         average_strategy_memory_capacity: int | None = None,
         average_strategy_weight: float = 0.0,
         average_strategy_batch_size: int | None = None,
+        use_betting_history: bool = True,
     ):
         self.n_players = n_players
         self.hidden_dim = hidden_dim
@@ -424,6 +430,7 @@ class DeepCFRTrainer:
         self.policy_target_batch_size = policy_target_batch_size
         self.average_strategy_weight = float(average_strategy_weight)
         self.average_strategy_batch_size = average_strategy_batch_size
+        self.use_betting_history = bool(use_betting_history)
         self.strategy_buffer = PolicyReservoirBuffer(
             int(average_strategy_memory_capacity or buffer_capacity)
         )
@@ -441,10 +448,16 @@ class DeepCFRTrainer:
         ]
         # Single shared value network (SD-CFR).
         self.value_net = ValueNetwork(
-            N_FEATURES, hidden_dim, N_ACTIONS
+            N_FEATURES,
+            hidden_dim,
+            N_ACTIONS,
+            use_betting_history=self.use_betting_history,
         ).to(self.device)
         self.average_policy_net = PolicyNetwork(
-            N_FEATURES, hidden_dim, N_ACTIONS
+            N_FEATURES,
+            hidden_dim,
+            N_ACTIONS,
+            use_betting_history=self.use_betting_history,
         ).to(self.device)
         self.has_average_policy_net = False
         self.iteration = 0
@@ -485,6 +498,7 @@ class DeepCFRTrainer:
                 batch_size=self.batch_size,
                 lr=self.lr,
                 device=self.device,
+                use_betting_history=self.use_betting_history,
                 policy_target_buffer=self.policy_target_buffer,
                 policy_target_weight=self.policy_target_weight,
                 policy_target_batch_size=self.policy_target_batch_size,
@@ -498,6 +512,7 @@ class DeepCFRTrainer:
                     batch_size=self.average_strategy_batch_size or self.batch_size,
                     lr=self.lr,
                     device=self.device,
+                    use_betting_history=self.use_betting_history,
                 )
                 self.has_average_policy_net = True
 
@@ -544,6 +559,7 @@ class DeepCFRTrainer:
                 "hidden_dim": self.hidden_dim,
                 "average_strategy_target_size": int(self.strategy_buffer.size),
                 "average_strategy_weight": self.average_strategy_weight,
+                "uses_betting_history": self.use_betting_history,
                 "has_average_policy_net": bool(self.has_average_policy_net),
                 "buffer_sizes": [len(b) for b in self.buffers],
                 **(
@@ -574,6 +590,7 @@ class DeepCFRTrainer:
             n_players=checkpoint["n_players"],
             hidden_dim=checkpoint["hidden_dim"],
             device=device,
+            use_betting_history=bool(checkpoint.get("uses_betting_history", False)),
         )
         trainer.value_net.load_state_dict(checkpoint["value_net"])
         if checkpoint.get("average_policy_net") is not None:

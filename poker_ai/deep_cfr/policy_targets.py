@@ -273,6 +273,7 @@ def train_average_policy_network(
     batch_size: int = 2048,
     lr: float = 0.001,
     device: torch.device | None = None,
+    use_betting_history: bool = True,
 ) -> PolicyNetwork:
     """Train a standalone average-strategy network from strategy memory."""
     if getattr(strategy_buffer, "size", 0) <= 0:
@@ -285,6 +286,7 @@ def train_average_policy_network(
         hidden_dim=hidden_dim,
         output_dim=N_ACTIONS,
         n_layers=n_layers,
+        use_betting_history=use_betting_history,
     ).to(device)
     optimizer = optim.Adam(net.parameters(), lr=lr)
     net.train()

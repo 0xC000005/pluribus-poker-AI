@@ -44,6 +44,7 @@
 ## Coding Style & Naming Conventions
 - Python with 4-space indentation, type hints, and PEP 8 names (`snake_case` functions/modules, `PascalCase` classes).
 - Keep the 9-action contract and feature/legal-mask behavior aligned across CPU, fast, CUDA, and Slumbot integration code.
+- New Deep CFR checkpoints use the 12 public betting-history features by default and save `uses_betting_history=true`; checkpoints without this metadata load with the legacy masked-history contract.
 - Avoid ad hoc poker strategy rules; prefer learned policies, regret matching, and principled search.
 
 ## Testing Guidelines
@@ -57,6 +58,7 @@
 - Deep CFR can collect legal-mask average-strategy targets during traversal with `--average-strategy-weight > 0` and save an explicit `average-policy` network, but this path is experimental and off by default. First 5-iteration A/Bs regressed H2H, so do not scale it without stronger regret-network or averaging evidence.
 - Diagnose teacher collapse before scaling calibration: a dominant top action or all-in majority is a teacher-quality blocker, not a signal to sweep more calibration hyperparameters.
 - Prefer SD-CFR-style checkpoint-mixture diagnostics before adding another average-policy trainer; checkpoint selection must be fixed by iteration/glob, not by post-hoc benchmark wins.
+- Do not zero betting-history inputs unless a learned sequence encoder is actually wired through training, evaluation, and Slumbot play. A 5-iteration local H2H gate strongly favored restored history, but this remains pre-Slumbot-confirmation evidence.
 - For method, evaluation-protocol, checkpoint-promotion, or persistent-knob changes, enqueue and complete a methodology review. The review must include independent-verifier findings, related work with source URLs, and a benchmark-hacking audit.
 - Treat evaluation harnesses, Slumbot adapters, solver benchmarks, promotion logic, parsers, seed lists, and parity tests as protected surfaces. Changes to them require a completed review and objective-drift audit.
 - Use sub-agents as a review team when available: verifier for `review.md`, literature scout for `related_work.md`, benchmark auditor for `benchmark_audit.md`, and research lead for `decision.json`.
