@@ -1261,3 +1261,24 @@
 - Summary: Added a teacher-collapse diagnostic for public-state hand-sweep policy targets. On the same 16x128 turn/river sweep, the regret teacher is sharp and all-in-heavy while the policy-head teacher is nearly legal-uniform but has check/call as the top action on almost every hand. This confirms the next blocker is teacher construction, not policy-head capacity, target temperature, or sweep scale.
 - Metrics file: autoresearch-session/policy_calibration/teacher_diagnostics_summary_20260512.json
 - Key metrics: `{"passed": true, "regret_target_allin_rate": 0.652832, "regret_dominant_top_action": 8, "regret_dominant_top_action_rate": 0.652832, "regret_mean_target_normalized_entropy": 0.409578, "policy_head_target_allin_rate": 0.0, "policy_head_dominant_top_action": 1, "policy_head_dominant_top_action_rate": 0.999512, "policy_head_mean_target_normalized_entropy": 0.998273}`
+
+## 20260512T213555Z-sd-cfr-checkpoint-mixture-diagnostic - failed
+
+- Timestamp: 2026-05-12T21:35:55Z
+- Type: experiment
+- Gate: sd-cfr-checkpoint-mixture-diagnostic
+- Hypothesis: A fixed SD-CFR-style linearly weighted mixture over saved Slumbot-track iteration networks should outperform the final network if final-iteration regret play is the main average-policy defect.
+- Failure class: strategy_quality
+- Summary: Added a standalone checkpoint-mixture evaluator and tested the fixed `models/slumbot_2p_iter*.pt` series against `models/slumbot_2p_iter1000.pt` without changing protected Slumbot or promotion paths. The mixture was not better than the final checkpoint under duplicate-swapped local H2H. This does not falsify SD-CFR generally, but it falsifies the easy all-saved-checkpoints mixture for this existing run.
+- Metrics file: autoresearch-session/sd_cfr_mixture/sd_cfr_mixture_ab_20260512.json
+- Key metrics: `{"passed": false, "avg_chips_per_hand": -11.26, "lower95_chips_per_hand": -120.103285, "n_games": 1800, "candidate_checkpoint_count": 14, "baseline_iteration": 1000}`
+## 20260512T213249Z-methodology-review-for-native-deep-cfr-average-strategy - passed
+
+- Timestamp: 2026-05-12T21:32:49Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T212955Z-native-deep-cfr-average-strategy-targets
+- Hypothesis: Methodology review for Native Deep CFR average strategy targets should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T212955Z-native-deep-cfr-average-strategy-targets passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T213249Z-methodology-review-for-native-deep-cfr-average-strategy/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "methodology-review-20260512T212955Z-native-deep-cfr-average-strategy-targets", "passed": true}`

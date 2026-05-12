@@ -98,6 +98,7 @@ python scripts/build_policy_calibration_targets.py --checkpoint models/control.p
 python scripts/train_policy_head_calibration.py --checkpoint models/control.pt --targets autoresearch-session/policy_calibration/calib_targets.npz --output autoresearch-session/policy_calibration/calibrated.pt --n-steps 600
 python scripts/diagnose_policy_teacher.py --checkpoint models/control.pt --sampled-cases 16 --hands-per-case 128 --strategy-source regret --output autoresearch-session/policy_calibration/teacher_diag.json
 python scripts/diagnose_range_tracker.py --checkpoint autoresearch-session/policy_calibration/calibrated.pt --cases-json autoresearch-session/search_targets/reachable_policyhead_holdout_16x5.cases.json --strategy-source policy-head
+python scripts/eval_sd_cfr_mixture.py --candidate-glob 'models/run/*iter_*.pt' --baseline-checkpoint models/run/final.pt --n-games 300 --seeds 20260512,20260513,20260514 --output autoresearch-session/sd_cfr_mixture/mixture_h2h.json
 ```
 
 Autoresearch governance:
@@ -125,6 +126,9 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
 - Diagnose teacher collapse before scaling policy calibration; a dominant
   top-action or all-in majority is a teacher-quality blocker, not a reason to
   sweep more calibration hyperparameters.
+- Prefer SD-CFR-style checkpoint-mixture diagnostics before adding another
+  average-policy trainer; checkpoint selection must be fixed by iteration/glob,
+  not by post-hoc benchmark wins.
 - Before method, evaluation, promotion, or persistent-knob changes, complete a
   methodology review with independent verification, related work, and a
   benchmark-hacking audit.
