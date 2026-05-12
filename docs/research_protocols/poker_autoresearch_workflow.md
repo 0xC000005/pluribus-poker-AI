@@ -237,6 +237,9 @@ Direct target fit is not promotion evidence. Evaluate held-out target fit with
 `scripts/eval_search_targets.py`, then cross-check resolver drift and all-in
 rate. A run that only learns the target file but worsens blueprint-vs-resolver
 drift or collapses into all-in selection fails the search-quality criterion.
+The solver, training masks, CUDA masks, Slumbot adapter, and target builder must
+share the same 9-action legality contract; search must not clamp an illegal
+fractional bucket into a different legal raise size.
 
 ## Implemented Automation
 

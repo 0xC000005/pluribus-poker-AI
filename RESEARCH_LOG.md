@@ -1069,3 +1069,14 @@
 - Summary: Sampled search-target supervision improved target-fit metrics slightly but failed the transfer criterion: blueprint resolver drift worsened and policy-head all-in rate rose to 0.875 on an 8-case holdout; next step is target-quality and action-bucket legality diagnosis, not scale-up.
 - Metrics file: autoresearch-session/search_targets/sampled_search_consistency_ab_20260512.json
 - Key metrics: `{"passed": false, "control_holdout_mean_l1": 0.349352, "target_holdout_mean_l1": 0.329761, "control_policy_head_mean_action_l1_drift": 0.4546, "target_policy_head_mean_action_l1_drift": 0.4406, "control_mean_action_l1_drift": 1.3008, "target_mean_action_l1_drift": 1.3861, "target_policy_head_allin_rate": 0.875}`
+
+## 20260512T201315Z-street-solver-action-generation-should-match-the-training - passed
+
+- Timestamp: 2026-05-12T20:13:20Z
+- Type: implementation
+- Gate: solver-action-space-parity
+- Hypothesis: Street solver action generation should match the training and Slumbot legal-mask contract on sampled turn-river states.
+- Failure class: none
+- Summary: Fixed street-solver action-space parity by omitting under-minimum fractional raise buckets instead of clamping them; sampled holdout resolver illegal cases dropped from 2 to 0.
+- Metrics file: autoresearch-session/search_targets/solver_action_parity_fix_20260512.json
+- Key metrics: `{"passed": true, "control_holdout_illegal_case_count_before": 2, "control_holdout_illegal_case_count_after": 0, "target_holdout_illegal_case_count_before": 2, "target_holdout_illegal_case_count_after": 0, "control_holdout_mean_action_l1_drift_after": 1.225, "target_holdout_mean_action_l1_drift_after": 1.3556}`

@@ -12,6 +12,12 @@ from poker_ai.research.resolver_benchmark import (
     run_resolver_benchmark,
 )
 
+SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from solver import StreetSolver  # noqa: E402
+
 
 def _small_checkpoint(path: Path) -> None:
     checkpoint = {
@@ -72,6 +78,19 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     assert "no_allin_changed_rate" in metrics
     assert "policy_head_allin_rate" in metrics
     assert "policy_head_mean_action_l1_drift" in metrics
+
+
+def test_street_solver_omits_under_minimum_raise_buckets():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+
+    assert 2 not in solver.root.children
+    assert 3 in solver.root.children
 
 
 def test_resolver_benchmark_cli_emits_json_for_checkpoint(tmp_path):

@@ -215,6 +215,13 @@ GPU training readiness:
   to `1.386` and policy-head all-in rate rose to `0.875` against a holdout
   target all-in rate of `0.375`. Treat this as a failed search-quality cycle
   and diagnose target quality/action-bucket legality before scaling it.
+- The first diagnosis found a solver action-space parity bug: the street solver
+  clamped under-minimum fractional raise buckets up to the minimum raise, while
+  the training/Slumbot legal masks remove those buckets. The solver now omits
+  under-minimum fractional actions instead. On the same 8-case sampled holdout,
+  resolver `illegal_case_count` dropped from `2` to `0`; control/target resolver
+  benchmarks both pass legality, though strategy drift remains too high for
+  promotion.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

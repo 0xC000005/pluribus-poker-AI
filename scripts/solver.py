@@ -36,6 +36,13 @@ for _ci in range(52):
         _RANK_CHARS[_ci // 4] + _SUIT_CHARS[_ci % 4])
 
 
+def _min_raise_contribution(to_call, big_blind=BIG_BLIND):
+    """Minimum chips the actor must add for a legal raise bucket."""
+    if to_call <= 0:
+        return big_blind
+    return to_call + max(to_call, big_blind)
+
+
 def resolve_solver_backend(backend='auto', device=None):
     """Resolve public backend names to the concrete CFR implementation."""
     if backend == 'auto':
@@ -225,9 +232,9 @@ class StreetSolver:
         # Bets/raises.
         if nr < 3 and acting > tc:
             for ai, frac in BET_FRACS.items():
-                rb = max(int(frac * pot), BIG_BLIND)
+                rb = int(frac * pot)
                 tot = tc + rb
-                if tot > acting:
+                if tot < _min_raise_contribution(tc) or tot > acting:
                     continue
                 bp = pot + tot
                 bh, bv = (hs - tot, vs) if player == 0 else (hs, vs - tot)
