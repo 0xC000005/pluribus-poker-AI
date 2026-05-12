@@ -233,6 +233,11 @@ they are not a training distribution. Any candidate meant for promotion should
 use sampled train/held-out public states and must still pass the falsification
 ladder before Slumbot confirmation.
 
+Direct target fit is not promotion evidence. Evaluate held-out target fit with
+`scripts/eval_search_targets.py`, then cross-check resolver drift and all-in
+rate. A run that only learns the target file but worsens blueprint-vs-resolver
+drift or collapses into all-in selection fails the search-quality criterion.
+
 ## Implemented Automation
 
 The executable runner is `scripts/poker_autoresearch.py`. It automates
@@ -279,14 +284,16 @@ python scripts/poker_autoresearch.py enqueue-falsification \
   --mechanism "search-distilled policy targets reduce Slumbot transfer loss" \
   --max-resolver-cases 3
 python scripts/poker_autoresearch.py add-knob \
-  --name search_target_mix \
-  --default 0.0 \
+  --name search_target_weight \
+  --default 0.05 \
   --failure-class search_quality \
-  --mechanism "Test whether search-distilled targets reduce live transfer loss." \
-  --rationale "One variable isolates the target mechanism." \
-  --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."
+  --mechanism "Test whether resolver-distilled policy targets reduce blueprint-vs-resolver drift and improve transfer evidence." \
+  --rationale "Single auxiliary-loss weight isolates the reviewed search-consistency mechanism." \
+  --removal-criterion "Retire if held-out resolver drift or falsification-ladder evidence fails to improve against the no-target control."
 python scripts/build_search_targets.py \
-  --output autoresearch-session/search_targets/fixed_turn_river.npz \
+  --output autoresearch-session/search_targets/sampled_turn_river_train.npz \
+  --sampled-cases 64 \
+  --seed 20260512 \
   --solver-iterations 25 \
   --solver-backend auto
 python scripts/poker_autoresearch.py enqueue-compare \
@@ -305,12 +312,16 @@ python scripts/poker_autoresearch.py enqueue-train \
   --n-iterations 50 \
   --n-traversals 4000 \
   --n-training-steps 1500 \
-  --search-targets autoresearch-session/search_targets/fixed_turn_river.npz \
+  --search-targets autoresearch-session/search_targets/sampled_turn_river_train.npz \
   --search-target-weight 0.05 \
   --prefix candidate_gpu \
   --save-every 25 \
   --auto-compare \
   --compare-strategy-source regret
+python scripts/eval_search_targets.py \
+  --checkpoint models/candidate.pt \
+  --targets autoresearch-session/search_targets/sampled_turn_river_holdout.npz \
+  --strategy-source policy-head
 python scripts/poker_autoresearch.py close-cycle \
   --run-id <run_id> \
   --outcome passed \
@@ -355,10 +366,12 @@ training gate writes periodic checkpoints, emits them in JSON, then continuous
 mode queues head-to-head incumbent comparisons for every emitted checkpoint.
 This avoids judging a long run only by its final checkpoint when the learning
 curve is non-monotonic.
-Use `scripts/build_search_targets.py` to create small resolver-target datasets
-and pass them to `enqueue-train` or `scripts/run_gpu_deep_cfr.py` with
-`--search-targets`. The training path records `search_target_weight` and target
-count in the emitted metrics JSON.
+Use `scripts/build_search_targets.py` to create resolver-target datasets and
+pass them to `enqueue-train` or `scripts/run_gpu_deep_cfr.py` with
+`--search-targets`. Prefer `--sampled-cases` plus a recorded seed for
+experiments. The script also writes `<output>.cases.json`; use a separate seed
+for held-out resolver benchmarks. The training path records
+`search_target_weight` and target count in the emitted metrics JSON.
 Use `--compare-strategy-source policy-head` for auto-queued comparisons only
 after the incumbent itself is a policy-head-capable checkpoint.
 Use `enqueue-slumbot` only for sparse live checks after local comparison says a

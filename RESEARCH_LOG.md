@@ -1058,3 +1058,14 @@
 - Summary: Implemented optional search-consistency policy targets: legal-mask-normalized target buffer, masked policy-head loss, resolver target builder, training/autoresearch CLI flags, docs, and focused tests. Smoke generated four fixed resolver targets and loaded them through a one-iteration CUDA training path.
 - Metrics file: autoresearch-session/search_targets/fixed_turn_river_smoke.json
 - Key metrics: `{"passed": true, "search_target_size": 4, "search_target_weight": 0.05, "cuda_smoke": true}`
+
+## 20260512T200732Z-sampled-resolver-targets-should-reduce-held-out-policy - failed
+
+- Timestamp: 2026-05-12T20:07:42Z
+- Type: experiment
+- Gate: sampled-search-consistency-ab
+- Hypothesis: Sampled resolver targets should reduce held-out policy-head drift without increasing resolver drift or all-in collapse.
+- Failure class: search_quality
+- Summary: Sampled search-target supervision improved target-fit metrics slightly but failed the transfer criterion: blueprint resolver drift worsened and policy-head all-in rate rose to 0.875 on an 8-case holdout; next step is target-quality and action-bucket legality diagnosis, not scale-up.
+- Metrics file: autoresearch-session/search_targets/sampled_search_consistency_ab_20260512.json
+- Key metrics: `{"passed": false, "control_holdout_mean_l1": 0.349352, "target_holdout_mean_l1": 0.329761, "control_policy_head_mean_action_l1_drift": 0.4546, "target_policy_head_mean_action_l1_drift": 0.4406, "control_mean_action_l1_drift": 1.3008, "target_mean_action_l1_drift": 1.3861, "target_policy_head_allin_rate": 0.875}`

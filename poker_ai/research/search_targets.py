@@ -29,6 +29,94 @@ from play_slumbot import (  # noqa: E402
 )
 
 
+_SUITS = ("c", "d", "h", "s")
+_RANKS = tuple("23456789TJQKA")
+_BET_SIZES = (200, 300, 500, 800, 1200, 2000, 4000)
+
+
+def _card_to_str(card: int) -> str:
+    return _RANKS[card // 4] + _SUITS[card % 4]
+
+
+def _sample_cards(rng: np.random.Generator, n: int) -> list[str]:
+    cards = rng.choice(52, size=n, replace=False)
+    return [_card_to_str(int(card)) for card in cards]
+
+
+def _sample_action_template(rng: np.random.Generator) -> tuple[int, str, int]:
+    flop_bet = int(rng.choice(_BET_SIZES))
+    turn_bet = int(rng.choice(_BET_SIZES))
+    river_bet = int(rng.choice(_BET_SIZES))
+    templates = (
+        (2, "ck/kk/", 0),
+        (2, f"ck/kk/b{turn_bet}", 1),
+        (2, f"ck/b{flop_bet}c/", 0),
+        (2, f"ck/b{flop_bet}c/b{turn_bet}", 1),
+        (3, "ck/kk/kk/", 0),
+        (3, f"ck/kk/kk/b{river_bet}", 1),
+        (3, f"ck/b{flop_bet}c/kk/", 0),
+        (3, f"ck/b{flop_bet}c/kk/b{river_bet}", 1),
+        (3, f"ck/b{flop_bet}c/b{turn_bet}c/", 0),
+    )
+    return templates[int(rng.integers(0, len(templates)))]
+
+
+def sample_resolver_cases(
+    n_cases: int,
+    *,
+    seed: int = 0,
+    source: str = "sampled",
+) -> list[ResolverBenchmarkCase]:
+    """Sample valid turn/river public states for resolver-target generation."""
+    rng = np.random.default_rng(seed)
+    cases: list[ResolverBenchmarkCase] = []
+    attempts = 0
+    while len(cases) < n_cases and attempts < max(100, n_cases * 20):
+        attempts += 1
+        street, action_str, client_pos = _sample_action_template(rng)
+        cards = _sample_cards(rng, 7)
+        hole_cards = tuple(cards[:2])
+        board = tuple(cards[2:6] if street == 2 else cards[2:7])
+        parsed = parse_action(action_str)
+        if "error" in parsed:
+            continue
+        if int(parsed.get("st", -1)) != street or int(parsed.get("pos", -1)) != client_pos:
+            continue
+        label = f"{source}-{len(cases):04d}-street{street}"
+        cases.append(
+            ResolverBenchmarkCase(
+                label=label,
+                hole_cards=hole_cards,
+                board=board,
+                action_str=action_str,
+                client_pos=client_pos,
+                source=source,
+            )
+        )
+    if len(cases) != n_cases:
+        raise RuntimeError(f"generated {len(cases)} valid cases out of requested {n_cases}")
+    return cases
+
+
+def save_cases_json(cases: Iterable[ResolverBenchmarkCase], path: str | Path) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "cases": [
+            {
+                "label": case.label,
+                "hole_cards": list(case.hole_cards),
+                "board": list(case.board),
+                "action_str": case.action_str,
+                "client_pos": int(case.client_pos),
+                "source": case.source,
+            }
+            for case in cases
+        ]
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
 def _normalized_legal_target(
     strategy: np.ndarray,
     legal_mask: np.ndarray,
@@ -138,10 +226,22 @@ def save_resolver_policy_targets(
     output: str | Path,
     *,
     cases_json: str | Path | None = None,
+    sampled_cases: int = 0,
+    seed: int = 0,
     solver_iterations: int = 25,
     solver_backend: str = "auto",
 ) -> dict:
-    cases = load_cases_json(cases_json) if cases_json else default_benchmark_cases()
+    if cases_json and sampled_cases:
+        raise ValueError("choose either cases_json or sampled_cases, not both")
+    if cases_json:
+        cases = load_cases_json(cases_json)
+        case_source = str(cases_json)
+    elif sampled_cases:
+        cases = sample_resolver_cases(sampled_cases, seed=seed)
+        case_source = "sampled"
+    else:
+        cases = default_benchmark_cases()
+        case_source = "fixed_default"
     buffer, metadata = build_resolver_policy_targets(
         cases,
         solver_iterations=solver_iterations,
@@ -150,8 +250,13 @@ def save_resolver_policy_targets(
     output = Path(output)
     buffer.save_npz(output)
     metadata_path = output.with_suffix(".json")
+    cases_path = output.with_suffix(".cases.json")
+    save_cases_json(cases, cases_path)
     metadata["output"] = str(output)
     metadata["metadata"] = str(metadata_path)
+    metadata["cases_json"] = str(cases_path)
+    metadata["case_source"] = case_source
+    metadata["seed"] = int(seed) if sampled_cases else None
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True),
         encoding="utf-8",

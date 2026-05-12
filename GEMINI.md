@@ -82,8 +82,9 @@ python scripts/poker_autoresearch.py gate eval-resolver-fixed-states
 Search-consistency targets:
 
 ```bash
-python scripts/build_search_targets.py --output autoresearch-session/search_targets/fixed_turn_river.npz --solver-iterations 25 --solver-backend auto
-python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --search-targets autoresearch-session/search_targets/fixed_turn_river.npz --search-target-weight 0.05 --prefix search_consistency --save-every 25 --auto-compare
+python scripts/build_search_targets.py --output autoresearch-session/search_targets/sampled_turn_river_train.npz --sampled-cases 64 --seed 20260512 --solver-iterations 25 --solver-backend auto
+python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --search-targets autoresearch-session/search_targets/sampled_turn_river_train.npz --search-target-weight 0.05 --prefix search_consistency --save-every 25 --auto-compare
+python scripts/eval_search_targets.py --checkpoint models/candidate.pt --targets autoresearch-session/search_targets/sampled_turn_river_holdout.npz --strategy-source policy-head
 ```
 
 Autoresearch governance:

@@ -206,6 +206,15 @@ GPU training readiness:
   `--search-target-batch-size`. A one-iteration CUDA smoke with four fixed
   resolver targets passed and recorded `search_target_size=4`; this validates
   the path, not strategy quality.
+- Sampled search-target generation now supports train/held-out turn-river
+  public states with recorded seeds and emitted case JSON. A tiny controlled
+  A/B (`10` iterations, `500` traversals, `50` training steps, `hidden_dim=128`)
+  showed the target path is learnable but not promotable: held-out policy-target
+  L1 improved only from `0.349` to `0.330`, policy-head resolver drift improved
+  from `0.455` to `0.441`, but blueprint resolver drift worsened from `1.301`
+  to `1.386` and policy-head all-in rate rose to `0.875` against a holdout
+  target all-in rate of `0.375`. Treat this as a failed search-quality cycle
+  and diagnose target quality/action-bucket legality before scaling it.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

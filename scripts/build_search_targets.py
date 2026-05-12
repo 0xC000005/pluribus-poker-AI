@@ -23,6 +23,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--output", required=True)
     parser.add_argument("--cases-json")
+    parser.add_argument(
+        "--sampled-cases",
+        type=int,
+        default=0,
+        help="Generate this many sampled turn/river cases instead of fixed defaults.",
+    )
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--solver-iterations", type=int, default=25)
     parser.add_argument(
         "--solver-backend",
@@ -36,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     metadata = save_resolver_policy_targets(
         args.output,
         cases_json=args.cases_json,
+        sampled_cases=args.sampled_cases,
+        seed=args.seed,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
     )
