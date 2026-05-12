@@ -94,6 +94,7 @@ Policy-head calibration diagnostics:
 
 ```bash
 python scripts/build_policy_calibration_targets.py --checkpoint models/control.pt --output autoresearch-session/policy_calibration/calib_targets.npz --n-targets 4096 --strategy-source regret
+python scripts/build_policy_calibration_targets.py --checkpoint models/control.pt --output autoresearch-session/policy_calibration/hand_sweep.npz --hand-sweep --sampled-cases 16 --hands-per-case 128 --strategy-source regret
 python scripts/train_policy_head_calibration.py --checkpoint models/control.pt --targets autoresearch-session/policy_calibration/calib_targets.npz --output autoresearch-session/policy_calibration/calibrated.pt --n-steps 600
 python scripts/diagnose_range_tracker.py --checkpoint autoresearch-session/policy_calibration/calibrated.pt --cases-json autoresearch-session/search_targets/reachable_policyhead_holdout_16x5.cases.json --strategy-source policy-head
 ```

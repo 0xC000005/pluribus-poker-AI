@@ -1208,3 +1208,24 @@
 - Summary: Added policy-head calibration target generation and policy-head-only training. The calibrated checkpoint improved train and held-out behavior-cloning loss and increased range-likelihood action dispersion by about 5-6x, but ranges remained high-entropy and local policy-head head-to-head did not clear a positive lower95 bound. This is a partial mechanism pass and not a promotable strategy.
 - Metrics file: autoresearch-session/policy_calibration/control_regret_policy_calibration_ab_20260512.json
 - Key metrics: `{"passed": false, "train_loss_delta": -0.525281, "holdout_loss_delta": -0.544128, "hero_likelihood_std_before": 0.00186, "hero_likelihood_std_after": 0.011748, "villain_likelihood_std_before": 0.001707, "villain_likelihood_std_after": 0.009523, "hero_range_entropy_after": 0.997141, "villain_range_entropy_after": 0.996692, "policy_head_h2h_avg": 151.815556, "policy_head_h2h_lower95": -3.994364}`
+## 20260512T211237Z-methodology-review-for-public-state-hand-sweep-policy - passed
+
+- Timestamp: 2026-05-12T21:12:37Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T211129Z-public-state-hand-sweep-policy-calibration
+- Hypothesis: Methodology review for public-state hand-sweep policy calibration should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T211129Z-public-state-hand-sweep-policy-calibration passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T211237Z-methodology-review-for-public-state-hand-sweep-policy/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T211129Z-public-state-hand-sweep-policy-calibration", "passed": true}`
+
+## 20260512T211710Z-public-state-hand-sweep-calibration-should-improve - failed
+
+- Timestamp: 2026-05-12T21:17:10Z
+- Type: experiment
+- Gate: public-state-hand-sweep-policy-calibration-ab
+- Hypothesis: A train-only turn/river public-state hand sweep should improve policy-head likelihood for RangeTracker more directly than realized-hand self-play calibration.
+- Failure class: teacher_quality
+- Summary: Added a public-state/private-hand sweep target builder and tested a small regret-teacher sweep. The sweep produced balanced turn/river coverage and reduced policy-target loss, but the regret teacher labels were all-in-heavy and local policy-head head-to-head regressed. Range entropy improved only modestly. Do not scale this sweep until the teacher or target softness is improved.
+- Metrics file: autoresearch-session/policy_calibration/hand_sweep_regret_ab_20260512.json
+- Key metrics: `{"passed": false, "target_allin_rate": 0.652832, "train_loss_delta": -1.057908, "hero_likelihood_std": 0.005595, "villain_likelihood_std": 0.005417, "hero_range_entropy": 0.995868, "villain_range_entropy": 0.995604, "policy_head_h2h_avg": -13.528889, "policy_head_h2h_lower95": -69.930421}`

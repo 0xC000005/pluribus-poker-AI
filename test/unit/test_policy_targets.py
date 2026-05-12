@@ -15,6 +15,7 @@ from poker_ai.research.range_diagnostics import diagnose_range_likelihood
 from poker_ai.research.policy_calibration import (
     evaluate_policy_target_loss,
     sample_policy_calibration_targets,
+    sample_public_state_hand_sweep_targets,
     train_policy_head_calibration,
 )
 from poker_ai.research.search_targets import (
@@ -307,6 +308,57 @@ def test_sample_policy_calibration_targets_collects_masked_strategy(tmp_path, mo
     assert metadata["checkpoint_iteration"] == 7
     np.testing.assert_allclose(buffer.target_probs.sum(axis=1), np.ones(8))
     assert np.all(buffer.legal_masks.sum(axis=1) > 0)
+
+
+def test_public_state_hand_sweep_targets_expand_private_hands(tmp_path, monkeypatch):
+    def passive_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
+        strategy = np.zeros(N_ACTIONS, dtype=np.float64)
+        legal = legal_mask > 0
+        strategy[legal] = 1.0 / max(float(legal.sum()), 1.0)
+        return np.zeros(N_ACTIONS, dtype=np.float32), strategy
+
+    monkeypatch.setattr(
+        "poker_ai.research.policy_calibration.network_strategy",
+        passive_strategy,
+    )
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "hand_sweep_source.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 11,
+        },
+        checkpoint,
+    )
+    case = ResolverBenchmarkCase(
+        label="sweep-turn-open",
+        hole_cards=("Ac", "Kd"),
+        board=("2c", "7d", "Jh", "4s"),
+        action_str="ck/kk/",
+        client_pos=0,
+        source="unit",
+    )
+
+    buffer, metadata = sample_public_state_hand_sweep_targets(
+        [case],
+        checkpoint=checkpoint,
+        strategy_source="regret",
+        device="cpu",
+        hands_per_case=5,
+        seed=20260512,
+    )
+
+    assert buffer.size == 5
+    assert metadata["mode"] == "public_state_hand_sweep_policy_calibration_targets"
+    assert metadata["street_counts"]["2"] == 5
+    assert metadata["records"][0]["n_hands"] == 5
+    np.testing.assert_allclose(
+        buffer.target_probs.sum(axis=1),
+        np.ones(5, dtype=np.float32),
+        atol=1e-6,
+    )
 
 
 def test_train_policy_head_calibration_reduces_target_loss(tmp_path):

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 import torch
@@ -20,6 +21,7 @@ from poker_ai.research.evaluation import (
     assert_strategy_source_supported,
     load_value_network_checkpoint,
 )
+from poker_ai.research.resolver_benchmark import ResolverBenchmarkCase
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
@@ -56,6 +58,10 @@ def _sample_cards(rng: np.random.Generator, n: int) -> list[str]:
     return [_card_to_str(int(card)) for card in cards]
 
 
+def _card_str_to_index(card: str) -> int:
+    return _RANKS.index(card[0]) * 4 + _SUITS.index(card[1])
+
+
 def _visible_board(board: list[str], street: int) -> list[str]:
     if street <= 0:
         return []
@@ -80,6 +86,21 @@ def _append_action(action_str: str, increment: str, previous_street: int) -> str
     ):
         return next_action + "/"
     return next_action
+
+
+def _sample_private_hands(
+    board: Iterable[str],
+    *,
+    rng: np.random.Generator,
+    max_hands: int | None,
+) -> list[tuple[str, str]]:
+    blocked = {_card_str_to_index(card) for card in board}
+    available = [card for card in range(52) if card not in blocked]
+    hands = list(itertools.combinations(available, 2))
+    if max_hands is not None and max_hands < len(hands):
+        selected = rng.choice(len(hands), size=max_hands, replace=False)
+        hands = [hands[int(index)] for index in selected]
+    return [(_card_to_str(hand[0]), _card_to_str(hand[1])) for hand in hands]
 
 
 def _normalized_strategy(strategy: np.ndarray, legal_mask: np.ndarray) -> np.ndarray:
@@ -225,6 +246,125 @@ def save_policy_calibration_targets(
         strategy_source=strategy_source,
         device=device,
         max_hands=max_hands,
+    )
+    output = Path(output)
+    buffer.save_npz(output)
+    meta_path = output.with_suffix(output.suffix + ".json")
+    meta_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return metadata
+
+
+def sample_public_state_hand_sweep_targets(
+    cases: Iterable[ResolverBenchmarkCase],
+    *,
+    checkpoint: str | Path,
+    seed: int = 0,
+    strategy_source: str = "regret",
+    device: str | torch.device = "auto",
+    hands_per_case: int | None = 256,
+) -> tuple[PolicyTargetBuffer, dict[str, Any]]:
+    """Expand turn/river public states over compatible private hands."""
+    resolved_device = _resolve_device(device)
+    loaded = load_value_network_checkpoint(checkpoint, resolved_device)
+    assert_strategy_source_supported(loaded, strategy_source)
+    rng = np.random.default_rng(seed)
+    selected_cases = list(cases)
+
+    features_out: list[np.ndarray] = []
+    masks_out: list[np.ndarray] = []
+    targets_out: list[np.ndarray] = []
+    weights_out: list[float] = []
+    records: list[dict[str, Any]] = []
+    street_counts = {"2": 0, "3": 0}
+
+    for case in selected_cases:
+        parsed = parse_action(case.action_str)
+        if "error" in parsed:
+            records.append({"label": case.label, "skipped": f"parse_error:{parsed['error']}"})
+            continue
+        street = int(parsed.get("st", -1))
+        if street not in (2, 3):
+            records.append({"label": case.label, "skipped": f"unsupported_street:{street}"})
+            continue
+        acting_pos = int(case.client_pos)
+        n_board = 4 if street == 2 else 5
+        board = list(case.board[:n_board])
+        legal_mask = get_legal_mask_from_parsed(parsed, case.action_str, acting_pos)
+        hands = _sample_private_hands(board, rng=rng, max_hands=hands_per_case)
+        start = len(features_out)
+        for hand in hands:
+            features = build_features(
+                list(hand),
+                board,
+                case.action_str,
+                acting_pos,
+                parsed,
+            )
+            _, strategy = network_strategy(
+                loaded.value_net,
+                features,
+                legal_mask,
+                resolved_device,
+                strategy_source=strategy_source,
+            )
+            features_out.append(features.astype(np.float32, copy=False))
+            masks_out.append((legal_mask > 0).astype(np.float32, copy=False))
+            targets_out.append(_normalized_strategy(strategy, legal_mask))
+            weights_out.append(float(max(int(loaded.metadata.get("iteration") or 1), 1)))
+        n_added = len(features_out) - start
+        street_counts[str(street)] += n_added
+        records.append(
+            {
+                "label": case.label,
+                "street": street,
+                "action_str": case.action_str,
+                "n_hands": int(n_added),
+                "n_legal_actions": int(legal_mask.sum()),
+            }
+        )
+
+    if not features_out:
+        raise RuntimeError("no public-state hand-sweep calibration targets generated")
+
+    n_targets = len(features_out)
+    features_arr = np.asarray(features_out, dtype=np.float32).reshape(n_targets, N_FEATURES)
+    masks_arr = np.asarray(masks_out, dtype=np.float32).reshape(n_targets, N_ACTIONS)
+    targets_arr = np.asarray(targets_out, dtype=np.float32).reshape(n_targets, N_ACTIONS)
+    weights_arr = np.asarray(weights_out, dtype=np.float32)
+    buffer = PolicyTargetBuffer(features_arr, masks_arr, targets_arr, weights_arr)
+    metadata: dict[str, Any] = {
+        "mode": "public_state_hand_sweep_policy_calibration_targets",
+        "checkpoint": str(checkpoint),
+        "checkpoint_iteration": loaded.metadata.get("checkpoint_iteration"),
+        "strategy_source": strategy_source,
+        "device": str(resolved_device),
+        "n_cases": int(len(selected_cases)),
+        "n_targets": int(n_targets),
+        "hands_per_case": int(hands_per_case) if hands_per_case is not None else "all",
+        "street_counts": street_counts,
+        "records": records,
+        **_target_summary(buffer.target_probs),
+    }
+    return buffer, metadata
+
+
+def save_public_state_hand_sweep_targets(
+    output: str | Path,
+    cases: Iterable[ResolverBenchmarkCase],
+    *,
+    checkpoint: str | Path,
+    seed: int = 0,
+    strategy_source: str = "regret",
+    device: str | torch.device = "auto",
+    hands_per_case: int | None = 256,
+) -> dict[str, Any]:
+    buffer, metadata = sample_public_state_hand_sweep_targets(
+        cases,
+        checkpoint=checkpoint,
+        seed=seed,
+        strategy_source=strategy_source,
+        device=device,
+        hands_per_case=hands_per_case,
     )
     output = Path(output)
     buffer.save_npz(output)
