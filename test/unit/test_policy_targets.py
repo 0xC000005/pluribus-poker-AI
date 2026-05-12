@@ -11,6 +11,7 @@ from poker_ai.deep_cfr.policy_targets import (
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.search_target_eval import evaluate_search_targets
 from poker_ai.research.resolver_benchmark import ResolverBenchmarkCase
+from poker_ai.research.range_diagnostics import diagnose_range_likelihood
 from poker_ai.research.search_targets import (
     build_resolver_policy_targets,
     parse_action,
@@ -225,3 +226,39 @@ def test_belief_conditioned_policy_targets_record_range_diagnostics(tmp_path):
     assert record["hero_range_support"] > 0
     assert record["villain_range_support"] > 0
     assert record["solver_n_hands"] <= record["solver_full_n_hands"]
+
+
+def test_range_likelihood_diagnostics_report_finite_dispersion(tmp_path):
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "range_diag.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 5,
+        },
+        checkpoint,
+    )
+    case = ResolverBenchmarkCase(
+        label="diag-turn-open",
+        hole_cards=("Ac", "Kd"),
+        board=("2c", "7d", "Jh", "4s"),
+        action_str="ck/kk/",
+        client_pos=0,
+        source="unit",
+    )
+
+    metrics = diagnose_range_likelihood(
+        checkpoint,
+        [case],
+        strategy_source="regret",
+        device="cpu",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["n_completed"] == 1
+    assert np.isfinite(metrics["mean_hero_range_normalized_entropy"])
+    record = metrics["records"][0]
+    assert record["hero_likelihood"]["top_action_diversity"] >= 1
+    assert record["villain_likelihood"]["mean_action_prob_std"] >= 0.0

@@ -1166,3 +1166,24 @@
 - Summary: Policy-head rollout was healthier than regret-only rollout and produced a positive single-seed policy-head average, but the effect did not survive three seeds. Target all-in rate stayed high and the trained policy-head selected all-in on every holdout target.
 - Metrics file: autoresearch-session/search_targets/reachable_policyhead_ab_20260512.json
 - Key metrics: `{"passed": false, "train_success_rate": 0.129032, "holdout_success_rate": 0.097561, "train_target_allin_rate": 0.6875, "holdout_target_allin_rate": 0.75, "candidate_holdout_mean_l1": 0.660395, "control_holdout_mean_l1": 0.710932, "candidate_policy_allin_rate": 1.0, "single_seed_policy_head_avg": 185.895, "three_seed_policy_head_avg": 20.9694, "three_seed_policy_head_lower95": -148.4342, "regret_h2h_avg": -193.65}`
+## 20260512T205610Z-methodology-review-for-range-likelihood-calibration-diagnostics-should - passed
+
+- Timestamp: 2026-05-12T20:56:10Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T205513Z-range-likelihood-calibration-diagnostics
+- Hypothesis: Methodology review for Range likelihood calibration diagnostics should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T205513Z-range-likelihood-calibration-diagnostics passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T205610Z-methodology-review-for-range-likelihood-calibration-diagnostics-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T205513Z-range-likelihood-calibration-diagnostics", "passed": true}`
+
+## 20260512T205920Z-range-likelihood-diagnostics-should-identify-belief - passed
+
+- Timestamp: 2026-05-12T20:59:20Z
+- Type: investigation
+- Gate: range-likelihood-calibration-diagnostics
+- Hypothesis: Learned range tracking should produce hand-conditional action likelihoods; otherwise belief-conditioned search targets will mostly reuse uniform ranges.
+- Failure class: belief_calibration
+- Summary: Added a range-likelihood diagnostic tool and found that the policy-head average strategy is nearly hand-independent on reachable holdout cases, leaving ranges almost uniform. The regret source is hand-conditional, but earlier transfer evidence showed it is strategically unstable and all-in heavy. The next principled step is policy-likelihood calibration for range tracking, not another search-target knob sweep.
+- Metrics file: autoresearch-session/search_targets/range_likelihood_diagnostics_20260512.json
+- Key metrics: `{"passed": true, "policy_head_mean_hero_likelihood_action_std": 0.00186, "policy_head_mean_villain_likelihood_action_std": 0.001707, "policy_head_mean_hero_range_entropy": 0.999976, "policy_head_mean_villain_range_entropy": 0.999976, "regret_mean_hero_likelihood_action_std": 0.153474, "regret_mean_villain_likelihood_action_std": 0.128329, "regret_mean_hero_range_entropy": 0.607518, "regret_mean_villain_range_entropy": 0.567628}`
