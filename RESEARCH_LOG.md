@@ -1303,3 +1303,24 @@
 - Summary: Added opt-in traversal-collected average-strategy memory for CPU and CUDA Deep CFR, then ran a matched 5-iteration GPU A/B. The machinery collected 20,000 legal-mask policy targets and did not slow the tiny training gate, but `--average-strategy-weight 0.1` worsened policy-head top-action collapse and lost duplicate-swapped policy-head H2H against the legacy control. Leave this path disabled by default until the target weighting or sampling mechanism is redesigned.
 - Metrics file: autoresearch-session/avg_strategy_memory_ab/avg_strategy_memory_ab_20260512.json
 - Key metrics: `{"passed": false, "control_iters_per_hour": 4181.0, "candidate_iters_per_hour": 4425.383, "candidate_average_strategy_target_size": 20000, "control_dominant_top_action_rate": 0.788086, "candidate_dominant_top_action_rate": 0.974609, "policy_head_h2h_avg": -194.123333, "policy_head_h2h_lower95": -298.212526}`
+## 20260512T215547Z-methodology-review-for-separate-average-policy-network-for - passed
+
+- Timestamp: 2026-05-12T21:55:47Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T215402Z-separate-average-policy-network-for-traversal-strategy-memory
+- Hypothesis: Methodology review for Separate average-policy network for traversal strategy memory should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T215402Z-separate-average-policy-network-for-traversal-strategy-memory passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T215547Z-methodology-review-for-separate-average-policy-network-for/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T215402Z-separate-average-policy-network-for-traversal-strategy-memory", "passed": true}`
+
+## 20260512T220700Z-separate-average-policy-network - failed
+
+- Timestamp: 2026-05-12T22:07:00Z
+- Type: experiment
+- Gate: separate-average-policy-network-ab
+- Hypothesis: A separate average-strategy policy network trained directly on strategy memory should avoid the auxiliary-head interference seen in the failed average-strategy-memory A/B.
+- Failure class: strategy_quality
+- Summary: Added an opt-in standalone average-policy network saved as `average_policy_net` and an explicit `average-policy` strategy source for evaluation and Slumbot paths. The separate model reduced the visible single-action collapse diagnostic versus the auxiliary policy head, but the resulting average policy still lost badly to the default regret-matching control in duplicate-swapped H2H. This suggests the current early-iteration strategy memory is too weak/noisy for direct average-policy play at this budget.
+- Metrics file: autoresearch-session/separate_avg_policy_ab/separate_avg_policy_ab_20260512.json
+- Key metrics: `{"passed": false, "control_iters_per_hour": 4523.003, "candidate_iters_per_hour": 4234.876, "candidate_average_strategy_target_size": 20000, "candidate_dominant_top_action_rate": 0.375, "candidate_top_action_diversity": 5, "mixed_h2h_avg": -238.219444, "mixed_h2h_lower95": -298.836569}`

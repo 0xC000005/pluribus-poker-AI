@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--strategy-source",
-        choices=("policy-head", "regret"),
+        choices=("policy-head", "regret", "average-policy"),
         default="policy-head",
     )
     args = parser.parse_args(argv)

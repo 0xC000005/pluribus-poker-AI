@@ -30,8 +30,12 @@ from numba.cuda.random import create_xoroshiro128p_states
 from poker_ai.deep_cfr.buffer import ReservoirBuffer
 from poker_ai.deep_cfr.deep_cfr import regret_match, train_value_network
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
-from poker_ai.deep_cfr.networks import ValueNetwork
-from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer, PolicyReservoirBuffer
+from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
+from poker_ai.deep_cfr.policy_targets import (
+    PolicyTargetBuffer,
+    PolicyReservoirBuffer,
+    train_average_policy_network,
+)
 
 from poker_ai.deep_cfr.cuda.lookup_tables import get_gpu_tables, FLUSH_SIZE, UNSUITED_SIZE
 from poker_ai.deep_cfr.cuda.game_state import (
@@ -950,6 +954,10 @@ class GPUDeepCFRTrainer:
         self.value_net = ValueNetwork(
             N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers
         ).to(self.device)
+        self.average_policy_net = PolicyNetwork(
+            N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers
+        ).to(self.device)
+        self.has_average_policy_net = False
         self.iteration = 0
         self._workspace: _GPUTraverseWorkspace | None = None
         self._schedule_logged = False
@@ -1047,10 +1055,18 @@ class GPUDeepCFRTrainer:
                     policy_target_buffer=self.policy_target_buffer,
                     policy_target_weight=self.policy_target_weight,
                     policy_target_batch_size=self.policy_target_batch_size,
-                    average_strategy_buffer=self.strategy_buffer,
-                    average_strategy_weight=self.average_strategy_weight,
-                    average_strategy_batch_size=self.average_strategy_batch_size,
                 )
+                if self.average_strategy_weight > 0 and self.strategy_buffer.size > 0:
+                    self.average_policy_net = train_average_policy_network(
+                        self.strategy_buffer,
+                        hidden_dim=self.hidden_dim,
+                        n_layers=self.n_layers,
+                        n_epochs=train_steps,
+                        batch_size=self.average_strategy_batch_size or train_batch,
+                        lr=self.lr,
+                        device=self.device,
+                    )
+                    self.has_average_policy_net = True
             finally:
                 if hasattr(combined, "release_gpu_cache"):
                     combined.release_gpu_cache()
@@ -1100,7 +1116,12 @@ class GPUDeepCFRTrainer:
                 ),
                 "average_strategy_target_size": int(self.strategy_buffer.size),
                 "average_strategy_weight": self.average_strategy_weight,
+                "has_average_policy_net": bool(self.has_average_policy_net),
                 "buffer_sizes": [len(b) for b in self.buffers],
+                **(
+                    {"average_policy_net": self.average_policy_net.state_dict()}
+                    if self.has_average_policy_net else {}
+                ),
             },
             path,
         )
@@ -1131,5 +1152,8 @@ class GPUDeepCFRTrainer:
                 "Could not load value_net state_dict: "
                 f"missing={missing}, unexpected={unexpected}"
             )
+        if checkpoint.get("average_policy_net") is not None:
+            trainer.average_policy_net.load_state_dict(checkpoint["average_policy_net"])
+            trainer.has_average_policy_net = True
         trainer.iteration = checkpoint["iteration"]
         return trainer

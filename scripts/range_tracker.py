@@ -581,6 +581,12 @@ class RangeTracker:
                 advantages_t, logits_t = self.value_net.forward_with_policy(feat_t)
                 advantages = advantages_t.cpu().numpy()
                 logits = logits_t.cpu().numpy()
+            elif self.strategy_source == "average-policy":
+                average_policy_net = getattr(self.value_net, "average_policy_net", None)
+                if average_policy_net is None:
+                    raise RuntimeError("average-policy strategy source requires average_policy_net")
+                advantages = self.value_net(feat_t).cpu().numpy()
+                logits = average_policy_net(feat_t).cpu().numpy()
             elif self.strategy_source == "regret":
                 advantages = self.value_net(feat_t).cpu().numpy()
                 logits = None
@@ -591,7 +597,7 @@ class RangeTracker:
         n = len(hands)
         strategies = np.zeros((n, N_ACTIONS), dtype=np.float64)
         for i in range(n):
-            if self.strategy_source == "policy-head":
+            if self.strategy_source in {"policy-head", "average-policy"}:
                 masked_logits = np.where(legal_mask > 0, logits[i], -1e9)
                 shifted = masked_logits - np.max(masked_logits)
                 probs = np.exp(shifted) * legal_mask

@@ -71,11 +71,15 @@ def _evaluate_head_to_head(
     seeds: list[int],
     initial_chips_override: int | None,
     strategy_source: str,
+    candidate_strategy_source: str | None = None,
+    baseline_strategy_source: str | None = None,
 ) -> dict:
+    candidate_strategy_source = candidate_strategy_source or strategy_source
+    baseline_strategy_source = baseline_strategy_source or strategy_source
     candidate = load_value_network_checkpoint(candidate_checkpoint, device)
     baseline = load_value_network_checkpoint(baseline_checkpoint, device)
-    assert_strategy_source_supported(candidate, strategy_source)
-    assert_strategy_source_supported(baseline, strategy_source)
+    assert_strategy_source_supported(candidate, candidate_strategy_source)
+    assert_strategy_source_supported(baseline, baseline_strategy_source)
     candidate_metadata = dict(candidate.metadata)
     baseline_metadata = dict(baseline.metadata)
     initial_chips = initial_chips_override or int(candidate_metadata["initial_chips"])
@@ -90,6 +94,8 @@ def _evaluate_head_to_head(
             candidate_metadata=candidate_metadata,
             baseline_metadata=baseline_metadata,
             strategy_source=strategy_source,
+            candidate_strategy_source=candidate_strategy_source,
+            baseline_strategy_source=baseline_strategy_source,
         )
         for seed in seeds
     ]
@@ -132,9 +138,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--initial-chips", type=int)
     parser.add_argument(
         "--strategy-source",
-        choices=("regret", "policy-head"),
+        choices=("regret", "policy-head", "average-policy"),
         default="regret",
         help="Use advantage regret matching or the trained average-strategy policy head.",
+    )
+    parser.add_argument(
+        "--candidate-strategy-source",
+        choices=("regret", "policy-head", "average-policy"),
+        help="Override --strategy-source for the candidate in head-to-head mode.",
+    )
+    parser.add_argument(
+        "--baseline-strategy-source",
+        choices=("regret", "policy-head", "average-policy"),
+        help="Override --strategy-source for the baseline in head-to-head mode.",
     )
     parser.add_argument(
         "--require-positive-lower95",
@@ -160,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
             seeds=seeds,
             initial_chips_override=args.initial_chips,
             strategy_source=args.strategy_source,
+            candidate_strategy_source=args.candidate_strategy_source,
+            baseline_strategy_source=args.baseline_strategy_source,
         )
         print(json.dumps(metrics, indent=2, sort_keys=True))
         if args.require_positive_lower95:

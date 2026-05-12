@@ -19,11 +19,12 @@ import torch.nn as nn
 import torch.optim as optim
 
 from poker_ai.deep_cfr.buffer import ReservoirBuffer
-from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
 from poker_ai.deep_cfr.policy_targets import (
     PolicyTargetBuffer,
     PolicyReservoirBuffer,
     masked_policy_cross_entropy,
+    train_average_policy_network,
 )
 from poker_ai.games.full_deck.state import (
     N_ACTIONS,
@@ -442,6 +443,10 @@ class DeepCFRTrainer:
         self.value_net = ValueNetwork(
             N_FEATURES, hidden_dim, N_ACTIONS
         ).to(self.device)
+        self.average_policy_net = PolicyNetwork(
+            N_FEATURES, hidden_dim, N_ACTIONS
+        ).to(self.device)
+        self.has_average_policy_net = False
         self.iteration = 0
 
     def run_iteration(self):
@@ -483,10 +488,18 @@ class DeepCFRTrainer:
                 policy_target_buffer=self.policy_target_buffer,
                 policy_target_weight=self.policy_target_weight,
                 policy_target_batch_size=self.policy_target_batch_size,
-                average_strategy_buffer=self.strategy_buffer,
-                average_strategy_weight=self.average_strategy_weight,
-                average_strategy_batch_size=self.average_strategy_batch_size,
             )
+            if self.average_strategy_weight > 0 and self.strategy_buffer.size > 0:
+                self.average_policy_net = train_average_policy_network(
+                    self.strategy_buffer,
+                    hidden_dim=self.hidden_dim,
+                    n_layers=2,
+                    n_epochs=self.n_training_steps,
+                    batch_size=self.average_strategy_batch_size or self.batch_size,
+                    lr=self.lr,
+                    device=self.device,
+                )
+                self.has_average_policy_net = True
 
     def _combine_buffers(self) -> ReservoirBuffer:
         """Merge all player buffers into a single buffer for training."""
@@ -531,7 +544,12 @@ class DeepCFRTrainer:
                 "hidden_dim": self.hidden_dim,
                 "average_strategy_target_size": int(self.strategy_buffer.size),
                 "average_strategy_weight": self.average_strategy_weight,
+                "has_average_policy_net": bool(self.has_average_policy_net),
                 "buffer_sizes": [len(b) for b in self.buffers],
+                **(
+                    {"average_policy_net": self.average_policy_net.state_dict()}
+                    if self.has_average_policy_net else {}
+                ),
             },
             path,
         )
@@ -558,6 +576,9 @@ class DeepCFRTrainer:
             device=device,
         )
         trainer.value_net.load_state_dict(checkpoint["value_net"])
+        if checkpoint.get("average_policy_net") is not None:
+            trainer.average_policy_net.load_state_dict(checkpoint["average_policy_net"])
+            trainer.has_average_policy_net = True
         trainer.iteration = checkpoint["iteration"]
         logger.info(
             f"Loaded checkpoint from {path} (iteration {trainer.iteration})"

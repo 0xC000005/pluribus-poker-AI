@@ -8,6 +8,7 @@ from poker_ai.deep_cfr.policy_targets import (
     PolicyTargetBuffer,
     PolicyReservoirBuffer,
     masked_policy_cross_entropy,
+    train_average_policy_network,
 )
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.search_target_eval import evaluate_search_targets
@@ -211,6 +212,34 @@ def test_train_value_network_accepts_average_strategy_memory():
     assert torch.isfinite(policy_logits).all()
 
 
+def test_train_average_policy_network_fits_legal_targets():
+    torch.manual_seed(20260512)
+    strategy_memory = PolicyReservoirBuffer(16)
+    features = np.zeros(N_FEATURES, dtype=np.float32)
+    legal_mask = np.zeros(N_ACTIONS, dtype=np.float32)
+    legal_mask[[1, 2]] = 1.0
+    target = np.zeros(N_ACTIONS, dtype=np.float32)
+    target[2] = 1.0
+    for _ in range(16):
+        strategy_memory.add(features, legal_mask, target, weight=1.0)
+
+    policy_net = train_average_policy_network(
+        strategy_memory,
+        hidden_dim=16,
+        n_layers=1,
+        n_epochs=80,
+        batch_size=8,
+        lr=0.05,
+        device=torch.device("cpu"),
+    )
+
+    with torch.no_grad():
+        logits = policy_net(torch.zeros(N_FEATURES))
+    masked = logits[0].clone()
+    masked[legal_mask == 0] = -1e9
+    assert int(torch.argmax(masked).item()) == 2
+
+
 def test_deep_cfr_trainer_collects_average_strategy_targets():
     trainer = DeepCFRTrainer(
         n_players=2,
@@ -227,6 +256,7 @@ def test_deep_cfr_trainer_collects_average_strategy_targets():
     trainer.run_iteration()
 
     assert trainer.strategy_buffer.size > 0
+    assert trainer.has_average_policy_net is True
     np.testing.assert_allclose(
         trainer.strategy_buffer.target_probs[: trainer.strategy_buffer.size].sum(axis=1),
         np.ones(trainer.strategy_buffer.size),

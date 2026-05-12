@@ -26,7 +26,7 @@ N_FEATURES = 126
 N_ACTIONS = 9
 RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
-from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
 from solver import resolve_solver_backend, solve_street, solver_action_to_slumbot
 from range_tracker import (
     RangeTracker,
@@ -513,15 +513,24 @@ def network_strategy(value_net, features, legal_mask, device, strategy_source="r
             adv_t, logits_t = value_net.forward_with_policy(feat_t)
             advantages = adv_t.cpu().numpy()[0]
             logits = logits_t.cpu().numpy()[0].astype(np.float64)
+        elif strategy_source == "average-policy":
+            average_policy_net = getattr(value_net, "average_policy_net", None)
+            if average_policy_net is None:
+                raise RuntimeError("average-policy strategy source requires average_policy_net")
+            logits = average_policy_net(feat_t).cpu().numpy()[0].astype(np.float64)
+            advantages = value_net(feat_t).cpu().numpy()[0]
+        else:
+            if strategy_source != "regret":
+                raise ValueError(f"Unknown strategy source: {strategy_source}")
+            advantages = value_net(feat_t).cpu().numpy()[0]
+
+        if strategy_source in {"policy-head", "average-policy"}:
             masked_logits = np.where(legal_mask > 0, logits, -1e9)
             shifted = masked_logits - np.max(masked_logits)
             probs = np.exp(shifted) * legal_mask
             total = probs.sum()
             strategy = probs / total if total > 0 else legal_mask / legal_mask.sum()
             return advantages, strategy
-        if strategy_source != "regret":
-            raise ValueError(f"Unknown strategy source: {strategy_source}")
-        advantages = value_net(feat_t).cpu().numpy()[0]
     return advantages, regret_match(advantages, legal_mask)
 
 
@@ -735,7 +744,7 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
         return incr
 
     if greedy:
-        if strategy_source == "policy-head":
+        if strategy_source in {"policy-head", "average-policy"}:
             action_idx = int(np.argmax(strategy))
         else:
             masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
@@ -976,7 +985,7 @@ def main():
     )
     parser.add_argument(
         '--strategy-source',
-        choices=('regret', 'policy-head'),
+        choices=('regret', 'policy-head', 'average-policy'),
         default='regret',
         help='Learned blueprint source for non-solver decisions and range tracking.',
     )
@@ -1007,6 +1016,18 @@ def main():
         raise RuntimeError(f"Unexpected keys in checkpoint: {unexpected}")
     # policy_head/seq_proj absent in legacy checkpoints; they are unused at
     # inference time (forward() returns only adv from trunk+adv_head).
+    if checkpoint.get('average_policy_net') is not None:
+        average_policy_net = PolicyNetwork(
+            N_FEATURES, hidden_dim, N_ACTIONS, n_layers=n_layers,
+        ).to(device)
+        average_policy_net.load_state_dict(checkpoint['average_policy_net'])
+        average_policy_net.eval()
+        value_net.average_policy_net = average_policy_net
+    elif args.strategy_source == "average-policy":
+        raise RuntimeError(
+            "Checkpoint does not contain average_policy_net; use --strategy-source regret "
+            "or train with average-strategy collection."
+        )
     value_net.eval()
     print(f"Loaded model (iter {checkpoint['iteration']}, hidden={hidden_dim}, layers={n_layers})")
     print()

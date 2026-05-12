@@ -30,6 +30,14 @@ def _policy_probs(
             masked = np.where(legal_masks > 0, scores, -1e9)
             shifted = masked - masked.max(axis=1, keepdims=True)
             probs = np.exp(shifted) * legal_masks
+        elif strategy_source == "average-policy":
+            average_policy_net = getattr(value_net, "average_policy_net", None)
+            if average_policy_net is None:
+                raise RuntimeError("average-policy strategy source requires average_policy_net")
+            scores = average_policy_net(features_t).cpu().numpy().astype(np.float64)
+            masked = np.where(legal_masks > 0, scores, -1e9)
+            shifted = masked - masked.max(axis=1, keepdims=True)
+            probs = np.exp(shifted) * legal_masks
         elif strategy_source == "regret":
             advantages = value_net(features_t).cpu().numpy().astype(np.float64)
             probs = np.maximum(advantages, 0.0) * legal_masks

@@ -13,7 +13,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.optim as optim
 
+from poker_ai.deep_cfr.networks import PolicyNetwork
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 
 
@@ -260,3 +262,45 @@ def masked_policy_cross_entropy(
         return per_sample.mean()
     weights = weights.to(dtype=per_sample.dtype).clamp(min=0)
     return (per_sample * weights).sum() / weights.sum().clamp(min=1e-8)
+
+
+def train_average_policy_network(
+    strategy_buffer: PolicyTargetBuffer | PolicyReservoirBuffer,
+    *,
+    hidden_dim: int = 256,
+    n_layers: int = 2,
+    n_epochs: int = 1000,
+    batch_size: int = 2048,
+    lr: float = 0.001,
+    device: torch.device | None = None,
+) -> PolicyNetwork:
+    """Train a standalone average-strategy network from strategy memory."""
+    if getattr(strategy_buffer, "size", 0) <= 0:
+        raise ValueError("strategy_buffer must contain policy targets")
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    net = PolicyNetwork(
+        N_FEATURES,
+        hidden_dim=hidden_dim,
+        output_dim=N_ACTIONS,
+        n_layers=n_layers,
+    ).to(device)
+    optimizer = optim.Adam(net.parameters(), lr=lr)
+    net.train()
+
+    for _ in range(max(1, int(n_epochs))):
+        batch = strategy_buffer.sample_batch(batch_size, device)
+        optimizer.zero_grad(set_to_none=True)
+        logits = net(batch.features)
+        loss = masked_policy_cross_entropy(
+            logits,
+            batch.legal_masks,
+            batch.target_probs,
+            weights=batch.weights,
+        )
+        loss.backward()
+        optimizer.step()
+
+    net.eval()
+    return net

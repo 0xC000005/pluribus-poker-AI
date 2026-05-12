@@ -178,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "average_strategy_weight": float(args.average_strategy_weight),
             "average_strategy_target_size": average_strategy_target_size,
+            "has_average_policy_net": bool(
+                getattr(trainer, "has_average_policy_net", False)
+            ),
             "save_every": int(args.save_every),
             "hidden_dim": int(args.hidden_dim),
             "n_layers": int(args.n_layers),

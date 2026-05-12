@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seeds")
     parser.add_argument("--initial-chips", type=int)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--strategy-source", choices=("regret", "policy-head"), default="regret")
+    parser.add_argument("--strategy-source", choices=("regret", "policy-head", "average-policy"), default="regret")
     parser.add_argument("--output")
     args = parser.parse_args(argv)
 

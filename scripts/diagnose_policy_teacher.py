@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sampled-cases", type=int, default=0)
     parser.add_argument("--hands-per-case", type=int, default=256)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--strategy-source", choices=("regret", "policy-head"), default="regret")
+    parser.add_argument("--strategy-source", choices=("regret", "policy-head", "average-policy"), default="regret")
     parser.add_argument("--target-temperature", type=float, default=1.0)
     parser.add_argument("--device", default="auto")
     args = parser.parse_args(argv)

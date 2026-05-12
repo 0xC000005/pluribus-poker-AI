@@ -71,9 +71,17 @@ class _PolicyHeadProbeNet(torch.nn.Module):
         return advantages, logits
 
 
+class _AveragePolicyProbeNet(torch.nn.Module):
+    def forward(self, features):
+        logits = torch.zeros((features.shape[0], 9), dtype=torch.float32)
+        logits[:, 1] = 10.0
+        return logits
+
+
 def test_base_policy_action_can_use_policy_head_instead_of_regret_matching():
     parsed = parse_action("")
     net = _PolicyHeadProbeNet()
+    net.average_policy_net = _AveragePolicyProbeNet()
 
     regret_incr = _base_policy_action(
         ["Ac", "Kd"],
@@ -101,9 +109,23 @@ def test_base_policy_action_can_use_policy_head_instead_of_regret_matching():
         verbose=False,
         strategy_source="policy-head",
     )
+    average_policy_incr = _base_policy_action(
+        ["Ac", "Kd"],
+        [],
+        "",
+        1,
+        parsed,
+        net,
+        torch.device("cpu"),
+        greedy=True,
+        no_allin=False,
+        verbose=False,
+        strategy_source="average-policy",
+    )
 
     assert regret_incr.startswith("b")
     assert policy_incr == "c"
+    assert average_policy_incr == "c"
 
 
 def test_play_slumbot_script_help_imports_from_repo_root():

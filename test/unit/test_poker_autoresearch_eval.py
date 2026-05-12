@@ -26,6 +26,25 @@ class _PolicyOnlyProbeNet(torch.nn.Module):
         return advantages, logits
 
 
+class _AveragePolicyProbeNet(torch.nn.Module):
+    def forward(self, features):
+        logits = torch.zeros((features.shape[0], N_ACTIONS), dtype=torch.float32)
+        logits[:, 1] = 10.0
+        return logits
+
+
+class _AveragePolicyOnlyProbeNet(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.average_policy_net = _AveragePolicyProbeNet()
+
+    def forward(self, features):
+        raise AssertionError("average-policy evaluation should not call value forward()")
+
+    def forward_with_policy(self, features):
+        raise AssertionError("average-policy evaluation should not call policy head")
+
+
 def test_load_value_network_checkpoint_accepts_legacy_sequential_keys(tmp_path):
     checkpoint = {
         "iteration": 7,
@@ -52,6 +71,30 @@ def test_load_value_network_checkpoint_accepts_legacy_sequential_keys(tmp_path):
     assert loaded.value_net.hidden_dim == 16
 
 
+def test_load_value_network_checkpoint_loads_average_policy_net(tmp_path):
+    from poker_ai.deep_cfr.networks import PolicyNetwork, ValueNetwork
+
+    value_net = ValueNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    average_policy_net = PolicyNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    checkpoint = {
+        "iteration": 7,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 20000,
+        "value_net": value_net.state_dict(),
+        "average_policy_net": average_policy_net.state_dict(),
+    }
+    path = tmp_path / "average_policy.pt"
+    torch.save(checkpoint, path)
+
+    loaded = load_value_network_checkpoint(path, torch.device("cpu"))
+
+    assert loaded.metadata["has_average_policy_net"] is True
+    assert loaded.average_policy_net is not None
+    assert getattr(loaded.value_net, "average_policy_net") is loaded.average_policy_net
+
+
 def test_strategy_source_guard_rejects_legacy_policy_head_checkpoint(tmp_path):
     checkpoint = {
         "iteration": 7,
@@ -76,6 +119,32 @@ def test_strategy_source_guard_rejects_legacy_policy_head_checkpoint(tmp_path):
         assert "does not contain a trained policy head" in str(exc)
     else:
         raise AssertionError("legacy checkpoint should reject policy-head evaluation")
+
+
+def test_strategy_source_guard_rejects_missing_average_policy_checkpoint(tmp_path):
+    checkpoint = {
+        "iteration": 7,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 20000,
+        "value_net": {
+            "net.0.weight": torch.randn(16, N_FEATURES),
+            "net.0.bias": torch.randn(16),
+            "net.2.weight": torch.randn(N_ACTIONS, 16),
+            "net.2.bias": torch.randn(N_ACTIONS),
+        },
+    }
+    path = tmp_path / "legacy.pt"
+    torch.save(checkpoint, path)
+    loaded = load_value_network_checkpoint(path, torch.device("cpu"))
+
+    try:
+        assert_strategy_source_supported(loaded, "average-policy")
+    except RuntimeError as exc:
+        assert "does not contain a trained average policy net" in str(exc)
+    else:
+        raise AssertionError("legacy checkpoint should reject average-policy evaluation")
 
 
 def test_evaluate_value_net_vs_random_returns_ci_metrics():
@@ -125,6 +194,28 @@ def test_evaluate_value_net_vs_random_can_use_policy_head_source():
 
     assert metrics["passed"] is True
     assert metrics["strategy_source"] == "policy-head"
+
+
+def test_evaluate_value_net_vs_random_can_use_average_policy_source():
+    checkpoint = {
+        "iteration": 0,
+        "n_players": 2,
+        "initial_chips": 1000,
+    }
+
+    metrics = evaluate_value_net_vs_random(
+        _AveragePolicyOnlyProbeNet(),
+        torch.device("cpu"),
+        n_games=4,
+        n_players=2,
+        initial_chips=1000,
+        seed=123,
+        checkpoint_metadata=checkpoint,
+        strategy_source="average-policy",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["strategy_source"] == "average-policy"
 
 
 def test_evaluate_value_nets_head_to_head_self_compare_is_zero_with_swapped_seats():
@@ -178,6 +269,61 @@ def test_evaluate_value_nets_head_to_head_can_use_policy_head_source():
 
     assert metrics["passed"] is True
     assert metrics["strategy_source"] == "policy-head"
+
+
+def test_evaluate_value_nets_head_to_head_can_use_average_policy_source():
+    metadata = {
+        "checkpoint": "self.pt",
+        "checkpoint_iteration": 0,
+        "hidden_dim": 32,
+        "n_layers": 1,
+    }
+
+    metrics = evaluate_value_nets_head_to_head(
+        _AveragePolicyOnlyProbeNet(),
+        _AveragePolicyOnlyProbeNet(),
+        torch.device("cpu"),
+        n_games=4,
+        initial_chips=1000,
+        seed=123,
+        candidate_metadata=metadata,
+        baseline_metadata=metadata,
+        strategy_source="average-policy",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["strategy_source"] == "average-policy"
+
+
+def test_evaluate_value_nets_head_to_head_can_mix_strategy_sources():
+    metadata = {
+        "checkpoint": "self.pt",
+        "checkpoint_iteration": 0,
+        "hidden_dim": 32,
+        "n_layers": 1,
+    }
+    from poker_ai.deep_cfr.networks import ValueNetwork
+
+    baseline = ValueNetwork(N_FEATURES, 32, N_ACTIONS, n_layers=1)
+
+    metrics = evaluate_value_nets_head_to_head(
+        _AveragePolicyOnlyProbeNet(),
+        baseline,
+        torch.device("cpu"),
+        n_games=4,
+        initial_chips=1000,
+        seed=123,
+        candidate_metadata=metadata,
+        baseline_metadata=metadata,
+        strategy_source="regret",
+        candidate_strategy_source="average-policy",
+        baseline_strategy_source="regret",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["strategy_source"] == "mixed"
+    assert metrics["candidate_strategy_source"] == "average-policy"
+    assert metrics["baseline_strategy_source"] == "regret"
 
 
 def test_eval_cli_emits_json_for_legacy_checkpoint(tmp_path):

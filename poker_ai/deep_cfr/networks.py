@@ -116,3 +116,36 @@ class ValueNetwork(nn.Module):
                 seq_summary = seq_summary.to(device)
         with torch.no_grad():
             return self.forward(features.unsqueeze(0), seq_summary).squeeze(0)
+
+
+class PolicyNetwork(nn.Module):
+    """Standalone average-strategy network over the same feature contract."""
+
+    def __init__(
+        self,
+        input_dim: int = N_FEATURES,
+        hidden_dim: int = 256,
+        output_dim: int = N_ACTIONS,
+        n_layers: int = 2,
+    ):
+        super().__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.n_layers = n_layers
+
+        layers = [nn.Linear(input_dim, hidden_dim), nn.ReLU()]
+        for _ in range(n_layers - 1):
+            layers.extend([nn.Linear(hidden_dim, hidden_dim), nn.ReLU()])
+        layers.append(nn.Linear(hidden_dim, output_dim))
+        self.net = nn.Sequential(*layers)
+
+        self._engineered_start = 113
+        self._engineered_end = 126
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        x = x.clone()
+        x[:, self._engineered_start:self._engineered_end] = 0.0
+        return self.net(x)

@@ -124,10 +124,10 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
   behavior-cloning loss or range dispersion is not a promotion claim without
   head-to-head, resolver, and Slumbot evidence.
 - Deep CFR can collect legal-mask average-strategy targets during traversal with
-  `--average-strategy-weight > 0`, but this path is experimental and off by
-  default. A first 5-iteration A/B with `--average-strategy-weight 0.1`
-  regressed policy-head H2H, so do not scale it without a new falsification
-  result.
+  `--average-strategy-weight > 0` and save an explicit `average-policy`
+  network, but this path is experimental and off by default. First 5-iteration
+  A/Bs regressed H2H, so do not scale it without stronger regret-network or
+  averaging evidence.
 - Diagnose teacher collapse before scaling policy calibration; a dominant
   top-action or all-in majority is a teacher-quality blocker, not a reason to
   sweep more calibration hyperparameters.

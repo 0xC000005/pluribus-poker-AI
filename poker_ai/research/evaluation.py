@@ -12,7 +12,7 @@ import torch
 
 from poker_ai.deep_cfr.deep_cfr import regret_match
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
-from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
 from poker_ai.deep_cfr.vectorized_env import VectorizedPokerEnv
 
 
@@ -23,6 +23,7 @@ BIG_BLIND = 100
 class LoadedValueNetwork:
     value_net: ValueNetwork
     metadata: dict[str, Any]
+    average_policy_net: PolicyNetwork | None = None
 
 
 def remap_legacy_state_dict(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -80,6 +81,17 @@ def load_value_network_checkpoint(
         "policy_head.weight",
         "policy_head.bias",
     }.intersection(missing)
+    average_policy_net = None
+    if checkpoint.get("average_policy_net") is not None:
+        average_policy_net = PolicyNetwork(
+            N_FEATURES,
+            hidden_dim,
+            N_ACTIONS,
+            n_layers=n_layers,
+        ).to(device)
+        average_policy_net.load_state_dict(checkpoint["average_policy_net"])
+        average_policy_net.eval()
+        value_net.average_policy_net = average_policy_net
     value_net.eval()
 
     return LoadedValueNetwork(
@@ -93,7 +105,9 @@ def load_value_network_checkpoint(
             "n_layers": n_layers,
             "initial_chips": initial_chips,
             "has_policy_head": has_policy_head,
+            "has_average_policy_net": average_policy_net is not None,
         },
+        average_policy_net=average_policy_net,
     )
 
 
@@ -108,7 +122,16 @@ def assert_strategy_source_supported(
             "use --strategy-source regret or retrain/create an incumbent with "
             "policy_head weights."
         )
-    if strategy_source not in {"regret", "policy-head"}:
+    if (
+        strategy_source == "average-policy"
+        and not loaded.metadata.get("has_average_policy_net")
+    ):
+        checkpoint = loaded.metadata.get("checkpoint", "<unknown>")
+        raise RuntimeError(
+            f"Checkpoint {checkpoint} does not contain a trained average policy net; "
+            "use --strategy-source regret or train with average-strategy collection."
+        )
+    if strategy_source not in {"regret", "policy-head", "average-policy"}:
         raise ValueError(f"Unknown strategy source: {strategy_source}")
 
 
@@ -131,6 +154,18 @@ def _strategies_from_network(
         with torch.no_grad():
             _, logits_t = value_net.forward_with_policy(feature_tensor)
         logits = logits_t.cpu().numpy().astype(np.float64)
+    elif strategy_source == "average-policy":
+        average_policy_net = getattr(value_net, "average_policy_net", None)
+        if average_policy_net is None:
+            raise RuntimeError("average-policy strategy source requires average_policy_net")
+        average_policy_net.eval()
+        with torch.no_grad():
+            logits_t = average_policy_net(feature_tensor)
+        logits = logits_t.cpu().numpy().astype(np.float64)
+    else:
+        raise ValueError(f"Unknown strategy source: {strategy_source}")
+
+    if strategy_source in {"policy-head", "average-policy"}:
         strategies: list[np.ndarray] = []
         for i, mask in enumerate(masks):
             masked_logits = np.where(mask > 0, logits[i], -1e9)
@@ -249,7 +284,8 @@ def _evaluate_head_to_head_payouts(
     *,
     n_games: int,
     initial_chips: int,
-    strategy_source: str,
+    player0_strategy_source: str,
+    player1_strategy_source: str,
 ) -> np.ndarray:
     env = VectorizedPokerEnv(n_games, 2, initial_chips=initial_chips)
     env.reset()
@@ -292,14 +328,14 @@ def _evaluate_head_to_head_payouts(
             player0_indices,
             player0_net,
             device,
-            strategy_source=strategy_source,
+            strategy_source=player0_strategy_source,
         )
         _step_model_group(
             env,
             player1_indices,
             player1_net,
             device,
-            strategy_source=strategy_source,
+            strategy_source=player1_strategy_source,
         )
 
     return env.get_payouts(0)
@@ -363,7 +399,11 @@ def evaluate_value_nets_head_to_head(
     candidate_metadata: dict[str, Any],
     baseline_metadata: dict[str, Any],
     strategy_source: str = "regret",
+    candidate_strategy_source: str | None = None,
+    baseline_strategy_source: str | None = None,
 ) -> dict[str, Any]:
+    candidate_strategy_source = candidate_strategy_source or strategy_source
+    baseline_strategy_source = baseline_strategy_source or strategy_source
     np.random.seed(seed)
     torch.manual_seed(seed)
     candidate_seat0 = _evaluate_head_to_head_payouts(
@@ -372,7 +412,8 @@ def evaluate_value_nets_head_to_head(
         device,
         n_games=n_games,
         initial_chips=initial_chips,
-        strategy_source=strategy_source,
+        player0_strategy_source=candidate_strategy_source,
+        player1_strategy_source=baseline_strategy_source,
     )
 
     np.random.seed(seed)
@@ -383,7 +424,8 @@ def evaluate_value_nets_head_to_head(
         device,
         n_games=n_games,
         initial_chips=initial_chips,
-        strategy_source=strategy_source,
+        player0_strategy_source=baseline_strategy_source,
+        player1_strategy_source=candidate_strategy_source,
     )
     paired = (candidate_seat0 - baseline_seat0) / 2.0
     avg = float(paired.mean())
@@ -397,7 +439,13 @@ def evaluate_value_nets_head_to_head(
         "n_players": 2,
         "initial_chips": int(initial_chips),
         "seed": int(seed),
-        "strategy_source": strategy_source,
+        "strategy_source": (
+            strategy_source
+            if candidate_strategy_source == baseline_strategy_source == strategy_source
+            else "mixed"
+        ),
+        "candidate_strategy_source": candidate_strategy_source,
+        "baseline_strategy_source": baseline_strategy_source,
         "avg_chips_per_hand": avg,
         "ci95_chips_per_hand": ci95,
         "paired_delta_lower95_chips_per_hand": avg - ci95,
@@ -463,6 +511,8 @@ def aggregate_seed_runs(runs: list[dict[str, Any]]) -> dict[str, Any]:
         "promotable",
         "promotion_blockers",
         "strategy_source",
+        "candidate_strategy_source",
+        "baseline_strategy_source",
     ):
         if key in first and first[key] is not None:
             metrics[key] = first[key]
