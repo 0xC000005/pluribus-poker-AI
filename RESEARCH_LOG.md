@@ -1187,3 +1187,24 @@
 - Summary: Added a range-likelihood diagnostic tool and found that the policy-head average strategy is nearly hand-independent on reachable holdout cases, leaving ranges almost uniform. The regret source is hand-conditional, but earlier transfer evidence showed it is strategically unstable and all-in heavy. The next principled step is policy-likelihood calibration for range tracking, not another search-target knob sweep.
 - Metrics file: autoresearch-session/search_targets/range_likelihood_diagnostics_20260512.json
 - Key metrics: `{"passed": true, "policy_head_mean_hero_likelihood_action_std": 0.00186, "policy_head_mean_villain_likelihood_action_std": 0.001707, "policy_head_mean_hero_range_entropy": 0.999976, "policy_head_mean_villain_range_entropy": 0.999976, "regret_mean_hero_likelihood_action_std": 0.153474, "regret_mean_villain_likelihood_action_std": 0.128329, "regret_mean_hero_range_entropy": 0.607518, "regret_mean_villain_range_entropy": 0.567628}`
+## 20260512T210330Z-methodology-review-for-policy-head-likelihood-calibration-should - passed
+
+- Timestamp: 2026-05-12T21:03:31Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T210126Z-policy-head-likelihood-calibration
+- Hypothesis: Methodology review for policy-head likelihood calibration should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T210126Z-policy-head-likelihood-calibration passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T210330Z-methodology-review-for-policy-head-likelihood-calibration-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T210126Z-policy-head-likelihood-calibration", "passed": true}`
+
+## 20260512T211050Z-policy-head-likelihood-calibration-should-improve - failed
+
+- Timestamp: 2026-05-12T21:10:50Z
+- Type: experiment
+- Gate: policy-head-likelihood-calibration-ab
+- Hypothesis: Training only the average-policy head from learned self-play action distributions should improve RangeTracker hand-conditional action likelihood without changing advantage training or evaluation surfaces.
+- Failure class: belief_calibration
+- Summary: Added policy-head calibration target generation and policy-head-only training. The calibrated checkpoint improved train and held-out behavior-cloning loss and increased range-likelihood action dispersion by about 5-6x, but ranges remained high-entropy and local policy-head head-to-head did not clear a positive lower95 bound. This is a partial mechanism pass and not a promotable strategy.
+- Metrics file: autoresearch-session/policy_calibration/control_regret_policy_calibration_ab_20260512.json
+- Key metrics: `{"passed": false, "train_loss_delta": -0.525281, "holdout_loss_delta": -0.544128, "hero_likelihood_std_before": 0.00186, "hero_likelihood_std_after": 0.011748, "villain_likelihood_std_before": 0.001707, "villain_likelihood_std_after": 0.009523, "hero_range_entropy_after": 0.997141, "villain_range_entropy_after": 0.996692, "policy_head_h2h_avg": 151.815556, "policy_head_h2h_lower95": -3.994364}`

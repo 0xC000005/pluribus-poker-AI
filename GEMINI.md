@@ -26,6 +26,9 @@ clustering, terminal play, and visualisation code are retained for reference.
   for legality, latency, blueprint drift, and learned-advantage proxies.
 - `scripts/build_search_targets.py`: builds bounded resolver policy targets for
   optional search-consistency training.
+- `scripts/build_policy_calibration_targets.py` and
+  `scripts/train_policy_head_calibration.py`: collect learned self-play policy
+  targets and train only the policy head for range-likelihood diagnostics.
 
 ## Current Contract
 
@@ -87,6 +90,14 @@ python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-travers
 python scripts/eval_search_targets.py --checkpoint models/candidate.pt --targets autoresearch-session/search_targets/sampled_turn_river_holdout.npz --strategy-source policy-head
 ```
 
+Policy-head calibration diagnostics:
+
+```bash
+python scripts/build_policy_calibration_targets.py --checkpoint models/control.pt --output autoresearch-session/policy_calibration/calib_targets.npz --n-targets 4096 --strategy-source regret
+python scripts/train_policy_head_calibration.py --checkpoint models/control.pt --targets autoresearch-session/policy_calibration/calib_targets.npz --output autoresearch-session/policy_calibration/calibrated.pt --n-steps 600
+python scripts/diagnose_range_tracker.py --checkpoint autoresearch-session/policy_calibration/calibrated.pt --cases-json autoresearch-session/search_targets/reachable_policyhead_holdout_16x5.cases.json --strategy-source policy-head
+```
+
 Autoresearch governance:
 
 ```bash
@@ -104,6 +115,9 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
   matching, and principled search.
 - Search-consistency targets must come from resolver/search output under the
   legal mask; do not encode manual no-all-in or street-specific rules.
+- Policy-head calibration is a diagnostic for learned range-likelihood
+  calibration. Improved behavior-cloning loss or range dispersion is not a
+  promotion claim without head-to-head, resolver, and Slumbot evidence.
 - Before method, evaluation, promotion, or persistent-knob changes, complete a
   methodology review with independent verification, related work, and a
   benchmark-hacking audit.

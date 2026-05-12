@@ -12,6 +12,11 @@ from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.search_target_eval import evaluate_search_targets
 from poker_ai.research.resolver_benchmark import ResolverBenchmarkCase
 from poker_ai.research.range_diagnostics import diagnose_range_likelihood
+from poker_ai.research.policy_calibration import (
+    evaluate_policy_target_loss,
+    sample_policy_calibration_targets,
+    train_policy_head_calibration,
+)
 from poker_ai.research.search_targets import (
     build_resolver_policy_targets,
     parse_action,
@@ -262,3 +267,79 @@ def test_range_likelihood_diagnostics_report_finite_dispersion(tmp_path):
     record = metrics["records"][0]
     assert record["hero_likelihood"]["top_action_diversity"] >= 1
     assert record["villain_likelihood"]["mean_action_prob_std"] >= 0.0
+
+
+def test_sample_policy_calibration_targets_collects_masked_strategy(tmp_path, monkeypatch):
+    def passive_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
+        strategy = np.zeros(N_ACTIONS, dtype=np.float64)
+        if legal_mask[1] > 0:
+            strategy[1] = 1.0
+        else:
+            strategy[legal_mask > 0] = 1.0 / max(float(legal_mask.sum()), 1.0)
+        return np.zeros(N_ACTIONS, dtype=np.float32), strategy
+
+    monkeypatch.setattr(
+        "poker_ai.research.policy_calibration.network_strategy",
+        passive_strategy,
+    )
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "policy_calibration_source.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 7,
+        },
+        checkpoint,
+    )
+
+    buffer, metadata = sample_policy_calibration_targets(
+        8,
+        checkpoint=checkpoint,
+        strategy_source="regret",
+        device="cpu",
+        seed=20260512,
+    )
+
+    assert buffer.size == 8
+    assert metadata["mode"] == "policy_calibration_targets"
+    assert metadata["checkpoint_iteration"] == 7
+    np.testing.assert_allclose(buffer.target_probs.sum(axis=1), np.ones(8))
+    assert np.all(buffer.legal_masks.sum(axis=1) > 0)
+
+
+def test_train_policy_head_calibration_reduces_target_loss(tmp_path):
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "policy_calibration_train.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 9,
+        },
+        checkpoint,
+    )
+    features = np.zeros((32, N_FEATURES), dtype=np.float32)
+    legal_masks = np.zeros((32, N_ACTIONS), dtype=np.float32)
+    legal_masks[:, [1, 2]] = 1.0
+    target_probs = np.zeros((32, N_ACTIONS), dtype=np.float32)
+    target_probs[:, 2] = 1.0
+    targets = PolicyTargetBuffer(features, legal_masks, target_probs)
+
+    before = evaluate_policy_target_loss(net, targets, "cpu", batch_size=16)
+    output = tmp_path / "policy_calibrated.pt"
+    metrics = train_policy_head_calibration(
+        checkpoint,
+        targets,
+        output,
+        n_steps=40,
+        batch_size=16,
+        lr=0.05,
+        device="cpu",
+    )
+
+    assert metrics["passed"] is True
+    assert output.exists()
+    assert metrics["after_loss"] < before
