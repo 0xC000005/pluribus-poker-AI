@@ -1014,3 +1014,36 @@
 - Summary: Added `--require-positive-lower95` to local evaluation and wired falsification comparison commands to use it. The previously near-miss `trainsteps500_4x512_100x2k_iter_50.pt` candidate now fails with lower95 `-15.59`, which is the intended blocker before Slumbot spend.
 - Metrics file: autoresearch-session/poker_runs/20260512T192210Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt/metrics.json
 - Key metrics: `{"passed": true, "corrected_false_pass": true, "candidate_lower95": -15.591476176590053}`
+
+## 20260512T192911Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt - passed
+
+- Timestamp: 2026-05-12T19:29:21Z
+- Type: experiment
+- Gate: resolver-candidate-benchmark-20260512T192905Z-trainsteps500-4x512-100x2k-iter-50
+- Hypothesis: Candidate checkpoint trainsteps500_4x512_100x2k_iter_50.pt should pass fixed turn/river resolver legality and drift diagnostics before live Slumbot evaluation.
+- Failure class: none
+- Summary: Gate resolver-candidate-benchmark-20260512T192905Z-trainsteps500-4x512-100x2k-iter-50 passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T192911Z-candidate-checkpoint-trainsteps500-4x512-100x2k-iter-50-pt/metrics.json
+- Key metrics: `{"gate": "resolver-candidate-benchmark-20260512T192905Z-trainsteps500-4x512-100x2k-iter-50", "mode": "fixed_public_state_resolver_benchmark", "passed": true}`
+
+## 20260512T192921Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-pass - passed
+
+- Timestamp: 2026-05-12T19:29:32Z
+- Type: experiment
+- Gate: resolver-candidate-benchmark-20260512T192905Z-slumbot-2p-iter1000
+- Hypothesis: Candidate checkpoint slumbot_2p_iter1000.pt should pass fixed turn/river resolver legality and drift diagnostics before live Slumbot evaluation.
+- Failure class: none
+- Summary: Gate resolver-candidate-benchmark-20260512T192905Z-slumbot-2p-iter1000 passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T192921Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-pass/metrics.json
+- Key metrics: `{"gate": "resolver-candidate-benchmark-20260512T192905Z-slumbot-2p-iter1000", "mode": "fixed_public_state_resolver_benchmark", "passed": true}`
+
+## 20260512T193811Z-methodology-review-for-search-consistency-training-objective-should - passed
+
+- Timestamp: 2026-05-12T19:38:11Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T193213Z-search-consistency-training-objective
+- Hypothesis: Methodology review for Search-consistency training objective should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T193213Z-search-consistency-training-objective passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T193811Z-methodology-review-for-search-consistency-training-objective-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T193213Z-search-consistency-training-objective", "passed": true}`

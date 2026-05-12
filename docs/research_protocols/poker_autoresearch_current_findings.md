@@ -1,6 +1,6 @@
 # Poker Autoresearch Current Findings
 
-Date: 2026-05-11
+Date: 2026-05-12
 
 ## Incumbent
 
@@ -182,6 +182,23 @@ GPU training readiness:
   `-6.541` over 18,000 games), while `iter_100`/final regressed
   (`avg_chips_per_hand=-14.295`, lower95 `-21.486`). This suggests optimizer
   step count is not the main remaining strategy-quality bottleneck.
+- The corrected falsification ladder now rejects the same near-miss checkpoint
+  because candidate-vs-incumbent lower95 is negative (`-15.59` chips/hand).
+  The old behavior treated a successful evaluator process as a pass even when
+  the statistical lower bound failed; this is now blocked before Slumbot spend.
+- Fixed turn/river resolver diagnostics show a clearer mechanism target than
+  more blind optimizer-step tuning. The near-miss candidate has mean
+  blueprint-vs-solver action L1 drift `1.597`, policy-head drift `0.682`, and
+  all-in selection on `2/4` fixed cases; the incumbent has mean action drift
+  `1.369`, policy-head drift `0.648`, and all-in selection on `2/4` fixed
+  cases. The diagnostics pass legality/latency mechanics, but strategy drift is
+  high.
+- Methodology review
+  `20260512T193213Z-search-consistency-training-objective` approved a narrow
+  next step: generate bounded resolver targets for sampled turn/river public
+  states and train the existing policy head toward those targets under the
+  legal mask. Fixed resolver cases remain diagnostics, not a training target;
+  no manual no-all-in rule should be added.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
