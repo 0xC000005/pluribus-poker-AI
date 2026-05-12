@@ -96,6 +96,7 @@ Policy-head calibration diagnostics:
 python scripts/build_policy_calibration_targets.py --checkpoint models/control.pt --output autoresearch-session/policy_calibration/calib_targets.npz --n-targets 4096 --strategy-source regret
 python scripts/build_policy_calibration_targets.py --checkpoint models/control.pt --output autoresearch-session/policy_calibration/hand_sweep.npz --hand-sweep --sampled-cases 16 --hands-per-case 128 --strategy-source regret --target-temperature 2.0
 python scripts/train_policy_head_calibration.py --checkpoint models/control.pt --targets autoresearch-session/policy_calibration/calib_targets.npz --output autoresearch-session/policy_calibration/calibrated.pt --n-steps 600
+python scripts/diagnose_policy_teacher.py --checkpoint models/control.pt --sampled-cases 16 --hands-per-case 128 --strategy-source regret --output autoresearch-session/policy_calibration/teacher_diag.json
 python scripts/diagnose_range_tracker.py --checkpoint autoresearch-session/policy_calibration/calibrated.pt --cases-json autoresearch-session/search_targets/reachable_policyhead_holdout_16x5.cases.json --strategy-source policy-head
 ```
 
@@ -121,6 +122,9 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
   it must not remove all-in or encode street-specific rules. Improved
   behavior-cloning loss or range dispersion is not a promotion claim without
   head-to-head, resolver, and Slumbot evidence.
+- Diagnose teacher collapse before scaling policy calibration; a dominant
+  top-action or all-in majority is a teacher-quality blocker, not a reason to
+  sweep more calibration hyperparameters.
 - Before method, evaluation, promotion, or persistent-knob changes, complete a
   methodology review with independent verification, related work, and a
   benchmark-hacking audit.

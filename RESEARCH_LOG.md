@@ -1250,3 +1250,14 @@
 - Summary: Added legal-mask-preserving target-temperature support for policy calibration targets and tested temperature 2.0 on the same 16x128 turn/river hand sweep. Smoothing reduced mean all-in probability but did not change top-action all-in concentration, left ranges near uniform, and regressed local policy-head head-to-head. The blocker is teacher quality, not target sharpness.
 - Metrics file: autoresearch-session/policy_calibration/hand_sweep_regret_temp2_ab_20260512.json
 - Key metrics: `{"passed": false, "target_temperature": 2.0, "target_allin_rate": 0.652832, "mean_target_allin_prob": 0.490323, "train_loss_delta": -0.841829, "hero_likelihood_std": 0.005707, "villain_likelihood_std": 0.005543, "hero_range_entropy": 0.997311, "villain_range_entropy": 0.997355, "policy_head_h2h_avg": -28.04, "policy_head_h2h_lower95": -87.986}`
+
+## 20260512T212743Z-policy-teacher-collapse-diagnostics - passed
+
+- Timestamp: 2026-05-12T21:27:43Z
+- Type: investigation
+- Gate: policy-teacher-collapse-diagnostics
+- Hypothesis: Policy-calibration teacher diagnostics should distinguish teacher collapse from calibration capacity before more training is attempted.
+- Failure class: teacher_quality
+- Summary: Added a teacher-collapse diagnostic for public-state hand-sweep policy targets. On the same 16x128 turn/river sweep, the regret teacher is sharp and all-in-heavy while the policy-head teacher is nearly legal-uniform but has check/call as the top action on almost every hand. This confirms the next blocker is teacher construction, not policy-head capacity, target temperature, or sweep scale.
+- Metrics file: autoresearch-session/policy_calibration/teacher_diagnostics_summary_20260512.json
+- Key metrics: `{"passed": true, "regret_target_allin_rate": 0.652832, "regret_dominant_top_action": 8, "regret_dominant_top_action_rate": 0.652832, "regret_mean_target_normalized_entropy": 0.409578, "policy_head_target_allin_rate": 0.0, "policy_head_dominant_top_action": 1, "policy_head_dominant_top_action_rate": 0.999512, "policy_head_mean_target_normalized_entropy": 0.998273}`

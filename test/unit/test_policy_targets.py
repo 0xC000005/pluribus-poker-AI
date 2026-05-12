@@ -13,6 +13,7 @@ from poker_ai.research.search_target_eval import evaluate_search_targets
 from poker_ai.research.resolver_benchmark import ResolverBenchmarkCase
 from poker_ai.research.range_diagnostics import diagnose_range_likelihood
 from poker_ai.research.policy_calibration import (
+    diagnose_policy_calibration_teacher,
     evaluate_policy_target_loss,
     sample_policy_calibration_targets,
     sample_public_state_hand_sweep_targets,
@@ -420,6 +421,57 @@ def test_policy_calibration_target_temperature_softens_legal_targets(tmp_path, m
         hard_metadata["mean_target_entropy"]
     )
     assert np.all(soft_buffer.target_probs[soft_buffer.legal_masks <= 0] == 0.0)
+
+
+def test_policy_teacher_diagnostics_report_action_collapse(tmp_path, monkeypatch):
+    def allin_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
+        strategy = np.zeros(N_ACTIONS, dtype=np.float64)
+        if legal_mask[8] > 0:
+            strategy[8] = 1.0
+        else:
+            strategy[np.flatnonzero(legal_mask > 0)[0]] = 1.0
+        return np.zeros(N_ACTIONS, dtype=np.float32), strategy
+
+    monkeypatch.setattr(
+        "poker_ai.research.policy_calibration.network_strategy",
+        allin_strategy,
+    )
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "teacher_diag_source.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 13,
+        },
+        checkpoint,
+    )
+    case = ResolverBenchmarkCase(
+        label="teacher-diag-turn-open",
+        hole_cards=("Ac", "Kd"),
+        board=("2c", "7d", "Jh", "4s"),
+        action_str="ck/kk/",
+        client_pos=0,
+        source="unit",
+    )
+
+    metrics = diagnose_policy_calibration_teacher(
+        [case],
+        checkpoint=checkpoint,
+        strategy_source="regret",
+        device="cpu",
+        hands_per_case=4,
+        seed=20260512,
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["mode"] == "policy_calibration_teacher_diagnostics"
+    assert metrics["n_targets"] == 4
+    assert metrics["dominant_top_action"] == 8
+    assert metrics["top_action_counts"]["8"] == 4
+    assert metrics["flags"]["allin_top_action_majority"] is True
+    assert metrics["records"][0]["dominant_top_action_rate"] == 1.0
 
 
 def test_train_policy_head_calibration_reduces_target_loss(tmp_path):

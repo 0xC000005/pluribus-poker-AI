@@ -148,6 +148,113 @@ def _target_summary(targets: np.ndarray) -> dict[str, float]:
     }
 
 
+def _target_diagnostics(targets: np.ndarray, legal_masks: np.ndarray) -> dict[str, Any]:
+    if targets.size == 0:
+        return {
+            "n_targets": 0,
+            "top_action_counts": {},
+            "dominant_top_action": None,
+            "dominant_top_action_rate": 0.0,
+            "top_action_diversity": 0,
+            "mean_target_max_prob": 0.0,
+            "mean_target_normalized_entropy": 0.0,
+            "mean_target_kl_to_legal_uniform": 0.0,
+        }
+
+    top_actions = np.argmax(targets, axis=1)
+    unique, counts = np.unique(top_actions, return_counts=True)
+    top_counts = {str(int(action)): int(count) for action, count in zip(unique, counts)}
+    dominant_index = int(np.argmax(counts))
+    entropies = []
+    normalized_entropies = []
+    uniform_kls = []
+    for target, legal_mask in zip(targets, legal_masks, strict=True):
+        positive = target[target > 0]
+        entropy = float(-(positive * np.log(positive)).sum()) if positive.size else 0.0
+        n_legal = int(np.sum(legal_mask > 0))
+        uniform_entropy = float(np.log(max(n_legal, 1)))
+        entropies.append(entropy)
+        normalized_entropies.append(
+            entropy / uniform_entropy if uniform_entropy > 0 else 0.0
+        )
+        uniform_kls.append(max(uniform_entropy - entropy, 0.0))
+    return {
+        "n_targets": int(targets.shape[0]),
+        "top_action_counts": top_counts,
+        "dominant_top_action": int(unique[dominant_index]),
+        "dominant_top_action_rate": round(float(counts[dominant_index] / targets.shape[0]), 6),
+        "top_action_diversity": int(unique.size),
+        "mean_target_max_prob": round(float(np.max(targets, axis=1).mean()), 6),
+        "mean_target_normalized_entropy": round(float(np.mean(normalized_entropies)), 6),
+        "mean_target_kl_to_legal_uniform": round(float(np.mean(uniform_kls)), 6),
+    }
+
+
+def _case_target_diagnostics(
+    records: list[dict[str, Any]],
+    targets: np.ndarray,
+    legal_masks: np.ndarray,
+) -> list[dict[str, Any]]:
+    start = 0
+    out: list[dict[str, Any]] = []
+    for record in records:
+        n_hands = int(record.get("n_hands", 0))
+        base = dict(record)
+        if n_hands <= 0:
+            out.append(base)
+            continue
+        end = start + n_hands
+        base.update(_target_diagnostics(targets[start:end], legal_masks[start:end]))
+        out.append(base)
+        start = end
+    return out
+
+
+def diagnose_policy_calibration_teacher(
+    cases: Iterable[ResolverBenchmarkCase],
+    *,
+    checkpoint: str | Path,
+    seed: int = 0,
+    strategy_source: str = "regret",
+    device: str | torch.device = "auto",
+    hands_per_case: int | None = 256,
+    target_temperature: float = 1.0,
+) -> dict[str, Any]:
+    """Diagnose whether a policy-calibration teacher is collapsed before training."""
+    buffer, metadata = sample_public_state_hand_sweep_targets(
+        cases,
+        checkpoint=checkpoint,
+        seed=seed,
+        strategy_source=strategy_source,
+        device=device,
+        hands_per_case=hands_per_case,
+        target_temperature=target_temperature,
+    )
+    diagnostics = _target_diagnostics(buffer.target_probs, buffer.legal_masks)
+    records = _case_target_diagnostics(
+        list(metadata.get("records", [])),
+        buffer.target_probs,
+        buffer.legal_masks,
+    )
+    target_allin_rate = float(metadata.get("target_allin_rate", 0.0))
+    return {
+        **metadata,
+        "mode": "policy_calibration_teacher_diagnostics",
+        **diagnostics,
+        "records": records,
+        "flags": {
+            "allin_top_action_majority": bool(target_allin_rate > 0.5),
+            "dominant_top_action_over_80pct": bool(
+                diagnostics["dominant_top_action_rate"] > 0.8
+            ),
+            "low_mean_normalized_entropy": bool(
+                diagnostics["mean_target_normalized_entropy"] < 0.35
+            ),
+        },
+        "passed": bool(buffer.size > 0),
+    }
+
+
 def sample_policy_calibration_targets(
     n_targets: int,
     *,
