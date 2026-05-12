@@ -11,6 +11,7 @@ from poker_ai.research.autoresearch import (
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_falsification_ladder,
     enqueue_gpu_training,
     enqueue_methodology_review,
     enqueue_resolver_benchmark,
@@ -641,6 +642,49 @@ def test_enqueue_resolver_benchmark_creates_candidate_gate(tmp_path):
     assert "321" == str(gate["timeout_seconds"])
 
 
+def test_enqueue_falsification_ladder_creates_countertest_gate(tmp_path):
+    init_state(tmp_path)
+    candidate = tmp_path / "models" / "candidate.pt"
+    incumbent = tmp_path / "models" / "incumbent.pt"
+    candidate.parent.mkdir()
+    candidate.write_bytes(b"candidate")
+    incumbent.write_bytes(b"incumbent")
+    set_incumbent(tmp_path, incumbent, reason="baseline")
+
+    queued = enqueue_falsification_ladder(
+        tmp_path,
+        candidate,
+        mechanism="search-distilled policy targets reduce transfer loss",
+        n_games=24,
+        seeds="11,12",
+        max_resolver_cases=2,
+        device="cpu",
+        changed_paths=["poker_ai/deep_cfr/networks.py"],
+        strategy_source="policy-head",
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    gate = goal["gates"][queued["gate"]]
+    commands = gate["commands"]
+    assert queued["gate"].startswith("falsification-ladder-")
+    assert queued["type"] == "falsification"
+    assert queued["mechanism"] == "search-distilled policy targets reduce transfer loss"
+    assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
+    assert "scripts/poker_objective_audit.py" in commands[0]
+    assert "--changed-path" in commands[0]
+    assert "poker_ai/deep_cfr/networks.py" in commands[0]
+    assert "scripts/poker_autoresearch_eval.py" in commands[1]
+    assert "--head-to-head" in commands[1]
+    assert "--strategy-source" in commands[1]
+    assert "policy-head" in commands[1]
+    assert "24" in commands[1]
+    assert "11,12" in commands[1]
+    assert "scripts/poker_resolver_benchmark.py" in commands[2]
+    assert "--max-cases" in commands[2]
+    assert "2" in commands[2]
+
+
 def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
     init_state(tmp_path)
 
@@ -1074,6 +1118,66 @@ def test_cli_objective_audit_blocks_protected_surface(tmp_path):
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert payload["protected_hits"] == ["scripts/play_slumbot.py"]
+
+
+def test_cli_enqueue_falsification_ladder_creates_gate(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    candidate = tmp_path / "models" / "candidate.pt"
+    incumbent = tmp_path / "models" / "incumbent.pt"
+    candidate.parent.mkdir()
+    candidate.write_bytes(b"candidate")
+    incumbent.write_bytes(b"incumbent")
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "set-incumbent",
+            "--checkpoint",
+            str(incumbent),
+            "--reason",
+            "baseline",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-falsification",
+            "--candidate",
+            str(candidate),
+            "--mechanism",
+            "search-distilled policy targets reduce transfer loss",
+            "--n-games",
+            "16",
+            "--max-resolver-cases",
+            "1",
+            "--changed-path",
+            "poker_ai/deep_cfr/networks.py",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    assert queued["gate"] in goal["gates"]
+    assert len(goal["gates"][queued["gate"]]["commands"]) == 3
 
 
 def test_cli_enqueue_train_creates_gate(tmp_path):

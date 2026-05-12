@@ -86,6 +86,31 @@ The long-term objective remains the controlling policy: novel, compute-efficient
 Texas hold'em methods that transfer to Slumbot and stronger bots on personal-PC
 hardware. Visible smoke metrics are diagnostics, not promotion targets.
 
+## Falsification Ladder
+
+Before spending Slumbot confidence hands or treating a candidate as promotable,
+queue a falsification ladder. This is the local POPPER-inspired counter-test
+stage: it tries to falsify the candidate's mechanism with distinct blockers
+before live evaluation.
+
+```bash
+python scripts/poker_autoresearch.py enqueue-falsification \
+  --candidate models/candidate.pt \
+  --mechanism "search-distilled policy targets reduce Slumbot transfer loss" \
+  --n-games 500 \
+  --max-resolver-cases 3 \
+  --changed-path poker_ai/deep_cfr/networks.py
+```
+
+The ladder currently runs:
+
+- objective-drift audit;
+- duplicate-swapped candidate-vs-incumbent comparison;
+- fixed-state resolver diagnostics.
+
+Passing the ladder is still not promotion. It means the candidate survived the
+cheap counter-tests and may justify sparse live Slumbot confirmation.
+
 ## Research Knob Governance
 
 Persistent knobs are allowed only when they test one named mechanism. Each knob
@@ -232,6 +257,10 @@ python scripts/poker_objective_audit.py --base-ref HEAD
 python scripts/poker_autoresearch.py objective-audit \
   --changed-path scripts/play_slumbot.py \
   --review-dir autoresearch-session/poker_reviews/<review_id>
+python scripts/poker_autoresearch.py enqueue-falsification \
+  --candidate models/candidate.pt \
+  --mechanism "search-distilled policy targets reduce Slumbot transfer loss" \
+  --max-resolver-cases 3
 python scripts/poker_autoresearch.py add-knob \
   --name search_target_mix \
   --default 0.0 \

@@ -249,6 +249,9 @@ Workflow governance status:
   a completed review exists. Protected surfaces include evaluation harnesses,
   Slumbot adapters, solver benchmarks, promotion logic, parsers, seed lists,
   and parity tests.
+- The POPPER-inspired falsification ladder is now the expected local
+  counter-test before Slumbot confidence spend. It runs objective-drift audit,
+  duplicate-swapped incumbent comparison, and fixed-state resolver diagnostics.
 - Persistent knobs are registered through `add-knob`, require a mechanism and
   removal criterion, and reject broad sweep-shaped defaults. This keeps the
   workflow focused on falsifying mechanisms instead of benchmark tuning.
@@ -309,3 +312,7 @@ script passes all 10 checks and is now part of Tier 0.
 8. Before keeping any candidate that touched protected evaluation surfaces, run
    `python scripts/poker_objective_audit.py --base-ref HEAD` and require a
    completed review bundle if the audit reports protected hits.
+9. Before Slumbot confirmation, queue
+   `python scripts/poker_autoresearch.py enqueue-falsification --candidate <path>
+   --mechanism "<mechanism>"` and close the falsification cycle through the
+   normal autoresearch log.

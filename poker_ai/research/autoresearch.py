@@ -1444,6 +1444,119 @@ def enqueue_resolver_benchmark(
     )
 
 
+def enqueue_falsification_ladder(
+    root: str | Path,
+    candidate_checkpoint: str | Path,
+    *,
+    mechanism: str,
+    baseline_checkpoint: str | Path | None = None,
+    n_games: int = 500,
+    seeds: str = "20260511,20260512,20260513",
+    device: str = "auto",
+    changed_paths: Iterable[str] | None = None,
+    solver_iterations: int = 25,
+    solver_backend: str = "auto",
+    max_resolver_cases: int | None = None,
+    strategy_source: str = "regret",
+    timeout_seconds: int = 3600,
+) -> dict:
+    """Create and queue a promotion falsification ladder for one candidate."""
+    if not mechanism.strip():
+        raise ValueError("Falsification ladder requires a mechanism claim.")
+
+    root = Path(root)
+    candidate = _resolve_existing_path(root, candidate_checkpoint, label="Candidate checkpoint")
+    state = _read_json(_state_path(root))
+    if baseline_checkpoint is None:
+        incumbent = state.get("incumbent_checkpoint") or {}
+        baseline_checkpoint = incumbent.get("checkpoint")
+        if baseline_checkpoint is None:
+            raise RuntimeError("No baseline checkpoint provided and no incumbent is recorded.")
+    baseline = _resolve_existing_path(root, baseline_checkpoint, label="Baseline checkpoint")
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    gate_name = _unique_gate_name(
+        root,
+        f"falsification-ladder-{timestamp}-{_slug(candidate.stem)}",
+    )
+    python = _project_python(root)
+    audit_command = [
+        python,
+        "scripts/poker_objective_audit.py",
+    ]
+    paths = list(changed_paths or [])
+    if paths:
+        for changed_path in paths:
+            audit_command.extend(["--changed-path", str(changed_path)])
+    else:
+        audit_command.extend(["--base-ref", "HEAD"])
+
+    compare_command = [
+        python,
+        "scripts/poker_autoresearch_eval.py",
+        "--checkpoint",
+        str(candidate),
+        "--baseline-checkpoint",
+        str(baseline),
+        "--n-games",
+        str(n_games),
+        "--device",
+        device,
+        "--seeds",
+        seeds,
+        "--head-to-head",
+    ]
+    if strategy_source != "regret":
+        compare_command.extend(["--strategy-source", strategy_source])
+
+    resolver_command = [
+        python,
+        "scripts/poker_resolver_benchmark.py",
+        "--checkpoint",
+        str(candidate),
+        "--device",
+        device,
+        "--solver-iterations",
+        str(solver_iterations),
+        "--solver-backend",
+        solver_backend,
+    ]
+    if max_resolver_cases is not None:
+        resolver_command.extend(["--max-cases", str(max_resolver_cases)])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Promotion falsification ladder: objective-drift audit, paired "
+            "incumbent head-to-head comparison, and fixed-state resolver "
+            "diagnostics. Passing this gate does not by itself promote a model; "
+            "it blocks weak or benchmark-hacked candidates before Slumbot spend."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [audit_command, compare_command, resolver_command],
+        "mechanism": mechanism,
+        "candidate_checkpoint": str(candidate),
+        "baseline_checkpoint": str(baseline),
+    }
+    _write_json(_goal_path(root), goal)
+    item = enqueue_cycle(
+        root,
+        hypothesis=(
+            f"Candidate checkpoint {candidate.name} should survive falsification "
+            f"of mechanism: {mechanism}"
+        ),
+        cycle_type="falsification",
+        failure_class="strategy_quality",
+        gate=gate_name,
+    )
+    item["mechanism"] = mechanism
+    state = _read_json(_state_path(root))
+    state["hypothesis_queue"][-1]["mechanism"] = mechanism
+    state["updated_at"] = _now()
+    _write_json(_state_path(root), state)
+    return item
+
+
 def append_research_log(
     root: str | Path,
     *,

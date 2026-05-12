@@ -152,6 +152,17 @@ keeping a candidate or committing methodology changes:
 python scripts/poker_objective_audit.py --base-ref HEAD
 ```
 
+Before spending Slumbot confirmation hands on a candidate, queue the local
+falsification ladder. It runs objective-drift audit, duplicate-swapped
+incumbent comparison, and fixed-state resolver diagnostics:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-falsification \
+  --candidate models/candidate.pt \
+  --mechanism "search-distilled policy targets reduce Slumbot transfer loss" \
+  --max-resolver-cases 3
+```
+
 ## Playing Slumbot
 
 ```bash

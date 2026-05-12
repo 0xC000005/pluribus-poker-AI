@@ -63,6 +63,15 @@ python scripts/poker_autoresearch.py objective-audit \
   --review-dir autoresearch-session/poker_reviews/<review_id>
 ```
 
+Before Slumbot confirmation on a candidate, queue the falsification ladder:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-falsification \
+  --candidate models/candidate.pt \
+  --mechanism "search-distilled policy targets reduce Slumbot transfer loss" \
+  --max-resolver-cases 3
+```
+
 Register persistent knobs through the workflow so they have a mechanism and a
 removal criterion:
 

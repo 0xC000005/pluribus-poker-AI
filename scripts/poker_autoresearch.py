@@ -18,6 +18,7 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_falsification_ladder,
     enqueue_gpu_training,
     enqueue_methodology_review,
     enqueue_resolver_benchmark,
@@ -129,6 +130,31 @@ def build_parser() -> argparse.ArgumentParser:
     resolver.add_argument("--max-cases", type=int)
     resolver.add_argument("--device", default="auto")
     resolver.add_argument("--timeout-seconds", type=int, default=1200)
+
+    falsify = subparsers.add_parser(
+        "enqueue-falsification",
+        help="Create and queue objective-audit, incumbent-comparison, and resolver counter-tests.",
+    )
+    falsify.add_argument("--candidate", required=True)
+    falsify.add_argument("--mechanism", required=True)
+    falsify.add_argument("--baseline")
+    falsify.add_argument("--n-games", type=int, default=500)
+    falsify.add_argument("--seeds", default="20260511,20260512,20260513")
+    falsify.add_argument("--device", default="auto")
+    falsify.add_argument("--changed-path", action="append", default=[])
+    falsify.add_argument("--solver-iterations", type=int, default=25)
+    falsify.add_argument(
+        "--solver-backend",
+        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        default="auto",
+    )
+    falsify.add_argument("--max-resolver-cases", type=int)
+    falsify.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+    )
+    falsify.add_argument("--timeout-seconds", type=int, default=3600)
 
     review = subparsers.add_parser(
         "enqueue-review",
@@ -304,6 +330,26 @@ def main(argv: list[str] | None = None) -> int:
                 solver_backend=args.solver_backend,
                 max_cases=args.max_cases,
                 device=args.device,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-falsification":
+        _emit(
+            enqueue_falsification_ladder(
+                root,
+                args.candidate,
+                mechanism=args.mechanism,
+                baseline_checkpoint=args.baseline,
+                n_games=args.n_games,
+                seeds=args.seeds,
+                device=args.device,
+                changed_paths=args.changed_path,
+                solver_iterations=args.solver_iterations,
+                solver_backend=args.solver_backend,
+                max_resolver_cases=args.max_resolver_cases,
+                strategy_source=args.strategy_source,
                 timeout_seconds=args.timeout_seconds,
             )
         )

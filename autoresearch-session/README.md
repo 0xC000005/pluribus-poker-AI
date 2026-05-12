@@ -23,3 +23,6 @@ persistent-knob changes. Validate review bundles with
 `scripts/poker_methodology_review.py --require-complete`.
 Run `scripts/poker_objective_audit.py --base-ref HEAD` before keeping
 candidates that touched protected evaluation surfaces.
+Use `python scripts/poker_autoresearch.py enqueue-falsification --candidate
+<path> --mechanism "<mechanism>"` before spending Slumbot confirmation hands on
+a candidate.

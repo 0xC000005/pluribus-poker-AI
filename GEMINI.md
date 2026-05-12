@@ -82,6 +82,7 @@ Autoresearch governance:
 python scripts/poker_autoresearch.py enqueue-review --subject "New search objective" --trigger method_change --claim "The objective should improve Slumbot transfer."
 python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/<review_id> --require-complete
 python scripts/poker_objective_audit.py --base-ref HEAD
+python scripts/poker_autoresearch.py enqueue-falsification --candidate models/candidate.pt --mechanism "search-distilled policy targets reduce Slumbot transfer loss" --max-resolver-cases 3
 python scripts/poker_autoresearch.py add-knob --name search_target_mix --default 0.0 --failure-class search_quality --mechanism "Test whether search-distilled targets reduce live transfer loss." --rationale "One variable isolates the target mechanism." --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."
 ```
 
@@ -95,6 +96,8 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
   benchmark-hacking audit.
 - Treat evaluation scripts, Slumbot adapters, solver benchmarks, promotion
   logic, parsers, seed lists, and parity tests as protected surfaces.
+- Queue the falsification ladder before Slumbot confirmation; it is the local
+  counter-test stage, not a promotion by itself.
 - Add research knobs only through `add-knob`; keep one mechanism and one
   primary variable, and avoid broad sweeps.
 - For performance work, report `iters/hour`, `samples/sec`, and

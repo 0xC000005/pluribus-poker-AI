@@ -949,3 +949,35 @@
 - Summary: Added protected-surface objective audit, required `benchmark_audit.md` review artifact, multi-agent review routing, and docs for immutable evaluation surfaces.
 - Metrics file: not recorded
 - Key metrics: `{"passed": true, "sources": ["karpathy/autoresearch", "AI Scientist", "POPPER", "OpenEvolve", "specification gaming"], "primary_guard": "protected evaluation surfaces require completed review"}`
+## 20260512T190817Z-methodology-review-for-popper-falsification-promotion-ladder-should - passed
+
+- Timestamp: 2026-05-12T19:08:17Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T190600Z-popper-falsification-promotion-ladder
+- Hypothesis: Methodology review for POPPER falsification promotion ladder should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T190600Z-popper-falsification-promotion-ladder passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T190817Z-methodology-review-for-popper-falsification-promotion-ladder-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T190600Z-popper-falsification-promotion-ladder", "passed": true}`
+
+## 20260512T191412Z-falsification-ladder-implementation - passed
+
+- Timestamp: 2026-05-12T19:14:12Z
+- Type: implementation
+- Gate: falsification-ladder
+- Hypothesis: Candidate promotion should require explicit local counter-tests before Slumbot confirmation spend.
+- Failure class: none
+- Summary: Added `enqueue-falsification` to queue objective-drift audit, duplicate-swapped incumbent comparison, and fixed-state resolver diagnostics for a candidate mechanism claim.
+- Metrics file: not recorded
+- Key metrics: `{"passed": true, "focused_tests": "2 passed", "review_decision": "proceed"}`
+
+## 20260512T191532Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-survive - passed
+
+- Timestamp: 2026-05-12T19:15:37Z
+- Type: falsification
+- Gate: falsification-ladder-20260512T191526Z-slumbot-2p-iter1000
+- Hypothesis: Candidate checkpoint slumbot_2p_iter1000.pt should survive falsification of mechanism: incumbent self-check should survive the local falsification ladder
+- Failure class: none
+- Summary: Gate falsification-ladder-20260512T191526Z-slumbot-2p-iter1000 passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T191532Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-survive/metrics.json
+- Key metrics: `{"gate": "falsification-ladder-20260512T191526Z-slumbot-2p-iter1000", "passed": true}`
