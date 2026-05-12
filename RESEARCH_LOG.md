@@ -1229,3 +1229,24 @@
 - Summary: Added a public-state/private-hand sweep target builder and tested a small regret-teacher sweep. The sweep produced balanced turn/river coverage and reduced policy-target loss, but the regret teacher labels were all-in-heavy and local policy-head head-to-head regressed. Range entropy improved only modestly. Do not scale this sweep until the teacher or target softness is improved.
 - Metrics file: autoresearch-session/policy_calibration/hand_sweep_regret_ab_20260512.json
 - Key metrics: `{"passed": false, "target_allin_rate": 0.652832, "train_loss_delta": -1.057908, "hero_likelihood_std": 0.005595, "villain_likelihood_std": 0.005417, "hero_range_entropy": 0.995868, "villain_range_entropy": 0.995604, "policy_head_h2h_avg": -13.528889, "policy_head_h2h_lower95": -69.930421}`
+## 20260512T212044Z-methodology-review-for-soft-policy-likelihood-teacher-for - passed
+
+- Timestamp: 2026-05-12T21:20:44Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T211758Z-soft-policy-likelihood-teacher-for-hand-sweep-calibration
+- Hypothesis: Methodology review for soft policy-likelihood teacher for hand-sweep calibration should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T211758Z-soft-policy-likelihood-teacher-for-hand-sweep-calibration passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T212044Z-methodology-review-for-soft-policy-likelihood-teacher-for/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T211758Z-soft-policy-likelihood-teacher-for-hand-sweep-calibration", "passed": true}`
+
+## 20260512T212259Z-soft-policy-likelihood-teacher-for-hand-sweep-calibration - failed
+
+- Timestamp: 2026-05-12T21:22:59Z
+- Type: experiment
+- Gate: soft-policy-likelihood-teacher-for-hand-sweep-calibration-ab
+- Hypothesis: Temperature-softened regret-teacher hand-sweep targets should improve policy-head range likelihood without suppressing legal all-in actions.
+- Failure class: teacher_quality
+- Summary: Added legal-mask-preserving target-temperature support for policy calibration targets and tested temperature 2.0 on the same 16x128 turn/river hand sweep. Smoothing reduced mean all-in probability but did not change top-action all-in concentration, left ranges near uniform, and regressed local policy-head head-to-head. The blocker is teacher quality, not target sharpness.
+- Metrics file: autoresearch-session/policy_calibration/hand_sweep_regret_temp2_ab_20260512.json
+- Key metrics: `{"passed": false, "target_temperature": 2.0, "target_allin_rate": 0.652832, "mean_target_allin_prob": 0.490323, "train_loss_delta": -0.841829, "hero_likelihood_std": 0.005707, "villain_likelihood_std": 0.005543, "hero_range_entropy": 0.997311, "villain_range_entropy": 0.997355, "policy_head_h2h_avg": -28.04, "policy_head_h2h_lower95": -87.986}`

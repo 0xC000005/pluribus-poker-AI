@@ -361,6 +361,67 @@ def test_public_state_hand_sweep_targets_expand_private_hands(tmp_path, monkeypa
     )
 
 
+def test_policy_calibration_target_temperature_softens_legal_targets(tmp_path, monkeypatch):
+    def peaked_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
+        strategy = np.zeros(N_ACTIONS, dtype=np.float64)
+        legal_actions = np.flatnonzero(legal_mask > 0)
+        strategy[legal_actions[0]] = 0.99
+        strategy[legal_actions[1]] = 0.01
+        return np.zeros(N_ACTIONS, dtype=np.float32), strategy
+
+    monkeypatch.setattr(
+        "poker_ai.research.policy_calibration.network_strategy",
+        peaked_strategy,
+    )
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "temperature_source.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 12,
+        },
+        checkpoint,
+    )
+    case = ResolverBenchmarkCase(
+        label="temperature-turn-open",
+        hole_cards=("Ac", "Kd"),
+        board=("2c", "7d", "Jh", "4s"),
+        action_str="ck/kk/",
+        client_pos=0,
+        source="unit",
+    )
+
+    hard_buffer, hard_metadata = sample_public_state_hand_sweep_targets(
+        [case],
+        checkpoint=checkpoint,
+        strategy_source="regret",
+        device="cpu",
+        hands_per_case=3,
+        seed=20260512,
+        target_temperature=1.0,
+    )
+    soft_buffer, soft_metadata = sample_public_state_hand_sweep_targets(
+        [case],
+        checkpoint=checkpoint,
+        strategy_source="regret",
+        device="cpu",
+        hands_per_case=3,
+        seed=20260512,
+        target_temperature=2.0,
+    )
+
+    assert hard_metadata["target_temperature"] == 1.0
+    assert soft_metadata["target_temperature"] == 2.0
+    np.testing.assert_allclose(soft_buffer.target_probs.sum(axis=1), np.ones(3))
+    assert float(soft_buffer.target_probs[0].max()) < float(hard_buffer.target_probs[0].max())
+    assert float(soft_metadata["mean_target_entropy"]) > float(
+        hard_metadata["mean_target_entropy"]
+    )
+    assert np.all(soft_buffer.target_probs[soft_buffer.legal_masks <= 0] == 0.0)
+
+
 def test_train_policy_head_calibration_reduces_target_loss(tmp_path):
     net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
     checkpoint = tmp_path / "policy_calibration_train.pt"

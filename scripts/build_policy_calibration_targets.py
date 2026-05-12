@@ -34,6 +34,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hands-per-case", type=int, default=256)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--strategy-source", choices=("regret", "policy-head"), default="regret")
+    parser.add_argument(
+        "--target-temperature",
+        type=float,
+        default=1.0,
+        help="Soften legal teacher probabilities before saving targets.",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument("--max-hands", type=int)
     args = parser.parse_args(argv)
@@ -60,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
             strategy_source=args.strategy_source,
             device=args.device,
             hands_per_case=args.hands_per_case,
+            target_temperature=args.target_temperature,
         )
         print(json.dumps(metadata, indent=2, sort_keys=True))
         return 0
@@ -72,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         strategy_source=args.strategy_source,
         device=args.device,
         max_hands=args.max_hands,
+        target_temperature=args.target_temperature,
     )
     print(json.dumps(metadata, indent=2, sort_keys=True))
     return 0

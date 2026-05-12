@@ -103,15 +103,36 @@ def _sample_private_hands(
     return [(_card_to_str(hand[0]), _card_to_str(hand[1])) for hand in hands]
 
 
-def _normalized_strategy(strategy: np.ndarray, legal_mask: np.ndarray) -> np.ndarray:
+def _normalized_strategy(
+    strategy: np.ndarray,
+    legal_mask: np.ndarray,
+    *,
+    target_temperature: float = 1.0,
+) -> np.ndarray:
     target = np.asarray(strategy, dtype=np.float32) * (legal_mask > 0)
     total = float(target.sum())
     if total > 1e-8:
-        return target / total
-    legal_total = float(legal_mask.sum())
-    if legal_total <= 0:
+        normalized = target / total
+    else:
+        legal_total = float(legal_mask.sum())
+        if legal_total <= 0:
+            raise ValueError("cannot normalize a policy target without legal actions")
+        normalized = legal_mask.astype(np.float32) / legal_total
+
+    temperature = float(target_temperature)
+    if not np.isfinite(temperature) or temperature <= 0.0:
+        raise ValueError("target_temperature must be finite and positive")
+    if abs(temperature - 1.0) < 1e-8:
+        return normalized.astype(np.float32, copy=False)
+
+    legal = legal_mask > 0
+    softened = np.zeros_like(normalized, dtype=np.float32)
+    powered = np.power(np.clip(normalized[legal], 1e-8, 1.0), 1.0 / temperature)
+    powered_total = float(powered.sum())
+    if powered_total <= 0.0:
         raise ValueError("cannot normalize a policy target without legal actions")
-    return legal_mask.astype(np.float32) / legal_total
+    softened[legal] = powered / powered_total
+    return softened
 
 
 def _target_summary(targets: np.ndarray) -> dict[str, float]:
@@ -135,6 +156,7 @@ def sample_policy_calibration_targets(
     strategy_source: str = "regret",
     device: str | torch.device = "auto",
     max_hands: int | None = None,
+    target_temperature: float = 1.0,
     stats: dict[str, Any] | None = None,
 ) -> tuple[PolicyTargetBuffer, dict[str, Any]]:
     """Collect supervised average-policy targets from learned self-play decisions."""
@@ -182,7 +204,11 @@ def sample_policy_calibration_targets(
                 resolved_device,
                 strategy_source=strategy_source,
             )
-            target = _normalized_strategy(strategy, legal_mask)
+            target = _normalized_strategy(
+                strategy,
+                legal_mask,
+                target_temperature=target_temperature,
+            )
             features_out.append(features.astype(np.float32, copy=False))
             masks_out.append((legal_mask > 0).astype(np.float32, copy=False))
             targets_out.append(target)
@@ -217,6 +243,7 @@ def sample_policy_calibration_targets(
         "checkpoint": str(checkpoint),
         "checkpoint_iteration": loaded.metadata.get("checkpoint_iteration"),
         "strategy_source": strategy_source,
+        "target_temperature": float(target_temperature),
         "device": str(resolved_device),
         "n_targets": int(n_targets),
         "attempted_hands": int(attempted_hands),
@@ -238,6 +265,7 @@ def save_policy_calibration_targets(
     strategy_source: str = "regret",
     device: str | torch.device = "auto",
     max_hands: int | None = None,
+    target_temperature: float = 1.0,
 ) -> dict[str, Any]:
     buffer, metadata = sample_policy_calibration_targets(
         n_targets,
@@ -246,6 +274,7 @@ def save_policy_calibration_targets(
         strategy_source=strategy_source,
         device=device,
         max_hands=max_hands,
+        target_temperature=target_temperature,
     )
     output = Path(output)
     buffer.save_npz(output)
@@ -262,6 +291,7 @@ def sample_public_state_hand_sweep_targets(
     strategy_source: str = "regret",
     device: str | torch.device = "auto",
     hands_per_case: int | None = 256,
+    target_temperature: float = 1.0,
 ) -> tuple[PolicyTargetBuffer, dict[str, Any]]:
     """Expand turn/river public states over compatible private hands."""
     resolved_device = _resolve_device(device)
@@ -309,7 +339,13 @@ def sample_public_state_hand_sweep_targets(
             )
             features_out.append(features.astype(np.float32, copy=False))
             masks_out.append((legal_mask > 0).astype(np.float32, copy=False))
-            targets_out.append(_normalized_strategy(strategy, legal_mask))
+            targets_out.append(
+                _normalized_strategy(
+                    strategy,
+                    legal_mask,
+                    target_temperature=target_temperature,
+                )
+            )
             weights_out.append(float(max(int(loaded.metadata.get("iteration") or 1), 1)))
         n_added = len(features_out) - start
         street_counts[str(street)] += n_added
@@ -337,6 +373,7 @@ def sample_public_state_hand_sweep_targets(
         "checkpoint": str(checkpoint),
         "checkpoint_iteration": loaded.metadata.get("checkpoint_iteration"),
         "strategy_source": strategy_source,
+        "target_temperature": float(target_temperature),
         "device": str(resolved_device),
         "n_cases": int(len(selected_cases)),
         "n_targets": int(n_targets),
@@ -357,6 +394,7 @@ def save_public_state_hand_sweep_targets(
     strategy_source: str = "regret",
     device: str | torch.device = "auto",
     hands_per_case: int | None = 256,
+    target_temperature: float = 1.0,
 ) -> dict[str, Any]:
     buffer, metadata = sample_public_state_hand_sweep_targets(
         cases,
@@ -365,6 +403,7 @@ def save_public_state_hand_sweep_targets(
         strategy_source=strategy_source,
         device=device,
         hands_per_case=hands_per_case,
+        target_temperature=target_temperature,
     )
     output = Path(output)
     buffer.save_npz(output)
