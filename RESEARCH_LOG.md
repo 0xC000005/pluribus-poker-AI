@@ -1047,3 +1047,14 @@
 - Summary: Gate methodology-review-20260512T193213Z-search-consistency-training-objective passed.
 - Metrics file: autoresearch-session/poker_runs/20260512T193811Z-methodology-review-for-search-consistency-training-objective-should/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T193213Z-search-consistency-training-objective", "passed": true}`
+
+## 20260512T195339Z-search-consistency-policy-target-plumbing-should-let-deep - passed
+
+- Timestamp: 2026-05-12T19:53:47Z
+- Type: implementation
+- Gate: search-consistency-policy-target-plumbing
+- Hypothesis: Search-consistency policy-target plumbing should let Deep CFR learn from bounded resolver outputs without hand-coded poker rules.
+- Failure class: none
+- Summary: Implemented optional search-consistency policy targets: legal-mask-normalized target buffer, masked policy-head loss, resolver target builder, training/autoresearch CLI flags, docs, and focused tests. Smoke generated four fixed resolver targets and loaded them through a one-iteration CUDA training path.
+- Metrics file: autoresearch-session/search_targets/fixed_turn_river_smoke.json
+- Key metrics: `{"passed": true, "search_target_size": 4, "search_target_weight": 0.05, "cuda_smoke": true}`

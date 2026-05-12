@@ -1091,6 +1091,9 @@ def enqueue_gpu_training(
     batch_size: int = 4096,
     traversal_pool_max_slots: int = 1_000_000,
     traversal_slots_per_traversal: int = 500,
+    search_targets: str | Path | None = None,
+    search_target_weight: float = 0.0,
+    search_target_batch_size: int = 0,
     save_dir: str | Path | None = None,
     prefix: str = "candidate",
     save_every: int = 0,
@@ -1117,6 +1120,8 @@ def enqueue_gpu_training(
     save_dir.mkdir(parents=True, exist_ok=True)
     if resume:
         resume = _resolve_existing_path(root, resume, label="Resume checkpoint")
+    if search_targets:
+        search_targets = _resolve_existing_path(root, search_targets, label="Search targets")
 
     gate_name = _unique_gate_name(
         root,
@@ -1144,6 +1149,10 @@ def enqueue_gpu_training(
         str(traversal_pool_max_slots),
         "--traversal-slots-per-traversal",
         str(traversal_slots_per_traversal),
+        "--search-target-weight",
+        str(search_target_weight),
+        "--search-target-batch-size",
+        str(search_target_batch_size),
         "--save-dir",
         str(save_dir),
         "--prefix",
@@ -1155,6 +1164,8 @@ def enqueue_gpu_training(
     ]
     if resume:
         command.extend(["--resume", str(resume)])
+    if search_targets:
+        command.extend(["--search-targets", str(search_targets)])
 
     goal = _read_json(_goal_path(root))
     goal.setdefault("gates", {})[gate_name] = {
@@ -1164,6 +1175,8 @@ def enqueue_gpu_training(
         ),
         "timeout_seconds": timeout_seconds,
         "commands": [command],
+        "search_target_weight": float(search_target_weight),
+        "search_targets": str(search_targets) if search_targets else "",
     }
     _write_json(_goal_path(root), goal)
     postprocess = None

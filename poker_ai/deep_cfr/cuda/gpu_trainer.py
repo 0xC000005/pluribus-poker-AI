@@ -31,6 +31,7 @@ from poker_ai.deep_cfr.buffer import ReservoirBuffer
 from poker_ai.deep_cfr.deep_cfr import regret_match, train_value_network
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
 
 from poker_ai.deep_cfr.cuda.lookup_tables import get_gpu_tables, FLUSH_SIZE, UNSUITED_SIZE
 from poker_ai.deep_cfr.cuda.game_state import (
@@ -851,6 +852,9 @@ class GPUDeepCFRTrainer:
         release_workspace_before_training: bool = True,
         traversal_pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
         traversal_slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
+        policy_target_buffer: PolicyTargetBuffer | None = None,
+        policy_target_weight: float = 0.0,
+        policy_target_batch_size: int | None = None,
     ):
         self.n_players = n_players
         self.initial_chips = initial_chips
@@ -865,6 +869,9 @@ class GPUDeepCFRTrainer:
         self.release_workspace_before_training = release_workspace_before_training
         self.traversal_pool_max_slots = max(1, int(traversal_pool_max_slots))
         self.traversal_slots_per_traversal = max(1, int(traversal_slots_per_traversal))
+        self.policy_target_buffer = policy_target_buffer
+        self.policy_target_weight = float(policy_target_weight)
+        self.policy_target_batch_size = policy_target_batch_size
 
         if device is None:
             self.device = torch.device(
@@ -968,6 +975,9 @@ class GPUDeepCFRTrainer:
                     lr=self.lr,
                     device=self.device,
                     n_layers=self.n_layers,
+                    policy_target_buffer=self.policy_target_buffer,
+                    policy_target_weight=self.policy_target_weight,
+                    policy_target_batch_size=self.policy_target_batch_size,
                 )
             finally:
                 if hasattr(combined, "release_gpu_cache"):
@@ -1011,6 +1021,11 @@ class GPUDeepCFRTrainer:
                 "hidden_dim": self.hidden_dim,
                 "n_layers": self.n_layers,
                 "initial_chips": self.initial_chips,
+                "search_target_weight": self.policy_target_weight,
+                "search_target_size": (
+                    int(self.policy_target_buffer.size)
+                    if self.policy_target_buffer is not None else 0
+                ),
                 "buffer_sizes": [len(b) for b in self.buffers],
             },
             path,

@@ -27,6 +27,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 
 from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
+from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
 
 
 def main():
@@ -40,6 +41,9 @@ def main():
     ap.add_argument("--hidden-dim", type=int, default=256)
     ap.add_argument("--n-layers", type=int, default=2)
     ap.add_argument("--n-training-steps", type=int, default=1500)
+    ap.add_argument("--search-targets", type=str, default="")
+    ap.add_argument("--search-target-weight", type=float, default=0.0)
+    ap.add_argument("--search-target-batch-size", type=int, default=0)
     ap.add_argument("--save-path", type=str, default="./models")
     ap.add_argument("--save-every", type=int, default=10)
     ap.add_argument("--eval-every", type=int, default=10)
@@ -63,6 +67,11 @@ def main():
 
     save_dir = Path(args.save_path)
     save_dir.mkdir(parents=True, exist_ok=True)
+    search_target_buffer = (
+        PolicyTargetBuffer.from_npz(args.search_targets)
+        if args.search_targets
+        else None
+    )
 
     trainer = GPUDeepCFRTrainer(
         n_players=args.n_players,
@@ -74,6 +83,9 @@ def main():
         n_training_steps=args.n_training_steps,
         n_traversals=args.n_traversals,
         device=dev,
+        policy_target_buffer=search_target_buffer,
+        policy_target_weight=args.search_target_weight,
+        policy_target_batch_size=args.search_target_batch_size or None,
     )
 
     console.print(

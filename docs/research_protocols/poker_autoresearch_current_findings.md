@@ -199,6 +199,13 @@ GPU training readiness:
   states and train the existing policy head toward those targets under the
   legal mask. Fixed resolver cases remain diagnostics, not a training target;
   no manual no-all-in rule should be added.
+- Search-consistency plumbing is now implemented behind an explicit opt-in
+  weight. `scripts/build_search_targets.py` can generate resolver policy-target
+  `.npz` files, `PolicyTargetBuffer` enforces legal-mask normalization, and GPU
+  training accepts `--search-targets`, `--search-target-weight`, and
+  `--search-target-batch-size`. A one-iteration CUDA smoke with four fixed
+  resolver targets passed and recorded `search_target_size=4`; this validates
+  the path, not strategy quality.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

@@ -20,6 +20,10 @@ import torch.optim as optim
 
 from poker_ai.deep_cfr.buffer import ReservoirBuffer
 from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.deep_cfr.policy_targets import (
+    PolicyTargetBuffer,
+    masked_policy_cross_entropy,
+)
 from poker_ai.games.full_deck.state import (
     N_ACTIONS,
     N_FEATURES,
@@ -182,6 +186,9 @@ def train_value_network(
     lr: float = 0.001,
     device: torch.device | None = None,
     n_layers: int = 2,
+    policy_target_buffer: PolicyTargetBuffer | None = None,
+    policy_target_weight: float = 0.0,
+    policy_target_batch_size: int | None = None,
 ) -> ValueNetwork:
     """Train a new value network from scratch on the buffer contents.
 
@@ -250,6 +257,14 @@ def train_value_network(
             logger.warning("torch.compile unavailable for value net; using eager mode.")
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
+    policy_target_weight = float(policy_target_weight)
+    use_policy_targets = (
+        policy_target_buffer is not None
+        and policy_target_weight > 0
+        and getattr(policy_target_buffer, "size", 0) > 0
+    )
+    policy_target_batch_size = int(policy_target_batch_size or batch_size)
+
     net.train()
     total_loss = 0.0
     for step in range(n_epochs):
@@ -285,6 +300,19 @@ def train_value_network(
             logp = torch.log_softmax(pol_logits, dim=1)
             loss_pol = -(weights * (policy_target * logp).sum(dim=1)).mean()
             loss = loss_adv + 0.1 * loss_pol
+            if use_policy_targets:
+                target_batch = policy_target_buffer.sample_batch(
+                    policy_target_batch_size,
+                    device,
+                )
+                _, target_logits = net.forward_with_policy(target_batch.features)
+                loss_search = masked_policy_cross_entropy(
+                    target_logits,
+                    target_batch.legal_masks,
+                    target_batch.target_probs,
+                    weights=target_batch.weights,
+                )
+                loss = loss + policy_target_weight * loss_search
 
         if use_amp:
             scaler.scale(loss).backward()
@@ -341,6 +369,9 @@ class DeepCFRTrainer:
         n_training_steps: int = 2000,
         n_traversals: int = 500,
         device: torch.device | None = None,
+        policy_target_buffer: PolicyTargetBuffer | None = None,
+        policy_target_weight: float = 0.0,
+        policy_target_batch_size: int | None = None,
     ):
         self.n_players = n_players
         self.hidden_dim = hidden_dim
@@ -348,6 +379,9 @@ class DeepCFRTrainer:
         self.lr = lr
         self.n_training_steps = n_training_steps
         self.n_traversals = n_traversals
+        self.policy_target_buffer = policy_target_buffer
+        self.policy_target_weight = float(policy_target_weight)
+        self.policy_target_batch_size = policy_target_batch_size
 
         if device is None:
             self.device = torch.device(
@@ -399,6 +433,9 @@ class DeepCFRTrainer:
                 batch_size=self.batch_size,
                 lr=self.lr,
                 device=self.device,
+                policy_target_buffer=self.policy_target_buffer,
+                policy_target_weight=self.policy_target_weight,
+                policy_target_batch_size=self.policy_target_batch_size,
             )
 
     def _combine_buffers(self) -> ReservoirBuffer:

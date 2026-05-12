@@ -219,6 +219,20 @@ Use `enqueue-review` for any change that needs independent verification or
 related work. This keeps review artifacts in the workflow queue instead of
 burying them in chat.
 
+## Search-Consistency Targets
+
+The approved next mechanism is bounded search-consistency training: use the
+turn/river resolver to generate policy-head targets, then train the existing
+policy head toward those search distributions under the 9-action legal mask.
+This is not a hand-coded poker rule; the target comes from search. Keep the
+search-target weight at `0.0` unless a completed methodology review and knob
+entry justify enabling it.
+
+Fixed public-state targets are useful for smoke tests and plumbing checks, but
+they are not a training distribution. Any candidate meant for promotion should
+use sampled train/held-out public states and must still pass the falsification
+ladder before Slumbot confirmation.
+
 ## Implemented Automation
 
 The executable runner is `scripts/poker_autoresearch.py`. It automates
@@ -271,6 +285,10 @@ python scripts/poker_autoresearch.py add-knob \
   --mechanism "Test whether search-distilled targets reduce live transfer loss." \
   --rationale "One variable isolates the target mechanism." \
   --removal-criterion "Retire if Slumbot transfer remains negative after confirmation."
+python scripts/build_search_targets.py \
+  --output autoresearch-session/search_targets/fixed_turn_river.npz \
+  --solver-iterations 25 \
+  --solver-backend auto
 python scripts/poker_autoresearch.py enqueue-compare \
   --candidate models/candidate.pt \
   --n-games 500 \
@@ -287,6 +305,8 @@ python scripts/poker_autoresearch.py enqueue-train \
   --n-iterations 50 \
   --n-traversals 4000 \
   --n-training-steps 1500 \
+  --search-targets autoresearch-session/search_targets/fixed_turn_river.npz \
+  --search-target-weight 0.05 \
   --prefix candidate_gpu \
   --save-every 25 \
   --auto-compare \
@@ -335,6 +355,10 @@ training gate writes periodic checkpoints, emits them in JSON, then continuous
 mode queues head-to-head incumbent comparisons for every emitted checkpoint.
 This avoids judging a long run only by its final checkpoint when the learning
 curve is non-monotonic.
+Use `scripts/build_search_targets.py` to create small resolver-target datasets
+and pass them to `enqueue-train` or `scripts/run_gpu_deep_cfr.py` with
+`--search-targets`. The training path records `search_target_weight` and target
+count in the emitted metrics JSON.
 Use `--compare-strategy-source policy-head` for auto-queued comparisons only
 after the incumbent itself is a policy-head-capable checkpoint.
 Use `enqueue-slumbot` only for sparse live checks after local comparison says a

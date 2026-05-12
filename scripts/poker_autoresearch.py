@@ -201,6 +201,9 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--batch-size", type=int, default=4096)
     train.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     train.add_argument("--traversal-slots-per-traversal", type=int, default=500)
+    train.add_argument("--search-targets")
+    train.add_argument("--search-target-weight", type=float, default=0.0)
+    train.add_argument("--search-target-batch-size", type=int, default=0)
     train.add_argument("--save-dir")
     train.add_argument("--prefix", default="candidate")
     train.add_argument("--save-every", type=int, default=0)
@@ -403,6 +406,9 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 traversal_pool_max_slots=args.traversal_pool_max_slots,
                 traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+                search_targets=args.search_targets,
+                search_target_weight=args.search_target_weight,
+                search_target_batch_size=args.search_target_batch_size,
                 save_dir=args.save_dir,
                 prefix=args.prefix,
                 save_every=args.save_every,

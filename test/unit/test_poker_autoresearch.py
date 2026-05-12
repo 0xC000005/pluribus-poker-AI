@@ -1183,6 +1183,8 @@ def test_cli_enqueue_falsification_ladder_creates_gate(tmp_path):
 
 def test_cli_enqueue_train_creates_gate(tmp_path):
     script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    search_targets = tmp_path / "targets.npz"
+    search_targets.write_bytes(b"placeholder")
 
     subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "init"],
@@ -1210,6 +1212,12 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
             "6",
             "--compare-strategy-source",
             "policy-head",
+            "--search-targets",
+            str(search_targets),
+            "--search-target-weight",
+            "0.05",
+            "--search-target-batch-size",
+            "7",
             "--timeout-seconds",
             "55",
         ],
@@ -1226,6 +1234,10 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
     assert "probe" in command
     assert "--save-every" in command
     assert "1" in command
+    assert "--search-targets" in command
+    assert str(search_targets) in command
+    assert "--search-target-weight" in command
+    assert "0.05" in command
     state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
     assert state["hypothesis_queue"][-1]["postprocess"]["n_games"] == 6
     assert state["hypothesis_queue"][-1]["postprocess"]["strategy_source"] == "policy-head"

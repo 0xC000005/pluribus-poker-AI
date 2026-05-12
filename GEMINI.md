@@ -9,8 +9,9 @@ clustering, terminal play, and visualisation code are retained for reference.
 ## Main Architecture
 
 - `poker_ai/deep_cfr/`: active learning stack. `networks.py` defines the
-  advantage/policy-head MLP, `buffer.py` defines reservoir replay, and
-  `deep_cfr.py` contains the reference training loop.
+  advantage/policy-head MLP, `policy_targets.py` defines optional
+  search-distilled policy target buffers, `buffer.py` defines reservoir replay,
+  and `deep_cfr.py` contains the reference training loop.
 - `poker_ai/deep_cfr/cuda/`: GPU trainer and Numba kernels. This is the
   preferred path for compute-heavy experiments on CUDA hosts.
 - `poker_ai/deep_cfr/fast_state.py` and `fast_traverse.py`: CPU-optimized
@@ -23,6 +24,8 @@ clustering, terminal play, and visualisation code are retained for reference.
 - `scripts/solver.py` and `scripts/fast_cfr.py`: range-vs-range CFR+ solver.
 - `scripts/poker_resolver_benchmark.py`: fixed public-state resolver benchmark
   for legality, latency, blueprint drift, and learned-advantage proxies.
+- `scripts/build_search_targets.py`: builds bounded resolver policy targets for
+  optional search-consistency training.
 
 ## Current Contract
 
@@ -76,6 +79,13 @@ python scripts/poker_resolver_benchmark.py --checkpoint models/slumbot_2p_iter10
 python scripts/poker_autoresearch.py gate eval-resolver-fixed-states
 ```
 
+Search-consistency targets:
+
+```bash
+python scripts/build_search_targets.py --output autoresearch-session/search_targets/fixed_turn_river.npz --solver-iterations 25 --solver-backend auto
+python scripts/poker_autoresearch.py enqueue-train --n-iterations 50 --n-traversals 4000 --search-targets autoresearch-session/search_targets/fixed_turn_river.npz --search-target-weight 0.05 --prefix search_consistency --save-every 25 --auto-compare
+```
+
 Autoresearch governance:
 
 ```bash
@@ -91,6 +101,8 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
 - Treat full-deck Deep CFR and Slumbot parity as the source of truth.
 - Avoid new hand-crafted poker heuristics; prefer learned policies, regret
   matching, and principled search.
+- Search-consistency targets must come from resolver/search output under the
+  legal mask; do not encode manual no-all-in or street-specific rules.
 - Before method, evaluation, promotion, or persistent-knob changes, complete a
   methodology review with independent verification, related work, and a
   benchmark-hacking audit.
