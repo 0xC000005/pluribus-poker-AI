@@ -1134,3 +1134,35 @@
 - Summary: The representation fix was necessary, but the corrected belief-conditioned targets still failed transfer. Target fit improved versus control, yet holdout target all-in rate remained high and the candidate lost to the no-target control under both regret and policy-head play.
 - Metrics file: autoresearch-session/search_targets/belief_range_fix_ab_20260512.json
 - Key metrics: `{"passed": false, "train_target_allin_rate": 0.75, "holdout_target_allin_rate": 0.8125, "candidate_holdout_mean_l1": 0.634443, "control_holdout_mean_l1": 0.714362, "candidate_policy_allin_rate": 1.0, "policy_head_h2h_avg": -211.71, "policy_head_h2h_lower95": -506.3123, "regret_h2h_avg": -196.4933, "regret_h2h_lower95": -463.034}`
+## 20260512T204755Z-methodology-review-for-gameplay-reachable-search-target-sampling - passed
+
+- Timestamp: 2026-05-12T20:47:55Z
+- Type: methodology_review
+- Gate: methodology-review-20260512T204650Z-gameplay-reachable-search-target-sampling
+- Hypothesis: Methodology review for Gameplay-reachable search target sampling should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260512T204650Z-gameplay-reachable-search-target-sampling passed.
+- Metrics file: autoresearch-session/poker_runs/20260512T204755Z-methodology-review-for-gameplay-reachable-search-target-sampling/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260512T204650Z-gameplay-reachable-search-target-sampling", "passed": true}`
+
+## 20260512T205010Z-learned-policy-rollouts-should-produce-reachable-search - passed
+
+- Timestamp: 2026-05-12T20:50:10Z
+- Type: implementation
+- Gate: gameplay-reachable-target-sampler
+- Hypothesis: Learned-policy rollouts should produce Slumbot-format turn/river resolver cases without changing action legality or adding poker rules.
+- Failure class: none
+- Summary: Added a blueprint self-play case sampler to the search-target builder. It uses the existing checkpoint loader, feature encoder, legal mask, network strategy, and Slumbot action mapping, then records sampling attempts/success rate in metadata.
+- Metrics file: autoresearch-session/search_targets/reachable_policyhead_ab_20260512.json
+- Key metrics: `{"passed": true, "tests": "19 passed", "regret_rollout_success_rate": 0.004184, "policy_head_rollout_success_rate": 0.102564}`
+
+## 20260512T205326Z-policy-head-reachable-search-targets-should-transfer - failed
+
+- Timestamp: 2026-05-12T20:53:26Z
+- Type: experiment
+- Gate: reachable-policyhead-search-target-ab
+- Hypothesis: Policy-head reachable search targets should reduce target distribution mismatch and improve local transfer versus the no-target control.
+- Failure class: search_quality
+- Summary: Policy-head rollout was healthier than regret-only rollout and produced a positive single-seed policy-head average, but the effect did not survive three seeds. Target all-in rate stayed high and the trained policy-head selected all-in on every holdout target.
+- Metrics file: autoresearch-session/search_targets/reachable_policyhead_ab_20260512.json
+- Key metrics: `{"passed": false, "train_success_rate": 0.129032, "holdout_success_rate": 0.097561, "train_target_allin_rate": 0.6875, "holdout_target_allin_rate": 0.75, "candidate_holdout_mean_l1": 0.660395, "control_holdout_mean_l1": 0.710932, "candidate_policy_allin_rate": 1.0, "single_seed_policy_head_avg": 185.895, "three_seed_policy_head_avg": 20.9694, "three_seed_policy_head_lower95": -148.4342, "regret_h2h_avg": -193.65}`

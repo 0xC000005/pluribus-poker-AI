@@ -29,6 +29,32 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="Generate this many sampled turn/river cases instead of fixed defaults.",
     )
+    parser.add_argument(
+        "--blueprint-cases",
+        type=int,
+        default=0,
+        help="Generate this many turn/river cases from learned-policy rollouts.",
+    )
+    parser.add_argument(
+        "--blueprint-checkpoint",
+        help="Checkpoint used to roll out learned-policy cases.",
+    )
+    parser.add_argument(
+        "--blueprint-strategy-source",
+        choices=("regret", "policy-head"),
+        default="regret",
+        help="Policy source used for learned-policy case rollouts.",
+    )
+    parser.add_argument(
+        "--blueprint-device",
+        default="auto",
+        help="Device for learned-policy rollout inference: auto, cpu, cuda, etc.",
+    )
+    parser.add_argument(
+        "--blueprint-max-attempts",
+        type=int,
+        help="Maximum self-play hands to try when collecting learned-policy cases.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--solver-iterations", type=int, default=25)
     parser.add_argument(
@@ -65,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
         args.output,
         cases_json=args.cases_json,
         sampled_cases=args.sampled_cases,
+        blueprint_cases=args.blueprint_cases,
+        blueprint_checkpoint=args.blueprint_checkpoint,
+        blueprint_strategy_source=args.blueprint_strategy_source,
+        blueprint_device=args.blueprint_device,
+        blueprint_max_attempts=args.blueprint_max_attempts,
         seed=args.seed,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,

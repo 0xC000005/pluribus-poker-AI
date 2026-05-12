@@ -34,9 +34,11 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from play_slumbot import (  # noqa: E402
     _compute_bets_before_street,
+    action_to_slumbot,
     build_features,
     card_str_to_index,
     get_legal_mask_from_parsed,
+    network_strategy,
     parse_action,
 )
 from range_tracker import RangeTracker, update_tracker_from_actions  # noqa: E402
@@ -118,6 +120,151 @@ def sample_resolver_cases(
         )
     if len(cases) != n_cases:
         raise RuntimeError(f"generated {len(cases)} valid cases out of requested {n_cases}")
+    return cases
+
+
+def _visible_board(board: list[str], street: int) -> list[str]:
+    if street <= 0:
+        return []
+    if street == 1:
+        return board[:3]
+    if street == 2:
+        return board[:4]
+    return board[:5]
+
+
+def _sample_policy_action(
+    value_net: Any,
+    device: torch.device,
+    *,
+    hole_cards: list[str],
+    board: list[str],
+    action_str: str,
+    acting_pos: int,
+    parsed: dict,
+    strategy_source: str,
+    rng: np.random.Generator,
+) -> int:
+    features = build_features(
+        hole_cards,
+        board,
+        action_str,
+        acting_pos,
+        parsed,
+    )
+    legal_mask = get_legal_mask_from_parsed(parsed, action_str, acting_pos)
+    _, strategy = network_strategy(
+        value_net,
+        features,
+        legal_mask,
+        device,
+        strategy_source=strategy_source,
+    )
+    legal_actions = np.flatnonzero(legal_mask > 0)
+    if legal_actions.size == 0:
+        return 1
+    probs = np.asarray([strategy[action] for action in legal_actions], dtype=np.float64)
+    total = float(probs.sum())
+    if total > 0:
+        probs /= total
+    else:
+        probs = np.ones_like(probs, dtype=np.float64) / len(probs)
+    return int(rng.choice(legal_actions, p=probs))
+
+
+def _append_action(action_str: str, increment: str, previous_street: int) -> str:
+    next_action = action_str + increment
+    if increment.startswith("f"):
+        return next_action
+    parsed_next = parse_action(next_action)
+    if "error" in parsed_next:
+        return next_action
+    if (
+        int(parsed_next.get("st", previous_street)) > previous_street
+        and int(parsed_next.get("pos", -1)) >= 0
+        and not next_action.endswith("/")
+    ):
+        return next_action + "/"
+    return next_action
+
+
+def sample_blueprint_resolver_cases(
+    n_cases: int,
+    *,
+    blueprint_checkpoint: str | Path,
+    seed: int = 0,
+    strategy_source: str = "regret",
+    device: str | torch.device = "auto",
+    source: str = "blueprint_self_play",
+    max_attempts: int | None = None,
+    stats: dict[str, Any] | None = None,
+) -> list[ResolverBenchmarkCase]:
+    """Sample turn/river cases from learned-policy Slumbot-format rollouts."""
+    resolved_device = _resolve_device(device)
+    loaded = load_value_network_checkpoint(blueprint_checkpoint, resolved_device)
+    assert_strategy_source_supported(loaded, strategy_source)
+    rng = np.random.default_rng(seed)
+    max_attempts = max_attempts or max(200, n_cases * 200)
+    cases: list[ResolverBenchmarkCase] = []
+    attempts = 0
+    while len(cases) < n_cases and attempts < max_attempts:
+        attempts += 1
+        cards = _sample_cards(rng, 9)
+        hero_hole = cards[:2]
+        villain_hole = cards[2:4]
+        board = cards[4:9]
+        client_pos = int(rng.integers(0, 2))
+        action_str = ""
+
+        for _ in range(40):
+            parsed = parse_action(action_str)
+            if "error" in parsed:
+                break
+            street = int(parsed.get("st", -1))
+            acting_pos = int(parsed.get("pos", -1))
+            if acting_pos < 0 or street not in (0, 1, 2, 3):
+                break
+            visible_board = _visible_board(board, street)
+            if street in (2, 3) and acting_pos == client_pos:
+                cases.append(
+                    ResolverBenchmarkCase(
+                        label=f"{source}-{len(cases):04d}-street{street}",
+                        hole_cards=tuple(hero_hole),
+                        board=tuple(visible_board),
+                        action_str=action_str,
+                        client_pos=client_pos,
+                        source=source,
+                    )
+                )
+                break
+
+            acting_hole = hero_hole if acting_pos == client_pos else villain_hole
+            action_idx = _sample_policy_action(
+                loaded.value_net,
+                resolved_device,
+                hole_cards=acting_hole,
+                board=visible_board,
+                action_str=action_str,
+                acting_pos=acting_pos,
+                parsed=parsed,
+                strategy_source=strategy_source,
+                rng=rng,
+            )
+            increment = action_to_slumbot(action_idx, parsed, action_str, acting_pos)
+            action_str = _append_action(action_str, increment, street)
+            if increment.startswith("f"):
+                break
+
+    if stats is not None:
+        stats["attempts"] = int(attempts)
+        stats["requested_cases"] = int(n_cases)
+        stats["generated_cases"] = int(len(cases))
+        stats["success_rate"] = round(float(len(cases)) / max(float(attempts), 1.0), 6)
+    if len(cases) != n_cases:
+        raise RuntimeError(
+            f"generated {len(cases)} reachable cases out of requested {n_cases} "
+            f"after {attempts} attempts"
+        )
     return cases
 
 
@@ -436,6 +583,11 @@ def save_resolver_policy_targets(
     *,
     cases_json: str | Path | None = None,
     sampled_cases: int = 0,
+    blueprint_cases: int = 0,
+    blueprint_checkpoint: str | Path | None = None,
+    blueprint_strategy_source: str = "regret",
+    blueprint_device: str | torch.device = "auto",
+    blueprint_max_attempts: int | None = None,
     seed: int = 0,
     solver_iterations: int = 25,
     solver_backend: str = "auto",
@@ -444,11 +596,26 @@ def save_resolver_policy_targets(
     range_device: str | torch.device = "auto",
     range_prune_threshold: float = 1e-4,
 ) -> dict:
-    if cases_json and sampled_cases:
-        raise ValueError("choose either cases_json or sampled_cases, not both")
+    selected_sources = sum(bool(item) for item in (cases_json, sampled_cases, blueprint_cases))
+    if selected_sources > 1:
+        raise ValueError("choose only one of cases_json, sampled_cases, or blueprint_cases")
     if cases_json:
         cases = load_cases_json(cases_json)
         case_source = str(cases_json)
+    elif blueprint_cases:
+        if blueprint_checkpoint is None:
+            raise ValueError("blueprint_cases requires blueprint_checkpoint")
+        blueprint_stats: dict[str, Any] = {}
+        cases = sample_blueprint_resolver_cases(
+            blueprint_cases,
+            blueprint_checkpoint=blueprint_checkpoint,
+            seed=seed,
+            strategy_source=blueprint_strategy_source,
+            device=blueprint_device,
+            max_attempts=blueprint_max_attempts,
+            stats=blueprint_stats,
+        )
+        case_source = "blueprint_self_play"
     elif sampled_cases:
         cases = sample_resolver_cases(sampled_cases, seed=seed)
         case_source = "sampled"
@@ -474,6 +641,13 @@ def save_resolver_policy_targets(
     metadata["cases_json"] = str(cases_path)
     metadata["case_source"] = case_source
     metadata["seed"] = int(seed) if sampled_cases else None
+    if blueprint_cases:
+        metadata["seed"] = int(seed)
+        metadata["blueprint_checkpoint"] = str(blueprint_checkpoint)
+        metadata["blueprint_strategy_source"] = blueprint_strategy_source
+        metadata["blueprint_device"] = str(_resolve_device(blueprint_device))
+        metadata["blueprint_max_attempts"] = blueprint_max_attempts
+        metadata["blueprint_sampling"] = blueprint_stats
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True),
         encoding="utf-8",
