@@ -1323,12 +1323,13 @@ def enqueue_candidate_comparison(
         command.append("--head-to-head")
     if strategy_source != "regret":
         command.extend(["--strategy-source", strategy_source])
+    command.append("--require-positive-lower95")
 
     gate_config = {
         "description": (
             "One-off local candidate-vs-incumbent comparison. This gate emits "
-            "delta metrics and promotion blockers; it is not a standalone "
-            "strategy-strength proof."
+            "delta metrics and fails unless the lower 95% comparison bound is "
+            "positive. It is not a standalone strategy-strength proof."
         ),
         "timeout_seconds": timeout_seconds,
         "commands": [command],

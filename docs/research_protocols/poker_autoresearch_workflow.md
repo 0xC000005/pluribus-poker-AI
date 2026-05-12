@@ -371,8 +371,10 @@ evaluation so the workflow cannot silently benchmark random initialized heads.
 Use `enqueue-train --save-every N --auto-compare` for longer GPU runs. The
 training gate writes periodic checkpoints, emits them in JSON, then continuous
 mode queues head-to-head incumbent comparisons for every emitted checkpoint.
-This avoids judging a long run only by its final checkpoint when the learning
-curve is non-monotonic.
+These comparisons require `--require-positive-lower95`, so a finite negative
+lower confidence bound fails the gate instead of being logged as a pass. This
+avoids judging a long run only by its final checkpoint when the learning curve
+is non-monotonic.
 Use `scripts/build_search_targets.py` to create resolver-target datasets and
 pass them to `enqueue-train` or `scripts/run_gpu_deep_cfr.py` with
 `--search-targets`. Prefer `--sampled-cases` plus a recorded seed for

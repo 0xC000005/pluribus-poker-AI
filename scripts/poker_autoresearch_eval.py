@@ -115,6 +115,23 @@ def _lower95_metric(metrics: dict) -> float | None:
     return None
 
 
+def _apply_positive_lower95_requirement(metrics: dict) -> str | None:
+    lower95 = _lower95_metric(metrics)
+    if lower95 is not None and lower95 > 0:
+        metrics["positive_lower95_required"] = True
+        return None
+
+    metrics["passed"] = False
+    metrics["positive_lower95_required"] = True
+    metrics["positive_lower95_value"] = lower95
+    blockers = list(metrics.get("promotion_blockers") or [])
+    blocker = "comparison_requires_positive_lower95"
+    if blocker not in blockers:
+        blockers.append(blocker)
+    metrics["promotion_blockers"] = blockers
+    return f"comparison did not clear positive lower95 requirement: {lower95}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate a checkpoint against random play.")
     parser.add_argument("--checkpoint", required=True)
@@ -179,15 +196,15 @@ def main(argv: list[str] | None = None) -> int:
             candidate_strategy_source=args.candidate_strategy_source,
             baseline_strategy_source=args.baseline_strategy_source,
         )
+        failure = (
+            _apply_positive_lower95_requirement(metrics)
+            if args.require_positive_lower95
+            else None
+        )
         print(json.dumps(metrics, indent=2, sort_keys=True))
-        if args.require_positive_lower95:
-            lower95 = _lower95_metric(metrics)
-            if lower95 is None or lower95 <= 0:
-                print(
-                    f"comparison did not clear positive lower95 requirement: {lower95}",
-                    file=sys.stderr,
-                )
-                return 1
+        if failure:
+            print(failure, file=sys.stderr)
+            return 1
         return 0 if metrics["passed"] else 1
 
     metrics = _evaluate_checkpoint(
@@ -210,15 +227,15 @@ def main(argv: list[str] | None = None) -> int:
             strategy_source=args.strategy_source,
         )
         metrics = compare_checkpoint_metrics(metrics, baseline)
+    failure = (
+        _apply_positive_lower95_requirement(metrics)
+        if args.require_positive_lower95
+        else None
+    )
     print(json.dumps(metrics, indent=2, sort_keys=True))
-    if args.require_positive_lower95:
-        lower95 = _lower95_metric(metrics)
-        if lower95 is None or lower95 <= 0:
-            print(
-                f"comparison did not clear positive lower95 requirement: {lower95}",
-                file=sys.stderr,
-            )
-            return 1
+    if failure:
+        print(failure, file=sys.stderr)
+        return 1
     return 0 if metrics["passed"] else 1
 
 

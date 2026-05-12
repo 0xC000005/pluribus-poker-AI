@@ -545,6 +545,7 @@ def test_enqueue_candidate_comparison_creates_named_gate_from_incumbent(tmp_path
     assert str(incumbent) in command
     assert "--baseline-checkpoint" in command
     assert "--head-to-head" in command
+    assert "--require-positive-lower95" in command
     assert "--strategy-source" in command
     assert "policy-head" in command
     assert "12" in command

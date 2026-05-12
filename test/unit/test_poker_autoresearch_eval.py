@@ -630,4 +630,7 @@ def test_eval_cli_can_require_positive_head_to_head_lower95(tmp_path):
     assert result.returncode == 1
     assert "positive lower95" in result.stderr
     metrics = json.loads(result.stdout)
+    assert metrics["passed"] is False
+    assert metrics["positive_lower95_required"] is True
     assert metrics["paired_delta_lower95_chips_per_hand_across_seeds"] == 0.0
+    assert "comparison_requires_positive_lower95" in metrics["promotion_blockers"]

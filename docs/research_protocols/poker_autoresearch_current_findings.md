@@ -165,9 +165,10 @@ GPU training readiness:
   `avg_chips_per_hand=-23.961`, lower95 `-76.519`.
 - Autoresearch GPU training now supports periodic `--save-every` checkpoints
   and `--auto-compare`, which queues incumbent head-to-head comparisons for
-  every emitted checkpoint after the training gate passes. This is now the
-  preferred unattended mode because current results are non-monotonic across
-  training length.
+  every emitted checkpoint after the training gate passes. Auto-comparisons
+  now require a positive lower 95% bound; finite negative bounds are rejection
+  evidence, not pass conditions. This is now the preferred unattended mode
+  because current results are non-monotonic across training length.
 - Local evaluation can now choose `--strategy-source regret` or
   `--strategy-source policy-head`. Policy-head evaluation is guarded so legacy
   checkpoints without trained `policy_head` weights are rejected instead of

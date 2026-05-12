@@ -147,6 +147,9 @@ python scripts/poker_autoresearch.py add-knob --name search_target_mix --default
   logic, parsers, seed lists, and parity tests as protected surfaces.
 - Queue the falsification ladder before Slumbot confirmation; it is the local
   counter-test stage, not a promotion by itself.
+- One-off and auto-queued candidate comparisons must include
+  `--require-positive-lower95`; a finite but negative lower bound is a
+  diagnostic failure, not a passed gate.
 - Add research knobs only through `add-knob`; keep one mechanism and one
   primary variable, and avoid broad sweeps.
 - For performance work, report `iters/hour`, `samples/sec`, and
