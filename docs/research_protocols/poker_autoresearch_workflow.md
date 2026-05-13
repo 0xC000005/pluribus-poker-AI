@@ -308,6 +308,12 @@ candidate architecture before considering solver integration; it tests a
 learned compression of the public-belief range vector instead of feeding the
 raw range vector directly into the value body.
 
+After that larger-surface probe passes, train a reusable checkpoint with
+`scripts/train_public_belief_dual_hand_cfv.py`. The checkpoint is still a leaf
+diagnostic artifact, not a gameplay model. Its next required gate is a fixed
+resolver-state learned-leaf A/B that checks both-player CFV error, zero-sum
+residual, root-action drift versus the full solver, and latency.
+
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case

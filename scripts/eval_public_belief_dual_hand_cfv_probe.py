@@ -29,6 +29,8 @@ from poker_ai.games.full_deck.state import N_FEATURES
 from poker_ai.research.belief_probe import BELIEF_DIM, N_HANDS, _HAND_TO_INDEX, _resolve_device
 from poker_ai.research.belief_value_probe import (
     _HAND_FEATURES,
+    _apply_standardization,
+    _standardization_stats,
     compute_hero_cfv_vector,
     compute_villain_cfv_vector,
     load_public_belief_cfv_dataset_cache,
@@ -425,6 +427,281 @@ def _metrics(pred: np.ndarray, dataset: DualCFVDataset) -> dict[str, float]:
         "rmse": round(float(np.sqrt(np.mean(err**2))), 8),
         "bias": round(float(np.mean(err)), 8),
     }
+
+
+def _standardize_dual_datasets(
+    train_raw: DualCFVDataset,
+    holdout_raw: DualCFVDataset,
+) -> tuple[DualCFVDataset, DualCFVDataset, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    public_mean, public_std = _standardization_stats(train_raw.features)
+    belief_mean, belief_std = _standardization_stats(train_raw.belief)
+    train = DualCFVDataset(
+        features=_apply_standardization(train_raw.features, public_mean, public_std),
+        belief=_apply_standardization(train_raw.belief, belief_mean, belief_std),
+        hero_values=train_raw.hero_values,
+        villain_values=train_raw.villain_values,
+        hero_masks=train_raw.hero_masks,
+        villain_masks=train_raw.villain_masks,
+        labels=train_raw.labels,
+    )
+    holdout = DualCFVDataset(
+        features=_apply_standardization(holdout_raw.features, public_mean, public_std),
+        belief=_apply_standardization(holdout_raw.belief, belief_mean, belief_std),
+        hero_values=holdout_raw.hero_values,
+        villain_values=holdout_raw.villain_values,
+        hero_masks=holdout_raw.hero_masks,
+        villain_masks=holdout_raw.villain_masks,
+        labels=holdout_raw.labels,
+    )
+    return train, holdout, public_mean, public_std, belief_mean, belief_std
+
+
+def train_public_belief_dual_hand_cfv_checkpoint(
+    *,
+    train_cases_json: str | Path,
+    train_cfv_cache: str | Path,
+    holdout_cases_json: str | Path,
+    holdout_cfv_cache: str | Path,
+    output_checkpoint: str | Path,
+    train_limit: int = 128,
+    holdout_limit: int = 64,
+    train_dual_cache: str | Path | None = None,
+    holdout_dual_cache: str | Path | None = None,
+    device: str | torch.device = "auto",
+    solver_iterations: int = 25,
+    solver_backend: str = "auto",
+    value_scale: float = 20000.0,
+    hidden_dim: int = 64,
+    epochs: int = 30,
+    batch_size: int = 8192,
+    lr: float = 1e-3,
+    weight_decay: float = 1e-3,
+    seed: int = 0,
+    head_mode: str = "separate",
+    belief_bottleneck_dim: int = 32,
+) -> dict[str, Any]:
+    """Train and save the belief-conditioned dual-player hand-CFV model."""
+    resolved_device = _resolve_device(device)
+    train_raw, train_records, train_loaded = _load_or_build_dual_dataset(
+        cases_json=train_cases_json,
+        cfv_cache=train_cfv_cache,
+        limit=train_limit,
+        solver_iterations=solver_iterations,
+        solver_backend=solver_backend,
+        value_scale=value_scale,
+        dual_cache=train_dual_cache,
+    )
+    holdout_raw, holdout_records, holdout_loaded = _load_or_build_dual_dataset(
+        cases_json=holdout_cases_json,
+        cfv_cache=holdout_cfv_cache,
+        limit=holdout_limit,
+        solver_iterations=solver_iterations,
+        solver_backend=solver_backend,
+        value_scale=value_scale,
+        dual_cache=holdout_dual_cache,
+    )
+    train, holdout, public_mean, public_std, belief_mean, belief_std = (
+        _standardize_dual_datasets(train_raw, holdout_raw)
+    )
+    target_mean, target_std = _standardize_targets(train)
+    model = _fit_model(
+        train,
+        target_mean=target_mean,
+        target_std=target_std,
+        hidden_dim=hidden_dim,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr=lr,
+        weight_decay=weight_decay,
+        seed=seed,
+        device=resolved_device,
+        use_belief=True,
+        head_mode=head_mode,
+        belief_bottleneck_dim=belief_bottleneck_dim,
+    )
+    holdout_pred = _predict(
+        model,
+        holdout,
+        target_mean=target_mean,
+        target_std=target_std,
+        batch_size=batch_size,
+        device=resolved_device,
+        use_belief=True,
+    )
+    holdout_metrics = _metrics(holdout_pred, holdout)
+
+    output_path = Path(output_checkpoint)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "mode": "public_belief_dual_hand_cfv_checkpoint",
+            "model_state": {
+                key: value.detach().cpu()
+                for key, value in model.state_dict().items()
+            },
+            "hidden_dim": int(hidden_dim),
+            "head_mode": head_mode,
+            "belief_bottleneck_dim": int(belief_bottleneck_dim),
+            "use_belief": True,
+            "feature_dim": int(N_FEATURES),
+            "belief_dim": int(BELIEF_DIM),
+            "hand_feature_dim": 52,
+            "player_feature_dim": 2,
+            "target_dim": int(N_HANDS),
+            "public_mean": public_mean,
+            "public_std": public_std,
+            "belief_mean": belief_mean,
+            "belief_std": belief_std,
+            "target_mean": float(target_mean),
+            "target_std": float(target_std),
+            "value_scale": float(value_scale),
+            "solver_iterations": int(solver_iterations),
+            "solver_backend": solver_backend,
+            "train_cases_json": str(train_cases_json),
+            "train_cfv_cache": str(train_cfv_cache),
+            "train_dual_cache": str(train_dual_cache) if train_dual_cache else None,
+            "seed": int(seed),
+        },
+        output_path,
+    )
+    return {
+        "mode": "public_belief_dual_hand_cfv_checkpoint_train",
+        "passed": bool(np.isfinite(holdout_metrics["mae"])),
+        "checkpoint": str(output_path),
+        "device": str(resolved_device),
+        "solver_iterations": int(solver_iterations),
+        "solver_backend": solver_backend,
+        "value_scale": float(value_scale),
+        "hidden_dim": int(hidden_dim),
+        "epochs": int(epochs),
+        "batch_size": int(batch_size),
+        "lr": float(lr),
+        "weight_decay": float(weight_decay),
+        "seed": int(seed),
+        "head_mode": head_mode,
+        "belief_bottleneck_dim": int(belief_bottleneck_dim),
+        "train_cfv_cache": str(train_cfv_cache),
+        "holdout_cfv_cache": str(holdout_cfv_cache),
+        "train_dual_cache": str(train_dual_cache) if train_dual_cache else None,
+        "holdout_dual_cache": str(holdout_dual_cache) if holdout_dual_cache else None,
+        "train_loaded_from_cache": bool(train_loaded),
+        "holdout_loaded_from_cache": bool(holdout_loaded),
+        "train_size": int(train.features.shape[0]),
+        "holdout_size": int(holdout.features.shape[0]),
+        "feature_dim": int(N_FEATURES),
+        "belief_dim": int(BELIEF_DIM),
+        "hand_feature_dim": 52,
+        "player_feature_dim": 2,
+        "target_dim": int(N_HANDS),
+        "train_label_count": int(train.hero_masks.sum() + train.villain_masks.sum()),
+        "holdout_label_count": int(
+            holdout.hero_masks.sum() + holdout.villain_masks.sum()
+        ),
+        "belief_holdout": holdout_metrics,
+        "train_dual_record_count": len(train_records),
+        "holdout_dual_record_count": len(holdout_records),
+    }
+
+
+def load_public_belief_dual_hand_cfv_checkpoint(
+    checkpoint: str | Path,
+    device: str | torch.device = "auto",
+) -> tuple[_DualHandCFVProbeNet, dict[str, Any]]:
+    """Load a saved dual-player public-belief hand-CFV checkpoint."""
+    resolved_device = _resolve_device(device)
+    payload = torch.load(checkpoint, map_location=resolved_device, weights_only=False)
+    if payload.get("mode") != "public_belief_dual_hand_cfv_checkpoint":
+        raise ValueError(f"{checkpoint} is not a dual hand-CFV checkpoint")
+    model = _DualHandCFVProbeNet(
+        int(payload["hidden_dim"]),
+        use_belief=True,
+        head_mode=str(payload.get("head_mode", "separate")),
+        belief_bottleneck_dim=int(payload.get("belief_bottleneck_dim", 0)),
+    ).to(resolved_device)
+    model.load_state_dict(payload["model_state"])
+    model.eval()
+    return model, payload
+
+
+def predict_public_belief_dual_hand_cfv_model(
+    model: _DualHandCFVProbeNet,
+    payload: dict[str, Any],
+    features: np.ndarray,
+    belief: np.ndarray,
+    hero_masks: np.ndarray | None = None,
+    villain_masks: np.ndarray | None = None,
+    *,
+    device: str | torch.device = "auto",
+    batch_size: int = 8192,
+) -> np.ndarray:
+    """Predict both players' global hand CFVs from a loaded dual-CFV model."""
+    features = np.asarray(features, dtype=np.float32)
+    belief = np.asarray(belief, dtype=np.float32)
+    if features.ndim == 1:
+        features = features.reshape(1, -1)
+    if belief.ndim == 1:
+        belief = belief.reshape(1, -1)
+    if features.shape[0] != belief.shape[0]:
+        raise ValueError("features and belief must have the same number of rows")
+    n = int(features.shape[0])
+    if hero_masks is None:
+        hero_masks = np.ones((n, N_HANDS), dtype=np.float32)
+    else:
+        hero_masks = np.asarray(hero_masks, dtype=np.float32)
+    if villain_masks is None:
+        villain_masks = np.ones((n, N_HANDS), dtype=np.float32)
+    else:
+        villain_masks = np.asarray(villain_masks, dtype=np.float32)
+    dataset = DualCFVDataset(
+        features=_apply_standardization(
+            features,
+            payload["public_mean"],
+            payload["public_std"],
+        ),
+        belief=_apply_standardization(
+            belief,
+            payload["belief_mean"],
+            payload["belief_std"],
+        ),
+        hero_values=np.zeros((n, N_HANDS), dtype=np.float32),
+        villain_values=np.zeros((n, N_HANDS), dtype=np.float32),
+        hero_masks=hero_masks,
+        villain_masks=villain_masks,
+        labels=tuple(f"predict-{idx}" for idx in range(n)),
+    )
+    return _predict(
+        model,
+        dataset,
+        target_mean=float(payload["target_mean"]),
+        target_std=float(payload["target_std"]),
+        batch_size=batch_size,
+        device=_resolve_device(device),
+        use_belief=True,
+    )
+
+
+def predict_public_belief_dual_hand_cfv_checkpoint(
+    checkpoint: str | Path,
+    features: np.ndarray,
+    belief: np.ndarray,
+    hero_masks: np.ndarray | None = None,
+    villain_masks: np.ndarray | None = None,
+    *,
+    device: str | torch.device = "auto",
+    batch_size: int = 8192,
+) -> np.ndarray:
+    """Predict both players' global hand CFVs from a saved dual-CFV checkpoint."""
+    model, payload = load_public_belief_dual_hand_cfv_checkpoint(checkpoint, device=device)
+    return predict_public_belief_dual_hand_cfv_model(
+        model,
+        payload,
+        features,
+        belief,
+        hero_masks,
+        villain_masks,
+        device=device,
+        batch_size=batch_size,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

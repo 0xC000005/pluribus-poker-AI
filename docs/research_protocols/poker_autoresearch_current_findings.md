@@ -408,6 +408,12 @@ GPU training readiness:
   `+0.0394`, and `+0.2255`. Read: the architecture is now strong enough to
   train a saved dual-player checkpoint and run a fixed resolver-state
   learned-leaf A/B, but not yet to wire into Slumbot.
+- A saved dual-player checkpoint path now exists for that architecture via
+  `scripts/train_public_belief_dual_hand_cfv.py`. The first larger-surface
+  checkpoint trained from cached dual labels on CUDA and reproduced the seed
+  `20260530` holdout metrics (`MAE=0.5051`, `RMSE=0.6826`). Read: future
+  learned-leaf diagnostics should load this checkpoint path instead of
+  re-training inside a probe script.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

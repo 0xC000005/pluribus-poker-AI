@@ -1882,3 +1882,14 @@
 - Summary: Generated a 192-state river-only gameplay-reachable pool from the restored-history blueprint, computed searched hero CFV labels, stratified it by searched-CFV bins into a balanced `128/64` train/holdout split, and built dual-player CFV caches. The separate-head 32-dim belief-bottleneck probe passed all three seeds on the larger holdout. This addresses the verifier's immediate small-split warning, but the result remains a diagnostic: the next gate is a saved dual-player checkpoint plus fixed resolver-state learned-leaf A/B with zero-sum residual and root-action drift.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river128x64_separate_bottleneck32_summary.json
 - Key metrics: `{"pass_count": 3, "n": 3, "train_size": 128, "holdout_size": 64, "mae_delta_mean": 0.08869616666666667, "rmse_delta_mean": 0.10599575, "mae_deltas": [0.07729132, 0.03141874, 0.15737844], "rmse_deltas": [0.05311631, 0.03938302, 0.22548792], "train_label_count": 276736, "holdout_label_count": 138368}`
+
+## 20260513T034659Z-dual-player-cfv-checkpoint - passed
+
+- Timestamp: 2026-05-13T03:46:59Z
+- Type: implementation
+- Gate: manual-dual-hand-cfv-checkpoint
+- Hypothesis: The larger-surface dual-player belief-bottleneck model should be saved as a reusable checkpoint before any learned-leaf resolver diagnostic is attempted.
+- Failure class: range_belief
+- Summary: Added `scripts/train_public_belief_dual_hand_cfv.py` plus load/predict helpers for saved dual-player public-belief hand-CFV checkpoints. Trained the separate-head 32-dim bottleneck architecture on the larger `128/64` cached river split. The checkpoint loads through the new round-trip path and reproduces the seed `20260530` holdout metrics. This creates the model artifact required for the next fixed resolver-state learned-leaf A/B; it is still not a Slumbot gameplay checkpoint.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_checkpoint_river128x64_seed20260530.json
+- Key metrics: `{"passed": true, "checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river128x64_separate_bottleneck32_seed20260530.pt", "device": "cuda", "train_size": 128, "holdout_size": 64, "train_label_count": 276736, "holdout_label_count": 138368, "belief_holdout": {"mae": 0.50511733, "rmse": 0.68256008, "bias": 0.06893115}}`
