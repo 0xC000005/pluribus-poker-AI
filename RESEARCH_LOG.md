@@ -2892,3 +2892,13 @@
 - Summary: Updated the tracked workflow, current findings, continuation target, README, AGENTS guide, and autoresearch default goal to make `neural_regret_field_resolving` the active phase. The phase allows modern neural architectures only when they serve the learned-search primitive and pass a root-disjoint warm-start resolver A/B against a higher-budget teacher; generic GPU Deep CFR training and live Slumbot smokes are blocked until that local gate exists. Retired stale local active knobs for search-target weight and policy-ranking diagnostics so unattended runs do not continue the old benchmark-hacking-prone path.
 - Metrics file: autoresearch-session/poker_reviews/20260513T204052Z-neural-regret-field-resolving-objective-pivot/decision.json and docs/research_protocols/poker_review_manifests/20260513T204052Z-neural-regret-field-resolving-objective-pivot.json
 - Key metrics: `{"active_phase": "neural_regret_field_resolving", "primary_gate": "warm-start low-budget resolver closer than vanilla low-budget resolver to high-budget teacher on root-disjoint public states", "modern_architecture_policy": "allowed when justified by learned-search role and resolver behavior", "promotion": false}`
+## 20260513T205531Z-neural-warm-started-low-budget-resolving-should-be - failed
+
+- Timestamp: 2026-05-13T21:02:05Z
+- Type: warm_start_resolver_gate
+- Gate: warm-start-resolver-20260513T205531Z-search-consistency-allroots-allhand-policy-train128-iter5-seed20260643
+- Hypothesis: Neural warm-started low-budget resolving should be closer than vanilla low-budget resolving to the higher-budget teacher on root-disjoint public states.
+- Failure class: search_quality
+- Summary: Root-disjoint warm-start resolver gate failed on 64 held-out roots: warm start worsened mean L1 and KL to the 25-iteration teacher, lowered top-action agreement, and exceeded the latency ratio despite zero illegal mass.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/neural_regret_field_warm_start_gate_seed20260655.json
+- Key metrics: `{"passed": false, "n_evaluated": 64, "root_disjoint_passed": true, "train_roots": 128, "eval_roots": 64, "mean_low_l1_to_reference": 0.52537416, "mean_warm_l1_to_reference": 0.60548418, "mean_low_kl_to_reference": 0.26023225, "mean_warm_kl_to_reference": 0.32932245, "low_action_agreement": 0.765625, "warm_action_agreement": 0.625, "low_allin_prob_gap": 0.07986568, "warm_allin_prob_gap": 0.06223191, "max_illegal_mass": 0.0, "warm_to_low_latency_ratio": 3.57485578}`

@@ -26,6 +26,7 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
+    enqueue_warm_start_resolver_gate,
     init_state,
     new_cycle,
     readiness_report,
@@ -141,6 +142,27 @@ def build_parser() -> argparse.ArgumentParser:
     resolver.add_argument("--max-cases", type=int)
     resolver.add_argument("--device", default="auto")
     resolver.add_argument("--timeout-seconds", type=int, default=1200)
+
+    warm_start = subparsers.add_parser(
+        "enqueue-warm-start-resolver",
+        help="Create and queue the root-disjoint neural warm-start resolver A/B gate.",
+    )
+    warm_start.add_argument("--checkpoint", required=True)
+    warm_start.add_argument("--cases", required=True)
+    warm_start.add_argument("--cfv-cache", required=True)
+    warm_start.add_argument("--train-labels-npz")
+    warm_start.add_argument("--start-index", type=int, default=128)
+    warm_start.add_argument("--limit", type=int, default=64)
+    warm_start.add_argument("--low-iterations", type=int, default=5)
+    warm_start.add_argument("--reference-iterations", type=int, default=25)
+    warm_start.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
+    warm_start.add_argument("--device", default="auto")
+    warm_start.add_argument("--regret-mass-scale", type=float, default=1.0)
+    warm_start.add_argument("--strategy-mass", type=float, default=0.0)
+    warm_start.add_argument("--min-evaluated", type=int, default=32)
+    warm_start.add_argument("--max-warm-latency-ratio", type=float, default=2.0)
+    warm_start.add_argument("--output-json")
+    warm_start.add_argument("--timeout-seconds", type=int, default=3600)
 
     falsify = subparsers.add_parser(
         "enqueue-falsification",
@@ -380,6 +402,30 @@ def main(argv: list[str] | None = None) -> int:
                 solver_backend=args.solver_backend,
                 max_cases=args.max_cases,
                 device=args.device,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-warm-start-resolver":
+        _emit(
+            enqueue_warm_start_resolver_gate(
+                root,
+                checkpoint=args.checkpoint,
+                cases_json=args.cases,
+                cfv_cache=args.cfv_cache,
+                train_labels_npz=args.train_labels_npz,
+                start_index=args.start_index,
+                limit=args.limit,
+                low_iterations=args.low_iterations,
+                reference_iterations=args.reference_iterations,
+                solver_backend=args.solver_backend,
+                device=args.device,
+                regret_mass_scale=args.regret_mass_scale,
+                strategy_mass=args.strategy_mass,
+                min_evaluated=args.min_evaluated,
+                max_warm_latency_ratio=args.max_warm_latency_ratio,
+                output_json=args.output_json,
                 timeout_seconds=args.timeout_seconds,
             )
         )

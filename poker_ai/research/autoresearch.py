@@ -1668,6 +1668,116 @@ def enqueue_gpu_training(
     )
 
 
+def enqueue_warm_start_resolver_gate(
+    root: str | Path,
+    *,
+    checkpoint: str | Path,
+    cases_json: str | Path,
+    cfv_cache: str | Path,
+    train_labels_npz: str | Path | None = None,
+    start_index: int = 128,
+    limit: int = 64,
+    low_iterations: int = 5,
+    reference_iterations: int = 25,
+    solver_backend: str = "cpu",
+    device: str = "auto",
+    regret_mass_scale: float = 1.0,
+    strategy_mass: float = 0.0,
+    min_evaluated: int = 32,
+    max_warm_latency_ratio: float = 2.0,
+    output_json: str | Path | None = None,
+    timeout_seconds: int = 3600,
+) -> dict:
+    """Queue the root-disjoint neural warm-start resolver A/B gate."""
+    root = Path(root)
+    _assert_phase_allows_action(root, "eval_warm_start_resolver_gate")
+    checkpoint_path = _resolve_existing_path(root, checkpoint, label="Warm-start checkpoint")
+    cases_path = _resolve_existing_path(root, cases_json, label="Warm-start cases JSON")
+    cache_path = _resolve_existing_path(root, cfv_cache, label="Warm-start CFV cache")
+    train_path = (
+        _resolve_existing_path(root, train_labels_npz, label="Warm-start train labels")
+        if train_labels_npz is not None
+        else None
+    )
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if output_json is None:
+        output_json = _runs_path(root) / f"{timestamp}-warm-start-resolver-gate" / "metrics.json"
+    else:
+        output_json = Path(output_json)
+        if not output_json.is_absolute():
+            output_json = root / output_json
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+
+    gate_name = _unique_gate_name(
+        root,
+        f"warm-start-resolver-{timestamp}-{_slug(checkpoint_path.stem)}",
+    )
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/eval_joint_pbs_policy_warm_start.py",
+        "--checkpoint",
+        str(checkpoint_path),
+        "--cases",
+        str(cases_path),
+        "--cfv-cache",
+        str(cache_path),
+        "--device",
+        device,
+        "--start-index",
+        str(start_index),
+        "--limit",
+        str(limit),
+        "--low-iterations",
+        str(low_iterations),
+        "--reference-iterations",
+        str(reference_iterations),
+        "--solver-backend",
+        solver_backend,
+        "--regret-mass-scale",
+        str(regret_mass_scale),
+        "--strategy-mass",
+        str(strategy_mass),
+        "--min-evaluated",
+        str(min_evaluated),
+        "--max-warm-latency-ratio",
+        str(max_warm_latency_ratio),
+        "--output-json",
+        str(output_json),
+    ]
+    if train_path is not None:
+        command.extend(["--train-labels-npz", str(train_path)])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Root-disjoint neural regret-field resolving gate: compare vanilla "
+            "low-budget CFR+ against neural-warm-start low-budget CFR+ using a "
+            "higher-budget resolver teacher."
+        ),
+        "timeout_seconds": int(timeout_seconds),
+        "commands": [command],
+        "checkpoint": str(checkpoint_path),
+        "cases_json": str(cases_path),
+        "cfv_cache": str(cache_path),
+        "output_json": str(output_json),
+        "low_iterations": int(low_iterations),
+        "reference_iterations": int(reference_iterations),
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            "Neural warm-started low-budget resolving should be closer than "
+            "vanilla low-budget resolving to the higher-budget teacher on "
+            "root-disjoint public states."
+        ),
+        cycle_type="warm_start_resolver_gate",
+        failure_class="search_quality",
+        gate=gate_name,
+    )
+
+
 def _first_stdout_json(metrics: dict) -> dict | None:
     for command_metric in metrics.get("commands", []):
         payload = command_metric.get("stdout_json")

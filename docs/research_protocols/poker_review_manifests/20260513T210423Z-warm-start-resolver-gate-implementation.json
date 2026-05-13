@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1177,
+      "path": "benchmark_audit.md",
+      "sha256": "8fc7f1ff44739cd34a3af8a22a0f4de56a8a510e6cb8881a8d21f90fbda3fe3d"
+    },
+    {
+      "bytes": 510,
+      "path": "decision.json",
+      "sha256": "14a652dab7bead3435988889cb0469ff54fa651cb0ea23d92f53babf60af5895"
+    },
+    {
+      "bytes": 1392,
+      "path": "mechanism_review.md",
+      "sha256": "2070b52aa77023a633c0bec6140d581ea45ad0cc9ca3f634b5faea4316a6f3b1"
+    },
+    {
+      "bytes": 1662,
+      "path": "related_work.md",
+      "sha256": "f2b78efb85d78b63d7dd77800f192ba34dcdba250adb2ed4e9519300daf67222"
+    },
+    {
+      "bytes": 1328,
+      "path": "review.md",
+      "sha256": "9ad24fe5d3a00032defea6e277a92006cc3bbbf8c354f03b87f4bb4dd05060a6"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "e2294317316f2c6852d6df6a30948037772baacb264a55af8e74c697cb8d0c97"
+    }
+  ],
+  "reason": "The implementation makes the warm-start mechanism falsifiable on root-disjoint public states, adds stricter diagnostics, and does not weaken evaluation or promotion surfaces.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T210423Z-warm-start-resolver-gate-implementation",
+  "review_id": "20260513T210423Z-warm-start-resolver-gate-implementation",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2007.10442",
+    "https://noambrown.github.io/papers/16-AAAI-Strategy-Based.pdf",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/8832"
+  ],
+  "written_at": "2026-05-13T21:05:27Z"
+}

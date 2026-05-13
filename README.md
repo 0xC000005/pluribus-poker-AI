@@ -178,6 +178,19 @@ python scripts/poker_autoresearch.py enqueue-falsification \
   --max-resolver-cases 3
 ```
 
+For the current neural regret-field phase, queue the local warm-start resolver
+gate before any new Slumbot spend:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-warm-start-resolver \
+  --checkpoint autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_allroots_allhand_policy_train128_iter5_seed20260643.pt \
+  --cases autoresearch-session/search_targets/restored200_turn_successor_pool256_policy_seed20260627.cases.json \
+  --cfv-cache autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_successor_pool256_seed20260627_cache.npz \
+  --start-index 128 \
+  --limit 64 \
+  --min-evaluated 64
+```
+
 ## Playing Slumbot
 
 ```bash

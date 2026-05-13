@@ -16,6 +16,15 @@ and more SOTA-aligned: compare low-budget vanilla resolving against
 neural-warm-start low-budget resolving, both measured against the same
 higher-budget teacher on root-disjoint public states.
 
+First gate status: implemented and run on the existing
+`search_consistency_allroots_allhand_policy_train128_iter5_seed20260643.pt`
+policy checkpoint. The gate correctly verified root-disjointness (`128` train
+roots, `64` eval roots, zero overlap) and zero illegal mass, but the checkpoint
+failed: warm-started low-budget resolving worsened L1 (`0.6055` vs `0.5254`),
+worsened KL (`0.3293` vs `0.2602`), lowered top-action agreement (`0.625` vs
+`0.7656`), and was `3.57x` slower than vanilla low-budget resolving. This
+falsifies reusing the old policy head as the regret-field initializer.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

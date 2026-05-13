@@ -340,6 +340,24 @@ Required A/B:
 - fail action: retire the learned object or change the target, not sweep
   architecture size on the same holdout.
 
+Queue the implemented gate with:
+
+```bash
+python scripts/poker_autoresearch.py enqueue-warm-start-resolver \
+  --checkpoint autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_allroots_allhand_policy_train128_iter5_seed20260643.pt \
+  --cases autoresearch-session/search_targets/restored200_turn_successor_pool256_policy_seed20260627.cases.json \
+  --cfv-cache autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_successor_pool256_seed20260627_cache.npz \
+  --start-index 128 \
+  --limit 64 \
+  --min-evaluated 64
+```
+
+The first run of this gate failed for the old joint-PBS policy checkpoint even
+though root-disjointness and legality passed. That result is evidence against
+reusing a policy-imitation head as the regret-field initializer; the next
+learned object should target regret/policy deltas that directly improve
+low-budget resolving toward a higher-budget teacher.
+
 Legacy search-consistency, policy-head calibration, and CFV/DCVN scripts remain
 diagnostic tools. Direct target fit is not promotion evidence. A run that only
 learns a target file but worsens resolver drift or collapses into all-in

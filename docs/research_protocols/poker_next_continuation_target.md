@@ -22,6 +22,15 @@ uncertainty heads, and mixed precision are all valid candidates. They must still
 be evaluated as search initializers. A larger network that improves offline
 target fit but fails the root-disjoint resolver A/B is not progress.
 
+The first implementation of this gate is now in place. Reusing the old
+joint-PBS policy checkpoint as the initializer failed the 64-root holdout gate:
+root-disjointness passed, but warm-starting worsened L1/KL and action agreement
+while adding substantial latency. The next target should therefore train a
+native regret-field initializer from low-vs-high resolver deltas, not reuse a
+policy-imitation head. The training target should include per-action regret or
+advantage residuals needed to move the low-budget solver toward the teacher,
+plus a latency budget that avoids per-hand inference inside every resolver node.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

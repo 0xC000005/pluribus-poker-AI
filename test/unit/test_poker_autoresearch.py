@@ -20,6 +20,7 @@ from poker_ai.research.autoresearch import (
     enqueue_resolver_benchmark,
     enqueue_slumbot_smoke,
     enqueue_cycle,
+    enqueue_warm_start_resolver_gate,
     init_state,
     new_cycle,
     readiness_report,
@@ -641,6 +642,44 @@ def test_neural_regret_phase_blocks_old_training_path_but_allows_warm_start_knob
         removal_criterion="Retire if the warm-start resolver gate does not improve over vanilla CFR.",
     )
     assert row["name"] == "regret_field_initializer_strength"
+
+
+def test_enqueue_warm_start_resolver_gate_is_allowed_in_neural_regret_phase(tmp_path):
+    init_state(tmp_path)
+    checkpoint = tmp_path / "models" / "joint.pt"
+    cases = tmp_path / "cases.json"
+    cache = tmp_path / "cache.npz"
+    train = tmp_path / "train.npz"
+    checkpoint.parent.mkdir()
+    checkpoint.write_bytes(b"checkpoint")
+    cases.write_text('{"cases": []}', encoding="utf-8")
+    cache.write_bytes(b"cache")
+    train.write_bytes(b"train")
+
+    queued = enqueue_warm_start_resolver_gate(
+        tmp_path,
+        checkpoint=checkpoint,
+        cases_json=cases,
+        cfv_cache=cache,
+        train_labels_npz=train,
+        start_index=7,
+        limit=11,
+        low_iterations=3,
+        reference_iterations=9,
+        min_evaluated=5,
+        output_json="autoresearch-session/warm/metrics.json",
+    )
+
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    state = _read_json(tmp_path / "autoresearch-session" / "poker_state.json")
+    command = goal["gates"][queued["gate"]]["commands"][0]
+    assert queued["type"] == "warm_start_resolver_gate"
+    assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
+    assert "scripts/eval_joint_pbs_policy_warm_start.py" in command
+    assert "--train-labels-npz" in command
+    assert str(train) in command
+    assert "--min-evaluated" in command
+    assert "5" in command
 
 
 def test_objective_audit_blocks_protected_surface_without_review(tmp_path):
@@ -1267,6 +1306,54 @@ def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
     assert "--max-cases" in goal["gates"][queued["gate"]]["commands"][0]
+
+
+def test_cli_enqueue_warm_start_resolver_creates_gate_in_default_phase(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    checkpoint = tmp_path / "models" / "joint.pt"
+    cases = tmp_path / "cases.json"
+    cache = tmp_path / "cache.npz"
+    checkpoint.parent.mkdir()
+    checkpoint.write_bytes(b"checkpoint")
+    cases.write_text('{"cases": []}', encoding="utf-8")
+    cache.write_bytes(b"cache")
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-warm-start-resolver",
+            "--checkpoint",
+            str(checkpoint),
+            "--cases",
+            str(cases),
+            "--cfv-cache",
+            str(cache),
+            "--limit",
+            "4",
+            "--min-evaluated",
+            "2",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    command = goal["gates"][queued["gate"]]["commands"][0]
+    assert "scripts/eval_joint_pbs_policy_warm_start.py" in command
+    assert "--limit" in command
+    assert "4" in command
 
 
 def test_cli_enqueue_review_creates_review_gate(tmp_path):

@@ -42,6 +42,7 @@
 - Evaluate DCVN leaf substitution: `python scripts/eval_public_belief_dcvn_leaf_ab.py --checkpoint autoresearch-session/dcvn/model.pt --cases autoresearch-session/search_targets/<holdout>.cases.json --cfv-cache autoresearch-session/<holdout_cfv_cache>.npz`
 - Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
 - Resolver benchmark CLI: `python scripts/poker_resolver_benchmark.py --checkpoint models/candidate.pt --solver-iterations 25 --solver-backend auto`
+- Queue neural regret-field warm-start gate: `python scripts/poker_autoresearch.py enqueue-warm-start-resolver --checkpoint autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_allroots_allhand_policy_train128_iter5_seed20260643.pt --cases autoresearch-session/search_targets/restored200_turn_successor_pool256_policy_seed20260627.cases.json --cfv-cache autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_successor_pool256_seed20260627_cache.npz --start-index 128 --limit 64 --min-evaluated 64`
 - Queue candidate comparison: `python scripts/poker_autoresearch.py enqueue-compare --candidate models/candidate.pt --head-to-head`
 - Queue candidate resolver check: `python scripts/poker_autoresearch.py enqueue-resolver --model models/candidate.pt`
 - Unit checks: `pytest -q test/unit/test_network_mask.py test/unit/test_slumbot_mapping.py test/unit/test_legal_mask_parity.py test/unit/test_policy_targets.py test/unit/test_sd_cfr_mixture.py`
