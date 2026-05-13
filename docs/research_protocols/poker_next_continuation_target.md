@@ -31,6 +31,15 @@ policy-imitation head. The training target should include per-action regret or
 advantage residuals needed to move the low-budget solver toward the teacher,
 plus a latency budget that avoids per-hand inference inside every resolver node.
 
+The oracle version of that target now passed. Copying the 25-iteration teacher
+solver's selected-node `regret_sum` and `strategy_sum` into a 5-iteration solve
+made the low-budget solver much closer to the teacher on 64 held-out roots
+(`0.0697` L1 vs `0.5254` vanilla, `0.0050` KL vs `0.2602`, `0.9688` top-action
+agreement vs `0.7656`, `1.04x` latency). This validates the warm-start
+interface and narrows the next task: export root-disjoint teacher solver-state
+labels and train a network to predict both regret and average-strategy mass at
+the public decision node.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

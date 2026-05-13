@@ -358,6 +358,24 @@ reusing a policy-imitation head as the regret-field initializer; the next
 learned object should target regret/policy deltas that directly improve
 low-budget resolving toward a higher-budget teacher.
 
+Before training that learned object, run the oracle sanity check:
+
+```bash
+python scripts/eval_regret_oracle_warm_start.py \
+  --cases autoresearch-session/search_targets/restored200_turn_successor_pool256_policy_seed20260627.cases.json \
+  --cfv-cache autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_successor_pool256_seed20260627_cache.npz \
+  --start-index 128 \
+  --limit 64 \
+  --low-iterations 5 \
+  --reference-iterations 25 \
+  --min-evaluated 64
+```
+
+The first 64-case oracle passed when it seeded both the teacher's selected-node
+`regret_sum` and `strategy_sum`; regret-only seeding was not calibrated enough
+on the smoke slice. This means the learned label should be the solver-state
+field, not only a final policy distribution.
+
 Legacy search-consistency, policy-head calibration, and CFV/DCVN scripts remain
 diagnostic tools. Direct target fit is not promotion evidence. A run that only
 learns a target file but worsens resolver drift or collapses into all-in

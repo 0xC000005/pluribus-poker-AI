@@ -25,6 +25,16 @@ worsened KL (`0.3293` vs `0.2602`), lowered top-action agreement (`0.625` vs
 `0.7656`), and was `3.57x` slower than vanilla low-budget resolving. This
 falsifies reusing the old policy head as the regret-field initializer.
 
+Oracle status: the CFR warm-start interface itself is valid. A 64-case
+teacher-regret/policy oracle copied the 25-iteration solver's selected-node
+`regret_sum` and `strategy_sum` into a 5-iteration solve and passed the same
+behavior gate: L1 fell from `0.5254` to `0.0697`, KL from `0.2602` to `0.0050`,
+top-action agreement rose from `0.7656` to `0.9688`, all-in probability gap
+fell from `0.0799` to `0.0040`, illegal mass stayed `0`, and latency was only
+`1.04x` vanilla low-budget. The next model should therefore learn the solver
+state field itself, including both regret and average-strategy mass, not just a
+root policy distribution.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

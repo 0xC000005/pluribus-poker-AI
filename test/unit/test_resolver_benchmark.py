@@ -34,6 +34,7 @@ from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
 )
 from eval_policy_prior_solver_budget import mix_strategy  # noqa: E402
 from eval_policy_warm_start_solver_budget import build_policy_warm_start  # noqa: E402
+from eval_regret_oracle_warm_start import build_regret_oracle_warm_start  # noqa: E402
 from train_policy_residual_combiner import (  # noqa: E402
     make_combiner_features,
     masked_softmax_np,
@@ -297,6 +298,46 @@ def test_build_policy_warm_start_seeds_only_selected_node():
     assert regret[0, 1, 0] == pytest.approx(25.0)
     assert strategy[0, max(solver.root.children), 0] == pytest.approx(1.5)
     assert regret[1:].sum() == pytest.approx(0.0)
+
+
+def test_build_regret_oracle_warm_start_copies_teacher_regrets_only_selected_node():
+    reference = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    target = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    shape = (
+        reference._tree["n_nodes"],
+        reference._tree["n_actions"],
+        reference.n,
+    )
+    reference._regret_sum = np.zeros(shape, dtype=np.float32)
+    reference._strategy_sum = np.zeros(shape, dtype=np.float32)
+    seeded_action = max(reference.root.children)
+    reference._regret_sum[0, seeded_action, 0] = 3.0
+    reference._strategy_sum[0, seeded_action, 0] = 0.25
+
+    initial_regret, initial_strategy = build_regret_oracle_warm_start(
+        reference_solver=reference,
+        reference_node=reference.root,
+        target_solver=target,
+        target_node=target.root,
+        regret_scale=2.0,
+    )
+
+    assert initial_regret[0, seeded_action, 0] == pytest.approx(6.0)
+    assert initial_strategy[0, seeded_action, 0] == pytest.approx(0.25)
+    assert np.count_nonzero(initial_regret[1:]) == 0
+    assert np.count_nonzero(initial_strategy[1:]) == 0
 
 
 def test_policy_residual_combiner_features_validate_shapes():

@@ -2902,3 +2902,15 @@
 - Summary: Root-disjoint warm-start resolver gate failed on 64 held-out roots: warm start worsened mean L1 and KL to the 25-iteration teacher, lowered top-action agreement, and exceeded the latency ratio despite zero illegal mass.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/neural_regret_field_warm_start_gate_seed20260655.json
 - Key metrics: `{"passed": false, "n_evaluated": 64, "root_disjoint_passed": true, "train_roots": 128, "eval_roots": 64, "mean_low_l1_to_reference": 0.52537416, "mean_warm_l1_to_reference": 0.60548418, "mean_low_kl_to_reference": 0.26023225, "mean_warm_kl_to_reference": 0.32932245, "low_action_agreement": 0.765625, "warm_action_agreement": 0.625, "low_allin_prob_gap": 0.07986568, "warm_allin_prob_gap": 0.06223191, "max_illegal_mass": 0.0, "warm_to_low_latency_ratio": 3.57485578}`
+
+## 20260513T211843Z-regret-policy-oracle-warm-start - passed
+
+- Timestamp: 2026-05-13T21:18:43Z
+- Type: diagnostic
+- Gate: manual-regret-policy-oracle-warm-start
+- Hypothesis: If the learned-search interface is correct, copying the teacher solver's public-node regret/policy state into a low-budget solve should move it toward the higher-budget teacher without hard-coded strategy rules.
+- Failure class: none
+- Related work: Strategy-based warm starting and regret-transfer work both imply that CFR warm starts should initialize regret dynamics, and DeepStack/ReBeL-style systems require learned information to enter through a search-compatible state rather than final action replacement.
+- Summary: Added `scripts/eval_regret_oracle_warm_start.py` and a unit test for selected-node oracle seeding. The initial regret-only smoke improved L1/top-action behavior but was not well calibrated; after seeding both teacher `regret_sum` and `strategy_sum`, the 64-case holdout gate passed. This validates the solver warm-start interface and shows the next learned target should predict both selected-node regret and average-strategy mass, not just a policy distribution.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_oracle_warm_start_smoke4_seed20260656.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_oracle_warm_start_holdout64_seed20260656.json
+- Key metrics: `{"passed": true, "n_evaluated": 64, "mean_low_l1_to_reference": 0.52537416, "mean_oracle_l1_to_reference": 0.06966234, "mean_low_kl_to_reference": 0.26023225, "mean_oracle_kl_to_reference": 0.00502819, "low_action_agreement": 0.765625, "oracle_action_agreement": 0.96875, "low_allin_prob_gap": 0.07986568, "warm_allin_prob_gap": 0.00404521, "max_illegal_mass": 0.0, "oracle_to_low_latency_ratio": 1.036241, "promotion": false}`
