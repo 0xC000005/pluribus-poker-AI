@@ -22,6 +22,7 @@ from eval_public_belief_dual_hand_cfv_probe import (
     load_public_belief_dual_hand_cfv_checkpoint,
     predict_public_belief_dual_hand_cfv_ensemble,
     predict_public_belief_dual_hand_cfv_model,
+    predict_public_belief_dual_hand_cfv_model_vectorized,
 )
 from solver import Node
 
@@ -336,6 +337,57 @@ def test_dual_cfv_checkpoint_ensemble_averages_predictions(tmp_path):
 
     assert pred.shape == (2, 1, bvp.N_HANDS)
     assert np.allclose(pred, 2.0)
+
+
+def test_dual_cfv_vectorized_prediction_matches_pairwise():
+    torch.manual_seed(3)
+    model = _DualHandCFVProbeNet(
+        8,
+        use_belief=True,
+        head_mode="separate",
+        belief_bottleneck_dim=4,
+        card_encoder="deepset",
+    )
+    payload = {
+        "public_mean": np.zeros((1, N_FEATURES), dtype=np.float32),
+        "public_std": np.ones((1, N_FEATURES), dtype=np.float32),
+        "belief_mean": np.zeros((1, bvp.BELIEF_DIM), dtype=np.float32),
+        "belief_std": np.ones((1, bvp.BELIEF_DIM), dtype=np.float32),
+        "target_mean": 0.25,
+        "target_std": 1.5,
+    }
+    features = np.zeros((2, N_FEATURES), dtype=np.float32)
+    features[:, 52:57] = 1.0
+    belief = np.zeros((2, bvp.BELIEF_DIM), dtype=np.float32)
+    belief[:, :10] = 0.1
+    hero_masks = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    villain_masks = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    hero_masks[:, :5] = 1.0
+    villain_masks[:, 5:10] = 1.0
+
+    pairwise = predict_public_belief_dual_hand_cfv_model(
+        model,
+        payload,
+        features,
+        belief,
+        hero_masks,
+        villain_masks,
+        device="cpu",
+        batch_size=7,
+    )
+    vectorized = predict_public_belief_dual_hand_cfv_model_vectorized(
+        model,
+        payload,
+        features,
+        belief,
+        hero_masks,
+        villain_masks,
+        device="cpu",
+        state_batch_size=1,
+        hand_batch_size=4,
+    )
+
+    np.testing.assert_allclose(vectorized, pairwise, rtol=1e-5, atol=1e-5)
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):

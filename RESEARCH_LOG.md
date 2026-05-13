@@ -2070,3 +2070,14 @@
 - Summary: Added `--target-leaf-applied` so the learned-leaf A/B scans through non-applicable all-in-only cases until it has a requested number of true learned-leaf replacements. A `target_leaf_applied=2`, three-iteration scan falsified immediate integration: both applicable cases changed the selected action, with mean leaf-only L1 drift `0.768`. The root-turn case is also too slow for unattended broad sweeps, taking `84.9s` for three iterations and `47,664` leaf prediction states. Learned river continuation is now blocked from gameplay integration until we can distinguish useful correction from value-model bias and reduce root-node leaf cost.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent_target2_iter3.json
 - Key metrics: `{"passed": true, "n_cases": 3, "n_leaf_applied": 2, "leaf_action_agreement_rate": 0.0, "leaf_mean_action_l1_drift": 0.76846713, "leaf_max_action_l1_drift": 1.11173773, "mean_learned_solve_ms": 31390.037, "root_turn_case": {"learned_solve_ms": 84869.834, "leaf_prediction_states": 47664, "leaf_prediction_ms": 37640.313}}`
+
+## 20260513T060618Z-vectorized-dual-cfv-leaf-inference - passed
+
+- Timestamp: 2026-05-13T06:06:18Z
+- Type: implementation
+- Gate: manual-learned-leaf-inference-vectorization
+- Hypothesis: Learned-leaf runtime is partly caused by the pairwise predictor repeating the same public belief for every hand/player query; vectorizing public/belief embeddings per state should improve GPU inference without changing predictions.
+- Failure class: performance
+- Summary: Added a vectorized all-hands dual-CFV predictor and wired it into the learned river leaf A/B. A unit test confirms it matches the older pairwise predictor. On the same guarded target-2 scan, root-turn leaf prediction time fell from `37.6s` to `7.4s`, and total root-case learned solve time fell from `84.9s` to `54.0s`. This is a real speedup, but it also reveals the next bottleneck: CPU-side leaf-state construction and denominator accumulation now dominate over neural forward time.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent_target2_iter3_vectorized.json
+- Key metrics: `{"prediction_speedup_root_case": 5.08, "solve_speedup_root_case": 1.57, "root_turn_case": {"learned_solve_ms": 53985.634, "leaf_prediction_states": 47664, "leaf_prediction_ms": 7416.275}, "leaf_mean_action_l1_drift": 0.76846718, "leaf_action_agreement_rate": 0.0}`

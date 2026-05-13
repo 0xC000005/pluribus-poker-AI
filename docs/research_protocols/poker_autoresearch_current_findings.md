@@ -653,6 +653,13 @@ Label-throughput update:
   case took `84.9s` for three iterations because it generated `47,664` leaf
   prediction states. The current learned river continuation path is a useful
   diagnostic, but it is not a gameplay-ready search component.
+- Leaf inference now uses a vectorized all-hands dual-CFV predictor that
+  computes public/belief embeddings once per state and broadcasts over hand
+  chunks. It matches the older pairwise predictor in unit tests. On the same
+  root-turn case, neural prediction time dropped from `37.6s` to `7.4s` and
+  total learned solve time dropped from `84.9s` to `54.0s`. The remaining
+  runtime is mostly CPU-side leaf-state construction and denominator
+  accumulation, not the MLP forward pass.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -696,3 +703,4 @@ script passes all 10 checks and is now part of Tier 0.
     callback into gameplay. Next work should either explain the high
     applicable-case action drift or replace the expensive root-turn river
     expansion with a direct turn-CFV continuation before another broad A/B.
+    If continuing this diagnostic, optimize CPU-side leaf accumulation first.

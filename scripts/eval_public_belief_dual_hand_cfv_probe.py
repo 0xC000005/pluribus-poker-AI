@@ -816,6 +816,114 @@ def predict_public_belief_dual_hand_cfv_model(
     )
 
 
+def predict_public_belief_dual_hand_cfv_model_vectorized(
+    model: _DualHandCFVProbeNet,
+    payload: dict[str, Any],
+    features: np.ndarray,
+    belief: np.ndarray,
+    hero_masks: np.ndarray | None = None,
+    villain_masks: np.ndarray | None = None,
+    *,
+    device: str | torch.device = "auto",
+    state_batch_size: int = 64,
+    hand_batch_size: int = N_HANDS,
+) -> np.ndarray:
+    """Predict both players' global hand CFVs with state/hand batching.
+
+    The pairwise predictor is convenient for sparse supervised datasets, but
+    learned-leaf search asks for nearly all hands at many public states.  This
+    path computes public/belief embeddings once per state and broadcasts them
+    over hand chunks, avoiding repeated 5k-dim belief copies for every hand.
+    """
+    resolved_device = _resolve_device(device)
+    features = np.asarray(features, dtype=np.float32)
+    belief = np.asarray(belief, dtype=np.float32)
+    if features.ndim == 1:
+        features = features.reshape(1, -1)
+    if belief.ndim == 1:
+        belief = belief.reshape(1, -1)
+    if features.shape[0] != belief.shape[0]:
+        raise ValueError("features and belief must have the same number of rows")
+    n_states = int(features.shape[0])
+    if hero_masks is None:
+        hero_masks = np.ones((n_states, N_HANDS), dtype=np.float32)
+    else:
+        hero_masks = np.asarray(hero_masks, dtype=np.float32)
+    if villain_masks is None:
+        villain_masks = np.ones((n_states, N_HANDS), dtype=np.float32)
+    else:
+        villain_masks = np.asarray(villain_masks, dtype=np.float32)
+
+    public = _apply_standardization(features, payload["public_mean"], payload["public_std"])
+    belief_std = _apply_standardization(belief, payload["belief_mean"], payload["belief_std"])
+    public_t = torch.from_numpy(public).to(resolved_device)
+    belief_t = torch.from_numpy(belief_std).to(resolved_device)
+    hand_feat_t = torch.from_numpy(_HAND_FEATURES).to(resolved_device)
+    masks_t = torch.from_numpy(
+        np.stack([hero_masks, villain_masks], axis=0).astype(np.float32, copy=False)
+    ).to(resolved_device)
+    player_t = torch.eye(2, dtype=torch.float32, device=resolved_device)
+    pred = np.zeros((2, n_states, N_HANDS), dtype=np.float32)
+    target_mean = float(payload["target_mean"])
+    target_std = float(payload["target_std"])
+    state_step = max(1, int(state_batch_size))
+    hand_step = max(1, min(int(hand_batch_size), N_HANDS))
+
+    model.eval()
+    with torch.no_grad():
+        for state_start in range(0, n_states, state_step):
+            state_end = min(state_start + state_step, n_states)
+            public_batch = public_t[state_start:state_end]
+            belief_batch = belief_t[state_start:state_end]
+            if model.card_encoder == "flat":
+                state_base = model.public(public_batch)
+                board_hidden = None
+            else:
+                board_hidden = model.board(public_batch[:, 52:104])
+                state_base = board_hidden + model.public_misc(public_batch[:, 104:])
+            if model.belief is not None:
+                state_base = state_base + model.belief(belief_batch)
+
+            for hand_start in range(0, N_HANDS, hand_step):
+                hand_end = min(hand_start + hand_step, N_HANDS)
+                hand_hidden = model.hand(hand_feat_t[hand_start:hand_end])
+                if model.card_encoder == "flat":
+                    hidden_base = state_base[:, None, :] + hand_hidden[None, :, :]
+                else:
+                    assert board_hidden is not None
+                    interaction = model.card_interaction(
+                        hand_hidden[None, :, :] * board_hidden[:, None, :]
+                    )
+                    hidden_base = (
+                        state_base[:, None, :]
+                        + hand_hidden[None, :, :]
+                        + interaction
+                    )
+                flat_size = int((state_end - state_start) * (hand_end - hand_start))
+                for player_idx in (0, 1):
+                    hidden = hidden_base + model.player(player_t[player_idx]).view(1, 1, -1)
+                    body = model.body(hidden.reshape(flat_size, -1))
+                    if model.head_mode == "shared":
+                        out = model.out(body).squeeze(-1)
+                    elif player_idx == 0:
+                        out = model.hero_out(body).squeeze(-1)
+                    else:
+                        out = model.villain_out(body).squeeze(-1)
+                    values = out.reshape(state_end - state_start, hand_end - hand_start)
+                    values = values * target_std + target_mean
+                    values = values * masks_t[
+                        player_idx,
+                        state_start:state_end,
+                        hand_start:hand_end,
+                    ]
+                    pred[
+                        player_idx,
+                        state_start:state_end,
+                        hand_start:hand_end,
+                    ] = values.cpu().numpy().astype(np.float32)
+    return pred
+
+
 def predict_public_belief_dual_hand_cfv_checkpoint(
     checkpoint: str | Path,
     features: np.ndarray,

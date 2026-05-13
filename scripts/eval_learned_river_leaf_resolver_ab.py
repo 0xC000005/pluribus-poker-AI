@@ -36,7 +36,7 @@ from poker_ai.research.resolver_benchmark import ResolverBenchmarkCase, load_cas
 from eval_public_belief_dual_hand_cfv_probe import (  # noqa: E402
     DualCFVDataset,
     load_public_belief_dual_hand_cfv_ensemble,
-    predict_public_belief_dual_hand_cfv_model,
+    predict_public_belief_dual_hand_cfv_model_vectorized,
 )
 from play_slumbot import (  # noqa: E402
     _compute_bets_before_street,
@@ -263,7 +263,7 @@ class LearnedRiverLeafCallback:
         )
         started = time.perf_counter()
         preds = [
-            predict_public_belief_dual_hand_cfv_model(
+            predict_public_belief_dual_hand_cfv_model_vectorized(
                 model,
                 payload,
                 dataset.features,
@@ -271,7 +271,8 @@ class LearnedRiverLeafCallback:
                 dataset.hero_masks,
                 dataset.villain_masks,
                 device=self.device,
-                batch_size=self.batch_size,
+                state_batch_size=32,
+                hand_batch_size=self.batch_size,
             )
             for model, payload in self.loaded_ensemble
         ]
