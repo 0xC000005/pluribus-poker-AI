@@ -37,6 +37,12 @@ def _policy_summary(target_probs: np.ndarray) -> dict[str, float]:
     }
 
 
+def _public_features(features: np.ndarray) -> np.ndarray:
+    public = np.asarray(features, dtype=np.float32).copy()
+    public[..., :52] = 0.0
+    return public
+
+
 def build_joint_payload(
     policy_targets: PolicyTargetBuffer,
     dual_dataset,
@@ -48,16 +54,18 @@ def build_joint_payload(
         raise ValueError("policy target and dual-CFV row counts differ")
     if policy_targets.features.shape != dual_dataset.features.shape:
         raise ValueError("policy target and dual-CFV feature shapes differ")
-    feature_abs_diff = np.abs(policy_targets.features - dual_dataset.features)
+    policy_public_features = _public_features(policy_targets.features)
+    feature_abs_diff = np.abs(policy_public_features - dual_dataset.features)
     max_feature_abs_diff = float(feature_abs_diff.max()) if feature_abs_diff.size else 0.0
     if max_feature_abs_diff > float(feature_atol):
         raise ValueError(
-            "policy target and dual-CFV features are misaligned: "
+            "policy target public features and dual-CFV features are misaligned: "
             f"max abs diff {max_feature_abs_diff:.8g} > {feature_atol:.8g}"
         )
 
     payload = {
         "features": dual_dataset.features.astype(np.float32, copy=False),
+        "policy_features": policy_targets.features.astype(np.float32, copy=False),
         "belief": dual_dataset.belief.astype(np.float32, copy=False),
         "legal_masks": policy_targets.legal_masks.astype(np.float32, copy=False),
         "target_probs": policy_targets.target_probs.astype(np.float32, copy=False),
@@ -70,6 +78,7 @@ def build_joint_payload(
     }
     metadata = {
         "mode": "joint_pbs_continuation_targets",
+        "feature_alignment": "public_features_match;policy_features_preserve_private_cards",
         "n_states": int(policy_targets.size),
         "feature_dim": int(dual_dataset.features.shape[1]),
         "belief_dim": int(dual_dataset.belief.shape[1]),

@@ -2258,6 +2258,17 @@
 - Summary: Added `scripts/build_joint_pbs_continuation_targets.py`. The script loads a `PolicyTargetBuffer` and exact dual-CFV cache, requires identical row counts and feature rows, and writes a combined joint PBS target payload with legal masks, policy targets, belief, both-player CFVs, masks, and labels. Unit coverage verifies successful payload construction and rejects feature misalignment. A synthetic CLI smoke wrote a 2-state joint target payload with `max_feature_abs_diff=0.0`.
 - Metrics file: /tmp/joint_pbs_smoke/joint.json
 - Key metrics: `{"n_states": 2, "feature_dim": 126, "belief_dim": 2652, "label_count": 8, "max_feature_abs_diff": 0.0}`
+
+## 20260513T084940Z-joint-pbs-deepset-continuation-probe - passed
+
+- Timestamp: 2026-05-13T08:49:40Z
+- Type: experiment
+- Gate: manual-joint-pbs-turn128x64-probe
+- Hypothesis: A joint public-belief continuation model with learned board/hand interaction should pass fixed held-out value and policy gates on the same turn/PBS states, whereas flat card features should expose whether the blocker is representation or target quality.
+- Failure class: none
+- Summary: Fixed the joint target builder contract after the real merge exposed expected private-card drift: policy targets preserve private `policy_features`, while value features are public-only and must align after zeroing the private band. The real train/holdout merge then passed with `max_feature_abs_diff=0.0` for `128/64` states. A flat joint probe failed value baselines (`MAE 0.2717` vs best constant `0.2500`) even though its policy head beat legal-uniform. A flat value-only sanity failed harder (`MAE 0.3475`). The existing Deepset value-only card encoder passed (`MAE/RMSE 0.2295/0.3018`), so the joint probe was upgraded to use the same learned board/hand interaction path by default. The Deepset joint probe then passed both fixed gates: value `MAE/RMSE 0.2109/0.2870` beat zero and train constants, and policy `L1/KL 0.8581/0.5719` beat legal-uniform `0.9475/0.6881`. This is evidence for the continuation representation, not promotion to gameplay; next step is methodology review plus fixed resolver A/B.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_turn_train128_seed20260607.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_turn_holdout64_seed20260608.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_turn128x64_probe_seed20260609.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/value_only_turn128x64_seed20260610.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/value_only_turn128x64_deepset_seed20260611.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_turn128x64_deepset_probe_seed20260612.json
+- Key metrics: `{"merge": {"train_states": 128, "holdout_states": 64, "max_feature_abs_diff": 0.0, "feature_alignment": "public_features_match;policy_features_preserve_private_cards"}, "flat_joint": {"passed": false, "value_mae": 0.27166519, "value_rmse": 0.35266543, "policy_l1": 0.862829, "policy_kl": 0.571586}, "flat_value_only": {"passed": false, "mae": 0.34747959, "rmse": 0.46304578}, "deepset_value_only": {"passed": true, "mae": 0.22948363, "rmse": 0.30176374}, "deepset_joint": {"passed": true, "value_mae": 0.21093715, "value_rmse": 0.28700232, "policy_l1": 0.858131, "policy_kl": 0.571855, "uniform_l1": 0.9475, "uniform_kl": 0.688074}}`
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z
@@ -2279,3 +2290,13 @@
 - Summary: Gate methodology-review-20260513T075145Z-shape-covered-leaf256-training passed.
 - Metrics file: autoresearch-session/poker_runs/20260513T080110Z-methodology-review-for-shape-covered-leaf256-training-should/metrics.json
 - Key metrics: `{"decision": "abandon", "gate": "methodology-review-20260513T075145Z-shape-covered-leaf256-training", "passed": true}`
+## 20260513T085424Z-methodology-review-for-joint-pbs-deepset-continuation-probe - passed
+
+- Timestamp: 2026-05-13T08:54:24Z
+- Type: methodology_review
+- Gate: methodology-review-20260513T085059Z-joint-pbs-deepset-continuation-probe
+- Hypothesis: Methodology review for joint-pbs-deepset-continuation-probe should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260513T085059Z-joint-pbs-deepset-continuation-probe passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T085424Z-methodology-review-for-joint-pbs-deepset-continuation-probe/metrics.json
+- Key metrics: `{"decision": "gather_more_evidence", "gate": "methodology-review-20260513T085059Z-joint-pbs-deepset-continuation-probe", "passed": true}`

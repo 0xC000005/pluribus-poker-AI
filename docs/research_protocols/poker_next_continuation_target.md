@@ -51,7 +51,8 @@ Primary sources:
 1. Build a fixed turn/PBS dataset with paired dual-CFV labels and solver policy
    targets from the same public states. Use
    `scripts/build_joint_pbs_continuation_targets.py` to merge only aligned
-   policy/value rows; it rejects feature mismatches before training.
+   policy/value rows; it rejects public feature mismatches before training and
+   preserves private policy features separately from public value features.
 2. Train a shared-trunk joint policy/value probe and compare against:
    feature-only value, value-only belief model, zero CFV, train constants, and
    existing search-target policy distillation.
@@ -69,3 +70,16 @@ Primary sources:
   or full-solver baseline.
 - Do not add a persistent hyperparameter knob unless it has a mechanism-level
   rationale and a documented removal criterion in `poker_knobs.tsv`.
+
+## First Local Evidence
+
+The first `128/64` turn/PBS split confirms the target is learnable only when the
+model has a learned card-set interaction path. A flat joint probe failed value
+baselines (`MAE 0.2717` vs best constant `0.2500`), and a flat value-only probe
+failed harder (`MAE 0.3475`). The Deepset value-only sanity passed (`MAE 0.2295`,
+`RMSE 0.3018`), and the Deepset joint probe passed both gates (`MAE 0.2109`,
+`RMSE 0.2870`, policy KL `0.5719` vs legal-uniform `0.6881`).
+
+This is not gameplay-ready. Treat it as evidence to run an independent
+methodology review and fixed resolver A/B with the joint continuation model
+before any Slumbot spend.

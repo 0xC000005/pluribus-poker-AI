@@ -33,6 +33,10 @@ from analyze_dual_cfv_cache_errors import (
     merge_record_metadata,
 )
 from build_joint_pbs_continuation_targets import build_joint_payload
+from eval_joint_pbs_continuation_probe import (
+    load_joint_pbs_dataset,
+    run_joint_pbs_continuation_probe,
+)
 from solver import Node
 
 
@@ -494,10 +498,15 @@ def test_dual_cfv_cache_leaf_record_enrichment_strips_bet_amounts():
 
 def test_joint_pbs_continuation_builder_requires_feature_alignment():
     features = np.zeros((2, N_FEATURES), dtype=np.float32)
+    policy_features = features.copy()
+    policy_features[0, 0] = 1.0
+    policy_features[0, 1] = 1.0
+    policy_features[1, 2] = 1.0
+    policy_features[1, 3] = 1.0
     legal_masks = np.ones((2, N_ACTIONS), dtype=np.float32)
     target_probs = np.zeros((2, N_ACTIONS), dtype=np.float32)
     target_probs[:, 1] = 1.0
-    policy = PolicyTargetBuffer(features, legal_masks, target_probs)
+    policy = PolicyTargetBuffer(policy_features, legal_masks, target_probs)
     belief = np.zeros((2, bvp.BELIEF_DIM), dtype=np.float32)
     values = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
     masks = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
@@ -520,13 +529,18 @@ def test_joint_pbs_continuation_builder_requires_feature_alignment():
     )
 
     assert payload["target_probs"].shape == (2, N_ACTIONS)
+    assert payload["features"][:, :52].sum() == 0.0
+    assert np.array_equal(payload["policy_features"], policy_features)
     assert payload["hero_values"].shape == (2, bvp.N_HANDS)
     assert metadata["n_states"] == 2
     assert metadata["label_count"] == 12
+    assert metadata["feature_alignment"] == (
+        "public_features_match;policy_features_preserve_private_cards"
+    )
     assert metadata["policy_target_mean_entropy"] == 0.0
 
-    misaligned = DualCFVDataset(
-        features=features + 1.0,
+    private_only_misaligned = DualCFVDataset(
+        features=policy_features.copy(),
         belief=belief,
         hero_values=values,
         villain_values=values,
@@ -534,8 +548,92 @@ def test_joint_pbs_continuation_builder_requires_feature_alignment():
         villain_masks=masks,
         labels=("a", "b"),
     )
+    with pytest.raises(ValueError, match="public features"):
+        build_joint_payload(
+            policy,
+            private_only_misaligned,
+            labels=private_only_misaligned.labels,
+            feature_atol=1e-6,
+        )
+
+    misaligned = DualCFVDataset(
+        features=features.copy(),
+        belief=belief,
+        hero_values=values,
+        villain_values=values,
+        hero_masks=masks,
+        villain_masks=masks,
+        labels=("a", "b"),
+    )
+    misaligned.features[:, 52] = 1.0
     with pytest.raises(ValueError, match="misaligned"):
         build_joint_payload(policy, misaligned, labels=misaligned.labels, feature_atol=1e-6)
+
+
+def _write_joint_pbs_fixture(path: Path, *, n_states: int) -> None:
+    features = np.zeros((n_states, N_FEATURES), dtype=np.float32)
+    policy_features = features.copy()
+    belief = np.zeros((n_states, bvp.BELIEF_DIM), dtype=np.float32)
+    legal_masks = np.ones((n_states, N_ACTIONS), dtype=np.float32)
+    target_probs = np.zeros((n_states, N_ACTIONS), dtype=np.float32)
+    policy_weights = np.ones(n_states, dtype=np.float32)
+    hero_values = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
+    villain_values = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
+    hero_masks = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
+    villain_masks = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
+    for idx in range(n_states):
+        card_a = (idx * 2) % 52
+        card_b = (idx * 2 + 1) % 52
+        policy_features[idx, card_a] = 1.0
+        policy_features[idx, card_b] = 1.0
+        features[idx, 52 + ((idx + 3) % 52)] = 1.0
+        features[idx, 104 + (idx % 4)] = 1.0
+        features[idx, 108] = float(idx + 1) / 10.0
+        target_probs[idx, 1 + (idx % (N_ACTIONS - 1))] = 1.0
+        hero_masks[idx, :4] = 1.0
+        villain_masks[idx, :4] = 1.0
+        hero_values[idx, :4] = np.linspace(0.0, 0.3, 4, dtype=np.float32) + idx * 0.01
+        villain_values[idx, :4] = np.linspace(0.3, 0.0, 4, dtype=np.float32) - idx * 0.01
+    np.savez_compressed(
+        path,
+        features=features,
+        policy_features=policy_features,
+        belief=belief,
+        legal_masks=legal_masks,
+        target_probs=target_probs,
+        policy_weights=policy_weights,
+        hero_values=hero_values,
+        villain_values=villain_values,
+        hero_masks=hero_masks,
+        villain_masks=villain_masks,
+        labels=np.asarray([f"case-{idx}" for idx in range(n_states)]),
+    )
+
+
+def test_joint_pbs_continuation_probe_smoke(tmp_path):
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    _write_joint_pbs_fixture(train_path, n_states=4)
+    _write_joint_pbs_fixture(holdout_path, n_states=3)
+
+    loaded = load_joint_pbs_dataset(train_path)
+    metrics = run_joint_pbs_continuation_probe(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        device="cpu",
+        hidden_dim=8,
+        belief_bottleneck_dim=4,
+        epochs=1,
+        batch_size=8,
+        seed=7,
+    )
+
+    assert loaded.features[:, :52].sum() == 0.0
+    assert loaded.policy_features[:, :52].sum() == 8.0
+    assert metrics["mode"] == "joint_pbs_continuation_probe"
+    assert metrics["train_value_label_count"] == 32
+    assert set(metrics["constant_baselines"]) == {"zero", "train_mean", "train_median"}
+    assert "policy_uniform_baseline" in metrics
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
