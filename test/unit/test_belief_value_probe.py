@@ -23,6 +23,7 @@ from eval_public_belief_dual_hand_cfv_probe import (
     predict_public_belief_dual_hand_cfv_ensemble,
     predict_public_belief_dual_hand_cfv_model,
     predict_public_belief_dual_hand_cfv_model_vectorized,
+    project_dual_cfv_zero_sum,
 )
 from solver import Node
 
@@ -388,6 +389,28 @@ def test_dual_cfv_vectorized_prediction_matches_pairwise():
     )
 
     np.testing.assert_allclose(vectorized, pairwise, rtol=1e-5, atol=1e-5)
+
+
+def test_dual_cfv_zero_sum_projection_removes_range_weighted_residual():
+    pred = np.zeros((2, 2, bvp.N_HANDS), dtype=np.float32)
+    pred[0, 0, 0] = 3.0
+    pred[1, 0, 1] = 1.0
+    pred[0, 1, 2] = 5.0
+    belief = np.zeros((2, bvp.BELIEF_DIM), dtype=np.float32)
+    belief[0, 0] = 1.0
+    belief[0, bvp.N_HANDS + 1] = 1.0
+    masks = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    masks[0, 0] = 1.0
+    masks[0, 1] = 1.0
+
+    projected = project_dual_cfv_zero_sum(pred, belief, masks, masks)
+
+    assert projected[0, 0, 0] == 1.0
+    assert projected[1, 0, 1] == -1.0
+    assert projected[0, 0, 2] == 0.0
+    assert projected[0, 1, 2] == 5.0
+    residual = projected[0, 0, 0] + projected[1, 0, 1]
+    assert residual == 0.0
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):

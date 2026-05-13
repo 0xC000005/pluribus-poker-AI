@@ -711,6 +711,19 @@ Label-throughput update:
   leaf-applicable action agreement stayed `0/2`. Keep learned river leaves as a
   diagnostic path until a broader applicable-case A/B shows stable root-action
   behavior.
+- A broader target-5 A/B is better but still not a gameplay gate. Unprojected
+  leaf action agreement reached `3/5`, root agreement `4/6`, and leaf mean L1
+  `0.3689`; a 10-iteration target-3 repeat gave leaf agreement `2/3`. The
+  persistent high-drift case is `blueprint_turn_independent-0128-street2`.
+- Exact CFV checking on 16 balanced leaves from that high-drift source shows the
+  model is useful per hand but still violates the residual gate: MAE/RMSE
+  `0.1577/0.2104` versus zero `0.2882/0.3564`, while value-sum residual error
+  is `0.0996` against target residual scale `0.0696`.
+- Optional zero-sum projection is now available in checkpoint, range-robustness,
+  and learned-leaf A/B diagnostics. It enforces the game invariant and lowered
+  the high-drift residual to zero, but it only tied the zero residual baseline
+  and reduced target-5 leaf action agreement to `2/5`. Keep it off by default
+  until a broader gate shows strategic benefit.
 
 Resolved workflow issue: `rules_parity`.
 

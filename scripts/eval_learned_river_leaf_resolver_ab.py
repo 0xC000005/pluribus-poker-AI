@@ -37,6 +37,7 @@ from eval_public_belief_dual_hand_cfv_probe import (  # noqa: E402
     DualCFVDataset,
     load_public_belief_dual_hand_cfv_ensemble,
     predict_public_belief_dual_hand_cfv_model_vectorized,
+    project_dual_cfv_zero_sum,
 )
 from play_slumbot import (  # noqa: E402
     _compute_bets_before_street,
@@ -176,6 +177,7 @@ class LearnedRiverLeafCallback:
         device: Any,
         value_scale: float,
         batch_size: int,
+        project_zero_sum: bool = False,
         active_subtree_node_idx: int | None = None,
     ):
         self.case = case
@@ -185,6 +187,7 @@ class LearnedRiverLeafCallback:
         self.device = device
         self.value_scale = float(value_scale)
         self.batch_size = int(batch_size)
+        self.project_zero_sum = bool(project_zero_sum)
         self.active_subtree_node_idx = active_subtree_node_idx
         self.stats = RiverLeafStats()
         self._board4_set = set(self.board4)
@@ -276,7 +279,15 @@ class LearnedRiverLeafCallback:
             )
             for model, payload in self.loaded_ensemble
         ]
-        pred = np.mean(np.stack(preds, axis=0), axis=0, dtype=np.float32) * self.value_scale
+        pred = np.mean(np.stack(preds, axis=0), axis=0, dtype=np.float32)
+        if self.project_zero_sum:
+            pred = project_dual_cfv_zero_sum(
+                pred,
+                dataset.belief,
+                dataset.hero_masks,
+                dataset.villain_masks,
+            )
+        pred = pred * self.value_scale
         self.stats.prediction_ms += (time.perf_counter() - started) * 1000.0
         self.stats.prediction_states += int(len(features))
 
@@ -348,6 +359,7 @@ def _solve_case(
     solver_backend: str,
     value_scale: float,
     batch_size: int,
+    project_zero_sum: bool,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     if "error" in parsed:
@@ -407,6 +419,7 @@ def _solve_case(
         device=device,
         value_scale=value_scale,
         batch_size=batch_size,
+        project_zero_sum=project_zero_sum,
         active_subtree_node_idx=active_subtree_node_idx,
     )
     callback.solver_hands = list(learned.hands)
@@ -446,6 +459,7 @@ def _solve_case(
         "learned_solve_ms": round(float(learned_ms), 3),
         "leaf_prediction_ms": round(float(callback.stats.prediction_ms), 3),
         "leaf_prediction_states": int(callback.stats.prediction_states),
+        "project_zero_sum": bool(project_zero_sum),
         "leaf_callback_calls": int(callback.stats.callback_calls),
         "replaced_showdowns": int(callback.stats.replaced_showdowns),
         "fallback_showdowns": int(callback.stats.fallback_showdowns),
@@ -478,6 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--value-scale", type=float, default=20000.0)
     parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument("--project-zero-sum", action="store_true")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -504,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
             solver_backend=args.solver_backend,
             value_scale=args.value_scale,
             batch_size=args.batch_size,
+            project_zero_sum=args.project_zero_sum,
         )
         records.append(record)
         if target_leaf_applied and sum(1 for item in records if item.get("leaf_applied")) >= target_leaf_applied:
@@ -525,6 +541,7 @@ def main(argv: list[str] | None = None) -> int:
         "cases": str(args.cases),
         "cfv_cache": str(args.cfv_cache) if args.cfv_cache else None,
         "device": str(device),
+        "project_zero_sum": bool(args.project_zero_sum),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
         "case_scan_limit": int(max_cases),

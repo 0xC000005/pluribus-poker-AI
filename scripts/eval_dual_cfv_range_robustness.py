@@ -35,6 +35,7 @@ from eval_public_belief_dual_hand_cfv_probe import (
     _zero_dual_prediction,
     load_public_belief_dual_hand_cfv_ensemble,
     predict_public_belief_dual_hand_cfv_model,
+    project_dual_cfv_zero_sum,
 )
 from play_slumbot import card_str_to_index, parse_action
 
@@ -83,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--value-scale", type=float, default=20000.0)
     parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument("--project-zero-sum", action="store_true")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -148,6 +150,13 @@ def main(argv: list[str] | None = None) -> int:
         device=device,
         batch_size=args.batch_size,
     )
+    if args.project_zero_sum:
+        pred = project_dual_cfv_zero_sum(
+            pred,
+            dataset.belief,
+            dataset.hero_masks,
+            dataset.villain_masks,
+        )
     model_metrics = _metrics(pred, dataset)
     zero_metrics = _metrics(_zero_dual_prediction(dataset), dataset)
     constant_baselines = {"zero": zero_metrics}
@@ -188,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
         "value_scale": float(args.value_scale),
+        "project_zero_sum": bool(args.project_zero_sum),
         "n_labels": int(dataset.hero_masks.sum() + dataset.villain_masks.sum()),
         "model_holdout": model_metrics,
         "zero_baseline": zero_metrics,

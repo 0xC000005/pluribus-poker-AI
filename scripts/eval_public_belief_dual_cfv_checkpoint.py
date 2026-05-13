@@ -74,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=20)
+    parser.add_argument("--project-zero-sum", action="store_true")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -86,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         _zero_dual_prediction,
         load_public_belief_dual_hand_cfv_ensemble,
         predict_public_belief_dual_hand_cfv_model,
+        project_dual_cfv_zero_sum,
     )
 
     device = _resolve_device(args.device)
@@ -119,6 +121,13 @@ def main(argv: list[str] | None = None) -> int:
     for _ in range(max(1, int(args.repeats))):
         started = time.perf_counter()
         pred = _predict_loaded_ensemble()
+        if args.project_zero_sum:
+            pred = project_dual_cfv_zero_sum(
+                pred,
+                dataset.belief,
+                dataset.hero_masks,
+                dataset.villain_masks,
+            )
         _sync_if_needed(device)
         timings_ms.append((time.perf_counter() - started) * 1000.0)
     assert pred is not None
@@ -181,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         "dual_cache": str(args.dual_cache),
         "device": str(device),
         "batch_size": int(args.batch_size),
+        "project_zero_sum": bool(args.project_zero_sum),
         "warmup": int(args.warmup),
         "repeats": int(args.repeats),
         "n_states": n_states,

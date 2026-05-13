@@ -924,6 +924,50 @@ def predict_public_belief_dual_hand_cfv_model_vectorized(
     return pred
 
 
+def project_dual_cfv_zero_sum(
+    pred: np.ndarray,
+    belief: np.ndarray,
+    hero_masks: np.ndarray | None = None,
+    villain_masks: np.ndarray | None = None,
+) -> np.ndarray:
+    """Project dual-player CFVs onto the range-weighted zero-sum constraint."""
+    pred = np.asarray(pred, dtype=np.float32)
+    belief = np.asarray(belief, dtype=np.float32)
+    if pred.ndim != 3 or pred.shape[0] != 2 or pred.shape[2] != N_HANDS:
+        raise ValueError("pred must have shape (2, n_states, N_HANDS)")
+    if belief.ndim == 1:
+        belief = belief.reshape(1, -1)
+    if belief.shape[0] != pred.shape[1] or belief.shape[1] < 2 * N_HANDS:
+        raise ValueError("belief must have shape (n_states, 2 * N_HANDS)")
+    n_states = int(pred.shape[1])
+    if hero_masks is None:
+        hero_masks = np.ones((n_states, N_HANDS), dtype=np.float32)
+    else:
+        hero_masks = np.asarray(hero_masks, dtype=np.float32)
+    if villain_masks is None:
+        villain_masks = np.ones((n_states, N_HANDS), dtype=np.float32)
+    else:
+        villain_masks = np.asarray(villain_masks, dtype=np.float32)
+    hero_range = np.maximum(belief[:, :N_HANDS], 0.0) * hero_masks
+    villain_range = np.maximum(belief[:, N_HANDS : 2 * N_HANDS], 0.0) * villain_masks
+    hero_den = hero_range.sum(axis=1, keepdims=True)
+    villain_den = villain_range.sum(axis=1, keepdims=True)
+    valid = (hero_den[:, 0] > 1e-12) & (villain_den[:, 0] > 1e-12)
+    out = pred.copy()
+    if not np.any(valid):
+        return out
+    hero_norm = hero_range[valid] / hero_den[valid]
+    villain_norm = villain_range[valid] / villain_den[valid]
+    residual = (
+        np.sum(hero_norm * out[0, valid], axis=1)
+        + np.sum(villain_norm * out[1, valid], axis=1)
+    )
+    correction = (0.5 * residual).astype(np.float32, copy=False)
+    out[0, valid] -= correction[:, None] * hero_masks[valid]
+    out[1, valid] -= correction[:, None] * villain_masks[valid]
+    return out
+
+
 def predict_public_belief_dual_hand_cfv_checkpoint(
     checkpoint: str | Path,
     features: np.ndarray,
