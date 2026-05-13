@@ -103,7 +103,7 @@ def analyze_joint_pbs_value_errors(
     batch_size: int = 8192,
     device: str = "auto",
 ) -> dict[str, Any]:
-    dataset = load_joint_pbs_dataset(joint_npz)
+    dataset = load_joint_pbs_dataset(joint_npz, metadata_json=metadata_json)
     model, payload = load_joint_pbs_continuation_checkpoint(checkpoint, device=device)
     pred = predict_joint_pbs_cfv_model(
         model,
@@ -112,6 +112,8 @@ def analyze_joint_pbs_value_errors(
         dataset.belief,
         dataset.hero_masks,
         dataset.villain_masks,
+        action_tokens=dataset.action_tokens,
+        action_amounts=dataset.action_amounts,
         device=device,
         batch_size=batch_size,
     )

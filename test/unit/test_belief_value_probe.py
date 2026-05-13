@@ -40,6 +40,7 @@ from build_successor_cut_pbs_targets import (
     export_successor_cut_targets,
 )
 from eval_joint_pbs_continuation_probe import (
+    _encode_action_sequence,
     load_joint_pbs_dataset,
     load_joint_pbs_continuation_checkpoint,
     predict_joint_pbs_cfv_model,
@@ -668,6 +669,58 @@ def test_joint_pbs_continuation_probe_smoke(tmp_path):
     assert "policy_uniform_baseline" in metrics
     assert value_pred.shape == (2, 4, bvp.N_HANDS)
     assert policy_pred.shape == (4, N_ACTIONS)
+
+
+def test_joint_pbs_action_sequence_metadata_feeds_gru_encoder(tmp_path):
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    metadata_path = tmp_path / "train_joint.json"
+    checkpoint_path = tmp_path / "joint_action.pt"
+    _write_joint_pbs_fixture(train_path, n_states=4)
+    _write_joint_pbs_fixture(holdout_path, n_states=3)
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "cut_records": [
+                    {"label": "case-0", "action_str": "b400c/b800k"},
+                    {"label": "case-1", "action_str": "ck/b1200"},
+                    {"label": "case-2", "action_str": "b300b900c/k"},
+                    {"label": "case-3", "action_str": "ck/kk/b1500"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    tokens, amounts = _encode_action_sequence("b400c/b800k", max_tokens=8)
+    loaded = load_joint_pbs_dataset(
+        train_path,
+        metadata_json=metadata_path,
+        max_action_tokens=8,
+    )
+    metrics = run_joint_pbs_continuation_probe(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        train_metadata_json=metadata_path,
+        holdout_metadata_json=metadata_path,
+        device="cpu",
+        hidden_dim=8,
+        belief_bottleneck_dim=4,
+        card_encoder="deepset",
+        action_encoder="gru",
+        max_action_tokens=8,
+        epochs=1,
+        batch_size=8,
+        seed=9,
+        output_checkpoint=checkpoint_path,
+    )
+
+    assert tokens[0] == 5
+    assert tokens[3] == 5
+    assert amounts[0] > 0.0
+    assert loaded.action_tokens.shape == (4, 8)
+    assert loaded.action_amounts[0, 0] > 0.0
+    assert metrics["action_encoder"] == "gru"
 
 
 def test_joint_pbs_continuation_probe_skips_policy_gate_without_policy_labels(tmp_path):

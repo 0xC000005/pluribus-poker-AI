@@ -128,3 +128,13 @@ Deepset model that fit train (`MAE 0.0681`) but failed holdout (`MAE/RMSE
 from more epochs or bigger unstructured MLPs. The next continuation target
 should encode the betting sequence and bet amounts in a reusable learned module,
 or factor values by public action topology, before any resolver A/B retry.
+
+The first learned action-sequence attempt also failed. A GRU over public
+action tokens and log-scaled bet amounts fit train (`MAE 0.0677`) but worsened
+the high-bet holdout (`MAE/RMSE 0.3944/0.4936`) relative to the same-seed
+no-action baseline (`0.3705/0.4679`) and the best constant (`0.3173/0.3961`).
+Keep the diagnostic encoder available for falsification, but do not promote it
+into gameplay. The next hypothesis should change the target or factorization:
+for example, train topology-conditioned continuation values, predict normalized
+delta-to-constant residuals, or generate paired public-action augmentations so
+the model must learn invariances rather than memorize action strings.

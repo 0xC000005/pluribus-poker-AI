@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +40,10 @@ from poker_ai.research.belief_value_probe import (
     save_metrics,
 )
 
+_ACTION_TOKEN_TO_ID = {"<pad>": 0, "/": 1, "k": 2, "c": 3, "f": 4, "b": 5}
+_ACTION_TOKEN_RE = re.compile(r"b\d+|[kcf/]")
+_DEFAULT_MAX_ACTION_TOKENS = 32
+
 
 @dataclass(frozen=True)
 class JointPBSDataset:
@@ -51,6 +57,8 @@ class JointPBSDataset:
     villain_values: np.ndarray
     hero_masks: np.ndarray
     villain_masks: np.ndarray
+    action_tokens: np.ndarray
+    action_amounts: np.ndarray
     labels: tuple[str, ...]
 
 
@@ -61,13 +69,19 @@ class _JointPBSContinuationNet(nn.Module):
         *,
         belief_bottleneck_dim: int = 32,
         card_encoder: str = "deepset",
+        action_encoder: str = "none",
+        max_action_tokens: int = _DEFAULT_MAX_ACTION_TOKENS,
     ):
         super().__init__()
         if belief_bottleneck_dim < 0:
             raise ValueError("belief_bottleneck_dim must be non-negative")
         if card_encoder not in ("flat", "deepset"):
             raise ValueError(f"unknown card_encoder: {card_encoder}")
+        if action_encoder not in ("none", "gru"):
+            raise ValueError(f"unknown action_encoder: {action_encoder}")
         self.card_encoder = card_encoder
+        self.action_encoder = action_encoder
+        self.max_action_tokens = int(max_action_tokens)
         if card_encoder == "flat":
             self.public = nn.Linear(N_FEATURES, hidden_dim)
             self.board = None
@@ -94,6 +108,18 @@ class _JointPBSContinuationNet(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
         )
+        if action_encoder == "gru":
+            self.action_token = nn.Embedding(
+                len(_ACTION_TOKEN_TO_ID),
+                hidden_dim,
+                padding_idx=0,
+            )
+            self.action_amount = nn.Linear(1, hidden_dim, bias=False)
+            self.action_gru = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
+        else:
+            self.action_token = None
+            self.action_amount = None
+            self.action_gru = None
         self.value_body = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
@@ -121,12 +147,39 @@ class _JointPBSContinuationNet(nn.Module):
         )
         return public_hidden, board_hidden
 
+    def _action_hidden(
+        self,
+        action_tokens: torch.Tensor | None,
+        action_amounts: torch.Tensor | None,
+    ) -> torch.Tensor | None:
+        if self.action_encoder == "none":
+            return None
+        if action_tokens is None or action_amounts is None:
+            return None
+        if self.action_token is None or self.action_amount is None or self.action_gru is None:
+            return None
+        tokens = action_tokens.to(dtype=torch.long)
+        amounts = action_amounts.to(dtype=self.action_token.weight.dtype)
+        embedded = self.action_token(tokens) + self.action_amount(amounts.unsqueeze(-1))
+        output, _hidden = self.action_gru(embedded)
+        mask = tokens > 0
+        lengths = mask.sum(dim=1).clamp(min=1)
+        gather_idx = (lengths - 1).view(-1, 1, 1).expand(-1, 1, output.shape[-1])
+        selected = output.gather(1, gather_idx).squeeze(1)
+        has_tokens = mask.any(dim=1).to(dtype=selected.dtype).unsqueeze(-1)
+        return selected * has_tokens
+
     def trunk(
         self,
         public_x: torch.Tensor,
         belief_x: torch.Tensor,
+        action_tokens: torch.Tensor | None = None,
+        action_amounts: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         public_hidden, board_hidden = self._public_hidden(public_x, belief_x)
+        action_hidden = self._action_hidden(action_tokens, action_amounts)
+        if action_hidden is not None:
+            public_hidden = public_hidden + action_hidden
         return self.trunk_body(public_hidden), board_hidden
 
     def value(
@@ -135,8 +188,15 @@ class _JointPBSContinuationNet(nn.Module):
         hand_x: torch.Tensor,
         player_x: torch.Tensor,
         belief_x: torch.Tensor,
+        action_tokens: torch.Tensor | None = None,
+        action_amounts: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        trunk_hidden, board_hidden = self.trunk(public_x, belief_x)
+        trunk_hidden, board_hidden = self.trunk(
+            public_x,
+            belief_x,
+            action_tokens,
+            action_amounts,
+        )
         hand_hidden = self.hand(hand_x)
         hidden = trunk_hidden + hand_hidden + self.player(player_x)
         if board_hidden is not None and self.card_interaction is not None:
@@ -151,8 +211,15 @@ class _JointPBSContinuationNet(nn.Module):
         public_x: torch.Tensor,
         private_x: torch.Tensor,
         belief_x: torch.Tensor,
+        action_tokens: torch.Tensor | None = None,
+        action_amounts: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        trunk_hidden, board_hidden = self.trunk(public_x, belief_x)
+        trunk_hidden, board_hidden = self.trunk(
+            public_x,
+            belief_x,
+            action_tokens,
+            action_amounts,
+        )
         private_hidden = self.private_cards(private_x)
         hidden = trunk_hidden + private_hidden
         if board_hidden is not None and self.card_interaction is not None:
@@ -160,7 +227,69 @@ class _JointPBSContinuationNet(nn.Module):
         return self.policy_body(hidden)
 
 
-def load_joint_pbs_dataset(path: str | Path) -> JointPBSDataset:
+def _encode_action_sequence(
+    action_str: str,
+    *,
+    max_tokens: int = _DEFAULT_MAX_ACTION_TOKENS,
+) -> tuple[np.ndarray, np.ndarray]:
+    token_ids: list[int] = []
+    amounts: list[float] = []
+    amount_scale = math.log1p(20000.0)
+    for match in _ACTION_TOKEN_RE.finditer(str(action_str)):
+        token = match.group(0)
+        if token.startswith("b"):
+            token_ids.append(_ACTION_TOKEN_TO_ID["b"])
+            amounts.append(math.log1p(float(token[1:])) / amount_scale)
+        else:
+            token_ids.append(_ACTION_TOKEN_TO_ID.get(token, 0))
+            amounts.append(0.0)
+    if max_tokens > 0:
+        token_ids = token_ids[-int(max_tokens) :]
+        amounts = amounts[-int(max_tokens) :]
+    tokens_out = np.zeros(int(max_tokens), dtype=np.int64)
+    amounts_out = np.zeros(int(max_tokens), dtype=np.float32)
+    n = min(len(token_ids), int(max_tokens))
+    if n > 0:
+        tokens_out[:n] = np.asarray(token_ids[:n], dtype=np.int64)
+        amounts_out[:n] = np.asarray(amounts[:n], dtype=np.float32)
+    return tokens_out, amounts_out
+
+
+def _load_action_sequences(
+    labels: tuple[str, ...],
+    *,
+    metadata_json: str | Path | None,
+    max_tokens: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    action_by_label: dict[str, str] = {}
+    metadata_path = Path(metadata_json) if metadata_json is not None else None
+    if metadata_path is not None and metadata_path.exists():
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        for field in ("cut_records", "records"):
+            for item in metadata.get(field, []):
+                label = item.get("label")
+                action = item.get("action_str")
+                if label is not None and action is not None:
+                    action_by_label[str(label)] = str(action)
+    encoded = [
+        _encode_action_sequence(action_by_label.get(label, ""), max_tokens=max_tokens)
+        for label in labels
+    ]
+    if not encoded:
+        return (
+            np.zeros((0, int(max_tokens)), dtype=np.int64),
+            np.zeros((0, int(max_tokens)), dtype=np.float32),
+        )
+    tokens, amounts = zip(*encoded, strict=True)
+    return np.stack(tokens), np.stack(amounts)
+
+
+def load_joint_pbs_dataset(
+    path: str | Path,
+    *,
+    metadata_json: str | Path | None = None,
+    max_action_tokens: int = _DEFAULT_MAX_ACTION_TOKENS,
+) -> JointPBSDataset:
     data = np.load(Path(path), allow_pickle=False)
     policy_features = data["policy_features"] if "policy_features" in data else data["features"]
     policy_weights = (
@@ -168,6 +297,20 @@ def load_joint_pbs_dataset(path: str | Path) -> JointPBSDataset:
         if "policy_weights" in data
         else np.ones(data["features"].shape[0], dtype=np.float32)
     )
+    labels = tuple(str(item) for item in data["labels"].tolist())
+    if "action_tokens" in data and "action_amounts" in data:
+        action_tokens = data["action_tokens"].astype(np.int64, copy=False)
+        action_amounts = data["action_amounts"].astype(np.float32, copy=False)
+    else:
+        inferred_metadata = metadata_json
+        if inferred_metadata is None:
+            candidate = Path(path).with_suffix(".json")
+            inferred_metadata = candidate if candidate.exists() else None
+        action_tokens, action_amounts = _load_action_sequences(
+            labels,
+            metadata_json=inferred_metadata,
+            max_tokens=max_action_tokens,
+        )
     return JointPBSDataset(
         features=data["features"].astype(np.float32, copy=False),
         policy_features=policy_features.astype(np.float32, copy=False),
@@ -179,7 +322,9 @@ def load_joint_pbs_dataset(path: str | Path) -> JointPBSDataset:
         villain_values=data["villain_values"].astype(np.float32, copy=False),
         hero_masks=data["hero_masks"].astype(np.float32, copy=False),
         villain_masks=data["villain_masks"].astype(np.float32, copy=False),
-        labels=tuple(str(item) for item in data["labels"].tolist()),
+        action_tokens=action_tokens,
+        action_amounts=action_amounts,
+        labels=labels,
     )
 
 
@@ -200,6 +345,8 @@ def _standardize_joint_pair(
         villain_values=train.villain_values,
         hero_masks=train.hero_masks,
         villain_masks=train.villain_masks,
+        action_tokens=train.action_tokens,
+        action_amounts=train.action_amounts,
         labels=train.labels,
     )
     holdout_std = JointPBSDataset(
@@ -213,6 +360,8 @@ def _standardize_joint_pair(
         villain_values=holdout.villain_values,
         hero_masks=holdout.hero_masks,
         villain_masks=holdout.villain_masks,
+        action_tokens=holdout.action_tokens,
+        action_amounts=holdout.action_amounts,
         labels=holdout.labels,
     )
     return train_std, holdout_std, public_mean, public_std, belief_mean, belief_std
@@ -272,6 +421,8 @@ def _fit_joint_model(
     hidden_dim: int,
     belief_bottleneck_dim: int,
     card_encoder: str,
+    action_encoder: str,
+    max_action_tokens: int,
     epochs: int,
     batch_size: int,
     lr: float,
@@ -294,6 +445,8 @@ def _fit_joint_model(
     legal_t = torch.from_numpy(dataset.legal_masks).to(device)
     policy_target_t = torch.from_numpy(dataset.target_probs).to(device)
     policy_weight_t = torch.from_numpy(dataset.policy_weights).to(device)
+    action_token_t = torch.from_numpy(dataset.action_tokens).to(device)
+    action_amount_t = torch.from_numpy(dataset.action_amounts).to(device)
     hand_feat_t = torch.from_numpy(_HAND_FEATURES).to(device)
     player_feat_t = torch.eye(2, dtype=torch.float32, device=device)
 
@@ -301,6 +454,8 @@ def _fit_joint_model(
         hidden_dim,
         belief_bottleneck_dim=belief_bottleneck_dim,
         card_encoder=card_encoder,
+        action_encoder=action_encoder,
+        max_action_tokens=max_action_tokens,
     ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     n_value = int(case_t.numel())
@@ -320,13 +475,21 @@ def _fit_joint_model(
                 hand_feat_t.index_select(0, h),
                 player_feat_t.index_select(0, p),
                 belief_t.index_select(0, c),
+                action_token_t.index_select(0, c),
+                action_amount_t.index_select(0, c),
             )
             loss = torch.mean((pred - value_target_t.index_select(0, batch)) ** 2)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
 
-        logits = model.policy(public_t, private_t, belief_t)
+        logits = model.policy(
+            public_t,
+            private_t,
+            belief_t,
+            action_token_t,
+            action_amount_t,
+        )
         policy_loss = _masked_policy_loss(
             logits,
             legal_t,
@@ -357,6 +520,8 @@ def _predict_values(
     player_t = torch.from_numpy(player_idx).to(device)
     public_t = torch.from_numpy(dataset.features).to(device)
     belief_t = torch.from_numpy(dataset.belief).to(device)
+    action_token_t = torch.from_numpy(dataset.action_tokens).to(device)
+    action_amount_t = torch.from_numpy(dataset.action_amounts).to(device)
     hand_feat_t = torch.from_numpy(_HAND_FEATURES).to(device)
     player_feat_t = torch.eye(2, dtype=torch.float32, device=device)
     outputs = []
@@ -371,6 +536,8 @@ def _predict_values(
                 hand_feat_t.index_select(0, h),
                 player_feat_t.index_select(0, p),
                 belief_t.index_select(0, c),
+                action_token_t.index_select(0, c),
+                action_amount_t.index_select(0, c),
             )
             outputs.append(out.cpu().numpy().astype(np.float32))
     values = np.concatenate(outputs, axis=0) * float(target_std) + float(target_mean)
@@ -390,7 +557,15 @@ def _predict_policy(
         belief_t = torch.from_numpy(dataset.belief).to(device)
         private_t = torch.from_numpy(dataset.policy_features[:, :52]).to(device)
         legal_t = torch.from_numpy(dataset.legal_masks).to(device)
-        logits = model.policy(public_t, private_t, belief_t).masked_fill(legal_t <= 0, -1e4)
+        action_token_t = torch.from_numpy(dataset.action_tokens).to(device)
+        action_amount_t = torch.from_numpy(dataset.action_amounts).to(device)
+        logits = model.policy(
+            public_t,
+            private_t,
+            belief_t,
+            action_token_t,
+            action_amount_t,
+        ).masked_fill(legal_t <= 0, -1e4)
         probs = torch.softmax(logits, dim=1).cpu().numpy().astype(np.float32)
     return _normalize_targets(probs, dataset.legal_masks)
 
@@ -402,6 +577,8 @@ def _save_checkpoint(
     hidden_dim: int,
     belief_bottleneck_dim: int,
     card_encoder: str,
+    action_encoder: str,
+    max_action_tokens: int,
     public_mean: np.ndarray,
     public_std: np.ndarray,
     belief_mean: np.ndarray,
@@ -425,6 +602,9 @@ def _save_checkpoint(
             "hidden_dim": int(hidden_dim),
             "belief_bottleneck_dim": int(belief_bottleneck_dim),
             "card_encoder": card_encoder,
+            "action_encoder": action_encoder,
+            "max_action_tokens": int(max_action_tokens),
+            "action_token_vocab_size": int(len(_ACTION_TOKEN_TO_ID)),
             "feature_dim": int(N_FEATURES),
             "belief_dim": int(BELIEF_DIM),
             "hand_feature_dim": 52,
@@ -457,6 +637,8 @@ def load_joint_pbs_continuation_checkpoint(
         int(payload["hidden_dim"]),
         belief_bottleneck_dim=int(payload.get("belief_bottleneck_dim", 0)),
         card_encoder=str(payload.get("card_encoder", "deepset")),
+        action_encoder=str(payload.get("action_encoder", "none")),
+        max_action_tokens=int(payload.get("max_action_tokens", _DEFAULT_MAX_ACTION_TOKENS)),
     ).to(resolved_device)
     model.load_state_dict(payload["model_state"])
     model.eval()
@@ -471,6 +653,8 @@ def predict_joint_pbs_cfv_model(
     hero_masks: np.ndarray,
     villain_masks: np.ndarray,
     *,
+    action_tokens: np.ndarray | None = None,
+    action_amounts: np.ndarray | None = None,
     device: str | torch.device = "auto",
     batch_size: int = 8192,
 ) -> np.ndarray:
@@ -487,6 +671,11 @@ def predict_joint_pbs_cfv_model(
         payload["belief_std"],
     )
     n_states = int(features_std.shape[0])
+    max_tokens = int(payload.get("max_action_tokens", _DEFAULT_MAX_ACTION_TOKENS))
+    if action_tokens is None:
+        action_tokens = np.zeros((n_states, max_tokens), dtype=np.int64)
+    if action_amounts is None:
+        action_amounts = np.zeros((n_states, max_tokens), dtype=np.float32)
     dataset = JointPBSDataset(
         features=features_std,
         policy_features=features_std,
@@ -498,6 +687,8 @@ def predict_joint_pbs_cfv_model(
         villain_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
         hero_masks=np.asarray(hero_masks, dtype=np.float32),
         villain_masks=np.asarray(villain_masks, dtype=np.float32),
+        action_tokens=np.asarray(action_tokens, dtype=np.int64),
+        action_amounts=np.asarray(action_amounts, dtype=np.float32),
         labels=tuple(f"predict-{idx}" for idx in range(n_states)),
     )
     return _predict_values(
@@ -518,6 +709,8 @@ def predict_joint_pbs_policy_model(
     belief: np.ndarray,
     legal_masks: np.ndarray,
     *,
+    action_tokens: np.ndarray | None = None,
+    action_amounts: np.ndarray | None = None,
     device: str | torch.device = "auto",
 ) -> np.ndarray:
     resolved_device = _resolve_device(device)
@@ -533,6 +726,11 @@ def predict_joint_pbs_policy_model(
         payload["belief_std"],
     )
     n_states = int(features_std.shape[0])
+    max_tokens = int(payload.get("max_action_tokens", _DEFAULT_MAX_ACTION_TOKENS))
+    if action_tokens is None:
+        action_tokens = np.zeros((n_states, max_tokens), dtype=np.int64)
+    if action_amounts is None:
+        action_amounts = np.zeros((n_states, max_tokens), dtype=np.float32)
     dataset = JointPBSDataset(
         features=features_std,
         policy_features=np.asarray(policy_features, dtype=np.float32),
@@ -544,6 +742,8 @@ def predict_joint_pbs_policy_model(
         villain_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
         hero_masks=np.zeros((n_states, N_HANDS), dtype=np.float32),
         villain_masks=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        action_tokens=np.asarray(action_tokens, dtype=np.int64),
+        action_amounts=np.asarray(action_amounts, dtype=np.float32),
         labels=tuple(f"policy-{idx}" for idx in range(n_states)),
     )
     return _predict_policy(model, dataset, device=resolved_device)
@@ -597,10 +797,14 @@ def run_joint_pbs_continuation_probe(
     *,
     train_joint_npz: str | Path,
     holdout_joint_npz: str | Path,
+    train_metadata_json: str | Path | None = None,
+    holdout_metadata_json: str | Path | None = None,
     device: str | torch.device = "auto",
     hidden_dim: int = 64,
     belief_bottleneck_dim: int = 32,
     card_encoder: str = "deepset",
+    action_encoder: str = "none",
+    max_action_tokens: int = _DEFAULT_MAX_ACTION_TOKENS,
     epochs: int = 30,
     batch_size: int = 8192,
     lr: float = 1e-3,
@@ -609,8 +813,16 @@ def run_joint_pbs_continuation_probe(
     output_checkpoint: str | Path | None = None,
 ) -> dict[str, Any]:
     resolved_device = _resolve_device(device)
-    train_raw = load_joint_pbs_dataset(train_joint_npz)
-    holdout_raw = load_joint_pbs_dataset(holdout_joint_npz)
+    train_raw = load_joint_pbs_dataset(
+        train_joint_npz,
+        metadata_json=train_metadata_json,
+        max_action_tokens=max_action_tokens,
+    )
+    holdout_raw = load_joint_pbs_dataset(
+        holdout_joint_npz,
+        metadata_json=holdout_metadata_json,
+        max_action_tokens=max_action_tokens,
+    )
     train, holdout, public_mean, public_std, belief_mean, belief_std = (
         _standardize_joint_pair(train_raw, holdout_raw)
     )
@@ -622,6 +834,8 @@ def run_joint_pbs_continuation_probe(
         hidden_dim=hidden_dim,
         belief_bottleneck_dim=belief_bottleneck_dim,
         card_encoder=card_encoder,
+        action_encoder=action_encoder,
+        max_action_tokens=max_action_tokens,
         epochs=epochs,
         batch_size=batch_size,
         lr=lr,
@@ -685,6 +899,8 @@ def run_joint_pbs_continuation_probe(
             hidden_dim=hidden_dim,
             belief_bottleneck_dim=belief_bottleneck_dim,
             card_encoder=card_encoder,
+            action_encoder=action_encoder,
+            max_action_tokens=max_action_tokens,
             public_mean=public_mean,
             public_std=public_std,
             belief_mean=belief_mean,
@@ -706,9 +922,13 @@ def run_joint_pbs_continuation_probe(
         "device": str(resolved_device),
         "train_joint_npz": str(train_joint_npz),
         "holdout_joint_npz": str(holdout_joint_npz),
+        "train_metadata_json": str(train_metadata_json) if train_metadata_json else None,
+        "holdout_metadata_json": str(holdout_metadata_json) if holdout_metadata_json else None,
         "hidden_dim": int(hidden_dim),
         "belief_bottleneck_dim": int(belief_bottleneck_dim),
         "card_encoder": card_encoder,
+        "action_encoder": action_encoder,
+        "max_action_tokens": int(max_action_tokens),
         "epochs": int(epochs),
         "batch_size": int(batch_size),
         "lr": float(lr),
@@ -748,6 +968,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--train-joint", required=True)
     parser.add_argument("--holdout-joint", required=True)
+    parser.add_argument("--train-metadata-json")
+    parser.add_argument("--holdout-metadata-json")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--belief-bottleneck-dim", type=int, default=32)
@@ -756,6 +978,12 @@ def main(argv: list[str] | None = None) -> int:
         choices=("flat", "deepset"),
         default="deepset",
     )
+    parser.add_argument(
+        "--action-encoder",
+        choices=("none", "gru"),
+        default="none",
+    )
+    parser.add_argument("--max-action-tokens", type=int, default=_DEFAULT_MAX_ACTION_TOKENS)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -768,10 +996,14 @@ def main(argv: list[str] | None = None) -> int:
     metrics = run_joint_pbs_continuation_probe(
         train_joint_npz=args.train_joint,
         holdout_joint_npz=args.holdout_joint,
+        train_metadata_json=args.train_metadata_json,
+        holdout_metadata_json=args.holdout_metadata_json,
         device=args.device,
         hidden_dim=args.hidden_dim,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
         card_encoder=args.card_encoder,
+        action_encoder=args.action_encoder,
+        max_action_tokens=args.max_action_tokens,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
