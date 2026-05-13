@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -53,6 +54,8 @@ from play_slumbot import (  # noqa: E402
 )
 from solver import StreetSolver, _parse_nav, resolve_solver_backend, solver_action_to_slumbot  # noqa: E402
 
+_BET_TOKEN_RE = re.compile(r"b\d+")
+
 
 @dataclass
 class JointCutStats:
@@ -67,13 +70,52 @@ def _node_index(solver: StreetSolver, node: Any) -> int:
     return int(solver._tree["all_nodes"].index(node))
 
 
-def _successor_cut_node_indices(solver: StreetSolver, active_node: Any) -> list[int]:
+def _frontier_action_shape(action_str: str) -> str:
+    return _BET_TOKEN_RE.sub("b", action_str)
+
+
+def _frontier_matches_filter(
+    *,
+    action_str: str,
+    min_bet_count: int = 0,
+    target_action_shapes: tuple[str, ...] = (),
+) -> bool:
+    action_shape = _frontier_action_shape(action_str)
+    bet_count = int(len(_BET_TOKEN_RE.findall(action_str)))
+    if target_action_shapes and action_shape not in target_action_shapes:
+        return False
+    return bet_count >= int(min_bet_count)
+
+
+def _successor_cut_node_indices(
+    solver: StreetSolver,
+    active_node: Any,
+    *,
+    action_prefix: str = "",
+    min_bet_count: int = 0,
+    target_action_shapes: tuple[str, ...] = (),
+) -> list[int]:
     """Return immediate non-terminal successors to use as a depth-limit frontier."""
     cut_indices: list[int] = []
     for action in sorted(active_node.children):
         child = active_node.children[action]
         if child.is_terminal:
             continue
+        if min_bet_count > 0 or target_action_shapes:
+            node_idx = _node_index(solver, child)
+            street_action = _action_path_to_street_string(
+                solver._tree,
+                node_idx,
+                hero_stack_start=int(solver._tree["stacks_h"][0]),
+                villain_stack_start=int(solver._tree["stacks_v"][0]),
+            )
+            action_str = f"{action_prefix}/{street_action}" if action_prefix else street_action
+            if not _frontier_matches_filter(
+                action_str=action_str,
+                min_bet_count=min_bet_count,
+                target_action_shapes=target_action_shapes,
+            ):
+                continue
         cut_indices.append(_node_index(solver, child))
     return cut_indices
 
@@ -205,6 +247,8 @@ def _solve_case(
     solver_backend: str,
     value_scale: float,
     batch_size: int,
+    min_bet_count: int,
+    target_action_shapes: tuple[str, ...],
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     if "error" in parsed:
@@ -233,6 +277,26 @@ def _solve_case(
     if backend != "cpu":
         raise ValueError("joint PBS cut A/B requires CPU backend for cut callbacks")
 
+    learned = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
+    learned_node = learned.navigate(_parse_nav(street_action, learned))
+    if learned_node is None or learned_node.is_terminal:
+        return {"label": case.label, "passed": False, "skipped": "learned_terminal_or_missing_node"}
+    candidate_cut_indices = _successor_cut_node_indices(learned, learned_node)
+    cut_indices = _successor_cut_node_indices(
+        learned,
+        learned_node,
+        action_prefix=action_prefix,
+        min_bet_count=min_bet_count,
+        target_action_shapes=target_action_shapes,
+    )
+    if not cut_indices:
+        return {
+            "label": case.label,
+            "passed": False,
+            "skipped": "no_matching_successor_cut_nodes",
+            "candidate_cut_nodes": int(len(candidate_cut_indices)),
+        }
+
     baseline = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
     baseline.solve(
         n_iterations=solver_iterations,
@@ -248,13 +312,6 @@ def _solve_case(
     hand = tuple(sorted(our_cards_idx))
     baseline_strategy = _strategy_vector(baseline.get_strategy(hand, baseline_node))
 
-    learned = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
-    learned_node = learned.navigate(nav)
-    if learned_node is None or learned_node.is_terminal:
-        return {"label": case.label, "passed": False, "skipped": "learned_terminal_or_missing_node"}
-    cut_indices = _successor_cut_node_indices(learned, learned_node)
-    if not cut_indices:
-        return {"label": case.label, "passed": False, "skipped": "no_successor_cut_nodes"}
     callback = JointPBSSuccessorCutCallback(
         case=case,
         board4=board_idx,
@@ -285,6 +342,7 @@ def _solve_case(
         "street": street,
         "passed": bool(np.isfinite(l1)),
         "cut_applied": bool(callback.stats.replaced_cut_nodes > 0),
+        "candidate_cut_nodes": int(len(candidate_cut_indices)),
         "n_cut_nodes": int(len(cut_indices)),
         "baseline_action": baseline_action,
         "baseline_increment": solver_action_to_slumbot(baseline_action, baseline_node, baseline, parsed),
@@ -318,6 +376,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--value-scale", type=float, default=20000.0)
     parser.add_argument("--batch-size", type=int, default=8192)
+    parser.add_argument(
+        "--min-bet-count",
+        type=int,
+        default=0,
+        help="Only replace successor cuts with at least this many bet tokens; other successors are solved exactly.",
+    )
+    parser.add_argument(
+        "--target-action-shapes",
+        nargs="*",
+        default=(),
+        help="Optional action-shape allowlist for diagnostic cut replacement, e.g. bbc/bbc/kb.",
+    )
+    parser.add_argument("--min-action-agreement", type=float, default=0.75)
+    parser.add_argument("--max-mean-action-l1-drift", type=float, default=0.25)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -345,6 +417,8 @@ def main(argv: list[str] | None = None) -> int:
                 solver_backend=args.solver_backend,
                 value_scale=args.value_scale,
                 batch_size=args.batch_size,
+                min_bet_count=args.min_bet_count,
+                target_action_shapes=tuple(args.target_action_shapes),
             )
         )
 
@@ -352,9 +426,37 @@ def main(argv: list[str] | None = None) -> int:
     cut_evaluated = [record for record in evaluated if record.get("cut_applied")]
     drift = [float(record["action_l1_drift"]) for record in evaluated]
     cut_drift = [float(record["action_l1_drift"]) for record in cut_evaluated]
+    action_agreement_rate = (
+        round(float(np.mean([record["action_agreement"] for record in evaluated])), 6)
+        if evaluated
+        else 0.0
+    )
+    cut_action_agreement_rate = (
+        round(float(np.mean([record["action_agreement"] for record in cut_evaluated])), 6)
+        if cut_evaluated
+        else 0.0
+    )
+    mean_action_l1_drift = round(float(np.mean(drift)), 8) if drift else None
+    max_action_l1_drift = round(float(np.max(drift)), 8) if drift else None
+    cut_mean_action_l1_drift = round(float(np.mean(cut_drift)), 8) if cut_drift else None
+    cut_max_action_l1_drift = round(float(np.max(cut_drift)), 8) if cut_drift else None
+    mechanical_passed = bool(cut_evaluated and all(record.get("passed") for record in evaluated))
+    behavior_passed = bool(
+        mechanical_passed
+        and action_agreement_rate >= float(args.min_action_agreement)
+        and mean_action_l1_drift is not None
+        and mean_action_l1_drift <= float(args.max_mean_action_l1_drift)
+    )
     metrics = {
         "mode": "joint_pbs_resolver_successor_cut_ab",
-        "passed": bool(cut_evaluated and all(record.get("passed") for record in evaluated)),
+        "passed": behavior_passed,
+        "mechanical_passed": mechanical_passed,
+        "behavior_passed": behavior_passed,
+        "pass_criteria": (
+            "must execute cut replacement, keep action agreement above "
+            f"{float(args.min_action_agreement):.3f}, and keep mean action L1 drift at or below "
+            f"{float(args.max_mean_action_l1_drift):.3f}"
+        ),
         "promotion_blockers": [
             "joint_pbs_resolver_successor_cut_ab_is_diagnostic_not_slumbot_confidence",
         ],
@@ -364,28 +466,20 @@ def main(argv: list[str] | None = None) -> int:
         "device": str(device),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
+        "min_bet_count": int(args.min_bet_count),
+        "target_action_shapes": list(args.target_action_shapes),
+        "min_action_agreement": float(args.min_action_agreement),
+        "max_mean_action_l1_drift": float(args.max_mean_action_l1_drift),
         "case_scan_limit": int(max_cases),
         "n_cases": len(records),
         "n_evaluated": len(evaluated),
         "n_cut_applied": len(cut_evaluated),
-        "action_agreement_rate": (
-            round(float(np.mean([record["action_agreement"] for record in evaluated])), 6)
-            if evaluated
-            else 0.0
-        ),
-        "cut_action_agreement_rate": (
-            round(float(np.mean([record["action_agreement"] for record in cut_evaluated])), 6)
-            if cut_evaluated
-            else 0.0
-        ),
-        "mean_action_l1_drift": round(float(np.mean(drift)), 8) if drift else None,
-        "max_action_l1_drift": round(float(np.max(drift)), 8) if drift else None,
-        "cut_mean_action_l1_drift": (
-            round(float(np.mean(cut_drift)), 8) if cut_drift else None
-        ),
-        "cut_max_action_l1_drift": (
-            round(float(np.max(cut_drift)), 8) if cut_drift else None
-        ),
+        "action_agreement_rate": action_agreement_rate,
+        "cut_action_agreement_rate": cut_action_agreement_rate,
+        "mean_action_l1_drift": mean_action_l1_drift,
+        "max_action_l1_drift": max_action_l1_drift,
+        "cut_mean_action_l1_drift": cut_mean_action_l1_drift,
+        "cut_max_action_l1_drift": cut_max_action_l1_drift,
         "records": records,
     }
     if args.output_json:

@@ -169,3 +169,16 @@ bottleneck is sparse frontier context, especially low legal-action-count states
 where residual error is highest. The next principled step should improve the
 continuation interface or target factorization for those sparse legal contexts,
 then rerun fixed successor-cut resolver A/B before any Slumbot evaluation.
+
+The fixed successor-cut resolver A/B was rerun with a stricter behavior gate and
+a matching high-bet frontier filter. This corrected an earlier diagnostic flaw:
+the high-bet-only checkpoint had been applied to every immediate successor cut.
+With `min_bet_count=5`, nonmatching successors remain exact CFR and only matching
+high-bet cuts use the learned continuation model. Even under that matched setup,
+the checkpoint failed the resolver behavior gate. On 16 evaluated cases from a
+64-case scan, 5 iterations gave action agreement `0.50` and mean L1 drift
+`0.8220`; 25 iterations gave agreement `0.4375` and drift `1.0912`. Hard
+successor-value replacement is therefore not ready. The next mechanism should
+make the search integration safer, for example by learning calibrated residuals,
+mixing learned and exact values, or using the network as a warm-start/policy
+prior instead of a hard cut-value oracle.

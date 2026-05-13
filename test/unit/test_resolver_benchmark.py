@@ -24,7 +24,10 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
     _global_board_mask,
     _local_ranges_from_belief,
 )
-from eval_joint_pbs_resolver_cut_ab import _successor_cut_node_indices  # noqa: E402
+from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
+    _frontier_action_shape,
+    _successor_cut_node_indices,
+)
 from build_learned_river_leaf_cases import (  # noqa: E402
     _rotated_cards,
     _summarize_leaf_records,
@@ -235,6 +238,29 @@ def test_successor_cut_node_indices_only_returns_nonterminal_children():
         child for child in solver.root.children.values() if child.is_terminal
     ]
     assert all(solver._tree["all_nodes"].index(child) not in cut_indices for child in terminal_children)
+
+
+def test_successor_cut_node_indices_can_filter_frontier_shape():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    all_indices = _successor_cut_node_indices(solver, solver.root)
+    bet_indices = _successor_cut_node_indices(solver, solver.root, min_bet_count=1)
+    check_indices = _successor_cut_node_indices(
+        solver,
+        solver.root,
+        target_action_shapes=("k",),
+    )
+
+    assert _frontier_action_shape("b400c/b1200") == "bc/b"
+    assert bet_indices
+    assert check_indices
+    assert set(bet_indices).isdisjoint(check_indices)
+    assert set(bet_indices).issubset(all_indices)
 
 
 def test_learned_leaf_action_path_reconstructs_turn_sequence():
