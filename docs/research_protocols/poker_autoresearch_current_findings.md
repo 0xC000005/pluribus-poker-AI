@@ -660,6 +660,12 @@ Label-throughput update:
   total learned solve time dropped from `84.9s` to `54.0s`. The remaining
   runtime is mostly CPU-side leaf-state construction and denominator
   accumulation, not the MLP forward pass.
+- Denominator accumulation now uses BLAS matrix-vector products instead of
+  allocating `valid_m * reach` arrays per leaf state. The same root-turn case
+  dropped again from `54.0s` to `11.4s` for three iterations, while neural
+  prediction stayed near `7.4s`. The diagnostic is now fast enough for small
+  samples, but action agreement remains `0/2`, so speed does not change the
+  integration blocker.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -703,4 +709,5 @@ script passes all 10 checks and is now part of Tier 0.
     callback into gameplay. Next work should either explain the high
     applicable-case action drift or replace the expensive root-turn river
     expansion with a direct turn-CFV continuation before another broad A/B.
-    If continuing this diagnostic, optimize CPU-side leaf accumulation first.
+    If continuing this diagnostic, prioritize drift attribution over more
+    runtime tuning.

@@ -2081,3 +2081,14 @@
 - Summary: Added a vectorized all-hands dual-CFV predictor and wired it into the learned river leaf A/B. A unit test confirms it matches the older pairwise predictor. On the same guarded target-2 scan, root-turn leaf prediction time fell from `37.6s` to `7.4s`, and total root-case learned solve time fell from `84.9s` to `54.0s`. This is a real speedup, but it also reveals the next bottleneck: CPU-side leaf-state construction and denominator accumulation now dominate over neural forward time.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent_target2_iter3_vectorized.json
 - Key metrics: `{"prediction_speedup_root_case": 5.08, "solve_speedup_root_case": 1.57, "root_turn_case": {"learned_solve_ms": 53985.634, "leaf_prediction_states": 47664, "leaf_prediction_ms": 7416.275}, "leaf_mean_action_l1_drift": 0.76846718, "leaf_action_agreement_rate": 0.0}`
+
+## 20260513T061043Z-blas-leaf-denominator-accumulation - passed
+
+- Timestamp: 2026-05-13T06:10:43Z
+- Type: implementation
+- Gate: manual-learned-leaf-denominator-accumulation
+- Hypothesis: After vectorizing neural inference, denominator accumulation should use BLAS matrix-vector products instead of allocating `valid_m * reach` elementwise arrays for every leaf state.
+- Failure class: performance
+- Summary: Replaced the per-leaf elementwise denominator reductions in the learned river leaf A/B with matrix-vector products. On the same guarded target-2 scan, the expensive root-turn case fell from `54.0s` to `11.4s` for three iterations, with neural prediction time unchanged at about `7.4s`. This makes the diagnostic practical enough for small applicable-case samples. Strategy quality remains blocked: applicable-case action agreement is still `0/2`, so the speedup does not justify gameplay integration.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent_target2_iter3_blasdenom.json
+- Key metrics: `{"root_solve_speedup_vs_vectorized": 4.72, "root_solve_speedup_vs_original": 7.42, "root_turn_case": {"learned_solve_ms": 11433.274, "leaf_prediction_states": 47664, "leaf_prediction_ms": 7442.202}, "leaf_mean_action_l1_drift": 0.76846713, "leaf_action_agreement_rate": 0.0}`

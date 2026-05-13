@@ -283,10 +283,11 @@ class LearnedRiverLeafCallback:
         leaf_h = np.zeros_like(out_h)
         leaf_v = np.zeros_like(out_v)
         local_idx = np.arange(len(self.solver_hands), dtype=np.int32)
+        global_idx = self._local_to_global
+        valid_m_t = valid_m.T.copy()
         for pred_idx, (row, local_legal) in enumerate(tasks):
-            hero_den = (valid_m * (villain_reach[row] * local_legal).reshape(1, -1)).sum(axis=1)
-            villain_den = (valid_m.T * (hero_reach[row] * local_legal).reshape(1, -1)).sum(axis=1)
-            global_idx = self._local_to_global
+            hero_den = valid_m @ (villain_reach[row] * local_legal)
+            villain_den = valid_m_t @ (hero_reach[row] * local_legal)
             legal_idx = local_idx[local_legal > 0]
             legal_global = global_idx[legal_idx]
             leaf_h[row, legal_idx] += pred[0, pred_idx, legal_global] * hero_den[legal_idx]
