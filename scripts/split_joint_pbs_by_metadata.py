@@ -212,6 +212,97 @@ def _choose_holdout_indices(
     return train, holdout, audit
 
 
+def _choose_group_holdout_indices(
+    records: list[dict[str, Any]],
+    *,
+    holdout_fraction: float,
+    seed: int,
+    group_field: str,
+) -> tuple[list[int], list[int], dict[str, Any]]:
+    if not 0.0 < float(holdout_fraction) < 1.0:
+        raise ValueError("--holdout-fraction must be between 0 and 1")
+    if not group_field:
+        raise ValueError("group_field must be non-empty")
+    rng = np.random.default_rng(int(seed))
+    by_group: dict[str, list[int]] = defaultdict(list)
+    for idx, record in enumerate(records):
+        group = record.get(group_field)
+        if group is None:
+            group = record.get("label", idx)
+        by_group[str(group)].append(idx)
+
+    by_shape: dict[str, list[str]] = defaultdict(list)
+    for group, indices in by_group.items():
+        shape_counts = Counter(
+            str(records[idx].get("action_shape", "missing")) for idx in indices
+        )
+        shape = shape_counts.most_common(1)[0][0] if shape_counts else "missing"
+        by_shape[shape].append(group)
+
+    train_groups: set[str] = set()
+    holdout_groups: set[str] = set()
+    per_shape: list[dict[str, Any]] = []
+    unsplittable_shapes: list[str] = []
+    for shape, groups in sorted(by_shape.items()):
+        shuffled = list(groups)
+        rng.shuffle(shuffled)
+        total_rows = sum(len(by_group[group]) for group in shuffled)
+        if len(shuffled) < 2:
+            train_groups.update(shuffled)
+            unsplittable_shapes.append(shape)
+            per_shape.append(
+                {
+                    "action_shape": shape,
+                    "total_groups": int(len(shuffled)),
+                    "train_groups": int(len(shuffled)),
+                    "holdout_groups": 0,
+                    "total_rows": int(total_rows),
+                    "train_rows": int(total_rows),
+                    "holdout_rows": 0,
+                }
+            )
+            continue
+
+        target_groups = int(round(len(shuffled) * float(holdout_fraction)))
+        target_groups = max(1, min(len(shuffled) - 1, target_groups))
+        selected = set(shuffled[:target_groups])
+        holdout_groups.update(selected)
+        train_groups.update(group for group in shuffled if group not in selected)
+        holdout_rows = sum(len(by_group[group]) for group in selected)
+        per_shape.append(
+            {
+                "action_shape": shape,
+                "total_groups": int(len(shuffled)),
+                "train_groups": int(len(shuffled) - len(selected)),
+                "holdout_groups": int(len(selected)),
+                "total_rows": int(total_rows),
+                "train_rows": int(total_rows - holdout_rows),
+                "holdout_rows": int(holdout_rows),
+            }
+        )
+
+    overlap = sorted(train_groups & holdout_groups)
+    if overlap:
+        raise AssertionError(f"group split produced overlapping groups: {overlap[:5]}")
+    train = sorted(idx for group in train_groups for idx in by_group[group])
+    holdout = sorted(idx for group in holdout_groups for idx in by_group[group])
+    if set(train) & set(holdout):
+        raise AssertionError("group split produced overlapping train and holdout rows")
+    if len(train) + len(holdout) != len(records):
+        raise AssertionError("group split did not account for every row")
+    audit = {
+        "holdout_fraction": float(holdout_fraction),
+        "seed": int(seed),
+        "group_field": str(group_field),
+        "train_group_count": int(len(train_groups)),
+        "holdout_group_count": int(len(holdout_groups)),
+        "group_overlap_count": int(len(overlap)),
+        "unsplittable_train_only_shapes": unsplittable_shapes,
+        "per_shape_group_split": per_shape,
+    }
+    return train, holdout, audit
+
+
 def _subset_arrays(arrays: dict[str, np.ndarray], indices: list[int]) -> dict[str, np.ndarray]:
     idx = np.asarray(indices, dtype=np.int64)
     return {key: np.asarray(value)[idx] for key, value in arrays.items()}
@@ -268,14 +359,23 @@ def split_joint_pbs_by_metadata(
     holdout_fraction: float = 0.25,
     seed: int = 0,
     reach_bins: int = 4,
+    group_field: str | None = None,
 ) -> dict[str, Any]:
     arrays, metadata, records = _load_payload(joint_npz, metadata_json)
-    train_indices, holdout_indices, audit = _choose_holdout_indices(
-        records,
-        holdout_fraction=holdout_fraction,
-        seed=seed,
-        reach_bins=reach_bins,
-    )
+    if group_field:
+        train_indices, holdout_indices, audit = _choose_group_holdout_indices(
+            records,
+            holdout_fraction=holdout_fraction,
+            seed=seed,
+            group_field=group_field,
+        )
+    else:
+        train_indices, holdout_indices, audit = _choose_holdout_indices(
+            records,
+            holdout_fraction=holdout_fraction,
+            seed=seed,
+            reach_bins=reach_bins,
+        )
     _save_subset(train_output, arrays, train_indices)
     _save_subset(holdout_output, arrays, holdout_indices)
     train_metadata = _subset_metadata(
@@ -320,6 +420,7 @@ def split_joint_pbs_by_metadata(
         "train_only_shapes": sorted(train_shapes - holdout_shapes),
         "train_shape_counts": train_metadata["action_shape_counts"],
         "holdout_shape_counts": holdout_metadata["action_shape_counts"],
+        "group_field": str(group_field) if group_field else None,
         "split_audit": audit,
     }
     save_metrics(metrics, Path(train_output).with_name(Path(train_output).stem + "_split_summary.json"))
@@ -337,6 +438,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--holdout-fraction", type=float, default=0.25)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--reach-bins", type=int, default=4)
+    parser.add_argument(
+        "--group-field",
+        help=(
+            "Optional metadata field, such as root_label, whose values must be "
+            "kept disjoint across train and holdout."
+        ),
+    )
     args = parser.parse_args(argv)
     metrics = split_joint_pbs_by_metadata(
         joint_npz=args.joint,
@@ -346,6 +454,7 @@ def main(argv: list[str] | None = None) -> int:
         holdout_fraction=args.holdout_fraction,
         seed=args.seed,
         reach_bins=args.reach_bins,
+        group_field=args.group_field,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))
     return 0

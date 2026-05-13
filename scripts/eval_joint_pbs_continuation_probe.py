@@ -286,6 +286,48 @@ def _load_action_sequences(
     return np.stack(tokens), np.stack(amounts)
 
 
+def _metadata_root_labels(metadata_json: str | Path | None) -> set[str]:
+    if metadata_json is None:
+        return set()
+    path = Path(metadata_json)
+    if not path.exists():
+        return set()
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    roots: set[str] = set()
+    for field in ("cut_records", "records"):
+        for item in metadata.get(field, []):
+            root = item.get("root_label")
+            if root is None:
+                label = str(item.get("label", ""))
+                if "-root-policy" in label:
+                    root = label.split("-root-policy", 1)[0]
+            if root is not None:
+                roots.add(str(root))
+    return roots
+
+
+def _root_disjoint_audit(
+    *,
+    train_metadata_json: str | Path | None,
+    holdout_metadata_json: str | Path | None,
+    require_root_disjoint: bool,
+) -> dict[str, Any]:
+    train_roots = _metadata_root_labels(train_metadata_json)
+    holdout_roots = _metadata_root_labels(holdout_metadata_json)
+    active = bool(train_roots and holdout_roots)
+    overlap = sorted(train_roots & holdout_roots)
+    passed = (not bool(require_root_disjoint)) or (not active) or not overlap
+    return {
+        "active": bool(active),
+        "required": bool(require_root_disjoint),
+        "passed": bool(passed),
+        "train_root_count": int(len(train_roots)),
+        "holdout_root_count": int(len(holdout_roots)),
+        "overlap_count": int(len(overlap)),
+        "overlap_sample": overlap[:10],
+    }
+
+
 def load_joint_pbs_dataset(
     path: str | Path,
     *,
@@ -872,8 +914,14 @@ def run_joint_pbs_continuation_probe(
     weight_decay: float = 1e-3,
     seed: int = 0,
     output_checkpoint: str | Path | None = None,
+    require_root_disjoint: bool = True,
 ) -> dict[str, Any]:
     resolved_device = _resolve_device(device)
+    root_audit = _root_disjoint_audit(
+        train_metadata_json=train_metadata_json,
+        holdout_metadata_json=holdout_metadata_json,
+        require_root_disjoint=require_root_disjoint,
+    )
     train_raw = load_joint_pbs_dataset(
         train_joint_npz,
         metadata_json=train_metadata_json,
@@ -982,11 +1030,17 @@ def run_joint_pbs_continuation_probe(
         )
     return {
         "mode": "joint_pbs_continuation_probe",
-        "passed": bool(beats_value_baselines and beats_policy_baseline),
+        "passed": bool(
+            beats_value_baselines
+            and beats_policy_baseline
+            and root_audit["passed"]
+        ),
         "pass_criteria": (
             "joint model must beat zero/train-constant value baselines when "
             "value targets are present and legal-uniform policy L1/KL when "
-            "policy targets are present"
+            "policy targets are present; when train/holdout metadata expose "
+            "root_label, public roots must be disjoint unless explicitly "
+            "overridden for diagnostics"
         ),
         "device": str(resolved_device),
         "train_joint_npz": str(train_joint_npz),
@@ -1027,6 +1081,8 @@ def run_joint_pbs_continuation_probe(
         "policy_uniform_baseline": uniform_policy,
         "value_beats_baselines": bool(beats_value_baselines),
         "policy_beats_uniform": bool(beats_policy_baseline),
+        "root_disjoint_audit": root_audit,
+        "root_disjoint_passed": bool(root_audit["passed"]),
     }
 
 
@@ -1059,6 +1115,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output-checkpoint")
     parser.add_argument("--output-json")
+    parser.add_argument(
+        "--allow-root-overlap",
+        action="store_true",
+        help="Allow overlapping train/holdout root_label metadata for diagnostics only.",
+    )
     args = parser.parse_args(argv)
 
     metrics = run_joint_pbs_continuation_probe(
@@ -1078,6 +1139,7 @@ def main(argv: list[str] | None = None) -> int:
         weight_decay=args.weight_decay,
         seed=args.seed,
         output_checkpoint=args.output_checkpoint,
+        require_root_disjoint=not args.allow_root_overlap,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

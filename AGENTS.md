@@ -7,6 +7,7 @@
 - `scripts/` contains runnable entrypoints: `run_gpu_deep_cfr.py`, `train_slumbot_2p.py`, `play_slumbot.py`, `solver.py`, and diagnostics. Live turn/river solving uses learned range-pruning before CFR.
 - `test/unit/` holds fast regression tests such as `test_network_mask.py`, `test_legal_mask_parity.py`, and `test_slumbot_mapping.py`.
 - `models/` and `research/` are local artifact directories for checkpoints/LUT data; keep generated binaries out of git. Legacy short-deck/tabular code remains for reference only.
+- `reference_code/` is an ignored local checkout area for external poker/research implementations used during audits; only its README is tracked.
 
 ## Build, Test, and Development Commands
 - Setup: `python -m venv .venv && source .venv/bin/activate && pip install -e .`
@@ -35,6 +36,9 @@
 - Diagnose policy-teacher collapse: `python scripts/diagnose_policy_teacher.py --checkpoint models/control.pt --sampled-cases 16 --hands-per-case 128 --strategy-source regret --output autoresearch-session/policy_calibration/teacher_diag.json`
 - Evaluate SD-CFR checkpoint mixture: `python scripts/eval_sd_cfr_mixture.py --candidate-glob 'models/run/*iter_*.pt' --baseline-checkpoint models/run/final.pt --n-games 300 --seeds 20260512,20260513,20260514 --output autoresearch-session/sd_cfr_mixture/mixture_h2h.json`
 - Diagnose range likelihood: `python scripts/diagnose_range_tracker.py --checkpoint autoresearch-session/policy_calibration/calibrated.pt --cases-json autoresearch-session/search_targets/reachable_policyhead_holdout_16x5.cases.json --strategy-source policy-head`
+- Build callback-state DCVN targets: `python scripts/build_public_belief_callback_leaf_targets.py --cases autoresearch-session/search_targets/<cases>.json --cfv-cache autoresearch-session/<belief_cache>.npz --output autoresearch-session/dcvn/callback_leaf_train.npz`
+- Train root-sliced dual-CFV/DCVN checkpoint: `python scripts/train_public_belief_dual_hand_cfv.py --train-start-index 0 --holdout-start-index 128 --train-limit 128 --holdout-limit 64 --output-checkpoint autoresearch-session/dcvn/model.pt ...`
+- Evaluate DCVN leaf substitution: `python scripts/eval_public_belief_dcvn_leaf_ab.py --checkpoint autoresearch-session/dcvn/model.pt --cases autoresearch-session/search_targets/<holdout>.cases.json --cfv-cache autoresearch-session/<holdout_cfv_cache>.npz`
 - Resolver benchmark gate: `python scripts/poker_autoresearch.py gate eval-resolver-fixed-states`
 - Resolver benchmark CLI: `python scripts/poker_resolver_benchmark.py --checkpoint models/candidate.pt --solver-iterations 25 --solver-backend auto`
 - Queue candidate comparison: `python scripts/poker_autoresearch.py enqueue-compare --candidate models/candidate.pt --head-to-head`

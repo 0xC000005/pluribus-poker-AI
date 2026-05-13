@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--holdout-cases", required=True)
     parser.add_argument("--holdout-cfv-cache", required=True)
     parser.add_argument("--output-checkpoint", required=True)
+    parser.add_argument("--train-start-index", type=int, default=0)
+    parser.add_argument("--holdout-start-index", type=int, default=0)
     parser.add_argument("--train-limit", type=int, default=128)
     parser.add_argument("--holdout-limit", type=int, default=64)
     parser.add_argument("--train-dual-cache")
@@ -70,6 +72,8 @@ def main(argv: list[str] | None = None) -> int:
         holdout_cases_json=args.holdout_cases,
         holdout_cfv_cache=args.holdout_cfv_cache,
         output_checkpoint=args.output_checkpoint,
+        train_start_index=args.train_start_index,
+        holdout_start_index=args.holdout_start_index,
         train_limit=args.train_limit,
         holdout_limit=args.holdout_limit,
         train_dual_cache=args.train_dual_cache,

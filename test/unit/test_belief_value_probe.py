@@ -703,6 +703,91 @@ def test_joint_pbs_continuation_probe_allows_policy_only_training(tmp_path):
     assert metrics["value_beats_baselines"] is True
 
 
+def test_joint_pbs_continuation_probe_fails_overlapping_root_metadata(tmp_path):
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    train_meta = tmp_path / "train_joint.json"
+    holdout_meta = tmp_path / "holdout_joint.json"
+    _write_joint_pbs_fixture(train_path, n_states=4)
+    _write_joint_pbs_fixture(holdout_path, n_states=3)
+    train_meta.write_text(
+        json.dumps(
+            {
+                "cut_records": [
+                    {"label": f"case-{idx}", "root_label": root, "action_str": ""}
+                    for idx, root in enumerate(("root-a", "root-b", "root-c", "root-d"))
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    holdout_meta.write_text(
+        json.dumps(
+            {
+                "cut_records": [
+                    {"label": f"case-{idx}", "root_label": root, "action_str": ""}
+                    for idx, root in enumerate(("root-a", "root-x", "root-y"))
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = run_joint_pbs_continuation_probe(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        train_metadata_json=train_meta,
+        holdout_metadata_json=holdout_meta,
+        device="cpu",
+        hidden_dim=8,
+        belief_bottleneck_dim=4,
+        epochs=1,
+        batch_size=8,
+        seed=13,
+    )
+
+    assert metrics["root_disjoint_audit"]["active"] is True
+    assert metrics["root_disjoint_audit"]["overlap_count"] == 1
+    assert metrics["root_disjoint_audit"]["overlap_sample"] == ["root-a"]
+    assert metrics["root_disjoint_passed"] is False
+    assert metrics["passed"] is False
+
+
+def test_joint_pbs_continuation_probe_can_override_root_overlap_for_diagnostics(tmp_path):
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    train_meta = tmp_path / "train_joint.json"
+    holdout_meta = tmp_path / "holdout_joint.json"
+    _write_joint_pbs_fixture(train_path, n_states=2)
+    _write_joint_pbs_fixture(holdout_path, n_states=2)
+    payload = {
+        "cut_records": [
+            {"label": "case-0", "root_label": "root-a", "action_str": ""},
+            {"label": "case-1", "root_label": "root-b", "action_str": ""},
+        ]
+    }
+    train_meta.write_text(json.dumps(payload), encoding="utf-8")
+    holdout_meta.write_text(json.dumps(payload), encoding="utf-8")
+
+    metrics = run_joint_pbs_continuation_probe(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        train_metadata_json=train_meta,
+        holdout_metadata_json=holdout_meta,
+        device="cpu",
+        hidden_dim=8,
+        belief_bottleneck_dim=4,
+        epochs=1,
+        batch_size=8,
+        seed=14,
+        require_root_disjoint=False,
+    )
+
+    assert metrics["root_disjoint_audit"]["required"] is False
+    assert metrics["root_disjoint_audit"]["overlap_count"] == 2
+    assert metrics["root_disjoint_passed"] is True
+
+
 def test_joint_pbs_value_weights_default_to_masks_and_can_be_loaded(tmp_path):
     weighted_path = tmp_path / "weighted_joint.npz"
     _write_joint_pbs_fixture(weighted_path, n_states=2)
@@ -928,6 +1013,55 @@ def test_split_joint_pbs_by_metadata_preserves_shape_coverage(tmp_path):
     assert {record["label"] for record in train_meta["cut_records"]}.isdisjoint(
         {record["label"] for record in holdout_meta["cut_records"]}
     )
+
+
+def test_split_joint_pbs_by_metadata_can_hold_out_root_groups(tmp_path):
+    joint_path = tmp_path / "joint.npz"
+    metadata_path = tmp_path / "joint.json"
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    _write_joint_pbs_fixture(joint_path, n_states=8)
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "mode": "fixture_joint_pbs",
+                "cut_records": [
+                    {
+                        "label": f"case-{idx}",
+                        "root_label": f"root-{idx // 2}",
+                        "action_shape": "shape-a" if idx < 4 else "shape-b",
+                        "bet_count": idx % 3,
+                        "policy_weight": 1.0,
+                        "hero_mask_count": 0,
+                        "villain_mask_count": 0,
+                    }
+                    for idx in range(8)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = split_joint_pbs_by_metadata(
+        joint_npz=joint_path,
+        metadata_json=metadata_path,
+        train_output=train_path,
+        holdout_output=holdout_path,
+        holdout_fraction=0.5,
+        seed=7,
+        group_field="root_label",
+    )
+    train_meta = json.loads(train_path.with_suffix(".json").read_text(encoding="utf-8"))
+    holdout_meta = json.loads(holdout_path.with_suffix(".json").read_text(encoding="utf-8"))
+    train_roots = {record["root_label"] for record in train_meta["cut_records"]}
+    holdout_roots = {record["root_label"] for record in holdout_meta["cut_records"]}
+
+    assert metrics["group_field"] == "root_label"
+    assert metrics["split_audit"]["group_overlap_count"] == 0
+    assert train_roots
+    assert holdout_roots
+    assert train_roots.isdisjoint(holdout_roots)
+    assert train_meta["policy_target_count"] + holdout_meta["policy_target_count"] == 8
 
 
 def test_joint_pbs_value_affine_calibration_helpers():

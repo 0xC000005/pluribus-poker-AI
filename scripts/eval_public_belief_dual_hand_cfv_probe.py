@@ -278,6 +278,7 @@ def _load_or_build_dual_dataset(
     *,
     cases_json: str | Path,
     cfv_cache: str | Path,
+    start_index: int = 0,
     limit: int,
     solver_iterations: int,
     solver_backend: str,
@@ -292,20 +293,24 @@ def _load_or_build_dual_dataset(
     cases = load_cases_json(cases_json)
     if len(cases) != base.features.shape[0]:
         raise ValueError("case count does not match base CFV cache")
-    n = min(max(1, int(limit)), len(cases))
+    start = max(0, min(int(start_index), len(cases)))
+    n = min(max(1, int(limit)), len(cases) - start)
+    if n <= 0:
+        raise ValueError("selected dual-CFV dataset slice is empty")
+    selected_cases = cases[start : start + n]
     jobs = max(1, int(label_jobs))
     if jobs > 1 and solver_backend == "torch-cuda":
         raise ValueError("parallel label generation is not supported with torch-cuda")
     worker_args = [
         (
             case,
-            base.belief[idx],
+            base.belief[start + idx],
             int(solver_iterations),
             solver_backend,
             float(value_scale),
             jobs > 1,
         )
-        for idx, case in enumerate(cases[:n])
+        for idx, case in enumerate(selected_cases)
     ]
     hero_values = []
     villain_values = []
@@ -324,13 +329,13 @@ def _load_or_build_dual_dataset(
         villain_masks.append(vm)
         records.append(record)
     dataset = DualCFVDataset(
-        features=base.features[:n].astype(np.float32, copy=False),
-        belief=base.belief[:n].astype(np.float32, copy=False),
+        features=base.features[start : start + n].astype(np.float32, copy=False),
+        belief=base.belief[start : start + n].astype(np.float32, copy=False),
         hero_values=np.stack(hero_values).astype(np.float32, copy=False),
         villain_values=np.stack(villain_values).astype(np.float32, copy=False),
         hero_masks=np.stack(hero_masks).astype(np.float32, copy=False),
         villain_masks=np.stack(villain_masks).astype(np.float32, copy=False),
-        labels=tuple(str(case.label) for case in cases[:n]),
+        labels=tuple(str(case.label) for case in selected_cases),
     )
     if dual_cache is not None:
         _save_dual_cache(dataset, records, dual_cache)
@@ -562,6 +567,8 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     output_checkpoint: str | Path,
     train_limit: int = 128,
     holdout_limit: int = 64,
+    train_start_index: int = 0,
+    holdout_start_index: int = 0,
     train_dual_cache: str | Path | None = None,
     holdout_dual_cache: str | Path | None = None,
     device: str | torch.device = "auto",
@@ -584,6 +591,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     train_raw, train_records, train_loaded = _load_or_build_dual_dataset(
         cases_json=train_cases_json,
         cfv_cache=train_cfv_cache,
+        start_index=train_start_index,
         limit=train_limit,
         solver_iterations=solver_iterations,
         solver_backend=solver_backend,
@@ -594,6 +602,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     holdout_raw, holdout_records, holdout_loaded = _load_or_build_dual_dataset(
         cases_json=holdout_cases_json,
         cfv_cache=holdout_cfv_cache,
+        start_index=holdout_start_index,
         limit=holdout_limit,
         solver_iterations=solver_iterations,
         solver_backend=solver_backend,
@@ -680,6 +689,8 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             "solver_backend": solver_backend,
             "train_cases_json": str(train_cases_json),
             "train_cfv_cache": str(train_cfv_cache),
+            "train_start_index": int(train_start_index),
+            "holdout_start_index": int(holdout_start_index),
             "train_dual_cache": str(train_dual_cache) if train_dual_cache else None,
             "seed": int(seed),
         },
@@ -719,6 +730,8 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         "holdout_loaded_from_cache": bool(holdout_loaded),
         "train_size": int(train.features.shape[0]),
         "holdout_size": int(holdout.features.shape[0]),
+        "train_start_index": int(train_start_index),
+        "holdout_start_index": int(holdout_start_index),
         "feature_dim": int(N_FEATURES),
         "belief_dim": int(BELIEF_DIM),
         "hand_feature_dim": 52,
@@ -1041,6 +1054,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--train-cfv-cache", required=True)
     parser.add_argument("--holdout-cases", required=True)
     parser.add_argument("--holdout-cfv-cache", required=True)
+    parser.add_argument("--train-start-index", type=int, default=0)
+    parser.add_argument("--holdout-start-index", type=int, default=0)
     parser.add_argument("--train-limit", type=int, default=16)
     parser.add_argument("--holdout-limit", type=int, default=8)
     parser.add_argument("--train-dual-cache")
@@ -1090,6 +1105,7 @@ def main(argv: list[str] | None = None) -> int:
     train_raw, train_records, train_loaded = _load_or_build_dual_dataset(
         cases_json=args.train_cases,
         cfv_cache=args.train_cfv_cache,
+        start_index=args.train_start_index,
         limit=args.train_limit,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
@@ -1100,6 +1116,7 @@ def main(argv: list[str] | None = None) -> int:
     holdout_raw, holdout_records, holdout_loaded = _load_or_build_dual_dataset(
         cases_json=args.holdout_cases,
         cfv_cache=args.holdout_cfv_cache,
+        start_index=args.holdout_start_index,
         limit=args.holdout_limit,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
@@ -1217,6 +1234,8 @@ def main(argv: list[str] | None = None) -> int:
         "device": str(device),
         "train_size": int(train.features.shape[0]),
         "holdout_size": int(holdout.features.shape[0]),
+        "train_start_index": int(args.train_start_index),
+        "holdout_start_index": int(args.holdout_start_index),
         "train_loaded_from_cache": bool(train_loaded),
         "holdout_loaded_from_cache": bool(holdout_loaded),
         "train_dual_cache": str(args.train_dual_cache) if args.train_dual_cache else None,

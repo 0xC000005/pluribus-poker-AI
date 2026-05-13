@@ -9,6 +9,8 @@ tags/
 # Autoresearch local state (keep only the directory note tracked)
 autoresearch-session/*
 !autoresearch-session/README.md
+reference_code/*
+!reference_code/README.md
 
 # Claude Code
 CLAUDE.md
