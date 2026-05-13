@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=("policy-head", "regret", "average-policy"),
         default="policy-head",
     )
+    parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
     from poker_ai.research.search_target_eval import evaluate_search_targets
@@ -36,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
         device=args.device,
         strategy_source=args.strategy_source,
     )
+    if args.output_json:
+        output = Path(args.output_json)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(metrics, indent=2, sort_keys=True))
     return 0 if metrics["passed"] else 1
 

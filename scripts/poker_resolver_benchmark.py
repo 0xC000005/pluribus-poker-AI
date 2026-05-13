@@ -50,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="Limit number of cases for smoke tests.",
     )
+    parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
     device = _device(args.device)
@@ -66,6 +67,10 @@ def main(argv: list[str] | None = None) -> int:
         solver_backend=args.solver_backend,
         checkpoint_metadata=loaded.metadata,
     )
+    if args.output_json:
+        output = Path(args.output_json)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(metrics, indent=2, sort_keys=True))
     return 0 if metrics["passed"] else 1
 

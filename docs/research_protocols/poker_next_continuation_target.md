@@ -192,3 +192,12 @@ not the bottleneck. The next target should be policy-aware or search-aware:
 train a boundary policy/prior from resolver targets, learn residuals conditioned
 on local legal context, or train a value-mixing controller against the fixed
 resolver behavior gate.
+
+The first policy-boundary calibration is promising but not directly usable.
+Training only the policy head on a `192/64` resolver-target split improved
+held-out policy fit (`L1 0.2115 -> 0.0382`, `KL 0.0572 -> 0.0054`) and reduced
+policy-head solver drift (`0.8880 -> 0.8097`). But its argmax selected all-in on
+`29.69%` of holdout cases while the target top all-in rate was `0`. Treat this
+as evidence for soft policy priors inside search, not direct policy-head action
+selection. The next gate should evaluate entropy/top-action calibration and a
+solver warm-start/prior path that cannot force unsafe top actions by itself.
