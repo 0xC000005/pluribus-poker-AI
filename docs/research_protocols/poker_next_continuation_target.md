@@ -280,3 +280,13 @@ gate with mean action L1 drift `0.5880`. But argmax all-in is still `0.9896`,
 so do not evaluate this checkpoint with `--greedy`. Next target: run stochastic
 fixed/Slumbot smoke for the confidence-weighted rank checkpoint, while reporting
 both probability-level and top-action diagnostics.
+
+The stochastic full-game local smoke did not transfer. In duplicate-swapped
+head-to-head against the base restored checkpoint, both using sampled
+`policy-head`, the confidence-weighted checkpoint averaged only `+1.85`
+chips/hand with lower95 `-50.57` over `12288` games. The likely bottleneck is
+coverage mismatch: the policy head was calibrated from turn/river resolver
+targets, but full-game policy-head evaluation uses it preflop and flop too.
+Next target: either generate all-street search/teacher targets, or add an
+explicit evaluation/play path that uses blueprint regret before turn and the
+calibrated stochastic policy head only on streets covered by resolver targets.
