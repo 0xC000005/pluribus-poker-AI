@@ -301,3 +301,12 @@ chips/hand with lower95 `-55.99` over `12288` games. The simple support-mismatch
 explanation is therefore not enough. Next target: stop tuning policy-head
 imitation losses and move to value/search mechanisms or reached-state policy
 targets that optimize full-game value directly.
+
+Historical checkpoint selection is now a triage tool, not the answer. A restored
+history round-robin over iterations `50/100/150/200` initially ranked iter100
+highest by mean field delta, but focused confirmation against iter200/final
+failed hard: `-165.33` chips/hand with lower95 `-228.62` over `12288` games.
+Keep iter200/final as incumbent. Next target: return to search/value integration
+and make successor-frontier value use safer than hard replacement, ideally by
+learning uncertainty or residual structure that is checked against resolver
+action drift rather than policy imitation loss.

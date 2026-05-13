@@ -538,6 +538,54 @@ def test_eval_cli_accepts_policy_head_strategy_source(tmp_path):
     assert metrics["strategy_source"] == "policy-head"
 
 
+def test_round_robin_cli_compares_identical_checkpoints(tmp_path):
+    from poker_ai.deep_cfr.networks import ValueNetwork
+
+    value_net = ValueNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    checkpoint = {
+        "iteration": 6,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 1000,
+        "value_net": value_net.state_dict(),
+    }
+    left_path = tmp_path / "left.pt"
+    right_path = tmp_path / "right.pt"
+    torch.save(checkpoint, left_path)
+    torch.save(checkpoint, right_path)
+    script = Path(__file__).resolve().parents[2] / "scripts" / "eval_checkpoint_round_robin.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--checkpoint",
+            str(left_path),
+            "--checkpoint",
+            str(right_path),
+            "--n-games",
+            "2",
+            "--seeds",
+            "7",
+            "--initial-chips",
+            "1000",
+            "--device",
+            "cpu",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    metrics = json.loads(result.stdout)
+    assert metrics["mode"] == "checkpoint_round_robin"
+    assert metrics["n_pairs"] == 1
+    assert metrics["mean_delta_matrix"][0][1] == 0.0
+    assert metrics["mean_delta_matrix"][1][0] == 0.0
+
+
 def test_compare_checkpoint_metrics_keeps_local_result_non_promotable():
     candidate = {
         "passed": True,
