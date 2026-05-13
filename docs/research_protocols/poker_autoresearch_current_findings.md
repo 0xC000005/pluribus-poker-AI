@@ -724,6 +724,10 @@ Label-throughput update:
   the high-drift residual to zero, but it only tied the zero residual baseline
   and reduced target-5 leaf action agreement to `2/5`. Keep it off by default
   until a broader gate shows strategic benefit.
+- Range-robustness diagnostics can now write `--output-dual-cache`, so exact
+  leaf labels can be reused by checkpoint/projection evaluators without
+  re-solving. A one-state high-drift smoke verified cache write/load; use this
+  path for future exact-leaf investigations.
 
 Resolved workflow issue: `rules_parity`.
 

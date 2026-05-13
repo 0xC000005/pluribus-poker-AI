@@ -32,6 +32,7 @@ from eval_public_belief_dual_hand_cfv_probe import (
     _case_dual_cfv_target,
     _constant_dual_prediction,
     _metrics,
+    _save_dual_cache,
     _zero_dual_prediction,
     load_public_belief_dual_hand_cfv_ensemble,
     predict_public_belief_dual_hand_cfv_model,
@@ -85,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--value-scale", type=float, default=20000.0)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument("--project-zero-sum", action="store_true")
+    parser.add_argument("--output-dual-cache")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -144,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         villain_masks=np.stack(villain_masks).astype(np.float32, copy=False),
         labels=tuple(labels),
     )
+    if args.output_dual_cache:
+        _save_dual_cache(dataset, records, args.output_dual_cache)
     pred = _predict_loaded_ensemble(
         loaded,
         dataset,
@@ -198,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
         "solver_backend": args.solver_backend,
         "value_scale": float(args.value_scale),
         "project_zero_sum": bool(args.project_zero_sum),
+        "output_dual_cache": str(args.output_dual_cache) if args.output_dual_cache else None,
         "n_labels": int(dataset.hero_masks.sum() + dataset.villain_masks.sum()),
         "model_holdout": model_metrics,
         "zero_baseline": zero_metrics,
