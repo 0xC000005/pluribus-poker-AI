@@ -743,8 +743,12 @@ Label-throughput update:
   `ck/b200c/b150b525c/` (`0.1840` MAE) and the worst residual miss is
   `ck/b200c/b150b712c/` (`0.1192`). Zero-sum projection removes predicted
   residual by construction but leaves the worst MAE essentially intact
-  (`0.1815`). This points to richer continuation targets or terminal/bet
-  stratification, not uncertainty or projection gates.
+  (`0.1815`). On the broader 50-state rotated holdout, the analyzer's derived
+  bet-count groups show increasing error with terminal betting complexity:
+  bet-count `0`/`1`/`2` gives MAE `0.1805`/`0.2003`/`0.2423`, while
+  bet-count `4`/`5`/`6` rises to `0.3558`/`0.4175`/`0.5234`. This points to
+  richer continuation targets and terminal/bet-structure coverage, not
+  uncertainty or projection gates.
 - Related-work checkpoint: DeepStack and Supremus support learned
   counterfactual value networks inside depth-limited continual resolving, and
   Supremus specifically reports beating Slumbot with improved deep CFV

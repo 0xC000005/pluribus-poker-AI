@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -32,6 +33,10 @@ from eval_public_belief_dual_hand_cfv_probe import (  # noqa: E402
     predict_public_belief_dual_hand_cfv_model,
     project_dual_cfv_zero_sum,
 )
+from play_slumbot import parse_action  # noqa: E402
+
+
+_BET_TOKEN_RE = re.compile(r"b\d+")
 
 
 def _predict_loaded_ensemble(
@@ -115,6 +120,22 @@ def _group_key(record: dict[str, Any], fields: tuple[str, ...]) -> str:
     return "|".join(parts)
 
 
+def enrich_leaf_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Add structural leaf-action metadata for grouping diagnostics."""
+    out = dict(record)
+    action = str(out.get("leaf_action_str") or out.get("action_str") or "")
+    if action:
+        out.setdefault("leaf_action_shape", _BET_TOKEN_RE.sub("b", action))
+        out.setdefault("leaf_bet_count", len(_BET_TOKEN_RE.findall(action)))
+        parsed = parse_action(action)
+        out.setdefault("leaf_parse_ok", "error" not in parsed)
+        if "error" not in parsed:
+            out.setdefault("leaf_total_last_bet_to", float(parsed["total_last_bet_to"]))
+            out.setdefault("leaf_street_last_bet_to", float(parsed["street_last_bet_to"]))
+            out.setdefault("leaf_last_bet_size", float(parsed["last_bet_size"]))
+    return out
+
+
 def merge_record_metadata(
     records: list[dict[str, Any]],
     metadata_records: list[dict[str, Any]],
@@ -131,7 +152,7 @@ def merge_record_metadata(
         metadata = metadata_by_label.get(label, {})
         combined = dict(metadata)
         combined.update(record)
-        merged.append(combined)
+        merged.append(enrich_leaf_record(combined))
     return merged
 
 
@@ -216,6 +237,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.metadata_json:
         metadata_payload = json.loads(Path(args.metadata_json).read_text(encoding="utf-8"))
         records = merge_record_metadata(records, list(metadata_payload.get("records", [])))
+    else:
+        records = [enrich_leaf_record(record) for record in records]
     loaded = load_public_belief_dual_hand_cfv_ensemble(args.checkpoint, device=device)
     pred = _predict_loaded_ensemble(
         loaded,

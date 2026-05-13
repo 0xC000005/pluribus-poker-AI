@@ -26,7 +26,11 @@ from eval_public_belief_dual_hand_cfv_probe import (
     predict_public_belief_dual_hand_cfv_model_vectorized,
     project_dual_cfv_zero_sum,
 )
-from analyze_dual_cfv_cache_errors import group_error_records, merge_record_metadata
+from analyze_dual_cfv_cache_errors import (
+    enrich_leaf_record,
+    group_error_records,
+    merge_record_metadata,
+)
 from solver import Node
 
 
@@ -466,10 +470,24 @@ def test_dual_cfv_cache_metadata_merge_keeps_solver_fields():
     assert merged == [
         {
             "label": "leaf-a",
+            "leaf_action_shape": "ck/bc/",
             "leaf_action_str": "ck/b200c/",
+            "leaf_bet_count": 1,
+            "leaf_parse_ok": True,
+            "leaf_last_bet_size": 0.0,
+            "leaf_street_last_bet_to": 0.0,
+            "leaf_total_last_bet_to": 300.0,
             "solver_latency_ms": 12.0,
         }
     ]
+
+
+def test_dual_cfv_cache_leaf_record_enrichment_strips_bet_amounts():
+    enriched = enrich_leaf_record({"leaf_action_str": "ck/b200c/b150b525c/"})
+
+    assert enriched["leaf_action_shape"] == "ck/bc/bbc/"
+    assert enriched["leaf_bet_count"] == 3
+    assert enriched["leaf_parse_ok"] is True
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
