@@ -347,6 +347,10 @@ def test_evaluate_search_targets_reports_policy_fit(tmp_path):
     assert metrics["has_policy_head"] is True
     assert np.isfinite(metrics["mean_l1"])
     assert np.isfinite(metrics["mean_kl"])
+    assert 0.0 <= metrics["policy_mean_allin_prob"] <= 1.0
+    assert metrics["target_mean_allin_prob"] == 0.5
+    assert np.isfinite(metrics["policy_mean_entropy"])
+    assert np.isfinite(metrics["target_mean_entropy"])
 
 
 def test_belief_conditioned_policy_targets_record_range_diagnostics(tmp_path):

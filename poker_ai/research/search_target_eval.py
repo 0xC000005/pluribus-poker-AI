@@ -77,6 +77,8 @@ def evaluate_search_targets(
     kl = (target_probs * (np.log(target_probs + eps) - np.log(policy + eps))).sum(axis=1)
     policy_top = policy.argmax(axis=1)
     target_top = target_probs.argmax(axis=1)
+    policy_entropy = -np.sum(policy * np.log(policy + eps), axis=1)
+    target_entropy = -np.sum(target_probs * np.log(target_probs + eps), axis=1)
     return {
         "passed": True,
         "mode": "search_target_eval",
@@ -89,5 +91,9 @@ def evaluate_search_targets(
         "top1_match_rate": round(float((policy_top == target_top).mean()), 6),
         "policy_allin_rate": round(float((policy_top == 8).mean()), 6),
         "target_allin_rate": round(float((target_top == 8).mean()), 6),
+        "policy_mean_allin_prob": round(float(policy[:, 8].mean()), 6),
+        "target_mean_allin_prob": round(float(target_probs[:, 8].mean()), 6),
+        "policy_mean_entropy": round(float(policy_entropy.mean()), 6),
+        "target_mean_entropy": round(float(target_entropy.mean()), 6),
         **loaded.metadata,
     }

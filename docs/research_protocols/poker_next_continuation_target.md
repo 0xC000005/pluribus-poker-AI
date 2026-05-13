@@ -203,4 +203,6 @@ selection. The next gate should evaluate entropy/top-action calibration and a
 solver warm-start/prior path that cannot force unsafe top actions by itself.
 The fixed resolver benchmark now has an optional policy-head behavior gate; the
 calibrated head fails it under max all-in rate `0.05` and max mean L1 drift
-`0.75`.
+`0.75`. The probability-level diagnostics explain why: calibrated mean all-in
+probability matches the target (`0.1469` vs `0.1454`) and entropy is close, but
+argmax behavior is unstable around near-tied soft actions.
