@@ -164,6 +164,9 @@ class RiverLeafStats:
     skipped_showdowns: int = 0
     prediction_states: int = 0
     prediction_ms: float = 0.0
+    prediction_std_sum: float = 0.0
+    prediction_std_count: int = 0
+    prediction_std_max: float = 0.0
 
 
 class LearnedRiverLeafCallback:
@@ -279,7 +282,20 @@ class LearnedRiverLeafCallback:
             )
             for model, payload in self.loaded_ensemble
         ]
-        pred = np.mean(np.stack(preds, axis=0), axis=0, dtype=np.float32)
+        pred_stack = np.stack(preds, axis=0)
+        if pred_stack.shape[0] > 1:
+            pred_std = np.std(pred_stack, axis=0, dtype=np.float32)
+            legal_std = pred_std[
+                np.stack([dataset.hero_masks, dataset.villain_masks], axis=0) > 0
+            ]
+            if legal_std.size:
+                self.stats.prediction_std_sum += float(np.sum(legal_std))
+                self.stats.prediction_std_count += int(legal_std.size)
+                self.stats.prediction_std_max = max(
+                    self.stats.prediction_std_max,
+                    float(np.max(legal_std)),
+                )
+        pred = np.mean(pred_stack, axis=0, dtype=np.float32)
         if self.project_zero_sum:
             pred = project_dual_cfv_zero_sum(
                 pred,
@@ -459,6 +475,18 @@ def _solve_case(
         "learned_solve_ms": round(float(learned_ms), 3),
         "leaf_prediction_ms": round(float(callback.stats.prediction_ms), 3),
         "leaf_prediction_states": int(callback.stats.prediction_states),
+        "leaf_prediction_std_mean": (
+            round(
+                float(
+                    callback.stats.prediction_std_sum
+                    / max(callback.stats.prediction_std_count, 1)
+                ),
+                8,
+            )
+            if callback.stats.prediction_std_count
+            else 0.0
+        ),
+        "leaf_prediction_std_max": round(float(callback.stats.prediction_std_max), 8),
         "project_zero_sum": bool(project_zero_sum),
         "leaf_callback_calls": int(callback.stats.callback_calls),
         "replaced_showdowns": int(callback.stats.replaced_showdowns),

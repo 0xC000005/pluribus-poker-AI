@@ -729,6 +729,11 @@ Label-throughput update:
   re-solving. A one-state high-drift smoke verified cache write/load, and the
   full 16-state high-drift exact cache is now materialized for future
   projection, uncertainty, or alternate continuation-value checks.
+- Learned-leaf A/B now records ensemble standard-deviation telemetry. The main
+  high-drift case is not simply a high-uncertainty prediction: its mean ensemble
+  std is `0.1077`, lower than several action-agreeing cases. Do not add an
+  uncertainty threshold as the next mechanism; prioritize a stronger
+  continuation objective/evaluation target.
 
 Resolved workflow issue: `rules_parity`.
 
