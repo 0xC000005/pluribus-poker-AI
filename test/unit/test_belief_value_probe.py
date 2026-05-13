@@ -675,6 +675,34 @@ def test_joint_pbs_continuation_probe_smoke(tmp_path):
     assert policy_pred.shape == (4, N_ACTIONS)
 
 
+def test_joint_pbs_continuation_probe_allows_policy_only_training(tmp_path):
+    train_path = tmp_path / "train_policy_only.npz"
+    holdout_path = tmp_path / "holdout_policy_only.npz"
+    _write_joint_pbs_fixture(train_path, n_states=4)
+    _write_joint_pbs_fixture(holdout_path, n_states=3)
+    for path in (train_path, holdout_path):
+        payload = dict(np.load(path))
+        payload["hero_masks"] = np.zeros_like(payload["hero_masks"], dtype=np.float32)
+        payload["villain_masks"] = np.zeros_like(payload["villain_masks"], dtype=np.float32)
+        np.savez_compressed(path, **payload)
+
+    metrics = run_joint_pbs_continuation_probe(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        device="cpu",
+        hidden_dim=8,
+        belief_bottleneck_dim=4,
+        epochs=1,
+        batch_size=8,
+        seed=11,
+    )
+
+    assert metrics["value_gate_active"] is False
+    assert metrics["policy_gate_active"] is True
+    assert metrics["train_value_label_count"] == 0
+    assert metrics["value_beats_baselines"] is True
+
+
 def test_joint_pbs_value_weights_default_to_masks_and_can_be_loaded(tmp_path):
     weighted_path = tmp_path / "weighted_joint.npz"
     _write_joint_pbs_fixture(weighted_path, n_states=2)

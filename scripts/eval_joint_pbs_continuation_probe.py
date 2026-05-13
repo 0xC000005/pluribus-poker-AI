@@ -466,8 +466,12 @@ def _fit_joint_model(
 ) -> _JointPBSContinuationNet:
     torch.manual_seed(int(seed))
     case_idx, hand_idx, player_idx, values, value_weights = _pair_indices(dataset)
-    if case_idx.size == 0:
-        raise ValueError("cannot train joint PBS probe without value labels")
+    policy_idx_np = np.flatnonzero(np.asarray(dataset.policy_weights, dtype=np.float32) > 0.0).astype(
+        np.int64,
+        copy=False,
+    )
+    if case_idx.size == 0 and policy_idx_np.size == 0:
+        raise ValueError("cannot train joint PBS probe without value or policy labels")
     value_target = ((values - float(target_mean)) / float(target_std)).astype(np.float32)
     case_t = torch.from_numpy(case_idx).to(device)
     hand_t = torch.from_numpy(hand_idx).to(device)
@@ -480,10 +484,6 @@ def _fit_joint_model(
     legal_t = torch.from_numpy(dataset.legal_masks).to(device)
     policy_target_t = torch.from_numpy(dataset.target_probs).to(device)
     policy_weight_t = torch.from_numpy(dataset.policy_weights).to(device)
-    policy_idx_np = np.flatnonzero(np.asarray(dataset.policy_weights, dtype=np.float32) > 0.0).astype(
-        np.int64,
-        copy=False,
-    )
     policy_idx_t = torch.from_numpy(policy_idx_np).to(device)
     action_token_t = torch.from_numpy(dataset.action_tokens).to(device)
     action_amount_t = torch.from_numpy(dataset.action_amounts).to(device)
@@ -499,31 +499,33 @@ def _fit_joint_model(
     ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     n_value = int(case_t.numel())
-    batch_size = max(1, min(int(batch_size), n_value))
+    batch_size = max(1, int(batch_size))
+    value_batch_size = max(1, min(batch_size, n_value)) if n_value else batch_size
     generator = torch.Generator(device=device)
     generator.manual_seed(int(seed))
     model.train()
     for _ in range(max(1, int(epochs))):
-        perm = torch.randperm(n_value, generator=generator, device=device)
-        for start in range(0, n_value, batch_size):
-            batch = perm[start : start + batch_size]
-            c = case_t.index_select(0, batch)
-            h = hand_t.index_select(0, batch)
-            p = player_t.index_select(0, batch)
-            pred = model.value(
-                public_t.index_select(0, c),
-                hand_feat_t.index_select(0, h),
-                player_feat_t.index_select(0, p),
-                belief_t.index_select(0, c),
-                action_token_t.index_select(0, c),
-                action_amount_t.index_select(0, c),
-            )
-            batch_weights = value_weight_t.index_select(0, batch).to(dtype=pred.dtype)
-            squared_error = (pred - value_target_t.index_select(0, batch)) ** 2
-            loss = (squared_error * batch_weights).sum() / batch_weights.sum().clamp(min=1e-8)
-            optimizer.zero_grad(set_to_none=True)
-            loss.backward()
-            optimizer.step()
+        if n_value:
+            perm = torch.randperm(n_value, generator=generator, device=device)
+            for start in range(0, n_value, value_batch_size):
+                batch = perm[start : start + value_batch_size]
+                c = case_t.index_select(0, batch)
+                h = hand_t.index_select(0, batch)
+                p = player_t.index_select(0, batch)
+                pred = model.value(
+                    public_t.index_select(0, c),
+                    hand_feat_t.index_select(0, h),
+                    player_feat_t.index_select(0, p),
+                    belief_t.index_select(0, c),
+                    action_token_t.index_select(0, c),
+                    action_amount_t.index_select(0, c),
+                )
+                batch_weights = value_weight_t.index_select(0, batch).to(dtype=pred.dtype)
+                squared_error = (pred - value_target_t.index_select(0, batch)) ** 2
+                loss = (squared_error * batch_weights).sum() / batch_weights.sum().clamp(min=1e-8)
+                optimizer.zero_grad(set_to_none=True)
+                loss.backward()
+                optimizer.step()
 
         if policy_idx_t.numel() > 0:
             policy_perm = policy_idx_t.index_select(
@@ -918,6 +920,9 @@ def run_joint_pbs_continuation_probe(
     )
     policy_probs = _predict_policy(model, holdout, device=resolved_device, batch_size=batch_size)
     policy_mask = holdout.policy_weights > 0
+    train_value_label_count = int(train.hero_masks.sum() + train.villain_masks.sum())
+    holdout_value_label_count = int(holdout.hero_masks.sum() + holdout.villain_masks.sum())
+    value_gate_active = bool(train_value_label_count > 0 and holdout_value_label_count > 0)
     train_policy_label_count = int(np.count_nonzero(train.policy_weights > 0))
     holdout_policy_label_count = int(np.count_nonzero(policy_mask))
     policy_gate_active = bool(train_policy_label_count > 0 and holdout_policy_label_count > 0)
@@ -938,10 +943,14 @@ def run_joint_pbs_continuation_probe(
     best_constant_mae = _best_constant_metric(constant_baselines, "mae")
     best_constant_rmse = _best_constant_metric(constant_baselines, "rmse")
     beats_value_baselines = (
-        value_holdout["mae"] < constant_baselines["zero"]["mae"]
-        and value_holdout["rmse"] <= constant_baselines["zero"]["rmse"]
-        and value_holdout["mae"] < best_constant_mae
-        and value_holdout["rmse"] <= best_constant_rmse
+        True
+        if not value_gate_active
+        else (
+            value_holdout["mae"] < constant_baselines["zero"]["mae"]
+            and value_holdout["rmse"] <= constant_baselines["zero"]["rmse"]
+            and value_holdout["mae"] < best_constant_mae
+            and value_holdout["rmse"] <= best_constant_rmse
+        )
     )
     beats_policy_baseline = (
         True
@@ -975,8 +984,9 @@ def run_joint_pbs_continuation_probe(
         "mode": "joint_pbs_continuation_probe",
         "passed": bool(beats_value_baselines and beats_policy_baseline),
         "pass_criteria": (
-            "joint model must beat zero/train-constant value baselines and "
-            "legal-uniform policy L1/KL when policy targets are present"
+            "joint model must beat zero/train-constant value baselines when "
+            "value targets are present and legal-uniform policy L1/KL when "
+            "policy targets are present"
         ),
         "device": str(resolved_device),
         "train_joint_npz": str(train_joint_npz),
@@ -1000,10 +1010,9 @@ def run_joint_pbs_continuation_probe(
         "belief_dim": int(BELIEF_DIM),
         "hand_feature_dim": 52,
         "target_dim": int(N_HANDS),
-        "train_value_label_count": int(train.hero_masks.sum() + train.villain_masks.sum()),
-        "holdout_value_label_count": int(
-            holdout.hero_masks.sum() + holdout.villain_masks.sum()
-        ),
+        "train_value_label_count": train_value_label_count,
+        "holdout_value_label_count": holdout_value_label_count,
+        "value_gate_active": bool(value_gate_active),
         "train_policy_label_count": train_policy_label_count,
         "holdout_policy_label_count": holdout_policy_label_count,
         "policy_gate_active": bool(policy_gate_active),
