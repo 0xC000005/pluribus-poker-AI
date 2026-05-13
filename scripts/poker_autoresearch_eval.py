@@ -172,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-positive-lower95",
         action="store_true",
-        help="Fail unless the comparison lower 95% confidence bound is positive.",
+        help="Fail unless the comparison lower 95%% confidence bound is positive.",
     )
     args = parser.parse_args(argv)
 

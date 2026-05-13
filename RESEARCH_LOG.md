@@ -1618,3 +1618,69 @@
 - Summary: Gate eval-candidate-compare-20260513T003516Z-restored-history-400x2k-4x512-final failed.
 - Metrics file: autoresearch-session/poker_runs/20260513T003648Z-candidate-checkpoint-restored-history-400x2k-4x512-final-pt/metrics.json
 - Key metrics: `{"avg_chips_per_hand": 27.072666666666674, "gate": "eval-candidate-compare-20260513T003516Z-restored-history-400x2k-4x512-final", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -96.26662271632344, "passed": false, "strategy_source": "regret"}`
+
+## 20260513T004029Z-gpu-deep-cfr-training-should-produce-search-consistency - passed
+
+- Timestamp: 2026-05-13T00:57:25Z
+- Type: experiment
+- Gate: train-gpu-deep-cfr-20260513T004018Z-search-consistency-restored200-100x2k
+- Hypothesis: GPU Deep CFR training should produce search_consistency_restored200_100x2k_final.pt with machine-readable throughput metrics.
+- Failure class: none
+- Summary: Gate train-gpu-deep-cfr-20260513T004018Z-search-consistency-restored200-100x2k passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T004029Z-gpu-deep-cfr-training-should-produce-search-consistency/metrics.json
+- Key metrics: `{"avg_iter_seconds": 10.134, "gate": "train-gpu-deep-cfr-20260513T004018Z-search-consistency-restored200-100x2k", "iters_per_hour": 355.235, "mode": "autoresearch_gpu_deep_cfr_train", "passed": true, "traversals_per_second": 197.351}`
+
+## 20260513T005725Z-candidate-checkpoint-search-consistency-restored200-100x2k-iter-50 - failed
+
+- Timestamp: 2026-05-13T00:57:26Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-iter-50
+- Hypothesis: Candidate checkpoint search_consistency_restored200_100x2k_iter_50.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-iter-50 failed.
+- Metrics file: autoresearch-session/poker_runs/20260513T005725Z-candidate-checkpoint-search-consistency-restored200-100x2k-iter-50/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 3.045999999999999, "gate": "eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-iter-50", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -39.91504023494776, "passed": false, "strategy_source": "regret"}`
+
+## 20260513T005916Z-candidate-checkpoint-search-consistency-restored200-100x2k-iter-100 - failed
+
+- Timestamp: 2026-05-13T00:59:18Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-iter-100
+- Hypothesis: Candidate checkpoint search_consistency_restored200_100x2k_iter_100.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-iter-100 failed.
+- Metrics file: autoresearch-session/poker_runs/20260513T005916Z-candidate-checkpoint-search-consistency-restored200-100x2k-iter-100/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 28.69066666666667, "gate": "eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-iter-100", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -22.831880987383887, "passed": false, "strategy_source": "regret"}`
+
+## 20260513T005927Z-candidate-checkpoint-search-consistency-restored200-100x2k-final-pt - failed
+
+- Timestamp: 2026-05-13T00:59:29Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-final
+- Hypothesis: Candidate checkpoint search_consistency_restored200_100x2k_final.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: Gate eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-final failed.
+- Metrics file: autoresearch-session/poker_runs/20260513T005927Z-candidate-checkpoint-search-consistency-restored200-100x2k-final-pt/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 28.69066666666667, "gate": "eval-candidate-compare-20260513T005725Z-search-consistency-restored200-100x2k-final", "mode": "duplicate_swapped_head_to_head", "paired_delta_lower95_chips_per_hand_across_seeds": -22.831880987383887, "passed": false, "strategy_source": "regret"}`
+
+## 20260513T010148Z-search-consistency-generalization-audit - failed
+
+- Timestamp: 2026-05-13T01:01:48Z
+- Type: analysis
+- Gate: manual-search-target-generalization-audit
+- Hypothesis: The search-consistency target path should improve held-out resolver-target fit and produce a playable policy head, not just memorize the sampled train targets.
+- Failure class: search_quality
+- Summary: The 100x2k search-consistency checkpoint memorized the 32-target train set but failed to improve held-out search-target fit or policy-head play. This falsifies scaling the current tiny resolver-target distillation path by weight or horizon alone.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/manual_eval_commands
+- Key metrics: `{"candidate_train_mean_l1": 0.03476, "candidate_train_top1": 0.9375, "candidate_holdout_mean_l1": 1.136864, "baseline_holdout_mean_l1": 1.124691, "policy_head_vs_incumbent_avg_chips_per_hand": -61.75633333333334, "policy_head_vs_incumbent_lower95": -130.25196389087606, "policy_head_vs_own_regret_avg_chips_per_hand": -32.193999999999996, "policy_head_vs_own_regret_lower95": -174.26936556243567}`
+
+## 20260513T010446Z-methodology-review-for-eval-cli-help-percent-format - passed
+
+- Timestamp: 2026-05-13T01:04:47Z
+- Type: methodology_review
+- Gate: methodology-review-20260513T010304Z-eval-cli-help-percent-format
+- Hypothesis: Methodology review for eval-cli-help-percent-format should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260513T010304Z-eval-cli-help-percent-format passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T010446Z-methodology-review-for-eval-cli-help-percent-format/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260513T010304Z-eval-cli-help-percent-format", "passed": true}`

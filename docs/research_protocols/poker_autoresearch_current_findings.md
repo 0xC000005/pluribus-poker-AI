@@ -1,6 +1,6 @@
 # Poker Autoresearch Current Findings
 
-Date: 2026-05-12
+Date: 2026-05-13
 
 ## Incumbent
 
@@ -264,6 +264,31 @@ GPU training readiness:
   lower95 `-185.978`). Do not scale random public-state/uniform-range targets;
   move target generation toward gameplay-distributed public states and learned
   public-belief/range inputs.
+- The gameplay-distributed search-consistency scaleup used resolver targets
+  generated from restored-history blueprint self-play
+  (`32` train targets, `16` held-out targets) and trained a 100-iteration,
+  2000-traversal, 4x512 checkpoint with `search_target_weight=0.05`. Training
+  completed on CUDA at `avg_iter_seconds=10.134`, `iters_per_hour=355.235`,
+  and `traversals_per_second=197.351`. The candidate memorized its tiny
+  training target set (`mean_l1=0.0348`, `top1_match_rate=0.9375`) but did not
+  generalize on held-out targets (`mean_l1=1.1369`, `top1_match_rate=0.0625`),
+  slightly worse than the restored-history baseline (`mean_l1=1.1247`,
+  `top1_match_rate=0.0625`). Local regret-source comparison was mean-positive
+  but not promotable: `iter_50` `+3.046`, lower95 `-39.915`; `iter_100`/final
+  `+28.691`, lower95 `-22.832` over 3000 duplicate-swapped games. The trained
+  policy head itself was weak against the incumbent regret source
+  (`-61.756`, lower95 `-130.252`) and weaker than its own regret source
+  (`-32.194`, lower95 `-174.269`). Read: naive small-batch resolver-target
+  distillation is overfitting and should not be scaled by weight or horizon
+  alone.
+- Related work reinforces this diagnosis. Deep CFR trains an average strategy
+  network from a broad strategy memory, not a tiny fixed resolver-target set,
+  and SD-CFR argues that avoiding a separate average-strategy network can reduce
+  approximation error. ReBeL and Student of Games both point to the stronger
+  mechanism: train and search over public belief states with value targets from
+  search during self-play, using the same search distribution at training and
+  inference. The next principled mechanism is therefore public-belief/value
+  learning with search-generated PBS targets, not more ad hoc target weighting.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
