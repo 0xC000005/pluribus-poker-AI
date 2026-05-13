@@ -644,16 +644,24 @@ def run_joint_pbs_continuation_probe(
         target_median=target_median,
     )
     policy_probs = _predict_policy(model, holdout, device=resolved_device)
-    policy_holdout = _policy_metrics(
-        policy_probs,
-        holdout.target_probs,
-        holdout.legal_masks,
-    )
-    uniform_policy = _policy_metrics(
-        _legal_uniform_policy(holdout),
-        holdout.target_probs,
-        holdout.legal_masks,
-    )
+    policy_mask = holdout.policy_weights > 0
+    train_policy_label_count = int(np.count_nonzero(train.policy_weights > 0))
+    holdout_policy_label_count = int(np.count_nonzero(policy_mask))
+    policy_gate_active = bool(train_policy_label_count > 0 and holdout_policy_label_count > 0)
+    if policy_gate_active:
+        policy_holdout = _policy_metrics(
+            policy_probs[policy_mask],
+            holdout.target_probs[policy_mask],
+            holdout.legal_masks[policy_mask],
+        )
+        uniform_policy = _policy_metrics(
+            _legal_uniform_policy(holdout)[policy_mask],
+            holdout.target_probs[policy_mask],
+            holdout.legal_masks[policy_mask],
+        )
+    else:
+        policy_holdout = {"mean_l1": 0.0, "mean_kl": 0.0}
+        uniform_policy = {"mean_l1": 0.0, "mean_kl": 0.0}
     best_constant_mae = _best_constant_metric(constant_baselines, "mae")
     best_constant_rmse = _best_constant_metric(constant_baselines, "rmse")
     beats_value_baselines = (
@@ -663,8 +671,12 @@ def run_joint_pbs_continuation_probe(
         and value_holdout["rmse"] <= best_constant_rmse
     )
     beats_policy_baseline = (
-        policy_holdout["mean_l1"] < uniform_policy["mean_l1"]
-        and policy_holdout["mean_kl"] < uniform_policy["mean_kl"]
+        True
+        if not policy_gate_active
+        else (
+            policy_holdout["mean_l1"] < uniform_policy["mean_l1"]
+            and policy_holdout["mean_kl"] < uniform_policy["mean_kl"]
+        )
     )
     if output_checkpoint is not None:
         _save_checkpoint(
@@ -689,7 +701,7 @@ def run_joint_pbs_continuation_probe(
         "passed": bool(beats_value_baselines and beats_policy_baseline),
         "pass_criteria": (
             "joint model must beat zero/train-constant value baselines and "
-            "legal-uniform policy L1/KL on held-out PBS states"
+            "legal-uniform policy L1/KL when policy targets are present"
         ),
         "device": str(resolved_device),
         "train_joint_npz": str(train_joint_npz),
@@ -713,6 +725,9 @@ def run_joint_pbs_continuation_probe(
         "holdout_value_label_count": int(
             holdout.hero_masks.sum() + holdout.villain_masks.sum()
         ),
+        "train_policy_label_count": train_policy_label_count,
+        "holdout_policy_label_count": holdout_policy_label_count,
+        "policy_gate_active": bool(policy_gate_active),
         "target_mean": round(float(target_mean), 8),
         "target_median": round(float(target_median), 8),
         "target_std": round(float(target_std), 8),

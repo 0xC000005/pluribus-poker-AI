@@ -34,6 +34,7 @@ from analyze_dual_cfv_cache_errors import (
 )
 from build_joint_pbs_continuation_targets import build_joint_payload
 from build_public_belief_cache import build_public_belief_cache
+from build_successor_cut_pbs_targets import export_successor_cut_targets
 from eval_joint_pbs_continuation_probe import (
     load_joint_pbs_dataset,
     load_joint_pbs_continuation_checkpoint,
@@ -574,13 +575,13 @@ def test_joint_pbs_continuation_builder_requires_feature_alignment():
         build_joint_payload(policy, misaligned, labels=misaligned.labels, feature_atol=1e-6)
 
 
-def _write_joint_pbs_fixture(path: Path, *, n_states: int) -> None:
+def _write_joint_pbs_fixture(path: Path, *, n_states: int, policy_weight: float = 1.0) -> None:
     features = np.zeros((n_states, N_FEATURES), dtype=np.float32)
     policy_features = features.copy()
     belief = np.zeros((n_states, bvp.BELIEF_DIM), dtype=np.float32)
     legal_masks = np.ones((n_states, N_ACTIONS), dtype=np.float32)
     target_probs = np.zeros((n_states, N_ACTIONS), dtype=np.float32)
-    policy_weights = np.ones(n_states, dtype=np.float32)
+    policy_weights = np.full(n_states, float(policy_weight), dtype=np.float32)
     hero_values = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
     villain_values = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
     hero_masks = np.zeros((n_states, bvp.N_HANDS), dtype=np.float32)
@@ -665,6 +666,29 @@ def test_joint_pbs_continuation_probe_smoke(tmp_path):
     assert policy_pred.shape == (4, N_ACTIONS)
 
 
+def test_joint_pbs_continuation_probe_skips_policy_gate_without_policy_labels(tmp_path):
+    train_path = tmp_path / "train_value_only_joint.npz"
+    holdout_path = tmp_path / "holdout_value_only_joint.npz"
+    _write_joint_pbs_fixture(train_path, n_states=4, policy_weight=0.0)
+    _write_joint_pbs_fixture(holdout_path, n_states=3, policy_weight=0.0)
+
+    metrics = run_joint_pbs_continuation_probe(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        device="cpu",
+        hidden_dim=8,
+        belief_bottleneck_dim=4,
+        epochs=1,
+        batch_size=8,
+        seed=8,
+    )
+
+    assert metrics["policy_gate_active"] is False
+    assert metrics["train_policy_label_count"] == 0
+    assert metrics["holdout_policy_label_count"] == 0
+    assert metrics["policy_beats_uniform"] is True
+
+
 def test_public_belief_cache_builder_skips_cfv_labels(tmp_path):
     checkpoint = tmp_path / "range.pt"
     _write_checkpoint(checkpoint)
@@ -694,6 +718,58 @@ def test_public_belief_cache_builder_skips_cfv_labels(tmp_path):
     assert dataset.values.shape == (1, bvp.N_HANDS)
     assert dataset.value_masks.sum() == 0.0
     assert records[0]["mode"] == "public_belief_only"
+
+
+def test_successor_cut_target_export_writes_joint_pbs_payload(tmp_path):
+    cases_path = tmp_path / "turn_cases.json"
+    cases_path.write_text(
+        json.dumps(
+            {
+                "cases": [
+                    {
+                        "label": "turn-open",
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh", "4s"],
+                        "action_str": "ck/kk/",
+                        "client_pos": 0,
+                        "source": "unit",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    cache_path = tmp_path / "root_cache.npz"
+    root_cache = bvp.PublicBeliefCFVDataset(
+        features=np.zeros((1, N_FEATURES), dtype=np.float32),
+        belief=np.ones((1, 2 * bvp.N_HANDS), dtype=np.float32),
+        values=np.zeros((1, bvp.N_HANDS), dtype=np.float32),
+        value_masks=np.zeros((1, bvp.N_HANDS), dtype=np.float32),
+        labels=("turn-open",),
+    )
+    bvp.save_public_belief_cfv_dataset_cache(
+        root_cache,
+        [{"label": "turn-open"}],
+        cache_path,
+    )
+    output = tmp_path / "successor_cut.npz"
+
+    metrics = export_successor_cut_targets(
+        cases_json=cases_path,
+        cfv_cache=cache_path,
+        output=output,
+        solver_iterations=1,
+        limit=1,
+    )
+    payload = np.load(output, allow_pickle=False)
+
+    assert metrics["mode"] == "successor_cut_joint_pbs_targets"
+    assert metrics["n_targets"] > 0
+    assert payload["features"].shape[1] == N_FEATURES
+    assert payload["belief"].shape[1] == 2 * bvp.N_HANDS
+    assert payload["hero_values"].shape == payload["hero_masks"].shape
+    assert payload["villain_values"].shape == payload["villain_masks"].shape
+    assert np.all(payload["policy_weights"] == 0.0)
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):

@@ -107,3 +107,11 @@ agreement `0.375` and mean/max L1 drift `0.6949/1.0212`, while 25 iterations
 gave agreement `0.25` and drift `1.0949/1.7699`. This suggests the next target
 must train on the successor frontier distribution that the depth-limited solver
 actually consumes, not only on current-decision root PBS states.
+
+The first successor-frontier export/training check built value-only joint PBS
+targets from real cut nodes without a second dual-CFV label pass. A small
+`16`-root train / `8`-root holdout export produced `95/50` successor targets
+with `0` client-policy targets, so the policy gate is inactive by design. The
+Deepset value model failed held-out value baselines (`MAE/RMSE 0.2423/0.3233`
+vs best constant `0.1994/0.2828`). Before scaling this path, inspect successor
+target error by action topology, actor-to-act, reach entropy, and bet size.
