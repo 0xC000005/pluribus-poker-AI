@@ -699,6 +699,18 @@ Label-throughput update:
   from `2` unique cards / `96.5%` max share to `44` / `5.3%`; holdout improved
   from `3` / `88%` to `35` / `6%`. Use the rotated split for the next leaf CFV
   training gate.
+- The rotated `114/50` leaf split produced the first useful resolver-leaf
+  value signal. Two of three single seeds passed the zero/train-constant gate,
+  and the three-checkpoint ensemble passed the stronger checkpoint evaluator:
+  MAE/RMSE `0.3092/0.3948` versus zero `0.3605/0.5031` and best constants
+  `0.3477/0.4474`, with value-sum residual error `0.2614` below target residual
+  scale `0.4990`. CUDA inference was about `11,809x` faster than solver labels
+  per state.
+- Resolver A/B is still not promotable. The leaf-trained ensemble reduced
+  guarded leaf-only mean action L1 drift from `0.7685` to `0.5367`, but
+  leaf-applicable action agreement stayed `0/2`. Keep learned river leaves as a
+  diagnostic path until a broader applicable-case A/B shows stable root-action
+  behavior.
 
 Resolved workflow issue: `rules_parity`.
 
