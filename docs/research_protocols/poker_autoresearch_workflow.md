@@ -284,6 +284,12 @@ and compares it to the solver latencies stored with the labels. Learned leaf
 evaluation must be much cheaper than solving the same public states, otherwise
 it is not a useful PC-limited search primitive.
 
+Use `scripts/eval_hand_cfv_range_robustness.py` before treating a saved CFV
+checkpoint as a search leaf. It perturbs river public-belief ranges, re-solves
+those perturbed states, and compares model CFVs against the new labels. Passing
+the original holdout alone is not enough, because search iterations query value
+functions at ranges different from the blueprint tracker distribution.
+
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case

@@ -1816,3 +1816,14 @@
 - Summary: Added `scripts/benchmark_public_belief_hand_cfv.py` and measured the saved river-only hand-CFV checkpoint on the 32-state river holdout cache. Batched CUDA inference predicted `34,592` valid hand labels in `3.77 ms` mean, about `0.118 ms/state`, while the cached solver labels averaged `1127.5 ms/state`. This validates the compute premise for the next step: plug the learned river CFV evaluator into a bounded turn-search experiment and measure action/EV drift before any live Slumbot promotion.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_benchmark_river_holdout_seed20260513.json
 - Key metrics: `{"inference_mean_ms": 3.771685, "model_ms_per_state": 0.117865, "labels_per_second": 9171497.781, "solver_mean_ms_per_state": 1127.505, "speedup_vs_solver_mean_per_state": 9566.059, "n_states": 32, "n_labels": 34592}`
+
+## 20260513T025428Z-river-hand-cfv-range-robustness - passed
+
+- Timestamp: 2026-05-13T02:54:28Z
+- Type: analysis
+- Gate: manual-public-belief-hand-cfv-range-robustness
+- Hypothesis: The saved river hand-CFV value model should remain usable when queried at ranges different from the blueprint range-tracker distribution, because a search leaf will see solver-iteration ranges.
+- Failure class: range_belief
+- Summary: Added `scripts/eval_hand_cfv_range_robustness.py`, which perturbs cached river public-belief ranges, re-solves those perturbed ranges, and compares the saved model against the new searched CFV labels. On 8 held-out river states, a 50% mix toward uniform legal ranges gave MAE `0.4478` and fully uniform legal ranges gave MAE `0.4790`, close to the original river holdout MAE `0.4549`. This small test does not prove broad range generalization, but it removes the immediate blocker that the model only works at the exact blueprint ranges.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_range_robustness_river8_mix050_seed20260513.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_range_robustness_river8_mix100_seed20260513.json
+- Key metrics: `{"mix_0.5": {"n_evaluated": 8, "n_labels": 8648, "mae": 0.44781216, "rmse": 0.55679146, "solver_mean_ms": 603.484}, "mix_1.0": {"n_evaluated": 8, "n_labels": 8648, "mae": 0.4790497, "rmse": 0.60220341, "solver_mean_ms": 615.466}}`

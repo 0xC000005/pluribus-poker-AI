@@ -369,6 +369,12 @@ GPU training readiness:
   `1127.5 ms/state` average solver-label latency in the cache. Read: use the
   river-only learned CFV component first when testing learned leaf values for
   turn search.
+- A first range-robustness diagnostic did not falsify the river CFV component.
+  On 8 held-out river states, re-solving 50% uniform-mixed ranges gave MAE
+  `0.4478`; fully uniform legal ranges gave MAE `0.4790`. These are close to
+  the original river holdout MAE `0.4549`, although the sample is still small.
+  Read: proceed to a bounded turn-search leaf experiment, but keep range
+  robustness in the promotion gate.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
