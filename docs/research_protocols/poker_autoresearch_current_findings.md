@@ -426,6 +426,13 @@ GPU training readiness:
   `train-mean RMSE=0.5292`). Read: naive data scaling alone is not enough at
   this size; the next method needs a better value target/objective or stronger
   generalization regularizer, judged against the constant gate.
+- Centering CFVs by public-state/player means does not rescue the current MLP.
+  On the `384/128` split, a state-centered residual probe failed `0/3` seeds
+  against a zero-residual baseline (`MAE=0.3569`, `RMSE=0.4483`). Increasing the
+  hidden size from `64` to `256` improved the best seed (`MAE=0.3818`,
+  `RMSE=0.5001`) but still failed. Read: the failure is not only an absolute
+  value offset; the current additive public+hand+belief MLP is not learning
+  holdout hand-residual structure well enough.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

@@ -1915,3 +1915,14 @@
 - Summary: Generated a 512-state river-only gameplay-reachable pool, computed searched CFV labels, stratified it into `384/128`, and reran the constant-hardened dual-player CFV probe. More data improved the feature-baseline deltas and nearly matched zero MAE in the best seed, but the model still failed all three seeds against train-constant baselines. This falsifies naive small-scale data expansion as sufficient. The next useful method change should target generalization/objective quality rather than wiring the checkpoint into search.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river384x128_separate_bottleneck32_summary.json
 - Key metrics: `{"pass_count": 0, "n": 3, "train_size": 384, "holdout_size": 128, "mae_delta_mean": 0.07575278, "rmse_delta_mean": 0.09329874333333334, "zero_mae_delta_mean": -0.034319720000000005, "zero_rmse_delta_mean": 0.013728413333333333, "best_constant_mae_delta_mean": -0.07250506999999999, "best_constant_rmse_delta_mean": -0.09536577666666667, "constant_baselines": {"train_mean": {"mae": 0.42588953, "rmse": 0.52916174}, "train_median": {"mae": 0.40984597, "rmse": 0.54764475}, "zero": {"mae": 0.44803132, "rmse": 0.63825593}}}`
+
+## 20260513T041510Z-centered-dual-cfv-residual-check - failed
+
+- Timestamp: 2026-05-13T04:15:10Z
+- Type: analysis
+- Gate: manual-centered-dual-cfv-residual
+- Hypothesis: The constant-baseline failure may be caused mainly by public-state/player value offsets; after centering each CFV vector by its public-state/player mean, the model should learn hand-specific residual structure better than zero residual.
+- Failure class: range_belief
+- Summary: Ran a cached state-centered residual diagnostic on the `384/128` split. The 64-hidden separate-head bottleneck model failed all three seeds against zero residual. A one-seed 256-hidden capacity check improved MAE/RMSE materially but still failed the zero-residual baseline. This suggests the current additive public+hand+belief MLP is not learning holdout card/range interaction structure reliably enough, not merely missing a scalar state offset.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/dual_cfv_state_centered_residual_probe_river384x128_summary.json
+- Key metrics: `{"centered_residual": {"pass_count": 0, "n": 3, "zero": {"mae": 0.35687731, "rmse": 0.44826709}, "mae_delta_mean": -0.10310238333333334, "rmse_delta_mean": -0.14490302999999996}, "capacity_check_seed20260540": {"hidden64": {"mae": 0.44520755, "rmse": 0.5756155}, "hidden256": {"mae": 0.38179403, "rmse": 0.50014647}}}`
