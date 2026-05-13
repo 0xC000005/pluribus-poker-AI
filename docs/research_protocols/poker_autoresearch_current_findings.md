@@ -52,6 +52,9 @@ Date: 2026-05-13
   averaged `0.2319` L1, but the held-out predictor had negative correlation
   (`r=-0.1752`) and selected worse cuts (`0.6463` L1) than it rejected
   (`0.4237`). Do not hand-tune thresholds on this sparse impact set.
+- Latest synthesis decision: gather denser root-disjoint intervention labels
+  before more value-only training. The next falsifier should test whether an
+  action-impact predictor can beat simple baselines on those labels.
 
 ## Metric Snapshot
 

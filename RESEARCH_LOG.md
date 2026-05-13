@@ -2859,3 +2859,24 @@
 - Summary: Added `scripts/fit_joint_pbs_cut_impact_predictor.py`, which fits a ridge/log predictor from one-cut records using action-shape and root-context features. On real dynamic high-bet records, train impact was much lower than holdout (`0.231860` vs `0.559242` mean L1), but the predictor did not generalize: holdout Pearson was `-0.175171`, top-quintile recall was `0.0`, and its median abstention rule selected worse cuts (`0.646348` mean L1) than it rejected (`0.423745`). This retires the simple structural gate on the current sparse impact dataset. The next useful version needs more intervention labels sampled across root contexts, or a differentiable search-consistency objective, before resolver integration.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_start0_seed20260654.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_cut_impact_predictor_seed20260654.json
 - Key metrics: `{"train_impact_mean_l1": 0.23185976, "holdout_impact_mean_l1": 0.55924223, "predictor_holdout_pearson": -0.17517116, "predictor_top_quintile_recall": 0.0, "selected_count": 14, "rejected_count": 9, "selected_mean_l1": 0.64634772, "rejected_mean_l1": 0.42374478, "promotion": false}`
+## 20260513T195209Z-failure-synthesis-for-root-disjoint-successor-cut-and - failed
+
+- Timestamp: 2026-05-13T19:52:09Z
+- Type: synthesis
+- Gate: failure-synthesis-20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures
+- Hypothesis: Failure synthesis for root-disjoint successor-cut and action-impact failures should identify the causal model and one next falsifier before further expansion.
+- Failure class: eval_invalid
+- Summary: Gate failure-synthesis-20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures failed.
+- Metrics file: autoresearch-session/poker_runs/20260513T195209Z-failure-synthesis-for-root-disjoint-successor-cut-and/metrics.json
+- Key metrics: `{"decision": "pending", "gate": "failure-synthesis-20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures", "passed": false}`
+
+## 20260513T195337Z-root-disjoint-action-impact-synthesis - passed
+
+- Timestamp: 2026-05-13T19:53:37Z
+- Type: synthesis
+- Gate: manual-root-disjoint-action-impact-synthesis
+- Hypothesis: The root-disjoint successor-cut failures should be compressed into a causal model and one next falsifier before starting another experiment family.
+- Failure class: none
+- Summary: Completed the pending synthesis bundle for root-disjoint successor-cut and action-impact failures. Decision is `gather_more_evidence`: value-only labels, one-cut impact, and sparse structural gates all fail on unseen roots, so the next falsifier should collect denser exact-vs-learned intervention labels across public roots before adding another value-only model or threshold.
+- Metrics file: autoresearch-session/poker_reviews/20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures-synthesis/decision.json and docs/research_protocols/poker_review_manifests/20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures-synthesis.json
+- Key metrics: `{"decision": "gather_more_evidence", "synthesis_validation_passed": true, "next_test": "collect root-disjoint intervention labels and test whether an action-impact predictor beats baselines"}`

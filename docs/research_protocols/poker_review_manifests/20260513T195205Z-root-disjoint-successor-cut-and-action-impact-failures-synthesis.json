@@ -1,0 +1,24 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 397,
+      "path": "decision.json",
+      "sha256": "cf3f2267158f362874cf89c3c4090e529c7803afd151b742f1e1cb3db6c23300"
+    },
+    {
+      "bytes": 2529,
+      "path": "synthesis.md",
+      "sha256": "c9c144b083296e8e2ba3f03c9107ee726d06cc290e10587411a6b2be9c86d9ce"
+    }
+  ],
+  "reason": "Root-disjoint value, one-cut behavior, and sparse structural-gate diagnostics all fail; the next falsifier should collect denser intervention labels before adding another value-only model or threshold.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures-synthesis",
+  "review_id": "20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures-synthesis",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.10442",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-13T19:53:20Z"
+}
