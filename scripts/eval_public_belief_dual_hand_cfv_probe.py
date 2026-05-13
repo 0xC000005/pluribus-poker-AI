@@ -87,6 +87,7 @@ class _DualHandCFVProbeNet(nn.Module):
         head_mode: str = "shared",
         belief_bottleneck_dim: int = 0,
         card_encoder: str = "flat",
+        value_factorization: str = "direct",
     ):
         super().__init__()
         self.use_belief = bool(use_belief)
@@ -94,10 +95,13 @@ class _DualHandCFVProbeNet(nn.Module):
             raise ValueError(f"unknown head_mode: {head_mode}")
         if card_encoder not in ("flat", "deepset"):
             raise ValueError(f"unknown card_encoder: {card_encoder}")
+        if value_factorization not in ("direct", "state-player-offset"):
+            raise ValueError(f"unknown value_factorization: {value_factorization}")
         if belief_bottleneck_dim < 0:
             raise ValueError("belief_bottleneck_dim must be non-negative")
         self.head_mode = head_mode
         self.card_encoder = card_encoder
+        self.value_factorization = value_factorization
         if card_encoder == "flat":
             self.public = nn.Linear(N_FEATURES, hidden_dim)
             self.hand = nn.Linear(52, hidden_dim)
@@ -129,6 +133,35 @@ class _DualHandCFVProbeNet(nn.Module):
         self.out = nn.Linear(hidden_dim, 1)
         self.hero_out = nn.Linear(hidden_dim, 1)
         self.villain_out = nn.Linear(hidden_dim, 1)
+        if value_factorization == "state-player-offset":
+            self.offset_body = nn.Sequential(
+                nn.ReLU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU(),
+            )
+            self.offset_out = nn.Linear(hidden_dim, 1)
+            self.offset_hero_out = nn.Linear(hidden_dim, 1)
+            self.offset_villain_out = nn.Linear(hidden_dim, 1)
+        else:
+            self.offset_body = None
+            self.offset_out = None
+            self.offset_hero_out = None
+            self.offset_villain_out = None
+
+    def _select_head(
+        self,
+        hidden: torch.Tensor,
+        player_x: torch.Tensor,
+        *,
+        shared: nn.Linear,
+        hero: nn.Linear,
+        villain: nn.Linear,
+    ) -> torch.Tensor:
+        if self.head_mode == "shared":
+            return shared(hidden).squeeze(-1)
+        hero_value = hero(hidden).squeeze(-1)
+        villain_value = villain(hidden).squeeze(-1)
+        return torch.where(player_x[:, 0] > 0.5, hero_value, villain_value)
 
     def forward(
         self,
@@ -138,27 +171,40 @@ class _DualHandCFVProbeNet(nn.Module):
         belief_x: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if self.card_encoder == "flat":
-            hidden = self.public(public_x) + self.hand(hand_x)
+            state_hidden = self.public(public_x)
+            hand_hidden = self.hand(hand_x)
         else:
             hand_hidden = self.hand(hand_x)
             board_hidden = self.board(public_x[:, 52:104])
-            hidden = (
-                hand_hidden
-                + board_hidden
-                + self.public_misc(public_x[:, 104:])
-                + self.card_interaction(hand_hidden * board_hidden)
-            )
-        hidden = hidden + self.player(player_x)
+            state_hidden = board_hidden + self.public_misc(public_x[:, 104:])
+            hand_hidden = hand_hidden + self.card_interaction(hand_hidden * board_hidden)
+        state_hidden = state_hidden + self.player(player_x)
         if self.belief is not None:
             if belief_x is None:
                 raise ValueError("belief_x is required when use_belief=True")
-            hidden = hidden + self.belief(belief_x)
-        hidden = self.body(hidden)
-        if self.head_mode == "shared":
-            return self.out(hidden).squeeze(-1)
-        hero = self.hero_out(hidden).squeeze(-1)
-        villain = self.villain_out(hidden).squeeze(-1)
-        return torch.where(player_x[:, 0] > 0.5, hero, villain)
+            state_hidden = state_hidden + self.belief(belief_x)
+        hidden = self.body(state_hidden + hand_hidden)
+        value = self._select_head(
+            hidden,
+            player_x,
+            shared=self.out,
+            hero=self.hero_out,
+            villain=self.villain_out,
+        )
+        if self.value_factorization == "state-player-offset":
+            assert self.offset_body is not None
+            assert self.offset_out is not None
+            assert self.offset_hero_out is not None
+            assert self.offset_villain_out is not None
+            offset_hidden = self.offset_body(state_hidden)
+            value = value + self._select_head(
+                offset_hidden,
+                player_x,
+                shared=self.offset_out,
+                hero=self.offset_hero_out,
+                villain=self.offset_villain_out,
+            )
+        return value
 
 
 def _normalize(values: np.ndarray) -> np.ndarray:
@@ -473,6 +519,7 @@ def _fit_model(
     head_mode: str,
     belief_bottleneck_dim: int,
     card_encoder: str,
+    value_factorization: str = "direct",
     loss_kind: str = "mse",
     weight_mode: str = "uniform",
     weight_power: float = 1.0,
@@ -508,6 +555,7 @@ def _fit_model(
         head_mode=head_mode,
         belief_bottleneck_dim=belief_bottleneck_dim if use_belief else 0,
         card_encoder=card_encoder,
+        value_factorization=value_factorization,
     ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     n = int(case_t.numel())
@@ -691,6 +739,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     head_mode: str = "separate",
     belief_bottleneck_dim: int = 32,
     card_encoder: str = "flat",
+    value_factorization: str = "direct",
     label_jobs: int = 1,
     loss_kind: str = "mse",
     weight_mode: str = "uniform",
@@ -742,6 +791,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         head_mode=head_mode,
         belief_bottleneck_dim=belief_bottleneck_dim,
         card_encoder=card_encoder,
+        value_factorization=value_factorization,
         loss_kind=loss_kind,
         weight_mode=weight_mode,
         weight_power=weight_power,
@@ -789,6 +839,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             "head_mode": head_mode,
             "belief_bottleneck_dim": int(belief_bottleneck_dim),
             "card_encoder": card_encoder,
+            "value_factorization": value_factorization,
             "use_belief": True,
             "feature_dim": int(N_FEATURES),
             "belief_dim": int(BELIEF_DIM),
@@ -844,6 +895,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         "head_mode": head_mode,
         "belief_bottleneck_dim": int(belief_bottleneck_dim),
         "card_encoder": card_encoder,
+        "value_factorization": value_factorization,
         "label_jobs": int(label_jobs),
         "loss_kind": loss_kind,
         "weight_mode": weight_mode,
@@ -895,6 +947,7 @@ def load_public_belief_dual_hand_cfv_checkpoint(
         head_mode=str(payload.get("head_mode", "separate")),
         belief_bottleneck_dim=int(payload.get("belief_bottleneck_dim", 0)),
         card_encoder=str(payload.get("card_encoder", "flat")),
+        value_factorization=str(payload.get("value_factorization", "direct")),
     ).to(resolved_device)
     model.load_state_dict(payload["model_state"])
     model.eval()
@@ -1043,7 +1096,8 @@ def predict_public_belief_dual_hand_cfv_model_vectorized(
                     )
                 flat_size = int((state_end - state_start) * (hand_end - hand_start))
                 for player_idx in (0, 1):
-                    hidden = hidden_base + model.player(player_t[player_idx]).view(1, 1, -1)
+                    player_hidden = model.player(player_t[player_idx]).view(1, 1, -1)
+                    hidden = hidden_base + player_hidden
                     body = model.body(hidden.reshape(flat_size, -1))
                     if model.head_mode == "shared":
                         out = model.out(body).squeeze(-1)
@@ -1052,6 +1106,24 @@ def predict_public_belief_dual_hand_cfv_model_vectorized(
                     else:
                         out = model.villain_out(body).squeeze(-1)
                     values = out.reshape(state_end - state_start, hand_end - hand_start)
+                    if model.value_factorization == "state-player-offset":
+                        assert model.offset_body is not None
+                        assert model.offset_out is not None
+                        assert model.offset_hero_out is not None
+                        assert model.offset_villain_out is not None
+                        offset_body = model.offset_body(
+                            (state_base[:, None, :] + player_hidden).reshape(
+                                state_end - state_start,
+                                -1,
+                            )
+                        )
+                        if model.head_mode == "shared":
+                            offset = model.offset_out(offset_body).squeeze(-1)
+                        elif player_idx == 0:
+                            offset = model.offset_hero_out(offset_body).squeeze(-1)
+                        else:
+                            offset = model.offset_villain_out(offset_body).squeeze(-1)
+                        values = values + offset[:, None]
                     values = values * target_std + target_mean
                     values = values * masks_t[
                         player_idx,
@@ -1227,6 +1299,12 @@ def main(argv: list[str] | None = None) -> int:
         default="flat",
         help="Use flat feature projections or learned hand/board card-set interactions.",
     )
+    parser.add_argument(
+        "--value-factorization",
+        choices=("direct", "state-player-offset"),
+        default="direct",
+        help="Use direct CFV output or add a learned state/player offset plus hand residual.",
+    )
     parser.add_argument("--loss-kind", choices=("mse", "smooth-l1"), default="mse")
     parser.add_argument(
         "--weight-mode",
@@ -1298,6 +1376,7 @@ def main(argv: list[str] | None = None) -> int:
         head_mode=args.head_mode,
         belief_bottleneck_dim=0,
         card_encoder=args.card_encoder,
+        value_factorization=args.value_factorization,
         loss_kind=args.loss_kind,
         weight_mode=args.weight_mode,
         weight_power=args.weight_power,
@@ -1320,6 +1399,7 @@ def main(argv: list[str] | None = None) -> int:
         head_mode=args.head_mode,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
         card_encoder=args.card_encoder,
+        value_factorization=args.value_factorization,
         loss_kind=args.loss_kind,
         weight_mode=args.weight_mode,
         weight_power=args.weight_power,
@@ -1400,6 +1480,7 @@ def main(argv: list[str] | None = None) -> int:
         "head_mode": args.head_mode,
         "belief_bottleneck_dim": int(args.belief_bottleneck_dim),
         "card_encoder": args.card_encoder,
+        "value_factorization": args.value_factorization,
         "label_jobs": int(args.label_jobs),
         "loss_kind": args.loss_kind,
         "weight_mode": args.weight_mode,

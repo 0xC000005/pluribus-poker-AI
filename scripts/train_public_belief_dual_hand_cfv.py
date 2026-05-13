@@ -57,6 +57,11 @@ def main(argv: list[str] | None = None) -> int:
         choices=("flat", "deepset"),
         default="flat",
     )
+    parser.add_argument(
+        "--value-factorization",
+        choices=("direct", "state-player-offset"),
+        default="direct",
+    )
     parser.add_argument("--label-jobs", type=int, default=1)
     parser.add_argument("--loss-kind", choices=("mse", "smooth-l1"), default="mse")
     parser.add_argument(
@@ -100,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         head_mode=args.head_mode,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
         card_encoder=args.card_encoder,
+        value_factorization=args.value_factorization,
         label_jobs=args.label_jobs,
         loss_kind=args.loss_kind,
         weight_mode=args.weight_mode,

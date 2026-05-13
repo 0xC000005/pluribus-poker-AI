@@ -372,8 +372,14 @@ scaled `32/16` root-disjoint cache failed value baselines and resolver drift
 gates. The first calibration falsifier, opponent-reach-weighted Smooth L1,
 worsened supervised MAE/RMSE and failed both projected and unprojected leaf
 A/B. This keeps the search-boundary value-network path alive, but rejects
-simple reach weighting as the missing mechanism. The next continuation target
-should change the learned target, not the training knob: factor callback values
-into public-state offsets plus hand residuals, predict search-consistency
-residuals against the exact resolver, or learn uncertainty/mixing only if it is
-trained against root action drift on root-disjoint callback states.
+simple reach weighting as the missing mechanism.
+
+A learned state/player-offset plus hand-residual head then tested the simplest
+target-factorization idea without leaking label means into inference. It also
+failed: supervised MAE/RMSE worsened versus the direct MSE checkpoint and
+unprojected leaf A/B drift rose to `0.6627`. The next continuation target
+should therefore change the training target or search coupling, not another
+direct CFV head variant: predict search-consistency residuals against the exact
+resolver, train uncertainty/mixing against root action drift on root-disjoint
+callback states, or collect paired exact-vs-learned callback interventions so
+the model learns which value errors actually matter to the root policy.

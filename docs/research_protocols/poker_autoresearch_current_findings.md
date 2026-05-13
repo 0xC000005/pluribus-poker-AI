@@ -36,6 +36,9 @@ Date: 2026-05-13
 - The reach-weighted Smooth L1 callback-state DCVN test failed. It did not beat
   zero or train-constant CFV baselines and failed both projected and unprojected
   learned-leaf resolver A/B checks, so it is not promotable.
+- A learned state/player-offset plus hand-residual factorization also failed on
+  the same fixed caches. This makes the immediate blocker target design and
+  search-consistency, not another simple loss or head variant.
 
 ## Metric Snapshot
 
@@ -112,10 +115,14 @@ Callback-state DCVN calibration:
   train-constant `0.3520/0.4489`. Unprojected leaf A/B reached `0.75`
   agreement but drift was `0.5727`; projected agreement was `0.625` with
   drift `0.6282`.
+- The learned offset-factorized head also failed: holdout MAE/RMSE
+  `0.3962/0.5800`, unprojected leaf agreement `0.625`, and mean L1 drift
+  `0.6627`. The projected variant was skipped because both supervised and
+  unprojected behavioral evidence already failed.
 - Current read: the search-boundary DCVN interface is still the principled
   direction, but the learned callback-state values are not calibrated enough
   for hard leaf substitution. More model-size or Slumbot runs are blocked until
-  the value target/factorization issue is explained.
+  a target/search-consistency issue is explained.
 
 Slumbot diagnostic instrumentation:
 
