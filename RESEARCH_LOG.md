@@ -1684,3 +1684,25 @@
 - Summary: Gate methodology-review-20260513T010304Z-eval-cli-help-percent-format passed.
 - Metrics file: autoresearch-session/poker_runs/20260513T010446Z-methodology-review-for-eval-cli-help-percent-format/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260513T010304Z-eval-cli-help-percent-format", "passed": true}`
+
+## 20260513T010724Z-methodology-review-for-public-belief-value-learning-should - passed
+
+- Timestamp: 2026-05-13T01:07:24Z
+- Type: methodology_review
+- Gate: methodology-review-20260513T010616Z-public-belief-value-learning
+- Hypothesis: Methodology review for public-belief-value-learning should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260513T010616Z-public-belief-value-learning passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T010724Z-methodology-review-for-public-belief-value-learning-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260513T010616Z-public-belief-value-learning", "passed": true}`
+
+## 20260513T012155Z-public-belief-probe-128x64 - passed
+
+- Timestamp: 2026-05-13T01:21:55Z
+- Type: analysis
+- Gate: manual-public-belief-probe
+- Hypothesis: Raw learned public-belief range vectors should improve held-out search-target prediction versus the existing feature vector alone before range inputs are wired into the main trainer.
+- Failure class: range_belief
+- Summary: The tiny 32/16 split still overfit, but the larger 128/64 gameplay-distributed split showed a small mixed-positive signal. L1 improved in all three probe seeds; KL improved in two of three. Treat this as diagnostic support for a larger public-belief value-target probe, not promotion evidence.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_probe_128x64_summary.json
+- Key metrics: `{"pass_count": 2, "n": 3, "l1_delta_mean": 0.032608, "kl_delta_mean": 0.002178333333333334, "l1_deltas": [0.011446, 0.040372, 0.046006], "kl_deltas": [-0.033725, 0.008247, 0.032013]}`

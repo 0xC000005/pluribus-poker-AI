@@ -289,6 +289,18 @@ GPU training readiness:
   search during self-play, using the same search distribution at training and
   inference. The next principled mechanism is therefore public-belief/value
   learning with search-generated PBS targets, not more ad hoc target weighting.
+- A public-belief probe now exists for this mechanism. It appends raw learned
+  hero/villain range distributions over all 1326 card combos to the existing
+  feature vector and compares a supervised feature-only probe to a
+  feature-plus-belief probe. On the tiny `32/16` restored-history split, belief
+  inputs still overfit and worsened held-out fit (`mean_l1` `1.2586` vs
+  `1.1719`). On a larger `128/64` gameplay-distributed split, the belief probe
+  gave a small but not promotion-grade signal: L1 improved in all three probe
+  seeds (`+0.0114`, `+0.0404`, `+0.0460`), KL improved in two of three
+  (`-0.0337`, `+0.0082`, `+0.0320`), and the strict pass criterion passed in
+  `2/3` seeds. Read: raw public belief is useful enough to keep investigating,
+  but the effect is too small and noisy to wire into mainline Deep CFR without a
+  real value-target probe or larger search distribution.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

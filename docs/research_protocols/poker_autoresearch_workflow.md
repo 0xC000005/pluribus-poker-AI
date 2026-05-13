@@ -245,6 +245,12 @@ The solver, training masks, CUDA masks, Slumbot adapter, and target builder must
 share the same 9-action legality contract; search must not clamp an illegal
 fractional bucket into a different legal raise size.
 
+Use `scripts/eval_public_belief_probe.py` before wiring range inputs into the
+main trainer. The probe compares feature-only target prediction to raw
+hero/villain range-vector prediction on held-out gameplay-distributed targets.
+It is diagnostic only: passing means the belief representation is worth a
+larger value-target experiment, not that a checkpoint is promotable.
+
 ## Implemented Automation
 
 The executable runner is `scripts/poker_autoresearch.py`. It automates
