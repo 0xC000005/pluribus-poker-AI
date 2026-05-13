@@ -92,5 +92,9 @@ before any Slumbot spend.
 The first diagnostic resolver A/B did execute, but it did not clear the
 behavior bar: replacing turn terminal equity leaves with joint-PBS values on
 8 holdout states produced action agreement `0.375` and mean action L1 drift
-`0.6281`. The next mechanism should either train leaf-compatible continuation
-targets or compare against a stronger exact reference before any live play.
+`0.6281`. Repeating the same 8-state A/B at 25 solver iterations kept action
+agreement at `0.375` and worsened mean/max action L1 drift to `1.1618/1.5874`.
+This falsifies direct terminal-leaf substitution for the current checkpoint.
+The next mechanism should either train leaf-compatible continuation targets,
+add a safer depth-limited cut interface, or compare against a stronger exact
+reference before any live play.

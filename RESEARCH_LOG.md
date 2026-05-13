@@ -2302,6 +2302,17 @@
 - Summary: Added `scripts/eval_joint_pbs_resolver_leaf_ab.py`, a diagnostic-only fixed-state A/B that uses the existing CPU `showdown_leaf_fn` hook to replace turn solver terminal equity leaves with joint-PBS checkpoint predictions. A one-case, one-iteration smoke passed and replaced 59 showdown leaves. The 8-case repeat-holdout run applied learned leaves in every evaluated case, but behavior drift was large: action agreement was only `0.375`, mean/max action L1 drift was `0.6281/1.0646`, and several root actions flipped between check/call and all-in. Treat this as a falsification of direct terminal-leaf substitution, not of the supervised joint PBS representation. Next work should train leaf-compatible continuation targets, add a safer depth-limited cut interface, or compare against a stronger exact reference before any gameplay wiring.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_leaf_ab_smoke_seed20260618.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_leaf_ab_repeat8_seed20260618.json
 - Key metrics: `{"smoke": {"n_cases": 1, "n_leaf_applied": 1, "mean_action_l1_drift": 0.0}, "repeat8": {"n_cases": 8, "n_leaf_applied": 8, "action_agreement_rate": 0.375, "mean_action_l1_drift": 0.62813421, "max_action_l1_drift": 1.06464286, "solver_iterations": 5}}`
+
+## 20260513T094146Z-joint-pbs-resolver-leaf-ab-iter25 - failed
+
+- Timestamp: 2026-05-13T09:41:46Z
+- Type: experiment
+- Gate: manual-joint-pbs-resolver-leaf-ab-iter25
+- Hypothesis: The direct joint-PBS terminal-leaf substitution failure might be caused by shallow 5-iteration resolver noise rather than objective/interface mismatch.
+- Failure class: search_integration
+- Summary: Repeated the same 8-case repeat-holdout resolver A/B with `25` CPU solver iterations. Learned leaves were applied in all 8 cases, but action agreement stayed at `0.375` and mean/max root action L1 drift worsened to `1.1618/1.5874`. Several baseline check/call roots still flipped to all-in, and learned-leaf prediction added substantial per-case latency because many terminal leaves were queried. This strengthens the conclusion that the current checkpoint should not be wired as a direct terminal equity replacement; the next step needs a depth-limited cut-node target or a leaf-compatible label objective.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_leaf_ab_repeat8_iter25_seed20260618.json
+- Key metrics: `{"n_cases": 8, "n_leaf_applied": 8, "action_agreement_rate": 0.375, "mean_action_l1_drift": 1.16183132, "max_action_l1_drift": 1.5874432, "solver_iterations": 25, "device": "cuda"}`
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z
