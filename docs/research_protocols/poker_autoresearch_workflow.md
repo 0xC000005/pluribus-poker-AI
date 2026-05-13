@@ -251,6 +251,14 @@ hero/villain range-vector prediction on held-out gameplay-distributed targets.
 It is diagnostic only: passing means the belief representation is worth a
 larger value-target experiment, not that a checkpoint is promotable.
 
+Use `scripts/eval_public_belief_value_probe.py` for the next stricter
+representation check. It computes searched scalar hero-EV targets from solved
+turn/river public states, then compares feature-only value regression against
+feature-plus-public-belief regression. Use `--train-value-cache` and
+`--holdout-value-cache` for repeated probe seeds so the expensive CPU solver
+labels are reused. This probe is also diagnostic only; promotion still requires
+the falsification ladder and Slumbot confirmation.
+
 For blueprint rollout targets, set `--blueprint-target-streets` deliberately.
 The default `2,3` collects desired target streets round-robin so target files
 are not accidentally all turn. Use `3` for river-only smoke tests and inspect

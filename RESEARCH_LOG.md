@@ -1728,3 +1728,14 @@
 - Summary: On a corrected `64/32` gameplay-distributed target split with round-robin turn/river sampling, the feature-plus-belief probe passed the strict criterion in all three seeds. This strengthens the public-belief/value-learning direction, but it is still a supervised diagnostic over small resolver-target sets, not a promotable main trainer change.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_probe_mixed64x32_summary.json
 - Key metrics: `{"pass_count": 3, "n": 3, "l1_delta_mean": 0.07975366666666667, "kl_delta_mean": 0.014316999999999998, "l1_deltas": [0.030366, 0.079368, 0.129527], "kl_deltas": [0.016533, 0.022054, 0.004364], "top1_deltas": [0.09375, 0.1875, 0.1875]}`
+
+## 20260513T015250Z-public-belief-value-probe-mixed64x32 - failed
+
+- Timestamp: 2026-05-13T01:52:50Z
+- Type: analysis
+- Gate: manual-public-belief-value-probe-mixed-streets
+- Hypothesis: Raw learned public-belief range vectors should improve held-out prediction of searched scalar hero EV targets versus the existing feature vector alone.
+- Failure class: range_belief
+- Summary: Added a standalone scalar EV probe and cache path, then ran it on the corrected `64/32` mixed turn/river target split. The probe failed in all three seeds: feature-plus-belief overfit the small high-dimensional value-label set and worsened held-out MAE/RMSE versus feature-only. This falsifies wiring raw 2652-dim belief directly into a scalar value head from this small target set; the next belief step needs either more gameplay-distributed value targets or a learned/compressed belief encoder before mainline trainer changes.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_value_probe_mixed64x32_summary.json
+- Key metrics: `{"pass_count": 0, "n": 3, "mae_delta_mean": -0.24931793666666668, "rmse_delta_mean": -0.32979592333333335, "mae_deltas": [-0.32166831, -0.06279998, -0.36348552], "rmse_deltas": [-0.44069192, -0.08180414, -0.46689171], "base_holdout_mae_mean": 0.3769828233333334, "belief_holdout_mae_mean": 0.62630076}`

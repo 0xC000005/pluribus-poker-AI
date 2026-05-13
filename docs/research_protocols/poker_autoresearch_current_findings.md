@@ -315,6 +315,17 @@ GPU training readiness:
   improved by `+0.0938`, `+0.1875`, and `+0.1875`. Read: learned public belief
   is the next principled model input to test, preferably through a PBS value
   target pathway rather than another small action-policy distillation patch.
+- A first scalar public-belief value probe did not confirm that direction as a
+  direct raw-input value head. The new probe computes searched hero EV targets
+  from solved turn/river subgames, compares feature-only regression to
+  feature-plus-raw-belief regression, and caches the expensive EV labels for
+  repeated seeds. On the same corrected `64/32` mixed-street split, raw belief
+  failed `0/3` seeds and worsened held-out MAE/RMSE: mean MAE delta `-0.2493`
+  and mean RMSE delta `-0.3298` in stack-scaled units. Read: do not wire the
+  raw 2652-dimensional public-belief vector directly into the main scalar
+  value path from this small target set. Either scale gameplay-distributed
+  value targets first or test a learned/compressed belief encoder as a bounded
+  representation probe.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
