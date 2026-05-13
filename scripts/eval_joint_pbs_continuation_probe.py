@@ -186,7 +186,7 @@ def load_joint_pbs_dataset(path: str | Path) -> JointPBSDataset:
 def _standardize_joint_pair(
     train: JointPBSDataset,
     holdout: JointPBSDataset,
-) -> tuple[JointPBSDataset, JointPBSDataset]:
+) -> tuple[JointPBSDataset, JointPBSDataset, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     public_mean, public_std = _standardization_stats(train.features)
     belief_mean, belief_std = _standardization_stats(train.belief)
     train_std = JointPBSDataset(
@@ -215,7 +215,7 @@ def _standardize_joint_pair(
         villain_masks=holdout.villain_masks,
         labels=holdout.labels,
     )
-    return train_std, holdout_std
+    return train_std, holdout_std, public_mean, public_std, belief_mean, belief_std
 
 
 def _pair_indices(dataset: JointPBSDataset) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -395,6 +395,160 @@ def _predict_policy(
     return _normalize_targets(probs, dataset.legal_masks)
 
 
+def _save_checkpoint(
+    *,
+    model: _JointPBSContinuationNet,
+    path: str | Path,
+    hidden_dim: int,
+    belief_bottleneck_dim: int,
+    card_encoder: str,
+    public_mean: np.ndarray,
+    public_std: np.ndarray,
+    belief_mean: np.ndarray,
+    belief_std: np.ndarray,
+    target_mean: float,
+    target_median: float,
+    target_std: float,
+    train_joint_npz: str | Path,
+    holdout_joint_npz: str | Path,
+    seed: int,
+) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "mode": "joint_pbs_continuation_checkpoint",
+            "model_state": {
+                key: value.detach().cpu()
+                for key, value in model.state_dict().items()
+            },
+            "hidden_dim": int(hidden_dim),
+            "belief_bottleneck_dim": int(belief_bottleneck_dim),
+            "card_encoder": card_encoder,
+            "feature_dim": int(N_FEATURES),
+            "belief_dim": int(BELIEF_DIM),
+            "hand_feature_dim": 52,
+            "player_feature_dim": 2,
+            "target_dim": int(N_HANDS),
+            "public_mean": public_mean,
+            "public_std": public_std,
+            "belief_mean": belief_mean,
+            "belief_std": belief_std,
+            "target_mean": float(target_mean),
+            "target_median": float(target_median),
+            "target_std": float(target_std),
+            "train_joint_npz": str(train_joint_npz),
+            "holdout_joint_npz": str(holdout_joint_npz),
+            "seed": int(seed),
+        },
+        output_path,
+    )
+
+
+def load_joint_pbs_continuation_checkpoint(
+    checkpoint: str | Path,
+    device: str | torch.device = "auto",
+) -> tuple[_JointPBSContinuationNet, dict[str, Any]]:
+    resolved_device = _resolve_device(device)
+    payload = torch.load(checkpoint, map_location=resolved_device, weights_only=False)
+    if payload.get("mode") != "joint_pbs_continuation_checkpoint":
+        raise ValueError(f"{checkpoint} is not a joint PBS continuation checkpoint")
+    model = _JointPBSContinuationNet(
+        int(payload["hidden_dim"]),
+        belief_bottleneck_dim=int(payload.get("belief_bottleneck_dim", 0)),
+        card_encoder=str(payload.get("card_encoder", "deepset")),
+    ).to(resolved_device)
+    model.load_state_dict(payload["model_state"])
+    model.eval()
+    return model, payload
+
+
+def predict_joint_pbs_cfv_model(
+    model: _JointPBSContinuationNet,
+    payload: dict[str, Any],
+    features: np.ndarray,
+    belief: np.ndarray,
+    hero_masks: np.ndarray,
+    villain_masks: np.ndarray,
+    *,
+    device: str | torch.device = "auto",
+    batch_size: int = 8192,
+) -> np.ndarray:
+    resolved_device = _resolve_device(device)
+    model = model.to(resolved_device)
+    features_std = _apply_standardization(
+        np.asarray(features, dtype=np.float32),
+        payload["public_mean"],
+        payload["public_std"],
+    )
+    belief_std = _apply_standardization(
+        np.asarray(belief, dtype=np.float32),
+        payload["belief_mean"],
+        payload["belief_std"],
+    )
+    n_states = int(features_std.shape[0])
+    dataset = JointPBSDataset(
+        features=features_std,
+        policy_features=features_std,
+        belief=belief_std,
+        legal_masks=np.ones((n_states, N_ACTIONS), dtype=np.float32),
+        target_probs=np.ones((n_states, N_ACTIONS), dtype=np.float32) / float(N_ACTIONS),
+        policy_weights=np.ones(n_states, dtype=np.float32),
+        hero_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        villain_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        hero_masks=np.asarray(hero_masks, dtype=np.float32),
+        villain_masks=np.asarray(villain_masks, dtype=np.float32),
+        labels=tuple(f"predict-{idx}" for idx in range(n_states)),
+    )
+    return _predict_values(
+        model,
+        dataset,
+        target_mean=float(payload["target_mean"]),
+        target_std=float(payload["target_std"]),
+        batch_size=batch_size,
+        device=resolved_device,
+    )
+
+
+def predict_joint_pbs_policy_model(
+    model: _JointPBSContinuationNet,
+    payload: dict[str, Any],
+    features: np.ndarray,
+    policy_features: np.ndarray,
+    belief: np.ndarray,
+    legal_masks: np.ndarray,
+    *,
+    device: str | torch.device = "auto",
+) -> np.ndarray:
+    resolved_device = _resolve_device(device)
+    model = model.to(resolved_device)
+    features_std = _apply_standardization(
+        np.asarray(features, dtype=np.float32),
+        payload["public_mean"],
+        payload["public_std"],
+    )
+    belief_std = _apply_standardization(
+        np.asarray(belief, dtype=np.float32),
+        payload["belief_mean"],
+        payload["belief_std"],
+    )
+    n_states = int(features_std.shape[0])
+    dataset = JointPBSDataset(
+        features=features_std,
+        policy_features=np.asarray(policy_features, dtype=np.float32),
+        belief=belief_std,
+        legal_masks=np.asarray(legal_masks, dtype=np.float32),
+        target_probs=np.ones((n_states, N_ACTIONS), dtype=np.float32) / float(N_ACTIONS),
+        policy_weights=np.ones(n_states, dtype=np.float32),
+        hero_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        villain_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        hero_masks=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        villain_masks=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        labels=tuple(f"policy-{idx}" for idx in range(n_states)),
+    )
+    return _predict_policy(model, dataset, device=resolved_device)
+
+
 def _value_metrics(pred: np.ndarray, dataset: JointPBSDataset) -> dict[str, float]:
     target = np.stack([dataset.hero_values, dataset.villain_values], axis=0)
     mask = np.stack([dataset.hero_masks, dataset.villain_masks], axis=0)
@@ -452,11 +606,14 @@ def run_joint_pbs_continuation_probe(
     lr: float = 1e-3,
     weight_decay: float = 1e-3,
     seed: int = 0,
+    output_checkpoint: str | Path | None = None,
 ) -> dict[str, Any]:
     resolved_device = _resolve_device(device)
     train_raw = load_joint_pbs_dataset(train_joint_npz)
     holdout_raw = load_joint_pbs_dataset(holdout_joint_npz)
-    train, holdout = _standardize_joint_pair(train_raw, holdout_raw)
+    train, holdout, public_mean, public_std, belief_mean, belief_std = (
+        _standardize_joint_pair(train_raw, holdout_raw)
+    )
     target_mean, target_median, target_std = _target_stats(train)
     model = _fit_joint_model(
         train,
@@ -509,6 +666,24 @@ def run_joint_pbs_continuation_probe(
         policy_holdout["mean_l1"] < uniform_policy["mean_l1"]
         and policy_holdout["mean_kl"] < uniform_policy["mean_kl"]
     )
+    if output_checkpoint is not None:
+        _save_checkpoint(
+            model=model,
+            path=output_checkpoint,
+            hidden_dim=hidden_dim,
+            belief_bottleneck_dim=belief_bottleneck_dim,
+            card_encoder=card_encoder,
+            public_mean=public_mean,
+            public_std=public_std,
+            belief_mean=belief_mean,
+            belief_std=belief_std,
+            target_mean=target_mean,
+            target_median=target_median,
+            target_std=target_std,
+            train_joint_npz=train_joint_npz,
+            holdout_joint_npz=holdout_joint_npz,
+            seed=seed,
+        )
     return {
         "mode": "joint_pbs_continuation_probe",
         "passed": bool(beats_value_baselines and beats_policy_baseline),
@@ -527,6 +702,7 @@ def run_joint_pbs_continuation_probe(
         "lr": float(lr),
         "weight_decay": float(weight_decay),
         "seed": int(seed),
+        "checkpoint": str(output_checkpoint) if output_checkpoint is not None else None,
         "train_size": int(train.features.shape[0]),
         "holdout_size": int(holdout.features.shape[0]),
         "feature_dim": int(N_FEATURES),
@@ -570,6 +746,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--output-checkpoint")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -585,6 +762,7 @@ def main(argv: list[str] | None = None) -> int:
         lr=args.lr,
         weight_decay=args.weight_decay,
         seed=args.seed,
+        output_checkpoint=args.output_checkpoint,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

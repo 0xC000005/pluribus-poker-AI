@@ -35,6 +35,9 @@ from analyze_dual_cfv_cache_errors import (
 from build_joint_pbs_continuation_targets import build_joint_payload
 from eval_joint_pbs_continuation_probe import (
     load_joint_pbs_dataset,
+    load_joint_pbs_continuation_checkpoint,
+    predict_joint_pbs_cfv_model,
+    predict_joint_pbs_policy_model,
     run_joint_pbs_continuation_probe,
 )
 from solver import Node
@@ -613,6 +616,7 @@ def _write_joint_pbs_fixture(path: Path, *, n_states: int) -> None:
 def test_joint_pbs_continuation_probe_smoke(tmp_path):
     train_path = tmp_path / "train_joint.npz"
     holdout_path = tmp_path / "holdout_joint.npz"
+    checkpoint_path = tmp_path / "joint.pt"
     _write_joint_pbs_fixture(train_path, n_states=4)
     _write_joint_pbs_fixture(holdout_path, n_states=3)
 
@@ -626,14 +630,38 @@ def test_joint_pbs_continuation_probe_smoke(tmp_path):
         epochs=1,
         batch_size=8,
         seed=7,
+        output_checkpoint=checkpoint_path,
+    )
+    model, payload = load_joint_pbs_continuation_checkpoint(checkpoint_path, device="cpu")
+    value_pred = predict_joint_pbs_cfv_model(
+        model,
+        payload,
+        loaded.features,
+        loaded.belief,
+        loaded.hero_masks,
+        loaded.villain_masks,
+        device="cpu",
+        batch_size=8,
+    )
+    policy_pred = predict_joint_pbs_policy_model(
+        model,
+        payload,
+        loaded.features,
+        loaded.policy_features,
+        loaded.belief,
+        loaded.legal_masks,
+        device="cpu",
     )
 
     assert loaded.features[:, :52].sum() == 0.0
     assert loaded.policy_features[:, :52].sum() == 8.0
     assert metrics["mode"] == "joint_pbs_continuation_probe"
+    assert metrics["checkpoint"] == str(checkpoint_path)
     assert metrics["train_value_label_count"] == 32
     assert set(metrics["constant_baselines"]) == {"zero", "train_mean", "train_median"}
     assert "policy_uniform_baseline" in metrics
+    assert value_pred.shape == (2, 4, bvp.N_HANDS)
+    assert policy_pred.shape == (4, N_ACTIONS)
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):

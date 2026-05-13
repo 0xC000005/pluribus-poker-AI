@@ -79,6 +79,8 @@ baselines (`MAE 0.2717` vs best constant `0.2500`), and a flat value-only probe
 failed harder (`MAE 0.3475`). The Deepset value-only sanity passed (`MAE 0.2295`,
 `RMSE 0.3018`), and the Deepset joint probe passed both gates (`MAE 0.2109`,
 `RMSE 0.2870`, policy KL `0.5719` vs legal-uniform `0.6881`).
+A checkpointed rerun also passed (`joint_pbs_turn128x64_deepset_seed20260613.pt`),
+so the next step can consume a durable artifact rather than an in-memory probe.
 
 This is not gameplay-ready. Treat it as evidence to run an independent
 methodology review and fixed resolver A/B with the joint continuation model
