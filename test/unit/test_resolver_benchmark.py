@@ -24,6 +24,7 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
     _global_board_mask,
     _local_ranges_from_belief,
 )
+from eval_joint_pbs_resolver_cut_ab import _successor_cut_node_indices  # noqa: E402
 from build_learned_river_leaf_cases import (  # noqa: E402
     _rotated_cards,
     _summarize_leaf_records,
@@ -145,6 +146,95 @@ def test_street_solver_showdown_leaf_callback_rejects_torch_backend():
 
     with pytest.raises(ValueError, match="CPU CFR backend"):
         solver.solve(n_iterations=1, backend="torch-cpu", showdown_leaf_fn=lambda **_: None)
+
+
+def test_street_solver_cut_node_callback_stops_descendant_updates():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    cut_node = solver.root.children[1]
+    cut_idx = solver._tree["all_nodes"].index(cut_node)
+    descendant = cut_node.children[1]
+    descendant_idx = solver._tree["all_nodes"].index(descendant)
+    calls = []
+
+    def zero_cut(**kwargs):
+        calls.append(kwargs["cut_indices"].copy())
+        n_cut = kwargs["cut_indices"].shape[0]
+        n_hands = kwargs["hero_reach"].shape[1]
+        return (
+            np.zeros((n_cut, n_hands), dtype=np.float32),
+            np.zeros((n_cut, n_hands), dtype=np.float32),
+        )
+
+    solver.solve(n_iterations=2, cut_node_indices=[cut_idx], cut_node_fn=zero_cut)
+
+    assert len(calls) == 2
+    assert calls[0].tolist() == [cut_idx]
+    np.testing.assert_allclose(solver._strategy_sum[cut_idx], 0.0)
+    np.testing.assert_allclose(solver._strategy_sum[descendant_idx], 0.0)
+
+
+def test_street_solver_cut_node_callback_rejects_bad_shape():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    cut_idx = solver._tree["all_nodes"].index(solver.root.children[1])
+
+    def bad_cut(**kwargs):
+        n_hands = kwargs["hero_reach"].shape[1]
+        return (
+            np.zeros((2, n_hands), dtype=np.float32),
+            np.zeros((1, n_hands), dtype=np.float32),
+        )
+
+    with pytest.raises(ValueError, match="cut_node_fn hero values shape"):
+        solver.solve(n_iterations=1, cut_node_indices=[cut_idx], cut_node_fn=bad_cut)
+
+
+def test_street_solver_cut_node_callback_rejects_torch_backend():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    cut_idx = solver._tree["all_nodes"].index(solver.root.children[1])
+
+    with pytest.raises(ValueError, match="CPU CFR backend"):
+        solver.solve(
+            n_iterations=1,
+            backend="torch-cpu",
+            cut_node_indices=[cut_idx],
+            cut_node_fn=lambda **_: None,
+        )
+
+
+def test_successor_cut_node_indices_only_returns_nonterminal_children():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    cut_indices = _successor_cut_node_indices(solver, solver.root)
+
+    assert cut_indices
+    assert all(not solver._tree["all_nodes"][idx].is_terminal for idx in cut_indices)
+    terminal_children = [
+        child for child in solver.root.children.values() if child.is_terminal
+    ]
+    assert all(solver._tree["all_nodes"].index(child) not in cut_indices for child in terminal_children)
 
 
 def test_learned_leaf_action_path_reconstructs_turn_sequence():

@@ -2313,6 +2313,17 @@
 - Summary: Repeated the same 8-case repeat-holdout resolver A/B with `25` CPU solver iterations. Learned leaves were applied in all 8 cases, but action agreement stayed at `0.375` and mean/max root action L1 drift worsened to `1.1618/1.5874`. Several baseline check/call roots still flipped to all-in, and learned-leaf prediction added substantial per-case latency because many terminal leaves were queried. This strengthens the conclusion that the current checkpoint should not be wired as a direct terminal equity replacement; the next step needs a depth-limited cut-node target or a leaf-compatible label objective.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_leaf_ab_repeat8_iter25_seed20260618.json
 - Key metrics: `{"n_cases": 8, "n_leaf_applied": 8, "action_agreement_rate": 0.375, "mean_action_l1_drift": 1.16183132, "max_action_l1_drift": 1.5874432, "solver_iterations": 25, "device": "cuda"}`
+
+## 20260513T095426Z-joint-pbs-successor-cut-ab - failed
+
+- Timestamp: 2026-05-13T09:54:26Z
+- Type: experiment
+- Gate: manual-joint-pbs-successor-cut-ab
+- Hypothesis: A safer depth-limited interface that replaces immediate non-terminal successor nodes, rather than terminal showdown leaves, should reduce root strategy drift when consuming the joint PBS continuation checkpoint.
+- Failure class: search_integration
+- Summary: Added a CPU CFR cut-node hook and `scripts/eval_joint_pbs_resolver_cut_ab.py`. The hook treats selected decision nodes as a depth-limit frontier, blocks descendant reach/regret updates, and requires the callback to return counterfactual numerator values with solver-shaped `(n_cut, n_hands)` arrays. Unit tests cover descendant blocking, shape validation, torch-backend rejection, and successor frontier selection. A real one-case smoke executed with CUDA model prediction. On the same 8 repeat-holdout cases, the successor cut A/B did not improve behavior: 5 iterations produced action agreement `0.375` and mean/max L1 drift `0.6949/1.0212`; 25 iterations worsened to agreement `0.25` and drift `1.0949/1.7699`. This indicates the interface is usable but the current checkpoint is off-distribution for immediate successor frontier states. The next target should export and label the actual successor-cut PBS distribution, including opponent-to-act frontier states, before retrying depth-limited search.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_successor_cut_ab_smoke_seed20260619.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_successor_cut_ab_repeat8_seed20260619.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/joint_pbs_resolver_successor_cut_ab_repeat8_iter25_seed20260619.json
+- Key metrics: `{"smoke": {"n_cases": 1, "n_cut_applied": 1, "mean_action_l1_drift": 0.0}, "repeat8_iter5": {"n_cases": 8, "n_cut_applied": 8, "action_agreement_rate": 0.375, "mean_action_l1_drift": 0.69490906, "max_action_l1_drift": 1.02118691}, "repeat8_iter25": {"n_cases": 8, "n_cut_applied": 8, "action_agreement_rate": 0.25, "mean_action_l1_drift": 1.09490981, "max_action_l1_drift": 1.76991114}}`
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z

@@ -98,3 +98,12 @@ This falsifies direct terminal-leaf substitution for the current checkpoint.
 The next mechanism should either train leaf-compatible continuation targets,
 add a safer depth-limited cut interface, or compare against a stronger exact
 reference before any live play.
+
+A safer one-step successor cut interface was added next. It avoids terminal
+leaf misuse by replacing only immediate non-terminal successor nodes under the
+current turn decision. The interface executed, but the current checkpoint still
+failed the fixed behavior check: on the same 8 holdout states, 5 iterations gave
+agreement `0.375` and mean/max L1 drift `0.6949/1.0212`, while 25 iterations
+gave agreement `0.25` and drift `1.0949/1.7699`. This suggests the next target
+must train on the successor frontier distribution that the depth-limited solver
+actually consumes, not only on current-decision root PBS states.

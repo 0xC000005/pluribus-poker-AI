@@ -114,10 +114,58 @@ def build_tree_arrays(root):
     }
 
 
+def _frontier_cut_nodes(tree, cut_node_indices):
+    if cut_node_indices is None:
+        return np.zeros(0, dtype=np.int32), np.zeros(tree['n_nodes'], dtype=bool)
+    raw = [int(idx) for idx in cut_node_indices]
+    if not raw:
+        return np.zeros(0, dtype=np.int32), np.zeros(tree['n_nodes'], dtype=bool)
+    n_nodes = int(tree['n_nodes'])
+    player = tree['player']
+    cut_set = set()
+    for idx in raw:
+        if idx < 0 or idx >= n_nodes:
+            raise ValueError(f"cut node index out of range: {idx}")
+        if int(player[idx]) == -1:
+            raise ValueError(f"cut node must be a decision node, got terminal {idx}")
+        cut_set.add(idx)
+
+    frontier = []
+    for idx in sorted(cut_set):
+        parent = int(tree['parent_idx'][idx])
+        has_cut_ancestor = False
+        while parent >= 0:
+            if parent in cut_set:
+                has_cut_ancestor = True
+                break
+            parent = int(tree['parent_idx'][parent])
+        if not has_cut_ancestor:
+            frontier.append(idx)
+
+    cut_idx = np.asarray(frontier, dtype=np.int32)
+    cut_mask = np.zeros(n_nodes, dtype=bool)
+    cut_mask[cut_idx] = True
+    return cut_idx, cut_mask
+
+
+def _descendants_of_cut_nodes(tree, cut_mask):
+    inactive = np.zeros(tree['n_nodes'], dtype=bool)
+    if not np.any(cut_mask):
+        return inactive
+    for idx in range(int(tree['n_nodes'])):
+        parent = int(tree['parent_idx'][idx])
+        while parent >= 0:
+            if cut_mask[parent]:
+                inactive[idx] = True
+                break
+            parent = int(tree['parent_idx'][parent])
+    return inactive
+
+
 def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               pot_start, hero_stack_start, villain_stack_start,
               n_iterations=100, hero_range=None, villain_range=None,
-              showdown_leaf_fn=None):
+              showdown_leaf_fn=None, cut_node_indices=None, cut_node_fn=None):
     """Run iterative CFR+ with batched terminal evaluation.
 
     Parameters
@@ -138,6 +186,11 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         Optional CPU-only diagnostic hook. When provided, it receives the
         default showdown counterfactual numerator values and current terminal
         reaches, and returns replacement `(hero_values, villain_values)`.
+    cut_node_indices, cut_node_fn : list[int], callable or None
+        Optional CPU-only diagnostic depth-limit hook. Cut nodes are treated as
+        terminal frontier states: descendants receive no reach/regret updates,
+        and the hook returns replacement counterfactual numerator values with
+        shape `(n_cut_nodes, n_hands)`.
 
     Returns
     -------
@@ -150,6 +203,12 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     player = tree['player']
     children = tree['children']
     decision_actions = tree['decision_actions']
+    cut_idx, cut_mask = _frontier_cut_nodes(tree, cut_node_indices)
+    inactive = _descendants_of_cut_nodes(tree, cut_mask)
+    if cut_idx.size and cut_node_fn is None:
+        raise ValueError("cut_node_fn is required when cut_node_indices are provided")
+    if cut_node_fn is not None and cut_idx.size == 0:
+        raise ValueError("cut_node_indices are required when cut_node_fn is provided")
 
     # Pre-extract terminal data as contiguous arrays
     show_idx = tree['showdown_idx']
@@ -208,12 +267,22 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     valid_mT = valid_m.T.copy()
 
     for _iter in range(n_iterations):
+        if cut_idx.size:
+            hr_at.fill(0.0)
+            vr_at.fill(0.0)
+            hvals.fill(0.0)
+            vvals.fill(0.0)
+
         # ===== Forward pass: compute reach probabilities =====
         hr_at[0] = hr_init
         vr_at[0] = vr_init
 
         for i in bfs_order:
+            if inactive[i]:
+                continue
             if player[i] == -1:
+                continue
+            if cut_mask[i]:
                 continue
             acts = decision_actions[i]
             # Compute strategy from regret_sum
@@ -287,6 +356,31 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 hvals[show_idx] = leaf_hvals
                 vvals[show_idx] = leaf_vvals
 
+        if cut_idx.size:
+            cut_hvals, cut_vvals = cut_node_fn(
+                tree=tree,
+                cut_indices=cut_idx,
+                hero_reach=hr_at[cut_idx],
+                villain_reach=vr_at[cut_idx],
+                valid_m=valid_m,
+                pot_start=pot_start,
+                hero_stack_start=hero_stack_start,
+                villain_stack_start=villain_stack_start,
+            )
+            cut_hvals = np.asarray(cut_hvals, dtype=np.float32)
+            cut_vvals = np.asarray(cut_vvals, dtype=np.float32)
+            expected_shape = (int(cut_idx.size), n)
+            if cut_hvals.shape != expected_shape:
+                raise ValueError(
+                    f"cut_node_fn hero values shape {cut_hvals.shape} != {expected_shape}"
+                )
+            if cut_vvals.shape != expected_shape:
+                raise ValueError(
+                    f"cut_node_fn villain values shape {cut_vvals.shape} != {expected_shape}"
+                )
+            hvals[cut_idx] = cut_hvals
+            vvals[cut_idx] = cut_vvals
+
         # Hero fold terminals
         if len(hfold_idx) > 0:
             VR_hf = vr_at[hfold_idx]  # (n_hf, n)
@@ -303,7 +397,11 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
 
         # ===== Backward pass: propagate values and update regrets =====
         for i in reversed(range(nn)):
+            if inactive[i]:
+                continue
             if player[i] == -1:
+                continue
+            if cut_mask[i]:
                 continue
 
             acts = decision_actions[i]
