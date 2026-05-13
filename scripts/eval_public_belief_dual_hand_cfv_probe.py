@@ -157,10 +157,11 @@ def _case_dual_cfv_target(
     if "error" in parsed:
         raise ValueError(f"{case.label}: parse error: {parsed['error']}")
     street = int(parsed.get("st", -1))
-    if street != 3:
-        raise ValueError(f"{case.label}: expected river state, got street {street}")
+    if street not in (2, 3):
+        raise ValueError(f"{case.label}: expected turn/river state, got street {street}")
 
-    board_idx = [card_str_to_index(card) for card in case.board[:5]]
+    n_board = 4 if street == 2 else 5
+    board_idx = [card_str_to_index(card) for card in case.board[:n_board]]
     our_bet_pre, opp_bet_pre = _compute_bets_before_street(
         case.action_str,
         case.client_pos,
@@ -211,6 +212,7 @@ def _case_dual_cfv_target(
     latency_ms = (time.perf_counter() - started) * 1000.0
     return hero_values, villain_values, hero_masks, villain_masks, {
         "label": case.label,
+        "street": street,
         "solver_latency_ms": round(float(latency_ms), 3),
         "solver_n_hands": int(solver.n),
         "hero_mask_count": int(hero_masks.sum()),

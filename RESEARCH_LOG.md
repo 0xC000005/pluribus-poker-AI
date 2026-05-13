@@ -1971,3 +1971,14 @@
 - Summary: Added a CPU-only `showdown_leaf_fn` hook to `solve_cfr` and `StreetSolver.solve`. The hook receives current terminal reaches plus default showdown counterfactual numerator values and returns replacement terminal values, which is the minimal API needed for learned-leaf diagnostics. The torch backend rejects the hook explicitly so the current experimental torch solver cannot silently run an unsupported path. Unit tests confirm that a passthrough hook exactly reproduces default regrets/strategy sums and that `torch-cpu` rejects the hook.
 - Metrics file: n/a
 - Key metrics: `{"tests": "5 passed in test/unit/test_resolver_benchmark.py", "objective_audit": "passed with completed methodology review", "protected_hits": ["scripts/fast_cfr.py", "scripts/solver.py"]}`
+
+## 20260513T045141Z-mixed-street-dual-cfv-probe - mixed
+
+- Timestamp: 2026-05-13T04:51:41Z
+- Type: experiment
+- Gate: manual-mixed-turn-river-dual-cfv
+- Hypothesis: The Deepset dual-player CFV architecture should extend from river-only labels to mixed turn+river labels, which is closer to a DeepStack-style street-specific value network path than dynamically calling a river model inside every turn CFR leaf.
+- Failure class: range_belief
+- Summary: Generalized the dual-player CFV target builder from river-only to turn+river states and ran a cached mixed-street `64/32` probe across three seeds. The result is promising but not stable: all seeds beat the zero baseline on MAE/RMSE, one seed passes the full constant-hardened gate, one seed narrowly misses constant RMSE, and one seed misses train constants. Label generation is now the practical bottleneck for this path: mixed turn labels averaged `3.35s` per train state and `3.84s` per holdout state with the current `torch-cuda` solver backend. Do not promote mixed-street learning yet; scale only after improving label throughput or using a more targeted turn-only split.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_mixed64x32_deepset64_summary.json
+- Key metrics: `{"pass_count": 1, "n": 3, "mae_delta_mean": 0.02482259, "rmse_delta_mean": 0.02831585, "zero_mae_delta_mean": 0.01720883, "zero_rmse_delta_mean": 0.06440819, "best_constant_mae_delta_mean": -0.00255133, "best_constant_rmse_delta_mean": 0.00123265, "train_solver_mean_ms": 3348.036, "holdout_solver_mean_ms": 3840.952}`

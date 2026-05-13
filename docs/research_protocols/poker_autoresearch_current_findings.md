@@ -550,6 +550,12 @@ Workflow governance status:
   reject the hook explicitly. This is the first infrastructure piece for fixed
   resolver-state learned-leaf A/B; it does not yet make the learned leaf part
   of gameplay.
+- The dual-CFV target builder now supports turn and river states. A mixed
+  turn+river `64/32` Deepset-64 probe is promising but unstable: `1/3` seeds
+  passed, all seeds beat zero, and the mean best-constant deltas were
+  `-0.0026` MAE and `+0.0012` RMSE. Label generation is the immediate practical
+  bottleneck for this route, averaging `3.35s` per train state and `3.84s` per
+  holdout state with the current `torch-cuda` solver backend.
 - Related-work anchor: Deep Sets supports permutation-aware learned set
   encoders for unordered card inputs, while Deep CFR/ReBeL/Supremus support
   learned value approximators paired with search rather than manual card
@@ -585,6 +591,13 @@ ensemble is the first reusable local result to beat those baselines, and it
 survives small perturbed-range checks. The next research cycle should test the
 learned card/range interaction inside fixed-state resolver diagnostics before
 any Slumbot spend.
+
+Tertiary learned-value bottleneck: `label_throughput`.
+
+Street-specific dual-CFV learning is more principled than trying to call a
+river model inside every turn CFR terminal, but mixed turn labels are slow at
+the current solver speed. The next mixed-street step should target label
+throughput or a turn-only split, not a hyperparameter sweep.
 
 Resolved workflow issue: `rules_parity`.
 
