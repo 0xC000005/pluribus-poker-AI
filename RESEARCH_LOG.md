@@ -2004,3 +2004,14 @@
 - Summary: Filtered the existing restored-history mixed split into a turn-only `64/32` public-belief CFV surface and built dual-player labels with `--solver-backend cpu --label-jobs 4`. The Deepset-64 separate-head/bottleneck model passed two of three seeds and all seeds beat the zero baseline, but the third seed still missed train-constant MAE/RMSE. This is stronger than the mixed-street result and supports training street-specific CFV networks, but the small turn-only surface is still seed-sensitive and not ready for solver integration. Next useful gate is a larger turn-only surface or a saved turn ensemble, not hyperparameter sweeping.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_turn64x32_deepset64_summary.json
 - Key metrics: `{"pass_count": 2, "n": 3, "mae_delta_mean": 0.03225656, "rmse_delta_mean": 0.03052992, "zero_mae_delta_mean": 0.0119938, "zero_rmse_delta_mean": 0.04079349, "best_constant_mae_delta_mean": -0.00086504, "best_constant_rmse_delta_mean": -0.00059138, "train_label_count": 144384, "holdout_label_count": 72192}`
+
+## 20260513T050550Z-turn-dual-cfv-saved-ensemble - passed
+
+- Timestamp: 2026-05-13T05:05:50Z
+- Type: experiment
+- Gate: manual-turn-dual-cfv-saved-ensemble
+- Hypothesis: The turn-only Deepset signal should become stable when using the same saved-checkpoint ensemble method that stabilized the river leaf.
+- Failure class: range_belief
+- Summary: Trained three saved turn-only Deepset-64 dual-CFV checkpoints from the cached `64/32` turn labels and evaluated them as an ensemble on the turn holdout dual cache. The ensemble passes the hardened checkpoint gate with a wider margin than any single seed: it beats zero and train-constant baselines, improves the value-sum residual over zero prediction, and runs about `9,180x` faster than the CPU label solver per state. This supports a street-specific dual-CFV value-network path. It still needs a larger independent turn surface before resolver integration or Slumbot spend.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_checkpoint_ensemble_eval_turn64x32_deepset64.json
+- Key metrics: `{"passed": true, "checkpoint_count": 3, "model_holdout": {"mae": 0.21250425, "rmse": 0.28350242, "bias": -0.01551578}, "best_constant": {"mae": 0.23764939, "rmse": 0.31203078}, "zero": {"mae": 0.25050823, "rmse": 0.35341565}, "value_sum_residual": {"pred_abs_mean": 0.32199765, "pred_minus_target_abs_mean": 0.1855074, "target_abs_mean": 0.34565767}, "model_ms_per_state": 0.780799, "speedup_vs_solver_mean_per_state": 9180.22}`

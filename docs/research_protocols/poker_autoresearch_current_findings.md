@@ -618,6 +618,11 @@ Label-throughput update:
   deltas were `-0.0009` MAE and `-0.0006` RMSE. This supports street-specific
   dual-CFV networks, but it is still seed-sensitive on the small surface. The
   next gate should be a larger turn-only surface or a saved turn ensemble.
+- The saved turn-only Deepset-64 ensemble passes the hardened checkpoint gate:
+  model MAE/RMSE `0.2125/0.2835`, best train-constant `0.2376/0.3120`, zero
+  `0.2505/0.3534`, and value-sum residual error `0.1855` versus zero
+  residual `0.3457`. Inference is `0.781 ms/state`, about `9,180x` faster than
+  the CPU label solver. The next gate is a larger independent turn surface.
 
 Resolved workflow issue: `rules_parity`.
 
