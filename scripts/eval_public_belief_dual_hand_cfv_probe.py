@@ -52,19 +52,24 @@ class DualCFVDataset:
 
 
 class _DualHandCFVProbeNet(nn.Module):
-    def __init__(self, hidden_dim: int, *, use_belief: bool):
+    def __init__(self, hidden_dim: int, *, use_belief: bool, head_mode: str = "shared"):
         super().__init__()
         self.use_belief = bool(use_belief)
+        if head_mode not in ("shared", "separate"):
+            raise ValueError(f"unknown head_mode: {head_mode}")
+        self.head_mode = head_mode
         self.public = nn.Linear(N_FEATURES, hidden_dim)
         self.hand = nn.Linear(52, hidden_dim)
         self.player = nn.Linear(2, hidden_dim)
         self.belief = nn.Linear(BELIEF_DIM, hidden_dim) if use_belief else None
-        self.out = nn.Sequential(
+        self.body = nn.Sequential(
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 1),
         )
+        self.out = nn.Linear(hidden_dim, 1)
+        self.hero_out = nn.Linear(hidden_dim, 1)
+        self.villain_out = nn.Linear(hidden_dim, 1)
 
     def forward(
         self,
@@ -78,7 +83,12 @@ class _DualHandCFVProbeNet(nn.Module):
             if belief_x is None:
                 raise ValueError("belief_x is required when use_belief=True")
             hidden = hidden + self.belief(belief_x)
-        return self.out(hidden).squeeze(-1)
+        hidden = self.body(hidden)
+        if self.head_mode == "shared":
+            return self.out(hidden).squeeze(-1)
+        hero = self.hero_out(hidden).squeeze(-1)
+        villain = self.villain_out(hidden).squeeze(-1)
+        return torch.where(player_x[:, 0] > 0.5, hero, villain)
 
 
 def _normalize(values: np.ndarray) -> np.ndarray:
@@ -300,6 +310,7 @@ def _fit_model(
     seed: int,
     device: torch.device,
     use_belief: bool,
+    head_mode: str,
 ) -> _DualHandCFVProbeNet:
     torch.manual_seed(seed)
     case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
@@ -312,7 +323,11 @@ def _fit_model(
     belief_t = torch.from_numpy(dataset.belief).to(device)
     hand_feat_t = torch.from_numpy(_HAND_FEATURES).to(device)
     player_feat_t = torch.eye(2, dtype=torch.float32, device=device)
-    model = _DualHandCFVProbeNet(hidden_dim, use_belief=use_belief).to(device)
+    model = _DualHandCFVProbeNet(
+        hidden_dim,
+        use_belief=use_belief,
+        head_mode=head_mode,
+    ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     n = int(case_t.numel())
     generator = torch.Generator(device=device)
@@ -418,6 +433,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--head-mode",
+        choices=("shared", "separate"),
+        default="shared",
+        help="Use one scalar output head or separate hero/villain output heads.",
+    )
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -473,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         device=device,
         use_belief=False,
+        head_mode=args.head_mode,
     )
     belief = _fit_model(
         train,
@@ -486,6 +508,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         device=device,
         use_belief=True,
+        head_mode=args.head_mode,
     )
     base_metrics = _metrics(
         _predict(
@@ -531,6 +554,7 @@ def main(argv: list[str] | None = None) -> int:
         "epochs": int(args.epochs),
         "batch_size": int(args.batch_size),
         "seed": int(args.seed),
+        "head_mode": args.head_mode,
         "target_dim": int(N_HANDS),
         "train_label_count": int(train.hero_masks.sum() + train.villain_masks.sum()),
         "holdout_label_count": int(holdout.hero_masks.sum() + holdout.villain_masks.sum()),

@@ -1849,3 +1849,14 @@
 - Summary: Added `scripts/eval_public_belief_dual_hand_cfv_probe.py`, which computes both players' hand-CFV labels, trains with a player indicator, and compares feature-only against feature-plus-belief models. A tiny `16/8` river split failed all three seeds. The full `64/32` river split improved the mean but passed only one of three seeds, with two small regressions and one strong positive seed. This blocks direct learned-leaf integration for now: the target shape is right, but the raw-belief dual-player architecture is not stable enough.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river16x8_summary.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river64x32_summary.json
 - Key metrics: `{"river16x8": {"pass_count": 0, "n": 3, "mae_delta_mean": -0.7813636633333333, "rmse_delta_mean": -1.42806195}, "river64x32": {"pass_count": 1, "n": 3, "mae_delta_mean": 0.03906832666666666, "rmse_delta_mean": 0.04431378, "mae_deltas": [-0.0171383, -0.01926114, 0.15360442], "rmse_deltas": [-0.03811794, -0.02233459, 0.19339387]}}`
+
+## 20260513T031713Z-dual-player-separate-heads - mixed
+
+- Timestamp: 2026-05-13T03:17:13Z
+- Type: experiment
+- Gate: manual-public-belief-dual-hand-cfv-separate-heads
+- Hypothesis: Separate hero/villain output heads should improve dual-player CFV learning because the two player value frames should not be forced through one shared scalar head.
+- Failure class: range_belief
+- Summary: Added `--head-mode separate` to the dual-player probe and reran the cached full river `64/32` split across three seeds. MAE improved in all seeds and the strict criterion passed two of three, but one seed still worsened RMSE. This is a clear improvement over the shared scalar head, but still not stable enough to wire into turn search without another architecture hardening step.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river64x32_separate_summary.json
+- Key metrics: `{"pass_count": 2, "n": 3, "mae_delta_mean": 0.06878027, "rmse_delta_mean": 0.05522332, "mae_deltas": [0.03972087, 0.13933148, 0.02728846], "rmse_deltas": [0.03936624, 0.16742925, -0.04112553]}`

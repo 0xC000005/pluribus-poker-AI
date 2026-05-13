@@ -388,6 +388,12 @@ GPU training readiness:
   dual-player CFV learning is the correct target shape, but raw belief with the
   current small MLP/player-indicator architecture is not promotable as a search
   leaf yet.
+- A mechanism-specific separate-player-head variant improves the dual-player
+  result but still needs confirmation. On the same full river `64/32` split,
+  MAE improved in all three seeds (`+0.0397`, `+0.1393`, `+0.0273`) and the
+  strict criterion passed `2/3`; RMSE deltas were `+0.0394`, `+0.1674`, and
+  `-0.0411`. Read: separate hero/villain value heads are the next architecture
+  to harden; do not use the older shared scalar head for leaf-value work.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

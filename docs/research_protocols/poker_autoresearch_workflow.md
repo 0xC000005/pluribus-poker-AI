@@ -300,7 +300,9 @@ Use `scripts/eval_public_belief_dual_hand_cfv_probe.py` for that probe. It
 trains on both players' hand-CFV labels with a player indicator and compares
 public+hand+player against public+hand+player+belief. Do not integrate a
 learned CFV checkpoint into turn search unless this dual-player probe is stable
-across seeds on a balanced river surface.
+across seeds on a balanced river surface. Prefer `--head-mode separate` when
+testing leaf-value architectures; the shared scalar head is retained as a
+baseline because it underfits the two payoff frames.
 
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
