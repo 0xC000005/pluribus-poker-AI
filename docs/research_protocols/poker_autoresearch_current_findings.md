@@ -26,6 +26,10 @@ Date: 2026-05-13
 - `eval-resolver-fixed-states`: passed fixed public-state resolver legality
   and latency diagnostics for CPU, experimental torch-CUDA, and default auto
   backend selection.
+- Autoresearch governance now includes mechanism-review artifacts, tracked
+  review-manifest digests, failure-synthesis status, and a
+  `callback_state_calibration_debug` phase that blocks new model-size/search
+  expansion until callback-state DCVN calibration is audited.
 
 ## Metric Snapshot
 

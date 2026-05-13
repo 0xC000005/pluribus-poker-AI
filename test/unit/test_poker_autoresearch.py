@@ -4,6 +4,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 import poker_ai.research.autoresearch as autoresearch
 from poker_ai.research.autoresearch import (
     CommandResult,
@@ -11,7 +12,9 @@ from poker_ai.research.autoresearch import (
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_callback_calibration_audit,
     enqueue_falsification_ladder,
+    enqueue_failure_synthesis,
     enqueue_gpu_training,
     enqueue_methodology_review,
     enqueue_resolver_benchmark,
@@ -23,6 +26,10 @@ from poker_ai.research.autoresearch import (
     register_research_knob,
     run_gate,
     set_incumbent,
+    set_research_phase,
+    synthesis_status,
+    validate_failure_synthesis,
+    write_review_manifest,
 )
 
 
@@ -48,6 +55,36 @@ def _json_runner(command, timeout_seconds=None):
 
 def _read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_tiny_callback_cache(path: Path, *, root_label: str) -> None:
+    features = np.zeros((2, 3), dtype=np.float32)
+    belief = np.array(
+        [
+            [0.7, 0.3, 0.0, 0.4, 0.6, 0.0],
+            [0.2, 0.8, 0.0, 0.5, 0.5, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    hero_values = np.array([[0.1, -0.2, 0.0], [0.3, -0.4, 0.0]], dtype=np.float32)
+    villain_values = -hero_values
+    masks = np.array([[1, 1, 0], [1, 1, 0]], dtype=np.float32)
+    records = [
+        {"root_label": root_label, "action_str": "ck/b100c", "label": f"{root_label}-0"},
+        {"root_label": root_label, "action_str": "ck/b200c", "label": f"{root_label}-1"},
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        path,
+        features=features,
+        belief=belief,
+        hero_values=hero_values,
+        villain_values=villain_values,
+        hero_masks=masks,
+        villain_masks=masks,
+        labels=np.array([f"{root_label}-0", f"{root_label}-1"]),
+        records_json=json.dumps(records),
+    )
 
 
 def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
@@ -81,6 +118,11 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "methodology_review_required" in goal["review_policy"]["required_for"]
     assert goal["knob_policy"]["max_active_knobs"] == 5
     assert "scripts/play_slumbot.py" in goal["objective_alignment_policy"]["protected_surfaces"]
+    assert goal["review_policy"]["requires_mechanism_review"] is True
+    assert goal["review_policy"]["requires_review_manifest"] is True
+    assert goal["synthesis_policy"]["experiments_per_synthesis"] == 5
+    assert goal["research_phase"]["current"] == "open_research"
+    assert (tmp_path / "docs" / "research_protocols" / "poker_review_manifests").is_dir()
 
 
 def test_init_state_prefers_repo_venv_python_for_default_gates(tmp_path):
@@ -136,6 +178,8 @@ def test_init_state_migrates_existing_policy_and_knob_files(tmp_path):
     migrated_goal = _read_json(goal_path)
     assert migrated_goal["commit_policy"]["mode"] == "batch_by_research_objective"
     assert migrated_goal["review_policy"]["requires_related_work"] is True
+    assert migrated_goal["review_policy"]["requires_mechanism_review"] is True
+    assert migrated_goal["synthesis_policy"]["experiments_per_synthesis"] == 5
     assert migrated_goal["knob_policy"]["max_active_knobs"] == 5
     assert (
         "run methodology review before method, promotion, or persistent knob changes"
@@ -347,6 +391,7 @@ def test_enqueue_methodology_review_creates_templates_and_related_work_gate(tmp_
     assert (review_dir / "review.md").is_file()
     assert (review_dir / "related_work.md").is_file()
     assert (review_dir / "benchmark_audit.md").is_file()
+    assert (review_dir / "mechanism_review.md").is_file()
     assert (review_dir / "team_review.md").is_file()
     assert (review_dir / "decision.json").is_file()
     assert "scripts/poker_methodology_review.py" in command
@@ -373,6 +418,7 @@ def test_methodology_review_validator_requires_independent_review_and_related_wo
     assert pending.returncode == 1
     assert "review.md is still pending" in pending.stderr
     assert "benchmark_audit.md is still pending" in pending.stderr
+    assert "mechanism_review.md is still pending" in pending.stderr
 
     (review_dir / "review.md").write_text(
         "# Independent Verification\n\n"
@@ -391,9 +437,23 @@ def test_methodology_review_validator_requires_independent_review_and_related_wo
         "Verdict: PASS\n",
         encoding="utf-8",
     )
+    (review_dir / "mechanism_review.md").write_text(
+        "# Mechanism Review\n\n"
+        "- Learned object: public-belief value network.\n"
+        "- Search boundary: resolver leaf state.\n"
+        "- Train distribution: sampled public roots.\n"
+        "- Eval distribution: root-disjoint heldout public roots.\n"
+        "- Falsifier: fails heldout leaf A/B drift.\n"
+        "- Pass action: queue limited implementation.\n"
+        "- Fail action: revise target distribution.\n"
+        "- Related-work delta: differs from Deep CFR by training values at search boundary.\n\n"
+        "Verdict: PASS\n",
+        encoding="utf-8",
+    )
     (review_dir / "decision.json").write_text(
         json.dumps(
             {
+                "schema_version": 2,
                 "decision": "gather_more_evidence",
                 "reason": "Local and live evidence disagree.",
                 "sources": ["https://arxiv.org/abs/1811.00164"],
@@ -410,6 +470,121 @@ def test_methodology_review_validator_requires_independent_review_and_related_wo
     )
     assert complete.returncode == 0
     assert json.loads(complete.stdout)["passed"] is True
+
+
+def test_write_review_manifest_creates_tracked_digest_for_ignored_bundle(tmp_path):
+    init_state(tmp_path)
+    queued = enqueue_methodology_review(
+        tmp_path,
+        subject="Callback-state DCVN calibration",
+        trigger="mechanism_change",
+        claim="A calibration audit should precede model scaling.",
+    )
+    review_dir = Path(queued["review_dir"])
+    (review_dir / "review.md").write_text(
+        "# Independent Verification\n\nVerdict: PASS\n\nArtifacts checked.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "related_work.md").write_text(
+        "# Related Work\n\n- [ReBeL](https://arxiv.org/abs/2007.13544)\n",
+        encoding="utf-8",
+    )
+    (review_dir / "benchmark_audit.md").write_text(
+        "# Benchmark-Hacking Audit\n\nVerdict: PASS\n\nNo protected-surface drift.\n",
+        encoding="utf-8",
+    )
+    (review_dir / "mechanism_review.md").write_text(
+        "# Mechanism Review\n\n"
+        "Learned object: callback-state dual counterfactual values.\n"
+        "Search boundary: CFR showdown leaf callback.\n"
+        "Train distribution: callback states queried by train roots.\n"
+        "Eval distribution: root-disjoint callback states.\n"
+        "Falsifier: worse than zero-CFV baseline.\n"
+        "Pass action: test calibrated loss.\n"
+        "Fail action: abandon scale-up.\n"
+        "Related-work delta: follows value-at-search-boundary papers.\n\n"
+        "Verdict: PASS\n",
+        encoding="utf-8",
+    )
+    (review_dir / "decision.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "decision": "revise",
+                "reason": "Need calibration before scaling.",
+                "sources": ["https://arxiv.org/abs/2007.13544"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = write_review_manifest(tmp_path, review_dir)
+
+    manifest_path = tmp_path / manifest["manifest_path"]
+    saved = _read_json(manifest_path)
+    assert manifest_path.is_file()
+    assert saved["decision"] == "revise"
+    assert any(record["path"] == "mechanism_review.md" for record in saved["files"])
+    assert all(len(record["sha256"]) == 64 for record in saved["files"])
+
+
+def test_synthesis_status_and_enqueue_failure_synthesis(tmp_path):
+    init_state(tmp_path)
+    state_path = tmp_path / "autoresearch-session" / "poker_state.json"
+    state = _read_json(state_path)
+    state["history"] = [
+        {"run_id": f"run-{idx}", "type": "experiment", "outcome": "failed"}
+        for idx in range(5)
+    ]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    status = synthesis_status(tmp_path)
+    queued = enqueue_failure_synthesis(tmp_path, subject="callback-state failures")
+
+    assert status["due"] is True
+    assert status["experiments_since_synthesis"] == 5
+    assert queued["type"] == "synthesis"
+    synthesis_dir = Path(queued["synthesis_dir"])
+    pending = validate_failure_synthesis(synthesis_dir)
+    assert pending["passed"] is False
+    assert "synthesis.md is still pending" in pending["errors"]
+
+
+def test_research_phase_blocks_training_and_slumbot_until_calibration_audit(tmp_path):
+    init_state(tmp_path)
+    set_research_phase(
+        tmp_path,
+        phase="callback_state_calibration_debug",
+        reason="scale-up failed",
+    )
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    try:
+        enqueue_gpu_training(tmp_path, n_iterations=1, n_traversals=1)
+    except RuntimeError as exc:
+        assert "callback_state_calibration_debug blocks" in str(exc)
+    else:
+        raise AssertionError("training should be blocked during calibration debug")
+
+    try:
+        enqueue_slumbot_smoke(tmp_path, model)
+    except RuntimeError as exc:
+        assert "callback_state_calibration_debug blocks" in str(exc)
+    else:
+        raise AssertionError("Slumbot smoke should be blocked during calibration debug")
+
+    train = tmp_path / "train.npz"
+    holdout = tmp_path / "holdout.npz"
+    _write_tiny_callback_cache(train, root_label="train-root")
+    _write_tiny_callback_cache(holdout, root_label="holdout-root")
+    queued = enqueue_callback_calibration_audit(
+        tmp_path,
+        train_dual_cache=train,
+        holdout_dual_cache=holdout,
+    )
+    assert queued["type"] == "calibration_audit"
 
 
 def test_objective_audit_blocks_protected_surface_without_review(tmp_path):
@@ -446,9 +621,23 @@ def test_objective_audit_allows_protected_surface_with_completed_review(tmp_path
         "# Benchmark-Hacking Audit\n\nVerdict: PASS\n\nNo benchmark weakening.\n",
         encoding="utf-8",
     )
+    (review_dir / "mechanism_review.md").write_text(
+        "# Mechanism Review\n\n"
+        "Learned object: parser output only.\n"
+        "Search boundary: live Slumbot adapter.\n"
+        "Train distribution: not applicable.\n"
+        "Eval distribution: live Slumbot hands.\n"
+        "Falsifier: replayed transcript mismatch.\n"
+        "Pass action: allow parser fix.\n"
+        "Fail action: block evaluation change.\n"
+        "Related-work delta: no algorithmic method change.\n\n"
+        "Verdict: PASS\n",
+        encoding="utf-8",
+    )
     (review_dir / "decision.json").write_text(
         json.dumps(
             {
+                "schema_version": 2,
                 "decision": "proceed",
                 "reason": "Parser fix keeps metric semantics unchanged.",
                 "sources": ["https://arxiv.org/abs/1811.00164"],
@@ -1048,6 +1237,93 @@ def test_cli_enqueue_review_creates_review_gate(tmp_path):
     assert Path(queued["review_dir"]).is_dir()
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
+
+
+def test_cli_phase_and_calibration_audit_commands(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    train = tmp_path / "train.npz"
+    holdout = tmp_path / "holdout.npz"
+    _write_tiny_callback_cache(train, root_label="train-root")
+    _write_tiny_callback_cache(holdout, root_label="holdout-root")
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    phase = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "set-phase",
+            "--phase",
+            "callback_state_calibration_debug",
+            "--reason",
+            "scale-up failed",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert phase.returncode == 0
+    assert json.loads(phase.stdout)["current"] == "callback_state_calibration_debug"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-calibration-audit",
+            "--train-dual-cache",
+            str(train),
+            "--holdout-dual-cache",
+            str(holdout),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    assert queued["gate"] in goal["gates"]
+    assert "scripts/poker_callback_calibration_audit.py" in goal["gates"][queued["gate"]]["commands"][0]
+
+
+def test_callback_calibration_audit_script_summarizes_tiny_cache(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_callback_calibration_audit.py"
+    train = tmp_path / "train.npz"
+    holdout = tmp_path / "holdout.npz"
+    output = tmp_path / "metrics.json"
+    _write_tiny_callback_cache(train, root_label="train-root")
+    _write_tiny_callback_cache(holdout, root_label="holdout-root")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--train-dual-cache",
+            str(train),
+            "--holdout-dual-cache",
+            str(holdout),
+            "--output-json",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    metrics = _read_json(output)
+    assert metrics["mode"] == "callback_state_calibration_audit"
+    assert metrics["passed"] is True
+    assert metrics["train"]["n_states"] == 2
+    assert metrics["holdout"]["n_roots"] == 1
 
 
 def test_cli_add_knob_records_governed_knob(tmp_path):

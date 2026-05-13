@@ -18,7 +18,9 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     close_cycle,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_callback_calibration_audit,
     enqueue_falsification_ladder,
+    enqueue_failure_synthesis,
     enqueue_gpu_training,
     enqueue_methodology_review,
     enqueue_resolver_benchmark,
@@ -30,6 +32,9 @@ from poker_ai.research.autoresearch import (  # noqa: E402
     register_research_knob,
     run_gate,
     set_incumbent,
+    set_research_phase,
+    synthesis_status,
+    write_review_manifest,
 )
 
 
@@ -56,6 +61,12 @@ def build_parser() -> argparse.ArgumentParser:
     incumbent = subparsers.add_parser("set-incumbent", help="Record incumbent checkpoint.")
     incumbent.add_argument("--checkpoint", required=True)
     incumbent.add_argument("--reason", required=True)
+
+    phase = subparsers.add_parser("set-phase", help="Set the autoresearch phase guard.")
+    phase.add_argument("--phase", required=True)
+    phase.add_argument("--reason", required=True)
+
+    subparsers.add_parser("synthesis-status", help="Report whether failure synthesis is due.")
 
     gate = subparsers.add_parser("gate", help="Run one configured workflow gate.")
     gate.add_argument("name", help="Gate name, for example tier0.")
@@ -165,6 +176,30 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--claim", required=True)
     review.add_argument("--timeout-seconds", type=int, default=600)
 
+    synthesis = subparsers.add_parser(
+        "enqueue-synthesis",
+        help="Create and queue a failure-synthesis gate after repeated experiments.",
+    )
+    synthesis.add_argument("--subject", required=True)
+    synthesis.add_argument("--timeout-seconds", type=int, default=600)
+
+    manifest = subparsers.add_parser(
+        "write-review-manifest",
+        help="Write a tracked digest manifest for an ignored review bundle.",
+    )
+    manifest.add_argument("--review-dir", required=True)
+
+    calibration = subparsers.add_parser(
+        "enqueue-calibration-audit",
+        help="Create and queue a callback-state DCVN calibration audit.",
+    )
+    calibration.add_argument("--train-dual-cache", required=True)
+    calibration.add_argument("--holdout-dual-cache", required=True)
+    calibration.add_argument("--supervised-metrics")
+    calibration.add_argument("--leaf-ab")
+    calibration.add_argument("--output-json")
+    calibration.add_argument("--timeout-seconds", type=int, default=900)
+
     knob = subparsers.add_parser(
         "add-knob",
         help="Register one persistent research knob with a mechanism and removal criterion.",
@@ -265,6 +300,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "set-incumbent":
         _emit(set_incumbent(root, args.checkpoint, reason=args.reason))
+        return 0
+
+    if args.command == "set-phase":
+        _emit(set_research_phase(root, phase=args.phase, reason=args.reason))
+        return 0
+
+    if args.command == "synthesis-status":
+        _emit(synthesis_status(root))
         return 0
 
     if args.command == "gate":
@@ -369,6 +412,34 @@ def main(argv: list[str] | None = None) -> int:
                 subject=args.subject,
                 trigger=args.trigger,
                 claim=args.claim,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-synthesis":
+        _emit(
+            enqueue_failure_synthesis(
+                root,
+                subject=args.subject,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "write-review-manifest":
+        _emit(write_review_manifest(root, args.review_dir))
+        return 0
+
+    if args.command == "enqueue-calibration-audit":
+        _emit(
+            enqueue_callback_calibration_audit(
+                root,
+                train_dual_cache=args.train_dual_cache,
+                holdout_dual_cache=args.holdout_dual_cache,
+                supervised_metrics=args.supervised_metrics,
+                leaf_ab=args.leaf_ab,
+                output_json=args.output_json,
                 timeout_seconds=args.timeout_seconds,
             )
         )

@@ -1,0 +1,46 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 867,
+      "path": "benchmark_audit.md",
+      "sha256": "5d97e289fe4ff3f711d1d8306649502e38009f947f09cef8ee98ea2896118663"
+    },
+    {
+      "bytes": 1762,
+      "path": "decision.json",
+      "sha256": "cde00537eb65baf41487285948986457183ab6349f968eaa573666bf25eaeebb"
+    },
+    {
+      "bytes": 1115,
+      "path": "mechanism_review.md",
+      "sha256": "4a27cdd53191be6a7ed5e66f797131d60afad4cd4f1f8bccd21ac996cbd49d9c"
+    },
+    {
+      "bytes": 771,
+      "path": "related_work.md",
+      "sha256": "dcaafc7ac7c0efecb42150ede70a5be1dca489fee5de74ef3b8b1de974d850cf"
+    },
+    {
+      "bytes": 1334,
+      "path": "review.md",
+      "sha256": "9e010db05c485d0b0be47b2aade6d899bc8b9cf12d15389f28f1782783b05777"
+    },
+    {
+      "bytes": 904,
+      "path": "team_review.md",
+      "sha256": "16e8a5114d2b5773be54286e7d1ee05a64ab67e39f0b1c5830dc9188c78ffff3"
+    }
+  ],
+  "reason": "The 32-train-root / 16-holdout-root callback-state DCVN scale-up failed supervised value baselines and both projected and unprojected learned-leaf A/B gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T211500Z-callback-state-dcvn-scale32-review",
+  "review_id": "20260513T211500Z-callback-state-dcvn-scale32-review",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.10442",
+    "https://arxiv.org/abs/2007.13544",
+    "reference_code/PyStack@65d53dc",
+    "reference_code/rebel@7960a42"
+  ],
+  "written_at": "2026-05-13T18:45:00Z"
+}

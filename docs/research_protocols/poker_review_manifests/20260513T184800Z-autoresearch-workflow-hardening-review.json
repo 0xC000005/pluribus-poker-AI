@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 549,
+      "path": "benchmark_audit.md",
+      "sha256": "ff70714e0aaa32d49e0c78bffd863b8eb3acb1ffc17d395c713906679494d1fd"
+    },
+    {
+      "bytes": 414,
+      "path": "decision.json",
+      "sha256": "df88fbd8a77ef4fee8c088b0ce4db6fa51aa0300ab22d0a889a04811496feb6e"
+    },
+    {
+      "bytes": 1223,
+      "path": "mechanism_review.md",
+      "sha256": "62d000c74604f9d00fe6fb99f1a04d99c060d807b724117b742633e2f53d1718"
+    },
+    {
+      "bytes": 1237,
+      "path": "related_work.md",
+      "sha256": "68712351f333063bb5f7a8937d5de3422b4d571b8bf2e333160114b2650b17ab"
+    },
+    {
+      "bytes": 1020,
+      "path": "review.md",
+      "sha256": "1e49f2632e6dc457170401580899a2cda08f11ae7a594f2b8d3b31bdba36106f"
+    },
+    {
+      "bytes": 398,
+      "path": "team_review.md",
+      "sha256": "c7b014966c85c726c59c4bde37e8b6fc369c4262fc148f3d54a3d4948840817c"
+    }
+  ],
+  "reason": "The patch tightens review, synthesis, phase blocking, and calibration diagnostics without weakening evaluation surfaces.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T184800Z-autoresearch-workflow-hardening-review",
+  "review_id": "20260513T184800Z-autoresearch-workflow-hardening-review",
+  "sources": [
+    "https://github.com/karpathy/autoresearch",
+    "https://arxiv.org/abs/2502.09858",
+    "https://arxiv.org/abs/2408.06292",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2007.10442"
+  ],
+  "written_at": "2026-05-13T18:48:13Z"
+}

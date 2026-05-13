@@ -14,6 +14,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
@@ -26,7 +27,9 @@ STATE_FILE = "poker_state.json"
 KNOBS_FILE = "poker_knobs.tsv"
 STOP_FILE = "STOP"
 RESEARCH_LOG = "RESEARCH_LOG.md"
+REVIEW_MANIFESTS_DIR = Path("docs") / "research_protocols" / "poker_review_manifests"
 ALLOWED_REVIEW_DECISIONS = {"proceed", "revise", "abandon", "gather_more_evidence"}
+ALLOWED_RESEARCH_PHASES = {"open_research", "callback_state_calibration_debug"}
 PROTECTED_EVAL_SURFACES = [
     "scripts/poker_autoresearch_eval.py",
     "scripts/poker_autoresearch_slumbot.py",
@@ -93,6 +96,10 @@ def _runs_path(root: Path) -> Path:
 
 def _reviews_path(root: Path) -> Path:
     return _session(root) / REVIEWS_DIR
+
+
+def _review_manifest_dir(root: Path) -> Path:
+    return root / REVIEW_MANIFESTS_DIR
 
 
 def _stop_path(root: Path) -> Path:
@@ -242,6 +249,7 @@ def _default_goal(root: str | Path | None = None) -> dict:
         "review_policy": {
             "required_for": [
                 "methodology_review_required",
+                "mechanism_review_required",
                 "checkpoint promotion",
                 "architecture or objective change",
                 "evaluation protocol change",
@@ -250,6 +258,56 @@ def _default_goal(root: str | Path | None = None) -> dict:
             ],
             "requires_independent_verifier": True,
             "requires_related_work": True,
+            "requires_mechanism_review": True,
+            "requires_review_manifest": True,
+            "mechanism_review_fields": [
+                "learned object",
+                "search boundary",
+                "train distribution",
+                "eval distribution",
+                "falsifier",
+                "pass action",
+                "fail action",
+                "related-work delta",
+            ],
+        },
+        "synthesis_policy": {
+            "experiments_per_synthesis": 5,
+            "required_fields": [
+                "current causal model",
+                "retired hypotheses",
+                "live hypotheses",
+                "single next test",
+            ],
+            "rule": (
+                "After every five non-review experiments, pause expansion and "
+                "write a failure synthesis before adding a new experiment family."
+            ),
+        },
+        "research_phase": {
+            "current": "open_research",
+            "reason": "default",
+            "set_at": None,
+            "allowed_phases": sorted(ALLOWED_RESEARCH_PHASES),
+            "callback_state_calibration_debug": {
+                "problem": (
+                    "The 4-root callback-state DCVN smoke passed, but the "
+                    "32-train/16-holdout scale-up failed supervised baselines "
+                    "and learned-leaf A/B."
+                ),
+                "allowed_actions": [
+                    "callback_state_calibration_audit",
+                    "methodology_review",
+                    "mechanism_review",
+                    "failure_synthesis",
+                    "objective_audit",
+                ],
+                "blocked_actions": [
+                    "gpu_deep_cfr_training",
+                    "slumbot_smoke",
+                    "new_model_size_or_search_knob",
+                ],
+            },
         },
         "knob_policy": {
             "max_active_knobs": 5,
@@ -499,6 +557,7 @@ def init_state(root: str | Path, force: bool = False) -> dict:
     session.mkdir(parents=True, exist_ok=True)
     runs.mkdir(parents=True, exist_ok=True)
     reviews.mkdir(parents=True, exist_ok=True)
+    _review_manifest_dir(root).mkdir(parents=True, exist_ok=True)
 
     default_goal = _default_goal(root)
     goal_path = _goal_path(root)
@@ -714,6 +773,11 @@ def register_research_knob(
     max_active: int | None = None,
 ) -> dict:
     """Register one persistent research knob with a mechanism and budget."""
+    _assert_phase_allows_action(
+        Path(root),
+        "new_model_size_or_search_knob",
+        details=f"{name} {failure_class} {mechanism} {rationale}",
+    )
     fields = {
         "name": name,
         "default": default,
@@ -825,6 +889,162 @@ def enqueue_cycle(
     return item
 
 
+def set_research_phase(root: str | Path, *, phase: str, reason: str) -> dict:
+    """Set the workflow phase used by guardrails."""
+    if phase not in ALLOWED_RESEARCH_PHASES:
+        raise ValueError(
+            "phase must be one of: " + ", ".join(sorted(ALLOWED_RESEARCH_PHASES))
+        )
+    if not str(reason).strip():
+        raise ValueError("reason is required")
+    root = Path(root)
+    goal = _read_json(_goal_path(root))
+    phase_record = goal.setdefault("research_phase", {})
+    phase_record["current"] = phase
+    phase_record["reason"] = reason
+    phase_record["set_at"] = _now()
+    phase_record["allowed_phases"] = sorted(ALLOWED_RESEARCH_PHASES)
+    _write_json(_goal_path(root), goal)
+    return phase_record
+
+
+def _assert_phase_allows_action(
+    root: Path,
+    action: str,
+    *,
+    details: str = "",
+) -> None:
+    goal_path = _goal_path(root)
+    if not goal_path.exists():
+        return
+    goal = _read_json(goal_path)
+    phase = goal.get("research_phase", {}).get("current", "open_research")
+    if phase != "callback_state_calibration_debug":
+        return
+    if action in {"callback_state_calibration_audit", "methodology_review", "mechanism_review", "failure_synthesis", "objective_audit"}:
+        return
+    if action == "new_model_size_or_search_knob":
+        lowered = details.lower()
+        guarded_terms = (
+            "model",
+            "hidden",
+            "layer",
+            "capacity",
+            "architecture",
+            "search",
+            "solver",
+            "slumbot",
+        )
+        if not any(term in lowered for term in guarded_terms):
+            return
+    raise RuntimeError(
+        "Research phase callback_state_calibration_debug blocks this action. "
+        "Run a callback-state calibration audit or synthesis before expanding "
+        f"the experiment surface. Blocked action: {action}."
+    )
+
+
+def synthesis_status(root: str | Path) -> dict:
+    """Return whether the workflow is due for failure synthesis."""
+    root = Path(root)
+    goal = _read_json(_goal_path(root))
+    state = _read_json(_state_path(root))
+    interval = int(goal.get("synthesis_policy", {}).get("experiments_per_synthesis", 5))
+    history = state.get("history", [])
+    last_synthesis_idx = -1
+    for idx, record in enumerate(history):
+        if record.get("type") == "synthesis":
+            last_synthesis_idx = idx
+    since = [
+        record
+        for record in history[last_synthesis_idx + 1 :]
+        if record.get("type") not in {"methodology_review", "synthesis"}
+    ]
+    return {
+        "due": len(since) >= interval,
+        "experiments_since_synthesis": len(since),
+        "interval": interval,
+        "required_fields": goal.get("synthesis_policy", {}).get("required_fields", []),
+        "last_synthesis_run_id": (
+            history[last_synthesis_idx].get("run_id") if last_synthesis_idx >= 0 else None
+        ),
+    }
+
+
+def enqueue_failure_synthesis(
+    root: str | Path,
+    *,
+    subject: str,
+    timeout_seconds: int = 600,
+) -> dict:
+    """Queue a synthesis review that compresses recent failures into a causal model."""
+    root = Path(root)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    review_dir = _unique_child_dir(
+        _reviews_path(root),
+        f"{timestamp}-{_slug(subject)}-synthesis",
+    )
+    review_dir.mkdir(parents=True, exist_ok=True)
+    (review_dir / "synthesis.md").write_text(
+        "# Failure Synthesis\n\n"
+        f"Subject: {subject}\n\n"
+        "Required fields:\n"
+        "- Current causal model: TODO\n"
+        "- Retired hypotheses: TODO\n"
+        "- Live hypotheses: TODO\n"
+        "- Single next test: TODO\n\n"
+        "Verdict: PENDING\n",
+        encoding="utf-8",
+    )
+    _write_json(
+        review_dir / "decision.json",
+        {
+            "decision": "pending",
+            "reason": "PENDING",
+            "sources": [],
+        },
+    )
+
+    gate_name = _unique_gate_name(
+        root,
+        f"failure-synthesis-{timestamp}-{_slug(subject)}",
+    )
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/poker_synthesis_review.py",
+        "--synthesis-dir",
+        str(review_dir),
+        "--require-complete",
+    ]
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Validate that recent failures were compressed into a causal model "
+            "before adding another experiment family."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+    }
+    _write_json(_goal_path(root), goal)
+    item = enqueue_cycle(
+        root,
+        hypothesis=(
+            f"Failure synthesis for {subject} should identify the causal model "
+            "and one next falsifier before further expansion."
+        ),
+        cycle_type="synthesis",
+        failure_class="eval_invalid",
+        gate=gate_name,
+    )
+    item["synthesis_dir"] = str(review_dir)
+    state = _read_json(_state_path(root))
+    state["hypothesis_queue"][-1]["synthesis_dir"] = str(review_dir)
+    state["updated_at"] = _now()
+    _write_json(_state_path(root), state)
+    return item
+
+
 def _write_methodology_review_templates(
     review_dir: Path,
     *,
@@ -877,6 +1097,21 @@ def _write_methodology_review_templates(
         "Verdict: PENDING\n",
         encoding="utf-8",
     )
+    (review_dir / "mechanism_review.md").write_text(
+        "# Mechanism Review\n\n"
+        f"Claim under review: {claim}\n\n"
+        "Required fields:\n"
+        "- Learned object: TODO\n"
+        "- Search boundary: TODO\n"
+        "- Train distribution: TODO\n"
+        "- Eval distribution: TODO\n"
+        "- Falsifier: TODO\n"
+        "- Pass action: TODO\n"
+        "- Fail action: TODO\n"
+        "- Related-work delta: TODO\n\n"
+        "Verdict: PENDING\n",
+        encoding="utf-8",
+    )
     (review_dir / "team_review.md").write_text(
         "# Review Team Routing\n\n"
         "- Research lead: owns `decision.json` and final go/no-go.\n"
@@ -890,6 +1125,7 @@ def _write_methodology_review_templates(
     _write_json(
         review_dir / "decision.json",
         {
+            "schema_version": 2,
             "decision": "pending",
             "reason": "PENDING",
             "sources": [],
@@ -907,6 +1143,7 @@ def enqueue_methodology_review(
 ) -> dict:
     """Create a methodology review bundle and queue its completion gate."""
     root = Path(root)
+    _assert_phase_allows_action(root, "methodology_review")
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     review_dir = _unique_child_dir(
         _reviews_path(root),
@@ -955,14 +1192,57 @@ def enqueue_methodology_review(
     item["requires_independent_verifier"] = True
     item["requires_related_work"] = True
     item["requires_benchmark_audit"] = True
+    item["requires_mechanism_review"] = True
     state = _read_json(_state_path(root))
     state["hypothesis_queue"][-1]["review_dir"] = str(review_dir)
     state["hypothesis_queue"][-1]["requires_independent_verifier"] = True
     state["hypothesis_queue"][-1]["requires_related_work"] = True
     state["hypothesis_queue"][-1]["requires_benchmark_audit"] = True
+    state["hypothesis_queue"][-1]["requires_mechanism_review"] = True
     state["updated_at"] = _now()
     _write_json(_state_path(root), state)
     return item
+
+
+def _review_file_digest(path: Path) -> dict:
+    data = path.read_bytes()
+    return {
+        "path": path.name,
+        "sha256": sha256(data).hexdigest(),
+        "bytes": len(data),
+    }
+
+
+def write_review_manifest(root: str | Path, review_dir: str | Path) -> dict:
+    """Write a tracked digest manifest for an ignored review bundle."""
+    root = Path(root)
+    review_dir = Path(review_dir)
+    if not review_dir.is_absolute():
+        review_dir = root / review_dir
+    if not review_dir.exists():
+        raise FileNotFoundError(f"Review directory does not exist: {review_dir}")
+    manifest_dir = _review_manifest_dir(root)
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    files = [
+        path
+        for path in sorted(review_dir.iterdir())
+        if path.is_file() and path.name.endswith((".md", ".json"))
+    ]
+    decision_path = review_dir / "decision.json"
+    decision = _read_json(decision_path) if decision_path.exists() else {}
+    manifest = {
+        "review_id": review_dir.name,
+        "review_dir": str(review_dir.relative_to(root)) if review_dir.is_relative_to(root) else str(review_dir),
+        "written_at": _now(),
+        "decision": decision.get("decision"),
+        "reason": decision.get("reason"),
+        "sources": decision.get("sources", []),
+        "files": [_review_file_digest(path) for path in files],
+    }
+    manifest_path = manifest_dir / f"{review_dir.name}.json"
+    _write_json(manifest_path, manifest)
+    manifest["manifest_path"] = str(manifest_path.relative_to(root))
+    return manifest
 
 
 def validate_methodology_review(review_dir: str | Path) -> dict:
@@ -972,8 +1252,9 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
     review_path = review_dir / "review.md"
     related_path = review_dir / "related_work.md"
     benchmark_path = review_dir / "benchmark_audit.md"
+    mechanism_path = review_dir / "mechanism_review.md"
     decision_path = review_dir / "decision.json"
-    for path in (review_path, related_path, benchmark_path, decision_path):
+    for path in (review_path, related_path, benchmark_path, mechanism_path, decision_path):
         if not path.exists():
             errors.append(f"Missing required artifact: {path.name}")
 
@@ -995,6 +1276,24 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
     if "Verdict:" not in benchmark_text:
         errors.append("benchmark_audit.md must include a Verdict line")
 
+    mechanism_text = mechanism_path.read_text(encoding="utf-8") if mechanism_path.exists() else ""
+    if "PENDING" in mechanism_text or "TODO" in mechanism_text:
+        errors.append("mechanism_review.md is still pending")
+    for required in (
+        "Learned object:",
+        "Search boundary:",
+        "Train distribution:",
+        "Eval distribution:",
+        "Falsifier:",
+        "Pass action:",
+        "Fail action:",
+        "Related-work delta:",
+    ):
+        if required not in mechanism_text:
+            errors.append(f"mechanism_review.md must include {required}")
+    if "Verdict:" not in mechanism_text:
+        errors.append("mechanism_review.md must include a Verdict line")
+
     decision: dict = {}
     if decision_path.exists():
         try:
@@ -1015,6 +1314,52 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
     return {
         "passed": not errors,
         "review_dir": str(review_dir),
+        "errors": errors,
+        "decision": decision.get("decision"),
+    }
+
+
+def validate_failure_synthesis(synthesis_dir: str | Path) -> dict:
+    """Validate a failure-synthesis bundle."""
+    synthesis_dir = Path(synthesis_dir)
+    errors: list[str] = []
+    synthesis_path = synthesis_dir / "synthesis.md"
+    decision_path = synthesis_dir / "decision.json"
+    if not synthesis_path.exists():
+        errors.append("Missing required artifact: synthesis.md")
+    if not decision_path.exists():
+        errors.append("Missing required artifact: decision.json")
+    text = synthesis_path.read_text(encoding="utf-8") if synthesis_path.exists() else ""
+    if "PENDING" in text or "TODO" in text:
+        errors.append("synthesis.md is still pending")
+    for required in (
+        "Current causal model:",
+        "Retired hypotheses:",
+        "Live hypotheses:",
+        "Single next test:",
+    ):
+        if required not in text:
+            errors.append(f"synthesis.md must include {required}")
+    if "Verdict:" not in text:
+        errors.append("synthesis.md must include a Verdict line")
+
+    decision: dict = {}
+    if decision_path.exists():
+        try:
+            decision = _read_json(decision_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"decision.json is invalid JSON: {exc}")
+    if decision:
+        if decision.get("decision") not in ALLOWED_REVIEW_DECISIONS:
+            errors.append(
+                "decision.json decision must be one of: "
+                + ", ".join(sorted(ALLOWED_REVIEW_DECISIONS))
+            )
+        if not str(decision.get("reason", "")).strip() or decision.get("reason") == "PENDING":
+            errors.append("decision.json must include a non-pending reason")
+    return {
+        "passed": not errors,
+        "synthesis_dir": str(synthesis_dir),
         "errors": errors,
         "decision": decision.get("decision"),
     }
@@ -1114,6 +1459,7 @@ def enqueue_gpu_training(
 ) -> dict:
     """Create and queue a GPU Deep CFR candidate-training gate."""
     root = Path(root)
+    _assert_phase_allows_action(root, "gpu_deep_cfr_training")
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     if save_dir is None:
         save_dir = root / "models" / f"autoresearch_gpu_{timestamp}"
@@ -1365,6 +1711,7 @@ def enqueue_slumbot_smoke(
 ) -> dict:
     """Create and queue a sparse live Slumbot smoke for a candidate checkpoint."""
     root = Path(root)
+    _assert_phase_allows_action(root, "slumbot_smoke")
     model_path = _resolve_existing_path(root, model, label="Slumbot model checkpoint")
     gate_name = _unique_gate_name(root, (
         f"slumbot-candidate-smoke-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
@@ -1580,6 +1927,91 @@ def enqueue_falsification_ladder(
     item["mechanism"] = mechanism
     state = _read_json(_state_path(root))
     state["hypothesis_queue"][-1]["mechanism"] = mechanism
+    state["updated_at"] = _now()
+    _write_json(_state_path(root), state)
+    return item
+
+
+def enqueue_callback_calibration_audit(
+    root: str | Path,
+    *,
+    train_dual_cache: str | Path,
+    holdout_dual_cache: str | Path,
+    supervised_metrics: str | Path | None = None,
+    leaf_ab: str | Path | None = None,
+    output_json: str | Path | None = None,
+    timeout_seconds: int = 900,
+) -> dict:
+    """Queue the callback-state target calibration audit phase."""
+    root = Path(root)
+    _assert_phase_allows_action(root, "callback_state_calibration_audit")
+    train = _resolve_existing_path(root, train_dual_cache, label="Train callback cache")
+    holdout = _resolve_existing_path(root, holdout_dual_cache, label="Holdout callback cache")
+    supervised = (
+        _resolve_existing_path(root, supervised_metrics, label="Supervised metrics")
+        if supervised_metrics
+        else None
+    )
+    leaf = _resolve_existing_path(root, leaf_ab, label="Leaf A/B metrics") if leaf_ab else None
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if output_json is None:
+        output_json = (
+            _runs_path(root)
+            / f"{timestamp}-callback-state-calibration-audit"
+            / "metrics.json"
+        )
+    else:
+        output_json = Path(output_json)
+        if not output_json.is_absolute():
+            output_json = root / output_json
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+
+    gate_name = _unique_gate_name(
+        root,
+        f"callback-state-calibration-audit-{timestamp}",
+    )
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/poker_callback_calibration_audit.py",
+        "--train-dual-cache",
+        str(train),
+        "--holdout-dual-cache",
+        str(holdout),
+        "--output-json",
+        str(output_json),
+    ]
+    if supervised is not None:
+        command.extend(["--supervised-metrics", str(supervised)])
+    if leaf is not None:
+        command.extend(["--leaf-ab", str(leaf)])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Callback-state DCVN calibration audit: summarize target variance, "
+            "reach skew, support coverage, and failed integration metrics before "
+            "adding capacity or Slumbot runs."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+        "phase": "callback_state_calibration_debug",
+    }
+    _write_json(_goal_path(root), goal)
+    item = enqueue_cycle(
+        root,
+        hypothesis=(
+            "Callback-state calibration audit should explain whether target "
+            "variance, reach skew, or loss weighting likely caused the DCVN "
+            "scale-up failure."
+        ),
+        cycle_type="calibration_audit",
+        failure_class="callback_state_scale_generalization_gap",
+        gate=gate_name,
+    )
+    item["calibration_audit_output"] = str(output_json)
+    state = _read_json(_state_path(root))
+    state["hypothesis_queue"][-1]["calibration_audit_output"] = str(output_json)
     state["updated_at"] = _now()
     _write_json(_state_path(root), state)
     return item

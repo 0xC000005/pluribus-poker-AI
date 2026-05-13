@@ -1,7 +1,8 @@
 # Poker Autoresearch Workflow
 
 Status: approved and implemented for safe evaluation/logging automation, with
-methodology-review and knob-governance gates.
+methodology-review, mechanism-review, synthesis, calibration-phase, and
+knob-governance gates.
 
 ## Objective
 
@@ -55,15 +56,48 @@ creates a review bundle under `autoresearch-session/poker_reviews/` with:
 - `review.md`: independent-verifier findings based on local files/artifacts.
 - `related_work.md`: at least one primary source URL and a transfer analysis.
 - `benchmark_audit.md`: objective-drift and benchmark-hacking checks.
+- `mechanism_review.md`: learned object, search boundary, train distribution,
+  eval distribution, falsifier, pass action, fail action, and related-work
+  delta.
 - `team_review.md`: routing for research lead, verifier, literature scout, and
   benchmark auditor roles.
 - `decision.json`: one of `proceed`, `revise`, `abandon`, or
   `gather_more_evidence`.
 
 The validator rejects pending `TODO`/`PENDING` review files and decisions
-without sources. When the independent verifier is invoked, related-work review
-and benchmark-hacking audit are mandatory. Use separate sub-agents for these
-roles when available; the review files are the durable source of truth.
+without sources. When the independent verifier is invoked, related-work review,
+benchmark-hacking audit, and mechanism review are mandatory. Use separate
+sub-agents for these roles when available; the review files are the durable
+source of truth.
+
+Review bundles are ignored because they may include local artifact paths and
+large evidence notes. For any review used to justify a methodology decision,
+write a tracked digest manifest:
+
+```bash
+python scripts/poker_autoresearch.py write-review-manifest \
+  --review-dir autoresearch-session/poker_reviews/<review_id>
+```
+
+Tracked manifests live under
+`docs/research_protocols/poker_review_manifests/`.
+
+## Failure Synthesis Gate
+
+Every five non-review experiments, stop expanding the experiment surface and
+write a causal synthesis. The synthesis must name the current causal model,
+retired hypotheses, live hypotheses, and one next falsifier. This prevents
+long unattended runs from accumulating diagnostics without converting them into
+a sharper research program.
+
+```bash
+python scripts/poker_autoresearch.py synthesis-status
+python scripts/poker_autoresearch.py enqueue-synthesis \
+  --subject "callback-state DCVN failures"
+```
+
+The synthesis validator rejects pending fields. A failed synthesis gate is a
+methodology failure, not a strategy-quality result.
 
 ## Objective-Drift Guard
 
@@ -121,6 +155,25 @@ must record a single default, failure class, mechanism, rationale, and removal
 criterion in `poker_knobs.tsv`. Broad sweeps and list-shaped defaults are
 rejected. Keep at most five active knobs unless the goal file is deliberately
 changed after methodology review.
+
+During `callback_state_calibration_debug`, new GPU training runs, live Slumbot
+smokes, and model-size/search knobs are blocked. The allowed next actions are
+calibration audit, methodology/mechanism review, failure synthesis, and
+objective audit:
+
+```bash
+python scripts/poker_autoresearch.py set-phase \
+  --phase callback_state_calibration_debug \
+  --reason "callback-state DCVN scale-up failed supervised and leaf gates"
+python scripts/poker_autoresearch.py enqueue-calibration-audit \
+  --train-dual-cache <train_callback_cache.npz> \
+  --holdout-dual-cache <holdout_callback_cache.npz> \
+  --supervised-metrics <train_metrics.json> \
+  --leaf-ab <leaf_ab_metrics.json>
+```
+
+Return to `open_research` only after the calibration audit explains the failure
+well enough to select one falsifiable next test.
 
 ## Research State
 
