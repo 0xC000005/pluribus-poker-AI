@@ -310,3 +310,15 @@ Keep iter200/final as incumbent. Next target: return to search/value integration
 and make successor-frontier value use safer than hard replacement, ideally by
 learning uncertainty or residual structure that is checked against resolver
 action drift rather than policy imitation loss.
+
+That uncertainty direction now has a positive diagnostic. A learned metadata
+risk model trained on the metadata-balanced high-bet successor split predicts
+per-cut value MAE on holdout with moderate signal: full metadata Pearson
+`0.4895`, top-quintile recall `0.5385`; structural-only Pearson `0.5093`,
+top-quintile recall `0.4615`. The structural-only result matters because it can
+be applied before deciding which successor nodes to cut, without relying on
+inside-callback reach features. The next continuation mechanism should implement
+selective successor cuts: only use the learned continuation value on predicted
+low-risk structural cuts and leave predicted high-risk cuts exact. The required
+gate remains the fixed successor-cut resolver A/B with action agreement and mean
+action L1 drift, not offline value MAE alone.
