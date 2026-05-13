@@ -549,6 +549,27 @@ def evaluate_policy_target_loss(
     return weighted_sum / max(weight_total, 1e-8)
 
 
+def masked_top_action_margin_loss(
+    logits: torch.Tensor,
+    legal_masks: torch.Tensor,
+    target_probs: torch.Tensor,
+    *,
+    margin: float = 0.25,
+) -> torch.Tensor:
+    """Encourage the solver-target top action to outrank other legal actions."""
+    legal = legal_masks > 0
+    top_actions = torch.argmax(target_probs, dim=1)
+    top_logits = logits.gather(1, top_actions.unsqueeze(1)).squeeze(1)
+    competitor_mask = legal.clone()
+    competitor_mask.scatter_(1, top_actions.unsqueeze(1), False)
+    competitor_logits = logits.masked_fill(~competitor_mask, -1e4).max(dim=1).values
+    valid = competitor_mask.any(dim=1)
+    if not bool(valid.any()):
+        return logits.sum() * 0.0
+    losses = torch.relu(float(margin) - (top_logits - competitor_logits))
+    return losses[valid].mean()
+
+
 def train_policy_head_calibration(
     checkpoint: str | Path,
     targets: PolicyTargetBuffer,
@@ -558,6 +579,8 @@ def train_policy_head_calibration(
     batch_size: int = 512,
     lr: float = 1e-3,
     device: str | torch.device = "auto",
+    rank_loss_weight: float = 0.0,
+    rank_margin: float = 0.25,
 ) -> dict[str, Any]:
     """Train only the policy head against supervised average-policy targets."""
     resolved_device = _resolve_device(device)
@@ -588,6 +611,13 @@ def train_policy_head_calibration(
             batch.target_probs,
             weights=batch.weights,
         )
+        if rank_loss_weight > 0:
+            loss = loss + float(rank_loss_weight) * masked_top_action_margin_loss(
+                logits,
+                batch.legal_masks,
+                batch.target_probs,
+                margin=rank_margin,
+            )
         loss.backward()
         torch.nn.utils.clip_grad_norm_(value_net.policy_head.parameters(), max_norm=1.0)
         optimizer.step()
@@ -607,6 +637,8 @@ def train_policy_head_calibration(
         "n_steps": int(n_steps),
         "batch_size": int(batch_size),
         "lr": float(lr),
+        "rank_loss_weight": float(rank_loss_weight),
+        "rank_margin": float(rank_margin),
         "before_loss": round(float(before_loss), 6),
         "after_loss": round(float(after_loss), 6),
     }
@@ -623,6 +655,8 @@ def train_policy_head_calibration(
         "n_steps": int(n_steps),
         "batch_size": int(batch_size),
         "lr": float(lr),
+        "rank_loss_weight": float(rank_loss_weight),
+        "rank_margin": float(rank_margin),
         "before_loss": round(float(before_loss), 6),
         "after_loss": round(float(after_loss), 6),
         "loss_delta": round(float(after_loss - before_loss), 6),

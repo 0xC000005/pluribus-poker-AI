@@ -17,6 +17,7 @@ from poker_ai.research.range_diagnostics import diagnose_range_likelihood
 from poker_ai.research.policy_calibration import (
     diagnose_policy_calibration_teacher,
     evaluate_policy_target_loss,
+    masked_top_action_margin_loss,
     sample_policy_calibration_targets,
     sample_public_state_hand_sweep_targets,
     train_policy_head_calibration,
@@ -189,6 +190,25 @@ def test_masked_policy_cross_entropy_ignores_illegal_logits():
     assert logits.grad is not None
     assert abs(float(logits.grad[0, 8])) < 1e-6
     assert float(logits.grad[0, 2]) < 0.0
+
+
+def test_top_action_margin_loss_respects_legal_competitors():
+    logits = torch.zeros((2, N_ACTIONS), dtype=torch.float32)
+    logits[0, 0] = 0.0
+    logits[0, 1] = 0.1
+    logits[0, 8] = 9.0
+    logits[1, 1] = 1.0
+    logits[1, 2] = -5.0
+    legal_masks = torch.zeros((2, N_ACTIONS), dtype=torch.float32)
+    legal_masks[0, [0, 1]] = 1.0
+    legal_masks[1, [1, 2]] = 1.0
+    target_probs = torch.zeros((2, N_ACTIONS), dtype=torch.float32)
+    target_probs[0, 0] = 1.0
+    target_probs[1, 1] = 1.0
+
+    loss = masked_top_action_margin_loss(logits, legal_masks, target_probs, margin=0.5)
+
+    assert loss == torch.tensor(0.3)
 
 
 def test_train_value_network_accepts_search_policy_targets():

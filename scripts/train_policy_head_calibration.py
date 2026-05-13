@@ -23,6 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--rank-loss-weight", type=float, default=0.0)
+    parser.add_argument("--rank-margin", type=float, default=0.25)
     parser.add_argument("--metrics-output")
     args = parser.parse_args(argv)
 
@@ -38,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
         batch_size=args.batch_size,
         lr=args.lr,
         device=args.device,
+        rank_loss_weight=args.rank_loss_weight,
+        rank_margin=args.rank_margin,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)
     if args.metrics_output:

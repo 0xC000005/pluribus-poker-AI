@@ -239,3 +239,14 @@ information is present but not captured by plain cross-entropy. The next
 mechanism should train decision-aware policy calibration from solver targets,
 for example top-action margin or pairwise ranking loss, with a fixed holdout
 gate.
+
+Decision-aware policy calibration is now the first local pass in this line. A
+legal-masked top-action margin loss trained from the solver target's own top
+action fixed the policy-head argmax failure on the original `64` holdout:
+top-1 match improved from `0.15625` to `1.0`, top all-in rate fell from
+`0.296875` to `0.0`, and the fixed resolver policy-head behavior gate passed
+with mean action L1 drift `0.6973` under the `0.75` gate. The tradeoff is worse
+soft distribution fit (`L1 0.0382 -> 0.1110`), so this is not promotion-ready.
+Next continuation target: validate the rank-aware checkpoint on fresh fixed
+resolver-policy cases without tuning `rank_loss_weight` or `rank_margin`; only
+then run a small Slumbot smoke.
