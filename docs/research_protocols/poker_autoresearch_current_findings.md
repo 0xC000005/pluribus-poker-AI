@@ -406,14 +406,16 @@ GPU training readiness:
   split into `128/64` public states, separate-head plus 32-dim belief bottleneck
   improved over the feature-only model in all three seeds, but every seed was
   worse than predicting zero CFV: zero MAE/RMSE were `0.4257/0.6297`, while the
-  belief model MAEs were `0.5051`, `0.5010`, and `0.5485`. Read: the previous
-  dual-player probe gate was too weak; learned-leaf work is blocked until the
-  model beats a trivial zero baseline.
+  belief model MAEs were `0.5051`, `0.5010`, and `0.5485`. It also loses to
+  train-constant baselines: train-median MAE is `0.3984`, and train-mean RMSE is
+  `0.5250`. Read: the previous dual-player probe gate was too weak;
+  learned-leaf work is blocked until the model beats trivial constant
+  baselines.
 - A saved dual-player checkpoint path now exists for that architecture via
   `scripts/train_public_belief_dual_hand_cfv.py`. The first larger-surface
   checkpoint trained from cached dual labels on CUDA and reproduced the seed
   `20260530` holdout metrics (`MAE=0.5051`, `RMSE=0.6826`), but it fails the
-  zero-CFV gate. Inference is fast (`0.245 ms/state`, about `7,499x` faster
+  constant-baseline gate. Inference is fast (`0.242 ms/state`, about `7,583x` faster
   than cached solver labels), so the bottleneck is target/model quality rather
   than deployment latency.
 - Policy-head local comparison produced a strong positive signal between two

@@ -307,8 +307,8 @@ dual-player river probe, also use `--belief-bottleneck-dim 32` as the default
 candidate architecture before considering solver integration; it tests a
 learned compression of the public-belief range vector instead of feeding the
 raw range vector directly into the value body. The probe must also beat a
-zero-CFV baseline on both MAE and RMSE; improving over a weak feature-only model
-is not enough.
+zero-CFV baseline and train-constant baselines on MAE/RMSE; improving over a
+weak feature-only model is not enough.
 
 Only after that harder larger-surface probe passes should a reusable checkpoint
 from `scripts/train_public_belief_dual_hand_cfv.py` be considered for learned

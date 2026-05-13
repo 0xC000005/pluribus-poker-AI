@@ -433,6 +433,35 @@ def _zero_dual_prediction(dataset: DualCFVDataset) -> np.ndarray:
     return np.zeros((2, dataset.features.shape[0], N_HANDS), dtype=np.float32)
 
 
+def _constant_dual_prediction(dataset: DualCFVDataset, value: float) -> np.ndarray:
+    return np.full(
+        (2, dataset.features.shape[0], N_HANDS),
+        float(value),
+        dtype=np.float32,
+    )
+
+
+def _train_target_values(dataset: DualCFVDataset) -> np.ndarray:
+    _, _, _, values = _pair_indices(dataset)
+    return values.astype(np.float32, copy=False)
+
+
+def _constant_baselines(
+    holdout: DualCFVDataset,
+    *,
+    target_mean: float,
+    target_median: float,
+) -> dict[str, dict[str, float]]:
+    zero = _metrics(_zero_dual_prediction(holdout), holdout)
+    mean = _metrics(_constant_dual_prediction(holdout, target_mean), holdout)
+    median = _metrics(_constant_dual_prediction(holdout, target_median), holdout)
+    return {"zero": zero, "train_mean": mean, "train_median": median}
+
+
+def _best_constant_metric(baselines: dict[str, dict[str, float]], metric: str) -> float:
+    return min(float(item[metric]) for item in baselines.values())
+
+
 def _standardize_dual_datasets(
     train_raw: DualCFVDataset,
     holdout_raw: DualCFVDataset,
@@ -508,6 +537,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         _standardize_dual_datasets(train_raw, holdout_raw)
     )
     target_mean, target_std = _standardize_targets(train)
+    target_median = float(np.median(_train_target_values(train)))
     model = _fit_model(
         train,
         target_mean=target_mean,
@@ -533,10 +563,21 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         use_belief=True,
     )
     holdout_metrics = _metrics(holdout_pred, holdout)
-    zero_metrics = _metrics(_zero_dual_prediction(holdout), holdout)
+    constant_baselines = _constant_baselines(
+        holdout,
+        target_mean=target_mean,
+        target_median=target_median,
+    )
+    zero_metrics = constant_baselines["zero"]
+    best_constant_mae = _best_constant_metric(constant_baselines, "mae")
+    best_constant_rmse = _best_constant_metric(constant_baselines, "rmse")
     beats_zero = (
         holdout_metrics["mae"] < zero_metrics["mae"]
         and holdout_metrics["rmse"] <= zero_metrics["rmse"]
+    )
+    beats_constants = (
+        holdout_metrics["mae"] < best_constant_mae
+        and holdout_metrics["rmse"] <= best_constant_rmse
     )
 
     output_path = Path(output_checkpoint)
@@ -562,6 +603,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             "belief_mean": belief_mean,
             "belief_std": belief_std,
             "target_mean": float(target_mean),
+            "target_median": float(target_median),
             "target_std": float(target_std),
             "value_scale": float(value_scale),
             "solver_iterations": int(solver_iterations),
@@ -575,8 +617,15 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     )
     return {
         "mode": "public_belief_dual_hand_cfv_checkpoint_train",
-        "passed": bool(np.isfinite(holdout_metrics["mae"]) and beats_zero),
-        "pass_criteria": "belief checkpoint must beat zero-CFV MAE and not worsen zero-CFV RMSE",
+        "passed": bool(
+            np.isfinite(holdout_metrics["mae"])
+            and beats_zero
+            and beats_constants
+        ),
+        "pass_criteria": (
+            "belief checkpoint must beat zero-CFV and train-constant MAE "
+            "without worsening zero-CFV or train-constant RMSE"
+        ),
         "checkpoint": str(output_path),
         "device": str(resolved_device),
         "solver_iterations": int(solver_iterations),
@@ -609,6 +658,9 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         ),
         "belief_holdout": holdout_metrics,
         "zero_baseline": zero_metrics,
+        "constant_baselines": constant_baselines,
+        "best_constant_mae": round(float(best_constant_mae), 8),
+        "best_constant_rmse": round(float(best_constant_rmse), 8),
         "train_dual_record_count": len(train_records),
         "holdout_dual_record_count": len(holdout_records),
     }
@@ -850,11 +902,22 @@ def main(argv: list[str] | None = None) -> int:
         ),
         holdout,
     )
-    zero_metrics = _metrics(_zero_dual_prediction(holdout), holdout)
+    target_values = _train_target_values(train)
+    target_median = float(np.median(target_values))
+    constant_baselines = _constant_baselines(
+        holdout,
+        target_mean=target_mean,
+        target_median=target_median,
+    )
+    zero_metrics = constant_baselines["zero"]
+    best_constant_mae = _best_constant_metric(constant_baselines, "mae")
+    best_constant_rmse = _best_constant_metric(constant_baselines, "rmse")
     mae_delta = round(float(base_metrics["mae"] - belief_metrics["mae"]), 8)
     rmse_delta = round(float(base_metrics["rmse"] - belief_metrics["rmse"]), 8)
     zero_mae_delta = round(float(zero_metrics["mae"] - belief_metrics["mae"]), 8)
     zero_rmse_delta = round(float(zero_metrics["rmse"] - belief_metrics["rmse"]), 8)
+    best_constant_mae_delta = round(float(best_constant_mae - belief_metrics["mae"]), 8)
+    best_constant_rmse_delta = round(float(best_constant_rmse - belief_metrics["rmse"]), 8)
     metrics = {
         "mode": "public_belief_dual_hand_cfv_probe",
         "passed": bool(
@@ -862,10 +925,12 @@ def main(argv: list[str] | None = None) -> int:
             and rmse_delta >= 0
             and zero_mae_delta > 0
             and zero_rmse_delta >= 0
+            and best_constant_mae_delta > 0
+            and best_constant_rmse_delta >= 0
         ),
         "pass_criteria": (
-            "belief_holdout must improve feature baseline and beat zero-CFV MAE "
-            "without worsening feature or zero-CFV RMSE"
+            "belief_holdout must improve feature baseline and beat zero-CFV and "
+            "train-constant MAE without worsening feature, zero-CFV, or train-constant RMSE"
         ),
         "device": str(device),
         "train_size": int(train.features.shape[0]),
@@ -883,16 +948,21 @@ def main(argv: list[str] | None = None) -> int:
         "seed": int(args.seed),
         "head_mode": args.head_mode,
         "belief_bottleneck_dim": int(args.belief_bottleneck_dim),
+        "target_mean": round(float(target_mean), 8),
+        "target_median": round(float(target_median), 8),
         "target_dim": int(N_HANDS),
         "train_label_count": int(train.hero_masks.sum() + train.villain_masks.sum()),
         "holdout_label_count": int(holdout.hero_masks.sum() + holdout.villain_masks.sum()),
         "base_holdout": base_metrics,
         "belief_holdout": belief_metrics,
         "zero_baseline": zero_metrics,
+        "constant_baselines": constant_baselines,
         "holdout_mae_delta": mae_delta,
         "holdout_rmse_delta": rmse_delta,
         "holdout_zero_mae_delta": zero_mae_delta,
         "holdout_zero_rmse_delta": zero_rmse_delta,
+        "holdout_best_constant_mae_delta": best_constant_mae_delta,
+        "holdout_best_constant_rmse_delta": best_constant_rmse_delta,
         "train_solver_mean_ms": round(
             float(np.mean([record["solver_latency_ms"] for record in train_records])), 3
         ),

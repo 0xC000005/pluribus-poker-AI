@@ -80,8 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     from poker_ai.research.belief_probe import N_HANDS, _resolve_device
     from poker_ai.research.belief_value_probe import save_metrics
     from eval_public_belief_dual_hand_cfv_probe import (
+        _constant_dual_prediction,
         _load_dual_cache,
         _metrics,
+        _zero_dual_prediction,
         load_public_belief_dual_hand_cfv_checkpoint,
         predict_public_belief_dual_hand_cfv_model,
     )
@@ -123,7 +125,6 @@ def main(argv: list[str] | None = None) -> int:
         timings_ms.append((time.perf_counter() - started) * 1000.0)
     assert pred is not None
 
-    zero_pred = np.zeros_like(pred)
     n_states = int(dataset.features.shape[0])
     n_labels = int(dataset.hero_masks.sum() + dataset.villain_masks.sum())
     mean_ms = float(statistics.mean(timings_ms))
@@ -142,7 +143,20 @@ def main(argv: list[str] | None = None) -> int:
         else None
     )
     model_metrics = _metrics(pred, dataset)
-    zero_metrics = _metrics(zero_pred, dataset)
+    zero_metrics = _metrics(_zero_dual_prediction(dataset), dataset)
+    constant_baselines = {"zero": zero_metrics}
+    if "target_mean" in payload:
+        constant_baselines["train_mean"] = _metrics(
+            _constant_dual_prediction(dataset, float(payload["target_mean"])),
+            dataset,
+        )
+    if "target_median" in payload:
+        constant_baselines["train_median"] = _metrics(
+            _constant_dual_prediction(dataset, float(payload["target_median"])),
+            dataset,
+        )
+    best_constant_mae = min(item["mae"] for item in constant_baselines.values())
+    best_constant_rmse = min(item["rmse"] for item in constant_baselines.values())
     zero_sum = _zero_sum_residuals(pred, dataset, n_hands=N_HANDS)
     metrics = {
         "mode": "public_belief_dual_hand_cfv_checkpoint_eval",
@@ -150,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
             n_states > 0
             and n_labels > 0
             and model_metrics["mae"] < zero_metrics["mae"]
+            and model_metrics["mae"] < best_constant_mae
+            and model_metrics["rmse"] <= best_constant_rmse
             and np.isfinite(zero_sum["pred_abs_mean"])
         ),
         "checkpoint": str(args.checkpoint),
@@ -162,6 +178,9 @@ def main(argv: list[str] | None = None) -> int:
         "n_labels": n_labels,
         "model_holdout": model_metrics,
         "zero_baseline": zero_metrics,
+        "constant_baselines": constant_baselines,
+        "best_constant_mae": round(float(best_constant_mae), 8),
+        "best_constant_rmse": round(float(best_constant_rmse), 8),
         "zero_sum_residual": zero_sum,
         "inference_mean_ms": round(mean_ms, 6),
         "inference_p50_ms": round(p50_ms, 6),
