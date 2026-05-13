@@ -182,3 +182,13 @@ successor-value replacement is therefore not ready. The next mechanism should
 make the search integration safer, for example by learning calibrated residuals,
 mixing learned and exact values, or using the network as a warm-start/policy
 prior instead of a hard cut-value oracle.
+
+The simplest calibration variant was tested and failed. A learned affine
+calibration over successor CFV predictions was nearly identity and slightly
+worsened holdout value MAE (`0.1204` raw to `0.1212` calibrated). Plugging the
+calibrated values into the matched 5-iteration resolver A/B still failed
+(`0.50` agreement, `0.8275` mean L1 drift). Simple scalar value calibration is
+not the bottleneck. The next target should be policy-aware or search-aware:
+train a boundary policy/prior from resolver targets, learn residuals conditioned
+on local legal context, or train a value-mixing controller against the fixed
+resolver behavior gate.

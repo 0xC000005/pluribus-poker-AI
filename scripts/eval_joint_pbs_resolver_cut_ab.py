@@ -38,6 +38,7 @@ from eval_joint_pbs_continuation_probe import (  # noqa: E402
     load_joint_pbs_continuation_checkpoint,
     predict_joint_pbs_cfv_model,
 )
+from fit_joint_pbs_value_calibration import apply_value_calibration  # noqa: E402
 from eval_joint_pbs_resolver_leaf_ab import (  # noqa: E402
     _action_path_to_street_string,
     _global_board_mask,
@@ -132,6 +133,7 @@ class JointPBSSuccessorCutCallback:
         device: Any,
         value_scale: float,
         batch_size: int,
+        value_calibration: dict[str, Any] | None = None,
     ):
         self.case = case
         self.board4 = [int(card) for card in board4]
@@ -146,6 +148,7 @@ class JointPBSSuccessorCutCallback:
         self.device = device
         self.value_scale = float(value_scale)
         self.batch_size = int(batch_size)
+        self.value_calibration = value_calibration
         self.stats = JointCutStats()
 
     def __call__(self, **kwargs):
@@ -201,6 +204,8 @@ class JointPBSSuccessorCutCallback:
             device=self.device,
             batch_size=self.batch_size,
         )
+        if self.value_calibration is not None:
+            pred = apply_value_calibration(pred, self.value_calibration)
         pred = pred * self.value_scale
         self.stats.prediction_ms += (time.perf_counter() - started) * 1000.0
         self.stats.prediction_states += int(len(tasks))
@@ -249,6 +254,7 @@ def _solve_case(
     batch_size: int,
     min_bet_count: int,
     target_action_shapes: tuple[str, ...],
+    value_calibration: dict[str, Any] | None,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     if "error" in parsed:
@@ -321,6 +327,7 @@ def _solve_case(
         device=device,
         value_scale=value_scale,
         batch_size=batch_size,
+        value_calibration=value_calibration,
     )
     callback.solver_hands = list(learned.hands)
     learned.solve(
@@ -377,6 +384,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--value-scale", type=float, default=20000.0)
     parser.add_argument("--batch-size", type=int, default=8192)
     parser.add_argument(
+        "--value-calibration-json",
+        help="Optional affine calibration JSON produced by fit_joint_pbs_value_calibration.py.",
+    )
+    parser.add_argument(
         "--min-bet-count",
         type=int,
         default=0,
@@ -395,6 +406,10 @@ def main(argv: list[str] | None = None) -> int:
 
     device = _resolve_device(args.device)
     cases = load_cases_json(args.cases)
+    value_calibration = None
+    if args.value_calibration_json:
+        calibration_payload = json.loads(Path(args.value_calibration_json).read_text(encoding="utf-8"))
+        value_calibration = calibration_payload.get("calibration", calibration_payload)
     base_dataset = None
     if args.cfv_cache:
         base_dataset, _records = load_public_belief_cfv_dataset_cache(args.cfv_cache)
@@ -419,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 min_bet_count=args.min_bet_count,
                 target_action_shapes=tuple(args.target_action_shapes),
+                value_calibration=value_calibration,
             )
         )
 
@@ -461,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
             "joint_pbs_resolver_successor_cut_ab_is_diagnostic_not_slumbot_confidence",
         ],
         "checkpoint": str(args.checkpoint),
+        "value_calibration_json": str(args.value_calibration_json) if args.value_calibration_json else None,
         "cases": str(args.cases),
         "cfv_cache": str(args.cfv_cache) if args.cfv_cache else None,
         "device": str(device),

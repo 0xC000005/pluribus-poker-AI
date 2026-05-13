@@ -49,6 +49,7 @@ from eval_joint_pbs_continuation_probe import (
     run_joint_pbs_continuation_probe,
 )
 from eval_joint_pbs_group_constant_baseline import eval_joint_pbs_group_constant_baseline
+from fit_joint_pbs_value_calibration import apply_value_calibration, fit_affine_calibration
 from split_joint_pbs_by_metadata import split_joint_pbs_by_metadata
 from solver import Node
 
@@ -865,6 +866,29 @@ def test_split_joint_pbs_by_metadata_preserves_shape_coverage(tmp_path):
     assert {record["label"] for record in train_meta["cut_records"]}.isdisjoint(
         {record["label"] for record in holdout_meta["cut_records"]}
     )
+
+
+def test_joint_pbs_value_affine_calibration_helpers():
+    pred = np.asarray([0.0, 1.0, 2.0, 3.0], dtype=np.float32)
+    target = pred * 2.0 + 0.5
+    mask = np.asarray([1, 1, 0, 1], dtype=bool)
+    fit = fit_affine_calibration(pred, target, mask)
+    stacked = np.stack([pred.reshape(1, 4), pred.reshape(1, 4)], axis=0)
+    calibrated = apply_value_calibration(
+        stacked,
+        {
+            "players": {
+                "hero": fit,
+                "villain": {"scale": 1.0, "bias": -1.0},
+            }
+        },
+    )
+
+    assert fit["n"] == 3
+    assert fit["scale"] == pytest.approx(2.0)
+    assert fit["bias"] == pytest.approx(0.5)
+    assert calibrated[0, 0, 1] == pytest.approx(2.5)
+    assert calibrated[1, 0, 1] == pytest.approx(0.0)
 
 
 def test_joint_pbs_continuation_probe_skips_policy_gate_without_policy_labels(tmp_path):
