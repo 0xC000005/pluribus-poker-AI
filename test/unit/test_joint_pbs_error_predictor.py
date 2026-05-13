@@ -26,3 +26,12 @@ def test_error_predictor_fits_synthetic_metadata_signal():
     assert metrics["passed"] is True
     assert metrics["holdout"]["pearson_mae"] > 0.9
     assert metrics["worst_predicted_holdout"][0]["label"] == "f"
+    assert metrics["model"]["abstention_rule"]
+    assert metrics["model"]["abstention_predicted_mae_cut"] > 0.0
+    assert metrics["structural_only"]["model"]["numeric_fields"] == [
+        "actor_to_act",
+        "bet_count",
+        "client_pos",
+        "cut_pos",
+        "legal_action_count",
+    ]

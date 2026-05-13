@@ -175,6 +175,7 @@ def _fit_error_predictor_with_fields(
     weights = _fit_ridge(x_train, y_train)
     train_pred = x_train @ weights
     holdout_pred = x_holdout @ weights
+    train_pred_mae = np.exp(train_pred) - 1e-6
     return {
         "passed": bool(np.isfinite(holdout_pred).all()),
         "n_train": len(train_rows),
@@ -187,6 +188,22 @@ def _fit_error_predictor_with_fields(
             np.asarray([float(row["mae"]) for row in train_rows], dtype=np.float64),
         ),
         "holdout": _metrics(holdout_pred, y_holdout_mae),
+        "model": {
+            "ridge": float(_RIDGE),
+            "numeric_fields": list(numeric_fields),
+            "categorical_fields": list(CATEGORICAL_FIELDS),
+            "category_vocab": vocab,
+            "numeric_mean": numeric_mean.round(10).tolist(),
+            "numeric_std": numeric_std.round(10).tolist(),
+            "weights": weights.round(10).tolist(),
+            "abstention_rule": "use_learned_value_when_predicted_mae_at_or_below_train_median",
+            "abstention_predicted_mae_cut": round(float(np.quantile(train_pred_mae, 0.5)), 8),
+            "train_predicted_mae_quantiles": {
+                "p50": round(float(np.quantile(train_pred_mae, 0.5)), 8),
+                "p80": round(float(np.quantile(train_pred_mae, 0.8)), 8),
+                "p90": round(float(np.quantile(train_pred_mae, 0.9)), 8),
+            },
+        },
         "worst_predicted_holdout": [
             {
                 "label": str(holdout_rows[index]["label"]),

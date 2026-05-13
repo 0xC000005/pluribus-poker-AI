@@ -51,11 +51,20 @@ from play_slumbot import (  # noqa: E402
     _compute_bets_before_street,
     build_features,
     card_str_to_index,
+    get_legal_mask_from_parsed,
     parse_action,
 )
 from solver import StreetSolver, _parse_nav, resolve_solver_backend, solver_action_to_slumbot  # noqa: E402
 
 _BET_TOKEN_RE = re.compile(r"b\d+")
+_STRUCTURAL_RISK_NUMERIC_FIELDS = (
+    "actor_to_act",
+    "bet_count",
+    "client_pos",
+    "cut_pos",
+    "legal_action_count",
+)
+_STRUCTURAL_RISK_CATEGORICAL_FIELDS = ("action_shape",)
 
 
 @dataclass
@@ -65,6 +74,85 @@ class JointCutStats:
     fallback_cut_nodes: int = 0
     prediction_states: int = 0
     prediction_ms: float = 0.0
+
+
+@dataclass
+class StructuralCutRiskPredictor:
+    numeric_fields: tuple[str, ...]
+    categorical_fields: tuple[str, ...]
+    category_vocab: dict[str, list[str]]
+    numeric_mean: np.ndarray
+    numeric_std: np.ndarray
+    weights: np.ndarray
+    abstention_cut: float
+    abstention_rule: str
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> "StructuralCutRiskPredictor":
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        section = payload.get("structural_only", payload)
+        model = section.get("model")
+        if not isinstance(model, dict):
+            raise ValueError("risk predictor JSON does not contain structural_only.model")
+        numeric_fields = tuple(str(field) for field in model.get("numeric_fields", ()))
+        categorical_fields = tuple(str(field) for field in model.get("categorical_fields", ()))
+        if numeric_fields != _STRUCTURAL_RISK_NUMERIC_FIELDS:
+            raise ValueError(
+                "risk predictor numeric fields do not match structural cut metadata"
+            )
+        if categorical_fields != _STRUCTURAL_RISK_CATEGORICAL_FIELDS:
+            raise ValueError(
+                "risk predictor categorical fields do not match structural cut metadata"
+            )
+        numeric_mean = np.asarray(model.get("numeric_mean", []), dtype=np.float64)
+        numeric_std = np.asarray(model.get("numeric_std", []), dtype=np.float64)
+        weights = np.asarray(model.get("weights", []), dtype=np.float64)
+        expected_cols = 1 + len(numeric_fields) + sum(
+            len(values) for values in model.get("category_vocab", {}).values()
+        )
+        if numeric_mean.shape != (len(numeric_fields),):
+            raise ValueError("risk predictor numeric_mean has invalid shape")
+        if numeric_std.shape != (len(numeric_fields),):
+            raise ValueError("risk predictor numeric_std has invalid shape")
+        if weights.shape != (expected_cols,):
+            raise ValueError("risk predictor weights have invalid shape")
+        return cls(
+            numeric_fields=numeric_fields,
+            categorical_fields=categorical_fields,
+            category_vocab={
+                str(field): [str(value) for value in values]
+                for field, values in model.get("category_vocab", {}).items()
+            },
+            numeric_mean=numeric_mean,
+            numeric_std=np.where(numeric_std > 1e-8, numeric_std, 1.0),
+            weights=weights,
+            abstention_cut=float(model["abstention_predicted_mae_cut"]),
+            abstention_rule=str(model.get("abstention_rule", "train_median")),
+        )
+
+    def predict_mae(self, metadata: dict[str, Any]) -> float:
+        numeric = np.asarray(
+            [float(metadata.get(field, 0.0) or 0.0) for field in self.numeric_fields],
+            dtype=np.float64,
+        )
+        parts = [
+            np.asarray([1.0], dtype=np.float64),
+            (numeric - self.numeric_mean) / self.numeric_std,
+        ]
+        for field in self.categorical_fields:
+            values = self.category_vocab.get(field, [])
+            encoded = np.zeros(len(values), dtype=np.float64)
+            try:
+                encoded[values.index(str(metadata.get(field, "missing")))] = 1.0
+            except ValueError:
+                pass
+            parts.append(encoded)
+        pred_log = float(np.concatenate(parts) @ self.weights)
+        return float(np.exp(pred_log) - 1e-6)
+
+    def should_replace(self, metadata: dict[str, Any]) -> tuple[bool, float]:
+        predicted_mae = self.predict_mae(metadata)
+        return bool(predicted_mae <= self.abstention_cut), predicted_mae
 
 
 def _node_index(solver: StreetSolver, node: Any) -> int:
@@ -88,6 +176,53 @@ def _frontier_matches_filter(
     return bet_count >= int(min_bet_count)
 
 
+def _successor_cut_node_records(
+    solver: StreetSolver,
+    active_node: Any,
+    *,
+    action_prefix: str = "",
+    client_pos: int | None = None,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    cut_pos = 0
+    for action in sorted(active_node.children):
+        child = active_node.children[action]
+        if child.is_terminal:
+            continue
+        node_idx = _node_index(solver, child)
+        street_action = _action_path_to_street_string(
+            solver._tree,
+            node_idx,
+            hero_stack_start=int(solver._tree["stacks_h"][0]),
+            villain_stack_start=int(solver._tree["stacks_v"][0]),
+        )
+        action_str = f"{action_prefix}/{street_action}" if action_prefix else street_action
+        action_shape = _frontier_action_shape(action_str)
+        bet_count = int(len(_BET_TOKEN_RE.findall(action_str)))
+        record: dict[str, Any] = {
+            "node_idx": node_idx,
+            "cut_pos": int(cut_pos),
+            "action_str": action_str,
+            "action_shape": action_shape,
+            "bet_count": bet_count,
+        }
+        if client_pos is not None:
+            parsed = parse_action(action_str)
+            record["parse_ok"] = "error" not in parsed
+            record["actor_to_act"] = (
+                int(parsed.get("pos", -1)) if "error" not in parsed else -1
+            )
+            record["client_pos"] = int(client_pos)
+            if "error" not in parsed:
+                legal_mask = get_legal_mask_from_parsed(parsed, action_str, int(client_pos))
+                record["legal_action_count"] = int(np.count_nonzero(legal_mask > 0))
+            else:
+                record["legal_action_count"] = 0
+        records.append(record)
+        cut_pos += 1
+    return records
+
+
 def _successor_cut_node_indices(
     solver: StreetSolver,
     active_node: Any,
@@ -98,27 +233,76 @@ def _successor_cut_node_indices(
 ) -> list[int]:
     """Return immediate non-terminal successors to use as a depth-limit frontier."""
     cut_indices: list[int] = []
-    for action in sorted(active_node.children):
-        child = active_node.children[action]
-        if child.is_terminal:
+    for record in _successor_cut_node_records(
+        solver,
+        active_node,
+        action_prefix=action_prefix,
+    ):
+        if not _frontier_matches_filter(
+            action_str=str(record["action_str"]),
+            min_bet_count=min_bet_count,
+            target_action_shapes=target_action_shapes,
+        ):
             continue
-        if min_bet_count > 0 or target_action_shapes:
-            node_idx = _node_index(solver, child)
-            street_action = _action_path_to_street_string(
-                solver._tree,
-                node_idx,
-                hero_stack_start=int(solver._tree["stacks_h"][0]),
-                villain_stack_start=int(solver._tree["stacks_v"][0]),
-            )
-            action_str = f"{action_prefix}/{street_action}" if action_prefix else street_action
-            if not _frontier_matches_filter(
-                action_str=action_str,
-                min_bet_count=min_bet_count,
-                target_action_shapes=target_action_shapes,
-            ):
-                continue
-        cut_indices.append(_node_index(solver, child))
+        cut_indices.append(int(record["node_idx"]))
     return cut_indices
+
+
+def _select_successor_cut_node_records(
+    solver: StreetSolver,
+    active_node: Any,
+    *,
+    action_prefix: str,
+    client_pos: int,
+    min_bet_count: int,
+    target_action_shapes: tuple[str, ...],
+    risk_predictor: StructuralCutRiskPredictor | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    candidates = _successor_cut_node_records(
+        solver,
+        active_node,
+        action_prefix=action_prefix,
+        client_pos=client_pos,
+    )
+    selected: list[dict[str, Any]] = []
+    for record in candidates:
+        record["frontier_filter_passed"] = _frontier_matches_filter(
+            action_str=str(record["action_str"]),
+            min_bet_count=min_bet_count,
+            target_action_shapes=target_action_shapes,
+        )
+        if not record["frontier_filter_passed"]:
+            record["risk_decision"] = "frontier_filter_rejected"
+            continue
+        if not bool(record.get("parse_ok", False)):
+            record["risk_decision"] = "parse_rejected"
+            continue
+        if risk_predictor is not None:
+            should_replace, predicted_mae = risk_predictor.should_replace(record)
+            record["predicted_mae"] = round(float(predicted_mae), 8)
+            record["risk_abstention_cut"] = round(float(risk_predictor.abstention_cut), 8)
+            if not should_replace:
+                record["risk_decision"] = "risk_rejected_exact_fallback"
+                continue
+        record["risk_decision"] = "selected_for_learned_value"
+        selected.append(record)
+    return candidates, selected
+
+
+def _summarize_cut_risk_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summary: list[dict[str, Any]] = []
+    for record in records:
+        item = {
+            "cut_pos": int(record["cut_pos"]),
+            "action_shape": str(record["action_shape"]),
+            "bet_count": int(record["bet_count"]),
+            "legal_action_count": int(record.get("legal_action_count", 0)),
+            "risk_decision": str(record.get("risk_decision", "unknown")),
+        }
+        if "predicted_mae" in record:
+            item["predicted_mae"] = float(record["predicted_mae"])
+        summary.append(item)
+    return summary
 
 
 class JointPBSSuccessorCutCallback:
@@ -255,6 +439,7 @@ def _solve_case(
     min_bet_count: int,
     target_action_shapes: tuple[str, ...],
     value_calibration: dict[str, Any] | None,
+    risk_predictor: StructuralCutRiskPredictor | None,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     if "error" in parsed:
@@ -287,20 +472,33 @@ def _solve_case(
     learned_node = learned.navigate(_parse_nav(street_action, learned))
     if learned_node is None or learned_node.is_terminal:
         return {"label": case.label, "passed": False, "skipped": "learned_terminal_or_missing_node"}
-    candidate_cut_indices = _successor_cut_node_indices(learned, learned_node)
-    cut_indices = _successor_cut_node_indices(
+    candidate_cut_records, selected_cut_records = _select_successor_cut_node_records(
         learned,
         learned_node,
         action_prefix=action_prefix,
+        client_pos=case.client_pos,
         min_bet_count=min_bet_count,
         target_action_shapes=target_action_shapes,
+        risk_predictor=risk_predictor,
     )
+    candidate_cut_indices = [int(record["node_idx"]) for record in candidate_cut_records]
+    cut_indices = [int(record["node_idx"]) for record in selected_cut_records]
     if not cut_indices:
         return {
             "label": case.label,
             "passed": False,
-            "skipped": "no_matching_successor_cut_nodes",
+            "skipped": "no_selected_successor_cut_nodes",
             "candidate_cut_nodes": int(len(candidate_cut_indices)),
+            "frontier_matching_cut_nodes": int(
+                sum(bool(record.get("frontier_filter_passed")) for record in candidate_cut_records)
+            ),
+            "risk_rejected_cut_nodes": int(
+                sum(
+                    record.get("risk_decision") == "risk_rejected_exact_fallback"
+                    for record in candidate_cut_records
+                )
+            ),
+            "cut_risk_records": _summarize_cut_risk_records(candidate_cut_records),
         }
 
     baseline = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
@@ -350,7 +548,17 @@ def _solve_case(
         "passed": bool(np.isfinite(l1)),
         "cut_applied": bool(callback.stats.replaced_cut_nodes > 0),
         "candidate_cut_nodes": int(len(candidate_cut_indices)),
+        "frontier_matching_cut_nodes": int(
+            sum(bool(record.get("frontier_filter_passed")) for record in candidate_cut_records)
+        ),
         "n_cut_nodes": int(len(cut_indices)),
+        "risk_rejected_cut_nodes": int(
+            sum(
+                record.get("risk_decision") == "risk_rejected_exact_fallback"
+                for record in candidate_cut_records
+            )
+        ),
+        "cut_risk_records": _summarize_cut_risk_records(candidate_cut_records),
         "baseline_action": baseline_action,
         "baseline_increment": solver_action_to_slumbot(baseline_action, baseline_node, baseline, parsed),
         "learned_action": learned_action,
@@ -388,6 +596,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional affine calibration JSON produced by fit_joint_pbs_value_calibration.py.",
     )
     parser.add_argument(
+        "--error-predictor-json",
+        help=(
+            "Optional error predictor JSON produced by eval_joint_pbs_error_predictor.py. "
+            "When supplied, only structural low-risk cuts use learned values."
+        ),
+    )
+    parser.add_argument(
         "--min-bet-count",
         type=int,
         default=0,
@@ -408,8 +623,15 @@ def main(argv: list[str] | None = None) -> int:
     cases = load_cases_json(args.cases)
     value_calibration = None
     if args.value_calibration_json:
-        calibration_payload = json.loads(Path(args.value_calibration_json).read_text(encoding="utf-8"))
+        calibration_payload = json.loads(
+            Path(args.value_calibration_json).read_text(encoding="utf-8")
+        )
         value_calibration = calibration_payload.get("calibration", calibration_payload)
+    risk_predictor = (
+        StructuralCutRiskPredictor.from_json(args.error_predictor_json)
+        if args.error_predictor_json
+        else None
+    )
     base_dataset = None
     if args.cfv_cache:
         base_dataset, _records = load_public_belief_cfv_dataset_cache(args.cfv_cache)
@@ -435,6 +657,7 @@ def main(argv: list[str] | None = None) -> int:
                 min_bet_count=args.min_bet_count,
                 target_action_shapes=tuple(args.target_action_shapes),
                 value_calibration=value_calibration,
+                risk_predictor=risk_predictor,
             )
         )
 
@@ -456,6 +679,13 @@ def main(argv: list[str] | None = None) -> int:
     max_action_l1_drift = round(float(np.max(drift)), 8) if drift else None
     cut_mean_action_l1_drift = round(float(np.mean(cut_drift)), 8) if cut_drift else None
     cut_max_action_l1_drift = round(float(np.max(cut_drift)), 8) if cut_drift else None
+    frontier_matching_cut_nodes = int(
+        sum(int(record.get("frontier_matching_cut_nodes", 0)) for record in records)
+    )
+    risk_rejected_cut_nodes = int(
+        sum(int(record.get("risk_rejected_cut_nodes", 0)) for record in records)
+    )
+    selected_cut_nodes = int(sum(int(record.get("n_cut_nodes", 0)) for record in records))
     mechanical_passed = bool(cut_evaluated and all(record.get("passed") for record in evaluated))
     behavior_passed = bool(
         mechanical_passed
@@ -478,6 +708,11 @@ def main(argv: list[str] | None = None) -> int:
         ],
         "checkpoint": str(args.checkpoint),
         "value_calibration_json": str(args.value_calibration_json) if args.value_calibration_json else None,
+        "error_predictor_json": str(args.error_predictor_json) if args.error_predictor_json else None,
+        "risk_abstention_rule": risk_predictor.abstention_rule if risk_predictor else None,
+        "risk_abstention_predicted_mae_cut": (
+            round(float(risk_predictor.abstention_cut), 8) if risk_predictor else None
+        ),
         "cases": str(args.cases),
         "cfv_cache": str(args.cfv_cache) if args.cfv_cache else None,
         "device": str(device),
@@ -491,6 +726,14 @@ def main(argv: list[str] | None = None) -> int:
         "n_cases": len(records),
         "n_evaluated": len(evaluated),
         "n_cut_applied": len(cut_evaluated),
+        "frontier_matching_cut_nodes": frontier_matching_cut_nodes,
+        "selected_cut_nodes": selected_cut_nodes,
+        "risk_rejected_cut_nodes": risk_rejected_cut_nodes,
+        "selected_cut_coverage": (
+            round(float(selected_cut_nodes / frontier_matching_cut_nodes), 8)
+            if frontier_matching_cut_nodes
+            else None
+        ),
         "action_agreement_rate": action_agreement_rate,
         "cut_action_agreement_rate": cut_action_agreement_rate,
         "mean_action_l1_drift": mean_action_l1_drift,

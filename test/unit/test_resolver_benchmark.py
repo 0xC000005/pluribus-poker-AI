@@ -25,7 +25,9 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
     _local_ranges_from_belief,
 )
 from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
+    StructuralCutRiskPredictor,
     _frontier_action_shape,
+    _select_successor_cut_node_records,
     _successor_cut_node_indices,
 )
 from eval_policy_prior_solver_budget import mix_strategy  # noqa: E402
@@ -449,6 +451,50 @@ def test_successor_cut_node_indices_can_filter_frontier_shape():
     assert check_indices
     assert set(bet_indices).isdisjoint(check_indices)
     assert set(bet_indices).issubset(all_indices)
+
+
+def test_structural_risk_predictor_filters_successor_cuts_before_solve():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    predictor = StructuralCutRiskPredictor(
+        numeric_fields=(
+            "actor_to_act",
+            "bet_count",
+            "client_pos",
+            "cut_pos",
+            "legal_action_count",
+        ),
+        categorical_fields=("action_shape",),
+        category_vocab={"action_shape": ["k"]},
+        numeric_mean=np.zeros(5, dtype=np.float64),
+        numeric_std=np.ones(5, dtype=np.float64),
+        weights=np.asarray([np.log(0.1 + 1e-6), 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+        abstention_cut=0.2,
+        abstention_rule="test_rule",
+    )
+
+    candidates, selected = _select_successor_cut_node_records(
+        solver,
+        solver.root,
+        action_prefix="",
+        client_pos=0,
+        min_bet_count=0,
+        target_action_shapes=(),
+        risk_predictor=predictor,
+    )
+
+    assert candidates
+    assert selected
+    assert any(
+        record["risk_decision"] == "risk_rejected_exact_fallback"
+        for record in candidates
+    )
+    assert all(record["risk_decision"] == "selected_for_learned_value" for record in selected)
 
 
 def test_learned_leaf_action_path_reconstructs_turn_sequence():

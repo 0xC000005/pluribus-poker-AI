@@ -322,3 +322,15 @@ selective successor cuts: only use the learned continuation value on predicted
 low-risk structural cuts and leave predicted high-risk cuts exact. The required
 gate remains the fixed successor-cut resolver A/B with action agreement and mean
 action L1 drift, not offline value MAE alone.
+
+The first selective-cut A/B failed that gate. The resolver now supports a
+pre-solve structural risk predictor so fallbacks remain exact instead of
+returning zeros from inside the cut callback. With the fixed train-median
+abstention rule, selected coverage was exactly `0.5` (`26/52` matching cuts),
+but behavior got worse: only `7` cases evaluated, action agreement was
+`0.4286`, and mean action L1 drift was `0.8906` versus `0.8220` for prior hard
+replacement. This means offline successor CFV error ranking is not the missing
+piece by itself. The next continuation target should train on the quantity the
+solver gate actually cares about: root action drift, cut regret residuals, or a
+search-consistency objective that couples successor values to root policy
+stability.
