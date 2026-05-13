@@ -163,6 +163,18 @@ def _reach_summary(prefix: str, reach: np.ndarray) -> dict[str, float | int]:
     }
 
 
+def _matches_frontier_filter(
+    *,
+    action_shape: str,
+    bet_count: int,
+    target_action_shapes: tuple[str, ...],
+    min_bet_count: int,
+) -> bool:
+    if target_action_shapes and action_shape not in target_action_shapes:
+        return False
+    return int(bet_count) >= int(min_bet_count)
+
+
 def _policy_target_for_cut(
     solver: StreetSolver,
     node: Any,
@@ -218,6 +230,9 @@ def export_successor_cut_targets(
     solver_backend: str = "cpu",
     value_scale: float = 20000.0,
     limit: int = 0,
+    min_bet_count: int = 0,
+    target_action_shapes: tuple[str, ...] = (),
+    target_cuts: int = 0,
 ) -> dict[str, Any]:
     cases = load_cases_json(cases_json)
     base_dataset, _records = load_public_belief_cfv_dataset_cache(cfv_cache)
@@ -243,8 +258,11 @@ def export_successor_cut_targets(
     records: list[dict[str, Any]] = []
     cut_records: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
+    roots_scanned = 0
+    filtered_cut_count = 0
 
     for root_idx, case in enumerate(cases):
+        roots_scanned += 1
         started = time.perf_counter()
         parsed = parse_action(case.action_str)
         if "error" in parsed or int(parsed.get("st", -1)) != 2:
@@ -287,12 +305,24 @@ def export_successor_cut_targets(
         reach_h, reach_v = _average_reaches(solver, hero_range, villain_range)
         board_mask = _global_board_mask(board_idx)
         emitted = 0
+        root_filtered = 0
         for cut_pos, cut_idx in enumerate(cut_indices):
             node = solver._tree["all_nodes"][cut_idx]
             action_str = _cut_action_str(solver, cut_idx, action_prefix)
             parsed_cut = parse_action(action_str)
             if "error" in parsed_cut:
                 skipped.append({"label": f"{case.label}:cut{cut_pos}", "reason": "cut_parse_error"})
+                continue
+            action_shape = _action_shape(action_str)
+            bet_count = int(len(_BET_TOKEN_RE.findall(action_str)))
+            if not _matches_frontier_filter(
+                action_shape=action_shape,
+                bet_count=bet_count,
+                target_action_shapes=target_action_shapes,
+                min_bet_count=min_bet_count,
+            ):
+                filtered_cut_count += 1
+                root_filtered += 1
                 continue
             public_feature = build_features([], list(case.board), action_str, case.client_pos, parsed_cut)
             legal_mask = get_legal_mask_from_parsed(parsed_cut, action_str, case.client_pos).astype(np.float32)
@@ -342,8 +372,8 @@ def export_successor_cut_targets(
                     "root_label": case.label,
                     "cut_pos": int(cut_pos),
                     "action_str": action_str,
-                    "action_shape": _action_shape(action_str),
-                    "bet_count": int(len(_BET_TOKEN_RE.findall(action_str))),
+                    "action_shape": action_shape,
+                    "bet_count": bet_count,
                     "actor_to_act": int(parsed_cut.get("pos", -1)),
                     "client_pos": int(case.client_pos),
                     "policy_weight": float(pol_weight),
@@ -355,14 +385,19 @@ def export_successor_cut_targets(
                 }
             )
             emitted += 1
+            if target_cuts > 0 and len(features) >= int(target_cuts):
+                break
         records.append(
             {
                 "label": case.label,
                 "cut_targets": int(emitted),
+                "filtered_cuts": int(root_filtered),
                 "solver_latency_ms": round(float(getattr(solver, "last_solve_ms", 0.0)), 3),
                 "export_latency_ms": round((time.perf_counter() - started) * 1000.0, 3),
             }
         )
+        if target_cuts > 0 and len(features) >= int(target_cuts):
+            break
 
     if not features:
         raise RuntimeError("no successor cut targets were exported")
@@ -390,8 +425,13 @@ def export_successor_cut_targets(
         "solver_iterations": int(solver_iterations),
         "solver_backend": solver_backend,
         "value_scale": float(value_scale),
-        "root_cases_scanned": int(len(cases)),
+        "limit": int(limit),
+        "min_bet_count": int(min_bet_count),
+        "target_action_shapes": list(target_action_shapes),
+        "target_cuts": int(target_cuts),
+        "root_cases_scanned": int(roots_scanned),
         "n_targets": int(len(features)),
+        "filtered_cut_count": int(filtered_cut_count),
         "policy_target_count": int(np.count_nonzero(np.asarray(policy_weights) > 0)),
         "value_label_count": int(
             sum(float(mask.sum()) for mask in hero_masks)
@@ -417,7 +457,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--value-scale", type=float, default=20000.0)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--min-bet-count", type=int, default=0)
+    parser.add_argument(
+        "--target-action-shapes",
+        default="",
+        help="Comma-separated action-shape allowlist, e.g. bbc/bbc/kb,bbbc/bbc/b.",
+    )
+    parser.add_argument("--target-cuts", type=int, default=0)
     args = parser.parse_args(argv)
+    target_action_shapes = tuple(
+        part.strip() for part in args.target_action_shapes.split(",") if part.strip()
+    )
     metrics = export_successor_cut_targets(
         cases_json=args.cases,
         cfv_cache=args.cfv_cache,
@@ -426,6 +476,9 @@ def main(argv: list[str] | None = None) -> int:
         solver_backend=args.solver_backend,
         value_scale=args.value_scale,
         limit=args.limit,
+        min_bet_count=args.min_bet_count,
+        target_action_shapes=target_action_shapes,
+        target_cuts=args.target_cuts,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))
     return 0

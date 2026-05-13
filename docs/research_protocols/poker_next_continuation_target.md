@@ -120,3 +120,11 @@ betting topologies: `bbc/bbc/kb` had MAE `0.5423`, `bbbc/bbc/b` had `0.4650`,
 and `bbbc/bbc/k` had `0.4039`, versus `0.1310-0.2110` for simpler checked/bet
 families. The next data step should stratify frontier exports by action shape
 and high bet count rather than blindly increasing all targets.
+
+The high-bet successor-frontier follow-up did not clear the gate. A targeted
+`96`-cut train / `48`-cut holdout export with `min_bet_count=5` produced a CUDA
+Deepset model that fit train (`MAE 0.0681`) but failed holdout (`MAE/RMSE
+0.3786/0.4788`) against the best constant (`0.3173/0.3961`). That points away
+from more epochs or bigger unstructured MLPs. The next continuation target
+should encode the betting sequence and bet amounts in a reusable learned module,
+or factor values by public action topology, before any resolver A/B retry.

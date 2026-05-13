@@ -35,7 +35,10 @@ from analyze_dual_cfv_cache_errors import (
 from analyze_joint_pbs_value_errors import _group_records
 from build_joint_pbs_continuation_targets import build_joint_payload
 from build_public_belief_cache import build_public_belief_cache
-from build_successor_cut_pbs_targets import export_successor_cut_targets
+from build_successor_cut_pbs_targets import (
+    _matches_frontier_filter,
+    export_successor_cut_targets,
+)
 from eval_joint_pbs_continuation_probe import (
     load_joint_pbs_dataset,
     load_joint_pbs_continuation_checkpoint,
@@ -773,6 +776,21 @@ def test_successor_cut_target_export_writes_joint_pbs_payload(tmp_path):
     assert payload["hero_values"].shape == payload["hero_masks"].shape
     assert payload["villain_values"].shape == payload["villain_masks"].shape
     assert np.all(payload["policy_weights"] == 0.0)
+
+
+def test_successor_cut_frontier_filter_targets_complex_cuts():
+    assert _matches_frontier_filter(
+        action_shape="bbc/bbc/kb",
+        bet_count=5,
+        target_action_shapes=("bbc/bbc/kb",),
+        min_bet_count=5,
+    )
+    assert not _matches_frontier_filter(
+        action_shape="ck/b",
+        bet_count=1,
+        target_action_shapes=("bbc/bbc/kb",),
+        min_bet_count=5,
+    )
 
 
 def test_joint_pbs_value_error_grouping_uses_cut_metadata():
