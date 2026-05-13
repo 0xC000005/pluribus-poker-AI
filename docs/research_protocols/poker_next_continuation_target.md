@@ -261,3 +261,13 @@ rank-aware checkpoints fail, and rank-aware is worse (`top1_match 0.0391`,
 solver all-in gap `0.8516`). Next target: build a larger policy-target pool and
 stratify train/holdout by target top action and public-state pressure before
 rerunning rank-aware calibration.
+
+The coherent-label rerun partially supports that direction but fails the
+behavior gate. A fresh sampled-only `384`-case target pool with uniform
+`25`-iteration CPU solver labels was split `288/96` by street and target top
+action. Fixed-margin rank-aware calibration improved holdout L1 (`0.8622 ->
+0.6315`) and top-1 match (`0.0833 -> 0.6458`), but overselected all-in
+(`0.9583` vs solver/target `0.6667`) and failed the solver-relative all-in gap.
+The next target is confidence-weighted ranking: use the solver distribution's
+top-vs-runner-up probability gap to decide how strongly to enforce rank
+margins, rather than forcing every top label equally.
