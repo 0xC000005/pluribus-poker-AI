@@ -1750,3 +1750,14 @@
 - Summary: Added a per-hand counterfactual value-vector probe using public features with private-card slots zeroed. The target shape reduced the belief penalty substantially compared with scalar EV, but raw belief still failed all three seeds on the corrected `64/32` mixed-street split. This supports the literature-shaped CFV target as the right direction, while falsifying direct raw-belief integration at this target scale.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_cfv_probe_mixed64x32_summary.json
 - Key metrics: `{"pass_count": 0, "n": 3, "mae_delta_mean": -0.039853309999999996, "rmse_delta_mean": -0.06265572666666668, "mae_deltas": [-0.04158113, -0.04643343, -0.03154537], "rmse_deltas": [-0.06322263, -0.06908919, -0.05565536], "train_mask_count": 70688, "holdout_mask_count": 35344}`
+
+## 20260513T021554Z-public-belief-cfv-probe-mixed128x64 - failed
+
+- Timestamp: 2026-05-13T02:15:54Z
+- Type: analysis
+- Gate: manual-public-belief-cfv-probe-data-scale
+- Hypothesis: Doubling the corrected mixed-street CFV target set should reduce raw-belief overfit enough to improve held-out CFV prediction versus feature-only.
+- Failure class: range_belief
+- Summary: Generated a larger corrected `128/64` mixed turn/river split and reran the CFV vector probe with cached value labels. The raw-belief model again failed all three seeds, with a larger average MAE/RMSE penalty than the `64/32` split. This falsifies small data-scale alone as the immediate fix for raw-belief value prediction.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_cfv_probe_mixed128x64_summary.json
+- Key metrics: `{"pass_count": 0, "n": 3, "mae_delta_mean": -0.059376816666666665, "rmse_delta_mean": -0.09354858666666667, "mae_deltas": [-0.06473704, -0.05932878, -0.05406463], "rmse_deltas": [-0.09998498, -0.09446186, -0.08619892], "train_mask_count": 141376, "holdout_mask_count": 70688}`

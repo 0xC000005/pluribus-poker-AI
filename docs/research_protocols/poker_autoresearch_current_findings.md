@@ -334,6 +334,12 @@ GPU training readiness:
   mean RMSE delta `-0.0627`, with `70,688` train hand-value labels and `35,344`
   holdout labels. Read: CFV-vector value learning is the right target shape,
   but raw public-belief input is not yet promotable at this data scale.
+- Doubling the corrected CFV split to `128/64` did not fix this; it failed
+  `0/3` seeds with mean MAE delta `-0.0594` and mean RMSE delta `-0.0935`
+  despite `141,376` train hand-value labels and `70,688` holdout labels. Read:
+  simply adding a small amount of supervised CFV data is not the next lever.
+  The next belief-value test should change representation learning or
+  regularization, not target count alone.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
