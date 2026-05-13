@@ -47,6 +47,7 @@ from eval_joint_pbs_continuation_probe import (
     predict_joint_pbs_policy_model,
     run_joint_pbs_continuation_probe,
 )
+from eval_joint_pbs_group_constant_baseline import eval_joint_pbs_group_constant_baseline
 from solver import Node
 
 
@@ -721,6 +722,42 @@ def test_joint_pbs_action_sequence_metadata_feeds_gru_encoder(tmp_path):
     assert loaded.action_tokens.shape == (4, 8)
     assert loaded.action_amounts[0, 0] > 0.0
     assert metrics["action_encoder"] == "gru"
+
+
+def test_joint_pbs_group_constant_baseline_uses_metadata(tmp_path):
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    train_meta = tmp_path / "train_joint.json"
+    holdout_meta = tmp_path / "holdout_joint.json"
+    _write_joint_pbs_fixture(train_path, n_states=4)
+    _write_joint_pbs_fixture(holdout_path, n_states=3)
+    for path, n_states in ((train_meta, 4), (holdout_meta, 3)):
+        path.write_text(
+            json.dumps(
+                {
+                    "cut_records": [
+                        {
+                            "label": f"case-{idx}",
+                            "action_shape": "shape-a" if idx < 2 else "shape-b",
+                        }
+                        for idx in range(n_states)
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    metrics = eval_joint_pbs_group_constant_baseline(
+        train_joint_npz=train_path,
+        holdout_joint_npz=holdout_path,
+        train_metadata_json=train_meta,
+        holdout_metadata_json=holdout_meta,
+        group_by=("action_shape",),
+    )
+
+    assert metrics["mode"] == "joint_pbs_group_constant_baseline"
+    assert metrics["n_train_groups"] == 2
+    assert "mae" in metrics["grouped_constant"]
 
 
 def test_joint_pbs_continuation_probe_skips_policy_gate_without_policy_labels(tmp_path):

@@ -2370,6 +2370,17 @@
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_actiongru_probe_seed20260624.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_deepset_probe_seed20260624.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_actiongru_error_by_shape_seed20260624.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_actiongru_train_error_by_shape_seed20260624.json
 - Key metrics: `{"action_gru": {"passed": false, "train_mae": 0.06768838, "holdout_mae": 0.39443482, "holdout_rmse": 0.49358745}, "same_seed_no_action": {"passed": false, "holdout_mae": 0.37048536, "holdout_rmse": 0.46785412}, "best_constant": {"mae": 0.31732337, "rmse": 0.39611551}}`
 
+## 20260513T102743Z-topology-constant-baseline - failed
+
+- Timestamp: 2026-05-13T10:27:43Z
+- Type: experiment
+- Gate: manual-topology-constant-baseline
+- Hypothesis: If high-bet successor-frontier failure is mostly public-topology shift, train-set constants grouped by action topology should beat the global train-mean constant on held-out targets.
+- Failure class: model_objective
+- Summary: Added `scripts/eval_joint_pbs_group_constant_baseline.py` to fit train-set scalar value constants by metadata groups and evaluate them on held-out joint-PBS value labels. This is a diagnostic baseline, not a gameplay rule. On the high-bet successor-frontier split, action-shape constants produced `MAE/RMSE 0.3214/0.3986`, and actor-to-act plus bet-count constants produced `0.3304/0.4108`; both were worse than the global train-mean constant `0.3173/0.3961`. This falsifies simple public-topology constant factorization. The next mechanism should inspect why public-belief support/reach changes do not transfer, likely via range-conditioned or residualized value targets rather than action topology alone.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_group_constant_action_shape_seed20260625.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_group_constant_actor_bet_seed20260625.json
+- Key metrics: `{"global_train_mean": {"mae": 0.31732337, "rmse": 0.39611551}, "action_shape": {"grouped_beats_global": false, "mae": 0.32143955, "rmse": 0.39860338, "n_train_groups": 10}, "actor_bet": {"grouped_beats_global": false, "mae": 0.3303969, "rmse": 0.41082458, "n_train_groups": 4}}`
+
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z

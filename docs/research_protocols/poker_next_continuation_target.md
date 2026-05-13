@@ -138,3 +138,11 @@ into gameplay. The next hypothesis should change the target or factorization:
 for example, train topology-conditioned continuation values, predict normalized
 delta-to-constant residuals, or generate paired public-action augmentations so
 the model must learn invariances rather than memorize action strings.
+
+A simple topology factorization check also failed. Train-set constants grouped
+by `action_shape` got `MAE/RMSE 0.3214/0.3986`, and constants grouped by
+`actor_to_act,bet_count` got `0.3304/0.4108`, both worse than the global
+train-mean constant `0.3173/0.3961`. Do not spend on topology buckets alone.
+The next target should probe reach/range-conditioned value structure: support
+entropy, top-mass, zero-sum residuals, and whether predicting residuals from a
+range-aware baseline is easier than raw per-hand CFVs.
