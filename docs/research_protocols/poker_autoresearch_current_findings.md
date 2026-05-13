@@ -539,6 +539,12 @@ Workflow governance status:
   (`0.3220` residual error vs `0.8756` zero-prediction residual), and run at
   `0.793 ms/state`, about `2,254x` faster than cached solver labels. Treat
   this as a promising learned-leaf direction, not a search-ready promotion.
+- Dual-player range robustness now has a diagnostic script. On eight held-out
+  river states, the saved Deepset-64 ensemble passed both a 50% mix toward
+  uniform legal ranges and fully uniform legal ranges after re-solving labels:
+  mix `0.5` MAE/RMSE `0.3087/0.3725`, mix `1.0` MAE/RMSE `0.3030/0.3669`.
+  Both beat zero and train-constant baselines, so exact-blueprint-range
+  overfitting is not the current learned-leaf blocker.
 - Related-work anchor: Deep Sets supports permutation-aware learned set
   encoders for unordered card inputs, while Deep CFR/ReBeL/Supremus support
   learned value approximators paired with search rather than manual card
@@ -570,9 +576,10 @@ Current learned-leaf failure class: `range_belief`.
 
 Flat public-belief hand-CFV models mostly learn broad value offsets and fail
 trivial constant baselines on held-out river states. The saved Deepset-64
-ensemble is the first reusable local result to beat those baselines, so the
-next research cycle should test learned card/range interaction inside
-fixed-state resolver diagnostics before any Slumbot spend.
+ensemble is the first reusable local result to beat those baselines, and it
+survives small perturbed-range checks. The next research cycle should test the
+learned card/range interaction inside fixed-state resolver diagnostics before
+any Slumbot spend.
 
 Resolved workflow issue: `rules_parity`.
 
