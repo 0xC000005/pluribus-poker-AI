@@ -57,6 +57,8 @@ class JointPBSDataset:
     villain_values: np.ndarray
     hero_masks: np.ndarray
     villain_masks: np.ndarray
+    hero_value_weights: np.ndarray
+    villain_value_weights: np.ndarray
     action_tokens: np.ndarray
     action_amounts: np.ndarray
     labels: tuple[str, ...]
@@ -297,6 +299,18 @@ def load_joint_pbs_dataset(
         if "policy_weights" in data
         else np.ones(data["features"].shape[0], dtype=np.float32)
     )
+    hero_masks = data["hero_masks"].astype(np.float32, copy=False)
+    villain_masks = data["villain_masks"].astype(np.float32, copy=False)
+    hero_value_weights = (
+        data["hero_value_weights"].astype(np.float32, copy=False)
+        if "hero_value_weights" in data
+        else hero_masks
+    )
+    villain_value_weights = (
+        data["villain_value_weights"].astype(np.float32, copy=False)
+        if "villain_value_weights" in data
+        else villain_masks
+    )
     labels = tuple(str(item) for item in data["labels"].tolist())
     if "action_tokens" in data and "action_amounts" in data:
         action_tokens = data["action_tokens"].astype(np.int64, copy=False)
@@ -320,8 +334,10 @@ def load_joint_pbs_dataset(
         policy_weights=policy_weights.astype(np.float32, copy=False),
         hero_values=data["hero_values"].astype(np.float32, copy=False),
         villain_values=data["villain_values"].astype(np.float32, copy=False),
-        hero_masks=data["hero_masks"].astype(np.float32, copy=False),
-        villain_masks=data["villain_masks"].astype(np.float32, copy=False),
+        hero_masks=hero_masks,
+        villain_masks=villain_masks,
+        hero_value_weights=hero_value_weights,
+        villain_value_weights=villain_value_weights,
         action_tokens=action_tokens,
         action_amounts=action_amounts,
         labels=labels,
@@ -345,6 +361,8 @@ def _standardize_joint_pair(
         villain_values=train.villain_values,
         hero_masks=train.hero_masks,
         villain_masks=train.villain_masks,
+        hero_value_weights=train.hero_value_weights,
+        villain_value_weights=train.villain_value_weights,
         action_tokens=train.action_tokens,
         action_amounts=train.action_amounts,
         labels=train.labels,
@@ -360,6 +378,8 @@ def _standardize_joint_pair(
         villain_values=holdout.villain_values,
         hero_masks=holdout.hero_masks,
         villain_masks=holdout.villain_masks,
+        hero_value_weights=holdout.hero_value_weights,
+        villain_value_weights=holdout.villain_value_weights,
         action_tokens=holdout.action_tokens,
         action_amounts=holdout.action_amounts,
         labels=holdout.labels,
@@ -367,7 +387,9 @@ def _standardize_joint_pair(
     return train_std, holdout_std, public_mean, public_std, belief_mean, belief_std
 
 
-def _pair_indices(dataset: JointPBSDataset) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _pair_indices(
+    dataset: JointPBSDataset,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     hero_case, hero_hand = np.nonzero(dataset.hero_masks > 0)
     villain_case, villain_hand = np.nonzero(dataset.villain_masks > 0)
     case_idx = np.concatenate([hero_case, villain_case]).astype(np.int64)
@@ -384,14 +406,26 @@ def _pair_indices(dataset: JointPBSDataset) -> tuple[np.ndarray, np.ndarray, np.
             dataset.villain_values[villain_case, villain_hand],
         ]
     ).astype(np.float32)
-    return case_idx, hand_idx, player_idx, values
+    weights = np.concatenate(
+        [
+            dataset.hero_value_weights[hero_case, hero_hand],
+            dataset.villain_value_weights[villain_case, villain_hand],
+        ]
+    ).astype(np.float32)
+    weights = np.maximum(weights, 0.0)
+    return case_idx, hand_idx, player_idx, values, weights
 
 
 def _target_stats(dataset: JointPBSDataset) -> tuple[float, float, float]:
-    _case_idx, _hand_idx, _player_idx, values = _pair_indices(dataset)
-    mean = float(values.mean()) if values.size else 0.0
+    _case_idx, _hand_idx, _player_idx, values, weights = _pair_indices(dataset)
+    if values.size and float(weights.sum()) > 1e-8:
+        mean = float(np.average(values, weights=weights))
+        var = float(np.average((values - mean) ** 2, weights=weights))
+        std = math.sqrt(max(var, 0.0))
+    else:
+        mean = float(values.mean()) if values.size else 0.0
+        std = float(values.std()) if values.size else 1.0
     median = float(np.median(values)) if values.size else 0.0
-    std = float(values.std()) if values.size else 1.0
     return mean, median, std if std > 1e-6 else 1.0
 
 
@@ -431,7 +465,7 @@ def _fit_joint_model(
     device: torch.device,
 ) -> _JointPBSContinuationNet:
     torch.manual_seed(int(seed))
-    case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
+    case_idx, hand_idx, player_idx, values, value_weights = _pair_indices(dataset)
     if case_idx.size == 0:
         raise ValueError("cannot train joint PBS probe without value labels")
     value_target = ((values - float(target_mean)) / float(target_std)).astype(np.float32)
@@ -439,6 +473,7 @@ def _fit_joint_model(
     hand_t = torch.from_numpy(hand_idx).to(device)
     player_t = torch.from_numpy(player_idx).to(device)
     value_target_t = torch.from_numpy(value_target).to(device)
+    value_weight_t = torch.from_numpy(value_weights).to(device)
     public_t = torch.from_numpy(dataset.features).to(device)
     belief_t = torch.from_numpy(dataset.belief).to(device)
     private_t = torch.from_numpy(dataset.policy_features[:, :52]).to(device)
@@ -478,7 +513,9 @@ def _fit_joint_model(
                 action_token_t.index_select(0, c),
                 action_amount_t.index_select(0, c),
             )
-            loss = torch.mean((pred - value_target_t.index_select(0, batch)) ** 2)
+            batch_weights = value_weight_t.index_select(0, batch).to(dtype=pred.dtype)
+            squared_error = (pred - value_target_t.index_select(0, batch)) ** 2
+            loss = (squared_error * batch_weights).sum() / batch_weights.sum().clamp(min=1e-8)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -511,7 +548,7 @@ def _predict_values(
     batch_size: int,
     device: torch.device,
 ) -> np.ndarray:
-    case_idx, hand_idx, player_idx, _values = _pair_indices(dataset)
+    case_idx, hand_idx, player_idx, _values, _weights = _pair_indices(dataset)
     pred = np.zeros((2, dataset.features.shape[0], N_HANDS), dtype=np.float32)
     if case_idx.size == 0:
         return pred
@@ -687,6 +724,8 @@ def predict_joint_pbs_cfv_model(
         villain_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
         hero_masks=np.asarray(hero_masks, dtype=np.float32),
         villain_masks=np.asarray(villain_masks, dtype=np.float32),
+        hero_value_weights=np.asarray(hero_masks, dtype=np.float32),
+        villain_value_weights=np.asarray(villain_masks, dtype=np.float32),
         action_tokens=np.asarray(action_tokens, dtype=np.int64),
         action_amounts=np.asarray(action_amounts, dtype=np.float32),
         labels=tuple(f"predict-{idx}" for idx in range(n_states)),
@@ -742,6 +781,8 @@ def predict_joint_pbs_policy_model(
         villain_values=np.zeros((n_states, N_HANDS), dtype=np.float32),
         hero_masks=np.zeros((n_states, N_HANDS), dtype=np.float32),
         villain_masks=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        hero_value_weights=np.zeros((n_states, N_HANDS), dtype=np.float32),
+        villain_value_weights=np.zeros((n_states, N_HANDS), dtype=np.float32),
         action_tokens=np.asarray(action_tokens, dtype=np.int64),
         action_amounts=np.asarray(action_amounts, dtype=np.float32),
         labels=tuple(f"policy-{idx}" for idx in range(n_states)),

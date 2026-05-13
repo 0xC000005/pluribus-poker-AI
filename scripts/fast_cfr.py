@@ -148,6 +148,20 @@ def _frontier_cut_nodes(tree, cut_node_indices):
     return cut_idx, cut_mask
 
 
+def _validated_trace_nodes(tree, trace_node_indices):
+    if trace_node_indices is None:
+        return np.zeros(0, dtype=np.int32)
+    raw = [int(idx) for idx in trace_node_indices]
+    if not raw:
+        return np.zeros(0, dtype=np.int32)
+    n_nodes = int(tree['n_nodes'])
+    unique = sorted(set(raw))
+    bad = [idx for idx in unique if idx <= 0 or idx >= n_nodes]
+    if bad:
+        raise ValueError(f"trace_node_indices out of range: {bad[:5]}")
+    return np.asarray(unique, dtype=np.int32)
+
+
 def _descendants_of_cut_nodes(tree, cut_mask):
     inactive = np.zeros(tree['n_nodes'], dtype=bool)
     if not np.any(cut_mask):
@@ -179,7 +193,8 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               pot_start, hero_stack_start, villain_stack_start,
               n_iterations=100, hero_range=None, villain_range=None,
               showdown_leaf_fn=None, cut_node_indices=None, cut_node_fn=None,
-              initial_regret_sum=None, initial_strategy_sum=None):
+              initial_regret_sum=None, initial_strategy_sum=None,
+              trace_node_indices=None, trace_node_fn=None):
     """Run iterative CFR+ with batched terminal evaluation.
 
     Parameters
@@ -208,6 +223,10 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     initial_regret_sum, initial_strategy_sum : array-like or None
         Optional CFR+ warm-start tensors with shape `(n_nodes, n_actions,
         n_hands)`. Values must be finite and non-negative.
+    trace_node_indices, trace_node_fn : list[int], callable or None
+        Optional CPU-only diagnostic hook. Trace nodes are not cut and do not
+        alter solving. The hook receives current reaches and exact node values
+        after each backward pass.
 
     Returns
     -------
@@ -221,11 +240,16 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     children = tree['children']
     decision_actions = tree['decision_actions']
     cut_idx, cut_mask = _frontier_cut_nodes(tree, cut_node_indices)
+    trace_idx = _validated_trace_nodes(tree, trace_node_indices)
     inactive = _descendants_of_cut_nodes(tree, cut_mask)
     if cut_idx.size and cut_node_fn is None:
         raise ValueError("cut_node_fn is required when cut_node_indices are provided")
     if cut_node_fn is not None and cut_idx.size == 0:
         raise ValueError("cut_node_indices are required when cut_node_fn is provided")
+    if trace_idx.size and trace_node_fn is None:
+        raise ValueError("trace_node_fn is required when trace_node_indices are provided")
+    if trace_node_fn is not None and trace_idx.size == 0:
+        raise ValueError("trace_node_indices are required when trace_node_fn is provided")
 
     # Pre-extract terminal data as contiguous arrays
     show_idx = tree['showdown_idx']
@@ -472,6 +496,21 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                         regret_sum[i, a] + vvals[ci] - vval, 0)
                 for a in acts:
                     strategy_sum[i, a] += vr_at[i] * strat_cache[a]
+
+        if trace_idx.size:
+            trace_node_fn(
+                iteration=int(_iter),
+                tree=tree,
+                node_indices=trace_idx,
+                hero_reach=hr_at[trace_idx],
+                villain_reach=vr_at[trace_idx],
+                hero_values=hvals[trace_idx],
+                villain_values=vvals[trace_idx],
+                valid_m=valid_m,
+                pot_start=pot_start,
+                hero_stack_start=hero_stack_start,
+                villain_stack_start=villain_stack_start,
+            )
 
     return regret_sum, strategy_sum
 

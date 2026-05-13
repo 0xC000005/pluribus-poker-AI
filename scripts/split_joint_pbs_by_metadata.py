@@ -34,6 +34,11 @@ _ARRAY_KEYS = (
     "labels",
 )
 
+_OPTIONAL_ARRAY_KEYS = (
+    "hero_value_weights",
+    "villain_value_weights",
+)
+
 _REACH_FIELDS = (
     "hero_reach_top10_mass",
     "villain_reach_top10_mass",
@@ -48,6 +53,9 @@ def _load_payload(joint_npz: str | Path, metadata_json: str | Path) -> tuple[dic
     if missing:
         raise ValueError(f"joint dataset is missing arrays: {missing}")
     arrays = {key: data[key] for key in _ARRAY_KEYS}
+    for key in _OPTIONAL_ARRAY_KEYS:
+        if key in data:
+            arrays[key] = data[key]
     labels = [str(item) for item in arrays["labels"].tolist()]
     metadata = json.loads(Path(metadata_json).read_text(encoding="utf-8"))
     records = [dict(item) for item in metadata.get("cut_records", [])]

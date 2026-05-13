@@ -26,6 +26,7 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
 )
 from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
     StructuralCutRiskPredictor,
+    _case_slice,
     _frontier_action_shape,
     _load_static_belief_by_label,
     _select_successor_cut_node_records,
@@ -413,6 +414,44 @@ def test_street_solver_cut_node_callback_rejects_torch_backend():
         )
 
 
+def test_street_solver_trace_node_callback_observes_without_changing_strategy():
+    baseline = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    traced = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    trace_idx = traced._tree["all_nodes"].index(traced.root.children[1])
+    calls = []
+
+    def trace_nodes(**kwargs):
+        calls.append(kwargs)
+        assert kwargs["hero_reach"].shape == (1, traced.n)
+        assert kwargs["villain_values"].shape == (1, traced.n)
+
+    baseline.solve(n_iterations=2, backend="cpu")
+    traced.solve(
+        n_iterations=2,
+        backend="cpu",
+        trace_node_indices=[trace_idx],
+        trace_node_fn=trace_nodes,
+    )
+
+    hand = traced.hands[0]
+    assert len(calls) == 2
+    assert calls[0]["iteration"] == 0
+    assert calls[1]["iteration"] == 1
+    assert baseline.get_strategy(hand) == traced.get_strategy(hand)
+
+
 def test_successor_cut_node_indices_only_returns_nonterminal_children():
     solver = StreetSolver(
         board=[0, 1, 2, 3],
@@ -510,6 +549,29 @@ def test_static_belief_loader_maps_labels(tmp_path):
     assert set(loaded) == {"a", "b"}
     assert loaded["a"].shape == (2 * N_HANDS,)
     assert loaded["b"][1] == 1.0
+
+
+def test_successor_cut_ab_case_slice_supports_heldout_offsets():
+    cases = [
+        ResolverBenchmarkCase(
+            label=f"case-{idx}",
+            hole_cards=("Ac", "Kd"),
+            board=("2c", "7d", "Jh", "4s"),
+            action_str="ck/kk/",
+            client_pos=0,
+        )
+        for idx in range(5)
+    ]
+
+    assert [case.label for case in _case_slice(cases, start_index=2, limit=2)] == [
+        "case-2",
+        "case-3",
+    ]
+    assert [case.label for case in _case_slice(cases, start_index=4, limit=0)] == [
+        "case-4"
+    ]
+    with pytest.raises(ValueError, match="start_index"):
+        _case_slice(cases, start_index=-1, limit=1)
 
 
 def test_learned_leaf_action_path_reconstructs_turn_sequence():

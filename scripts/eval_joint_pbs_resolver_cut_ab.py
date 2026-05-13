@@ -317,6 +317,17 @@ def _load_static_belief_by_label(path: str | Path) -> dict[str, np.ndarray]:
     return {label: beliefs[idx] for idx, label in enumerate(labels)}
 
 
+def _case_slice(cases: list[ResolverBenchmarkCase], *, start_index: int, limit: int) -> list[ResolverBenchmarkCase]:
+    if int(start_index) < 0:
+        raise ValueError("start_index must be non-negative")
+    start = min(int(start_index), len(cases))
+    if int(limit) <= 0:
+        stop = len(cases)
+    else:
+        stop = min(start + int(limit), len(cases))
+    return list(cases[start:stop])
+
+
 class JointPBSSuccessorCutCallback:
     def __init__(
         self,
@@ -618,6 +629,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", required=True)
     parser.add_argument("--cfv-cache")
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--limit", type=int, default=4)
     parser.add_argument("--solver-iterations", type=int, default=5)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
@@ -682,11 +694,15 @@ def main(argv: list[str] | None = None) -> int:
         if base_dataset.features.shape[0] != len(cases):
             raise ValueError("case count does not match CFV cache rows")
     model, payload = load_joint_pbs_continuation_checkpoint(args.checkpoint, device=device)
-    max_cases = max(1, min(int(args.limit), len(cases)))
-
     records = []
-    for idx, case in enumerate(cases[:max_cases]):
-        belief_row = base_dataset.belief[idx] if base_dataset is not None else None
+    selected_cases = _case_slice(
+        cases,
+        start_index=int(args.start_index),
+        limit=int(args.limit),
+    )
+    for local_idx, case in enumerate(selected_cases):
+        case_idx = int(args.start_index) + int(local_idx)
+        belief_row = base_dataset.belief[case_idx] if base_dataset is not None else None
         records.append(
             _solve_case(
                 case,
@@ -771,7 +787,8 @@ def main(argv: list[str] | None = None) -> int:
         "target_action_shapes": list(args.target_action_shapes),
         "min_action_agreement": float(args.min_action_agreement),
         "max_mean_action_l1_drift": float(args.max_mean_action_l1_drift),
-        "case_scan_limit": int(max_cases),
+        "start_index": int(args.start_index),
+        "case_scan_limit": int(args.limit),
         "n_cases": len(records),
         "n_evaluated": len(evaluated),
         "n_cut_applied": len(cut_evaluated),

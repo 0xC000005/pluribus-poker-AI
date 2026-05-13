@@ -675,6 +675,31 @@ def test_joint_pbs_continuation_probe_smoke(tmp_path):
     assert policy_pred.shape == (4, N_ACTIONS)
 
 
+def test_joint_pbs_value_weights_default_to_masks_and_can_be_loaded(tmp_path):
+    weighted_path = tmp_path / "weighted_joint.npz"
+    _write_joint_pbs_fixture(weighted_path, n_states=2)
+
+    unweighted = load_joint_pbs_dataset(weighted_path)
+    np.testing.assert_allclose(unweighted.hero_value_weights, unweighted.hero_masks)
+    np.testing.assert_allclose(unweighted.villain_value_weights, unweighted.villain_masks)
+
+    payload = dict(np.load(weighted_path))
+    hero_weights = np.zeros_like(payload["hero_masks"], dtype=np.float32)
+    villain_weights = np.zeros_like(payload["villain_masks"], dtype=np.float32)
+    hero_weights[:, :4] = 0.25
+    villain_weights[:, :4] = 0.5
+    np.savez_compressed(
+        weighted_path,
+        **payload,
+        hero_value_weights=hero_weights,
+        villain_value_weights=villain_weights,
+    )
+
+    weighted = load_joint_pbs_dataset(weighted_path)
+    np.testing.assert_allclose(weighted.hero_value_weights[:, :4], 0.25)
+    np.testing.assert_allclose(weighted.villain_value_weights[:, :4], 0.5)
+
+
 def test_joint_pbs_action_sequence_metadata_feeds_gru_encoder(tmp_path):
     train_path = tmp_path / "train_joint.npz"
     holdout_path = tmp_path / "holdout_joint.npz"
@@ -820,6 +845,13 @@ def test_split_joint_pbs_by_metadata_preserves_shape_coverage(tmp_path):
     train_path = tmp_path / "train_joint.npz"
     holdout_path = tmp_path / "holdout_joint.npz"
     _write_joint_pbs_fixture(joint_path, n_states=7)
+    payload = dict(np.load(joint_path))
+    np.savez_compressed(
+        joint_path,
+        **payload,
+        hero_value_weights=np.full_like(payload["hero_masks"], 0.25, dtype=np.float32),
+        villain_value_weights=np.full_like(payload["villain_masks"], 0.5, dtype=np.float32),
+    )
     metadata_path.write_text(
         json.dumps(
             {
@@ -860,6 +892,8 @@ def test_split_joint_pbs_by_metadata_preserves_shape_coverage(tmp_path):
 
     assert metrics["mode"] == "joint_pbs_metadata_split_summary"
     assert train["features"].shape[0] + holdout["features"].shape[0] == 7
+    assert "hero_value_weights" in train.files
+    assert "villain_value_weights" in holdout.files
     assert metrics["holdout_missing_in_train_shapes"] == []
     assert "shape-c" in metrics["train_only_shapes"]
     assert train_meta["value_label_count"] + holdout_meta["value_label_count"] == 56
