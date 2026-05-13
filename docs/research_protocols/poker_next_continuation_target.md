@@ -250,3 +250,14 @@ soft distribution fit (`L1 0.0382 -> 0.1110`), so this is not promotion-ready.
 Next continuation target: validate the rank-aware checkpoint on fresh fixed
 resolver-policy cases without tuning `rank_loss_weight` or `rank_margin`; only
 then run a small Slumbot smoke.
+
+Fresh validation failed and corrected the gate. A new `128`-case sampled
+resolver-policy target set has target top-all-in rate `0.59375`, while the old
+holdout had `0.0`; the rank-aware checkpoint had learned the old split's action
+distribution and selected all-in `0.0` on fresh cases. A fixed absolute all-in
+cap is therefore not a valid general gate. The resolver benchmark now supports a
+solver-relative all-in gap gate. On the fresh set, both the calibrated and
+rank-aware checkpoints fail, and rank-aware is worse (`top1_match 0.0391`,
+solver all-in gap `0.8516`). Next target: build a larger policy-target pool and
+stratify train/holdout by target top action and public-state pressure before
+rerunning rank-aware calibration.

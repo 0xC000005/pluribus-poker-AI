@@ -398,6 +398,7 @@ def run_resolver_benchmark(
     enforce_policy_head_behavior_gate: bool = False,
     max_policy_head_allin_rate: float = 0.05,
     max_policy_head_mean_l1_drift: float = 0.75,
+    max_policy_head_solver_allin_gap: float | None = None,
 ) -> dict[str, Any]:
     value_net.eval()
     selected_cases = list(cases) if cases is not None else default_benchmark_cases()
@@ -422,15 +423,32 @@ def run_resolver_benchmark(
     policy_head_allin_count = sum(
         1 for item in results if item.get("policy_head_allin_selected")
     )
+    solver_allin_count = sum(1 for item in solver_results if item.get("solver_action") == 8)
     allin_changed_count = sum(
         1 for item in results if item.get("allin_removed_action_changed")
     )
     metadata = checkpoint_metadata or {}
     mechanical_passed = all(bool(item["passed"]) for item in results)
     policy_head_allin_rate = float(policy_head_allin_count / len(results)) if results else 0.0
+    solver_allin_rate = float(solver_allin_count / len(solver_results)) if solver_results else 0.0
+    policy_head_solver_allin_gap = abs(policy_head_allin_rate - solver_allin_rate)
     policy_head_mean_l1 = float(np.mean(policy_head_drift_values)) if policy_head_drift_values else 0.0
+    if max_policy_head_solver_allin_gap is None:
+        policy_head_allin_passed = policy_head_allin_rate <= float(max_policy_head_allin_rate)
+        allin_gate = {
+            "mode": "absolute",
+            "max_policy_head_allin_rate": float(max_policy_head_allin_rate),
+        }
+    else:
+        policy_head_allin_passed = (
+            policy_head_solver_allin_gap <= float(max_policy_head_solver_allin_gap)
+        )
+        allin_gate = {
+            "mode": "solver_gap",
+            "max_policy_head_solver_allin_gap": float(max_policy_head_solver_allin_gap),
+        }
     policy_head_behavior_passed = bool(
-        policy_head_allin_rate <= float(max_policy_head_allin_rate)
+        policy_head_allin_passed
         and policy_head_mean_l1 <= float(max_policy_head_mean_l1_drift)
     )
     return {
@@ -442,7 +460,7 @@ def run_resolver_benchmark(
         "policy_head_behavior_passed": policy_head_behavior_passed,
         "enforce_policy_head_behavior_gate": bool(enforce_policy_head_behavior_gate),
         "policy_head_behavior_gate": {
-            "max_policy_head_allin_rate": float(max_policy_head_allin_rate),
+            **allin_gate,
             "max_policy_head_mean_l1_drift": float(max_policy_head_mean_l1_drift),
         },
         "mode": "fixed_public_state_resolver_benchmark",
@@ -468,6 +486,8 @@ def run_resolver_benchmark(
             float(allin_changed_count / len(results)) if results else 0.0
         ),
         "policy_head_allin_rate": policy_head_allin_rate,
+        "solver_allin_rate": solver_allin_rate,
+        "policy_head_solver_allin_gap": policy_head_solver_allin_gap,
         "illegal_case_count": sum(
             1
             for item in results

@@ -100,6 +100,8 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     assert "blueprint_allin_rate" in metrics
     assert "no_allin_changed_rate" in metrics
     assert "policy_head_allin_rate" in metrics
+    assert "solver_allin_rate" in metrics
+    assert "policy_head_solver_allin_gap" in metrics
     assert "policy_head_mean_action_l1_drift" in metrics
     assert "policy_head_behavior_passed" in metrics
     assert metrics["mechanical_passed"] is True
@@ -115,6 +117,18 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     assert gated["mechanical_passed"] is True
     assert gated["policy_head_behavior_passed"] is False
     assert gated["passed"] is False
+
+    relative_gate = run_resolver_benchmark(
+        value_net,
+        torch.device("cpu"),
+        cases=[case],
+        solver_iterations=1,
+        enforce_policy_head_behavior_gate=True,
+        max_policy_head_solver_allin_gap=2.0,
+        max_policy_head_mean_l1_drift=3.0,
+    )
+    assert relative_gate["policy_head_behavior_gate"]["mode"] == "solver_gap"
+    assert relative_gate["policy_head_behavior_passed"] is True
 
 
 def test_street_solver_omits_under_minimum_raise_buckets():

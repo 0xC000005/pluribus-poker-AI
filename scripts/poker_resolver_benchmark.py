@@ -53,6 +53,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-json")
     parser.add_argument("--enforce-policy-head-behavior-gate", action="store_true")
     parser.add_argument("--max-policy-head-allin-rate", type=float, default=0.05)
+    parser.add_argument(
+        "--max-policy-head-solver-allin-gap",
+        type=float,
+        help="Use a solver-relative all-in-rate gate instead of an absolute cap.",
+    )
     parser.add_argument("--max-policy-head-mean-l1-drift", type=float, default=0.75)
     args = parser.parse_args(argv)
 
@@ -71,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_metadata=loaded.metadata,
         enforce_policy_head_behavior_gate=args.enforce_policy_head_behavior_gate,
         max_policy_head_allin_rate=args.max_policy_head_allin_rate,
+        max_policy_head_solver_allin_gap=args.max_policy_head_solver_allin_gap,
         max_policy_head_mean_l1_drift=args.max_policy_head_mean_l1_drift,
     )
     if args.output_json:
