@@ -613,6 +613,11 @@ Label-throughput update:
   `--solver-backend cpu --label-jobs 4` for CPU label builds; keep
   `label_jobs=1` for default single-worker runs and do not combine label jobs
   with `torch-cuda`.
+- A filtered turn-only `64/32` probe is stronger than mixed turn+river:
+  Deepset-64 passed `2/3` seeds, all seeds beat zero, and mean best-constant
+  deltas were `-0.0009` MAE and `-0.0006` RMSE. This supports street-specific
+  dual-CFV networks, but it is still seed-sensitive on the small surface. The
+  next gate should be a larger turn-only surface or a saved turn ensemble.
 
 Resolved workflow issue: `rules_parity`.
 

@@ -1993,3 +1993,14 @@
 - Summary: Added `--label-jobs` to the dual-CFV probe and checkpoint trainer for parallel CPU label generation, with per-worker threadpool limiting to avoid BLAS oversubscription. A direct four-turn-case backend check showed CPU faster than `torch-cuda` (`1.10s` vs `1.45s` mean per case). A small uncached `8/4` CPU label-generation benchmark showed naive multiprocessing was much worse from thread oversubscription, while the thread-limited four-worker path reduced wall time from the original single-worker `27.26s` to `18.38s` (`1.48x`). Keep default `label_jobs=1`; use `--solver-backend cpu --label-jobs 4` only for CPU label builds, not `torch-cuda`.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_mixed8x4_cpu_jobs1_benchmark.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_mixed8x4_cpu_limited_jobs4_benchmark.json
 - Key metrics: `{"backend_check": {"cpu_mean_ms": 1103.094, "torch_cuda_mean_ms": 1448.142}, "uncached_8x4": {"single_worker_elapsed_s": 27.261, "limited_four_worker_elapsed_s": 18.384, "speedup": 1.483}, "guardrail": "parallel label jobs reject torch-cuda and cap worker threadpools"}`
+
+## 20260513T050412Z-turn-only-dual-cfv-probe - mixed
+
+- Timestamp: 2026-05-13T05:04:12Z
+- Type: experiment
+- Gate: manual-turn-only-dual-cfv
+- Hypothesis: The mixed-street instability may come from combining turn and river targets; a turn-only dual-CFV surface should give a clearer signal for street-specific value learning.
+- Failure class: range_belief
+- Summary: Filtered the existing restored-history mixed split into a turn-only `64/32` public-belief CFV surface and built dual-player labels with `--solver-backend cpu --label-jobs 4`. The Deepset-64 separate-head/bottleneck model passed two of three seeds and all seeds beat the zero baseline, but the third seed still missed train-constant MAE/RMSE. This is stronger than the mixed-street result and supports training street-specific CFV networks, but the small turn-only surface is still seed-sensitive and not ready for solver integration. Next useful gate is a larger turn-only surface or a saved turn ensemble, not hyperparameter sweeping.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_turn64x32_deepset64_summary.json
+- Key metrics: `{"pass_count": 2, "n": 3, "mae_delta_mean": 0.03225656, "rmse_delta_mean": 0.03052992, "zero_mae_delta_mean": 0.0119938, "zero_rmse_delta_mean": 0.04079349, "best_constant_mae_delta_mean": -0.00086504, "best_constant_rmse_delta_mean": -0.00059138, "train_label_count": 144384, "holdout_label_count": 72192}`
