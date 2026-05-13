@@ -29,7 +29,11 @@ STOP_FILE = "STOP"
 RESEARCH_LOG = "RESEARCH_LOG.md"
 REVIEW_MANIFESTS_DIR = Path("docs") / "research_protocols" / "poker_review_manifests"
 ALLOWED_REVIEW_DECISIONS = {"proceed", "revise", "abandon", "gather_more_evidence"}
-ALLOWED_RESEARCH_PHASES = {"open_research", "callback_state_calibration_debug"}
+ALLOWED_RESEARCH_PHASES = {
+    "open_research",
+    "callback_state_calibration_debug",
+    "neural_regret_field_resolving",
+}
 PROTECTED_EVAL_SURFACES = [
     "scripts/poker_autoresearch_eval.py",
     "scripts/poker_autoresearch_slumbot.py",
@@ -217,9 +221,10 @@ def _default_goal(root: str | Path | None = None) -> dict:
     python = _project_python(root)
     return {
         "objective": (
-            "Train a learned full-deck poker engine on a personal PC that uses "
-            "search efficiently during play and improves against Slumbot without "
-            "hand-crafted poker-strategy rules."
+            "Develop an elegant, novel, SOTA-oriented full-deck heads-up no-limit "
+            "hold'em engine that trains on a personal PC, uses learned public-belief "
+            "search initialization plus CFR/resolving during play, and beats Slumbot "
+            "and stronger public baselines without hand-crafted poker-strategy rules."
         ),
         "constraints": [
             "keep generated checkpoints and raw run artifacts out of git",
@@ -285,10 +290,48 @@ def _default_goal(root: str | Path | None = None) -> dict:
             ),
         },
         "research_phase": {
-            "current": "open_research",
-            "reason": "default",
+            "current": "neural_regret_field_resolving",
+            "reason": (
+                "default after hard value-cut replacement and direct policy imitation "
+                "failed root-disjoint resolver gates"
+            ),
             "set_at": None,
             "allowed_phases": sorted(ALLOWED_RESEARCH_PHASES),
+            "neural_regret_field_resolving": {
+                "problem": (
+                    "Hard learned CFV leaf/successor replacement and direct policy "
+                    "imitation repeatedly fit local targets without improving "
+                    "root-disjoint resolver behavior."
+                ),
+                "approved_method": (
+                    "Learn a public-belief regret/policy initializer that warm-starts "
+                    "CFR+/resolving; use search as the correction operator rather than "
+                    "letting the network replace the solver."
+                ),
+                "allowed_actions": [
+                    "methodology_review",
+                    "mechanism_review",
+                    "failure_synthesis",
+                    "objective_audit",
+                    "implement_solver_warm_start",
+                    "export_teacher_regret_field_targets",
+                    "train_regret_field_initializer",
+                    "eval_warm_start_resolver_gate",
+                ],
+                "blocked_actions": [
+                    "hard_value_leaf_replacement_as_mainline",
+                    "hard_successor_cut_replacement_as_mainline",
+                    "final_distribution_policy_mixing_sweeps",
+                    "new_model_size_sweeps_without_root_disjoint_gate",
+                    "slumbot_confidence_before_warm_start_resolver_gate",
+                ],
+                "gate": (
+                    "On root-disjoint public states, a neural-warm-started low-budget "
+                    "resolver must move closer than the same-budget vanilla resolver "
+                    "to a higher-budget teacher on root action L1/KL and top-action "
+                    "agreement, without illegal actions or latency regression."
+                ),
+            },
             "callback_state_calibration_debug": {
                 "problem": (
                     "The 4-root callback-state DCVN smoke passed, but the "
@@ -316,10 +359,38 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "and a removal criterion. Broad sweeps are rejected."
             ),
         },
+        "architecture_policy": {
+            "rule": (
+                "Modern neural architectures are allowed and expected when they "
+                "improve the learned search primitive. Capacity, attention, set "
+                "encoders, recurrence, and mixed precision must be justified by a "
+                "root-disjoint train/test split and a resolver-behavior gate."
+            ),
+            "approved_roles": [
+                "public-belief encoder",
+                "private-card set encoder",
+                "action-sequence encoder",
+                "regret/policy initializer",
+                "uncertainty or calibration head for search warm starts",
+            ],
+            "blocked_roles": [
+                "bigger network as a substitute for search evidence",
+                "policy argmax patch without resolver correction",
+                "architecture sweep scored only by local smoke or target fit",
+            ],
+        },
         "objective_alignment_policy": {
             "long_term_objective": (
-                "Develop novel, compute-efficient Texas hold'em methods that "
-                "transfer to Slumbot and stronger bots on personal-PC hardware."
+                "Develop an elegant, novel, compute-efficient Texas hold'em method "
+                "that can reach SOTA-style Slumbot performance on personal-PC "
+                "hardware by amortizing search knowledge into reusable neural "
+                "regret/policy initialization while preserving CFR/resolving as the "
+                "runtime correction mechanism."
+            ),
+            "active_method_target": (
+                "Neural regret-field resolving: learn reusable public-belief "
+                "regret/policy fields that warm-start search, then evaluate by "
+                "whether the low-budget resolver approaches a high-budget teacher."
             ),
             "protected_surfaces": PROTECTED_EVAL_SURFACES,
             "protected_surface_rule": (
@@ -347,6 +418,8 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "Slumbot credentials, network access, or API limits block evaluation",
             "cycle would overwrite an incumbent checkpoint",
             "cycle requires a hand-crafted opponent rule",
+            "cycle treats hard learned value cuts or policy argmax imitation as a "
+            "mainline method without a completed failure synthesis and resolver gate",
         ],
         "gates": {
             "tier0": {
@@ -919,9 +992,42 @@ def _assert_phase_allows_action(
         return
     goal = _read_json(goal_path)
     phase = goal.get("research_phase", {}).get("current", "open_research")
+    review_actions = {
+        "methodology_review",
+        "mechanism_review",
+        "failure_synthesis",
+        "objective_audit",
+    }
+    if phase == "neural_regret_field_resolving":
+        if action in review_actions:
+            return
+        if action == "new_model_size_or_search_knob":
+            lowered = details.lower()
+            warm_start_terms = (
+                "regret",
+                "warm",
+                "initializer",
+                "initialization",
+                "public-belief",
+                "public belief",
+                "resolver",
+            )
+            if any(term in lowered for term in warm_start_terms):
+                return
+        if action in {
+            "gpu_deep_cfr_training",
+            "slumbot_smoke",
+            "new_model_size_or_search_knob",
+        }:
+            raise RuntimeError(
+                "Research phase neural_regret_field_resolving blocks this action. "
+                "First implement and pass the root-disjoint warm-start resolver "
+                f"gate. Blocked action: {action}."
+            )
+        return
     if phase != "callback_state_calibration_debug":
         return
-    if action in {"callback_state_calibration_audit", "methodology_review", "mechanism_review", "failure_synthesis", "objective_audit"}:
+    if action in review_actions | {"callback_state_calibration_audit"}:
         return
     if action == "new_model_size_or_search_knob":
         lowered = details.lower()

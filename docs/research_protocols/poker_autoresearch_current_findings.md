@@ -2,6 +2,20 @@
 
 Date: 2026-05-13
 
+## Current Objective Pivot
+
+The active objective is now neural regret-field resolving: learn a
+public-belief regret/policy initializer that warm-starts CFR+/resolving, then
+let search correct it at runtime. This replaces the previous mainline of hard
+learned CFV leaf/successor replacement and direct policy imitation.
+
+Reason: value-only successor cuts, callback-state DCVN variants, final policy
+mixing, direct policy imitation, and sparse impact gates repeatedly fit local
+targets but failed root-disjoint resolver behavior. The new falsifier is stricter
+and more SOTA-aligned: compare low-budget vanilla resolving against
+neural-warm-start low-budget resolving, both measured against the same
+higher-budget teacher on root-disjoint public states.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

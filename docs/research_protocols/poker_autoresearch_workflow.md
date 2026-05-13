@@ -6,17 +6,18 @@ knob-governance gates.
 
 ## Objective
 
-Build a research loop for this repository whose long-run target is a learned
-poker engine that can train on a personal PC, use search efficiently during
-play, and beat Slumbot and stronger public opponents without hand-crafted
-poker-strategy rules.
+Build a research loop for an elegant, novel, SOTA-oriented heads-up no-limit
+hold'em engine that can train on a personal PC, use learned search knowledge
+during play, and beat Slumbot plus stronger public baselines without
+hand-crafted poker-strategy rules.
 
-The active direction is full-deck, heads-up Deep CFR-style self-play with GPU
-traversal where possible, a learned blueprint policy, and online subgame search.
-Search, abstraction, regret matching, and legality handling are allowed. Ad hoc
-rules such as opponent-specific action hacks, street-specific human heuristics,
-or manually curated poker features are not promoted unless they are temporary
-diagnostics with a removal criterion.
+The active direction is **neural regret-field resolving**: learn reusable
+public-belief regret/policy initializers, use them to warm-start CFR+/resolving,
+and let search remain the correction operator. Search, abstraction, regret
+matching, legality handling, and learned public-belief representations are
+allowed. Ad hoc opponent-specific action hacks, street-specific human heuristics,
+hard learned value-cut replacement, and benchmark-tuned policy argmax patches are
+not promoted.
 
 ## Workflow Contract
 
@@ -31,9 +32,11 @@ Each cycle follows HEAD:
 4. **Decide:** update state, append the research log, and either commit a
    focused change or record why no code change was justified.
 
-Do not run training merely because more training looks productive. Each run
-must answer a specific question about strategy quality, evaluation hardness,
-compute throughput, representation quality, or search.
+Do not run training merely because more training looks productive. Each run must
+answer a specific question about strategy quality, evaluation hardness, compute
+throughput, representation quality, or search. The main current question is
+whether amortized neural initialization can make a low-budget resolver behave
+more like a high-budget teacher on root-disjoint public states.
 
 ## Commit Policy
 
@@ -175,6 +178,33 @@ python scripts/poker_autoresearch.py enqueue-calibration-audit \
 Return to `open_research` only after the calibration audit explains the failure
 well enough to select one falsifiable next test.
 
+The current mainline phase is `neural_regret_field_resolving`. The prior
+callback-state DCVN and successor-cut work remains useful as negative evidence,
+but it is no longer the active method unless a completed methodology review
+reopens it.
+
+```bash
+python scripts/poker_autoresearch.py set-phase \
+  --phase neural_regret_field_resolving \
+  --reason "pivot to learned CFR/resolving warm starts after hard value-cut failures"
+```
+
+Approved next actions in this phase:
+
+- implement solver warm-start interfaces that preserve zero-initializer parity;
+- export root-disjoint teacher targets from higher-budget resolving;
+- train a public-belief regret/policy initializer, not a hard value oracle;
+- evaluate low-budget vanilla CFR+ versus neural-warm-start CFR+ against the
+  same higher-budget teacher.
+
+Blocked anti-patterns:
+
+- scaling hard learned leaf/successor value replacement as the mainline;
+- sweeping final-distribution policy mixing weights;
+- adding model-size knobs before a root-disjoint warm-start resolver gate;
+- queueing generic GPU Deep CFR training or live Slumbot smokes before the
+  local warm-start resolver gate passes.
+
 ## Research State
 
 The approved implementation should create local resumability state under
@@ -252,6 +282,22 @@ Every failed or inconclusive cycle assigns one primary class:
 Only diagnosed failure classes justify changing architecture, abstraction,
 training objective, solver behavior, or evaluation protocol.
 
+## Neural Architecture Policy
+
+Modern neural networks are allowed and expected. ReBeL is a 2020 result, and
+DeepStack is the 2017 poker result; both predate many now-standard architecture
+and training improvements. The workflow should consider stronger set encoders,
+attention/transformer blocks, learned action-sequence encoders, residual trunks,
+uncertainty heads, and mixed precision when they serve the learned-search
+mechanism.
+
+Architecture changes are not progress by themselves. A larger or newer network
+must name the learned object, the search boundary, and the local falsifier. For
+the current phase, that means improving a public-belief regret/policy
+initializer and passing the root-disjoint warm-start resolver gate. Offline
+target fit, local random wins, or a better-looking Slumbot smoke cannot justify
+mainline promotion without the search-behavior gate.
+
 ## Literature And Review Gate
 
 Online research is required before adopting a new RL/search method, changing the
@@ -272,31 +318,35 @@ Use `enqueue-review` for any change that needs independent verification or
 related work. This keeps review artifacts in the workflow queue instead of
 burying them in chat.
 
-## Search-Consistency Targets
+## Neural Regret-Field Targets
 
-The approved next mechanism is bounded search-consistency training: use the
-turn/river resolver to generate policy-head targets, then train the existing
-policy head toward those search distributions under the 9-action legal mask.
-This is not a hand-coded poker rule; the target comes from search. Keep the
-search-target weight at `0.0` unless a completed methodology review and knob
-entry justify enabling it.
+The approved next mechanism is not bounded policy imitation. It is a learned
+regret/policy field that initializes CFR+/resolving at public-belief states.
+The network may use stronger modern architecture, but its output must enter the
+search loop as an initializer or calibration signal that search can correct.
 
-Fixed public-state targets are useful for smoke tests and plumbing checks, but
-they are not a training distribution. Any candidate meant for promotion should
-use sampled train/held-out public states and must still pass the falsification
-ladder before Slumbot confirmation.
-Random public states with uniform ranges are also diagnostic only until their
-target distribution is shown not to collapse to one action. Promotion-oriented
-targets should be drawn from gameplay-distributed states with the best available
-learned public-belief/range estimates.
+The smallest useful target artifact should contain root-disjoint public states,
+legal masks, public cards, private-hand set encodings, public action sequences,
+reach/belief summaries, low-budget vanilla solver output, and higher-budget
+teacher output. The first pass can train policy logits only if the evaluation
+turns them into CFR/regret initializers rather than final played actions.
 
-Direct target fit is not promotion evidence. Evaluate held-out target fit with
-`scripts/eval_search_targets.py`, then cross-check resolver drift and all-in
-rate. A run that only learns the target file but worsens blueprint-vs-resolver
-drift or collapses into all-in selection fails the search-quality criterion.
-The solver, training masks, CUDA masks, Slumbot adapter, and target builder must
-share the same 9-action legality contract; search must not clamp an illegal
-fractional bucket into a different legal raise size.
+Required A/B:
+
+- vanilla low-budget CFR+ versus neural-warm-start low-budget CFR+;
+- both compared against the same higher-budget teacher;
+- metrics: root action L1/KL, top-action agreement, all-in probability/top rate,
+  illegal-action count, latency, and root-disjoint split identity;
+- fail action: retire the learned object or change the target, not sweep
+  architecture size on the same holdout.
+
+Legacy search-consistency, policy-head calibration, and CFV/DCVN scripts remain
+diagnostic tools. Direct target fit is not promotion evidence. A run that only
+learns a target file but worsens resolver drift or collapses into all-in
+selection fails the search-quality criterion. The solver, training masks, CUDA
+masks, Slumbot adapter, and target builder must share the same 9-action legality
+contract; search must not clamp an illegal fractional bucket into a different
+legal raise size.
 
 Use `scripts/eval_public_belief_probe.py` before wiring range inputs into the
 main trainer. The probe compares feature-only target prediction to raw

@@ -1,0 +1,47 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1250,
+      "path": "benchmark_audit.md",
+      "sha256": "897c427af7c29cbc247eeb462582a2337f8c14f8237c29512651d759f4eaabe7"
+    },
+    {
+      "bytes": 668,
+      "path": "decision.json",
+      "sha256": "fc6c00be804931067910ccca0dd39a0aa1bdf49b3041760f17742cbfa125c0e9"
+    },
+    {
+      "bytes": 1672,
+      "path": "mechanism_review.md",
+      "sha256": "afebf37e30b84fb4fda3b274e4ac8e9e859a1c58bc81b288c9491f82d496a5c3"
+    },
+    {
+      "bytes": 2290,
+      "path": "related_work.md",
+      "sha256": "2b4a723215fe0818ec26767b012dc135b5449553970fad02d30ff5e3ab70c80f"
+    },
+    {
+      "bytes": 1630,
+      "path": "review.md",
+      "sha256": "3f0f9ce80787e736b831b3927e5c05e26432757214b6af4fb0e5725eda986b19"
+    },
+    {
+      "bytes": 571,
+      "path": "team_review.md",
+      "sha256": "2e4076a9a7073d3803955200de21b443c52532e1c38fd26d0de2c7d0442e9852"
+    }
+  ],
+  "reason": "Local evidence rejects hard value-cut and direct policy-imitation mainlines; related work supports learned search plus CFR/resolving. The pivot tightens the next gate around root-disjoint warm-start resolver behavior and does not weaken evaluation surfaces.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T204052Z-neural-regret-field-resolving-objective-pivot",
+  "review_id": "20260513T204052Z-neural-regret-field-resolving-objective-pivot",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2007.10442",
+    "https://noambrown.github.io/papers/16-AAAI-Strategy-Based.pdf",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/8832",
+    "https://www.sciencedirect.com/science/article/pii/S0004370224001681"
+  ],
+  "written_at": "2026-05-13T20:45:58Z"
+}

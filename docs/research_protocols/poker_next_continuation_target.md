@@ -4,11 +4,26 @@ Date: 2026-05-13
 
 ## Decision
 
-Stop scaling the current learned river-leaf dual-CFV objective. The shape-covered
-`256/128` resolver-leaf split failed zero/train-constant gates across seeds, and
-a wider `hidden_dim=128` sanity check failed harder. The next target should be a
-search-integrated public-belief continuation model rather than another
-leaf-only value fit.
+Stop scaling hard learned leaf/successor value substitution and direct policy
+argmax imitation as mainline methods. The latest root-disjoint successor-cut,
+callback-state DCVN, policy mixing, and impact-gating checks all failed resolver
+behavior gates. The next target is **neural regret-field resolving**: learn a
+public-belief regret/policy initializer that warm-starts CFR+/resolving, then
+let search refine the decision during play.
+
+The required first gate is not Slumbot. It is a root-disjoint resolver A/B:
+compare low-budget vanilla CFR+ against low-budget neural-warm-start CFR+, both
+against the same higher-budget teacher, reporting root action L1/KL,
+top-action agreement, illegal-action count, and latency.
+
+Use modern neural architecture where it helps the learned search primitive:
+set/card encoders, attention over public action tokens, residual trunks,
+uncertainty heads, and mixed precision are all valid candidates. They must still
+be evaluated as search initializers. A larger network that improves offline
+target fit but fails the root-disjoint resolver A/B is not progress.
+
+Legacy note: the original leaf-only value objective is retained below as
+historical context and negative evidence.
 
 ## Mechanism Hypothesis
 

@@ -87,6 +87,29 @@ def _write_tiny_callback_cache(path: Path, *, root_label: str) -> None:
     )
 
 
+def _set_open_research(root: Path) -> None:
+    set_research_phase(root, phase="open_research", reason="test generic queue path")
+
+
+def _cli_set_open_research(script: Path, root: Path) -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(root),
+            "set-phase",
+            "--phase",
+            "open_research",
+            "--reason",
+            "test generic queue path",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
 def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     init_state(tmp_path)
 
@@ -121,7 +144,8 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert goal["review_policy"]["requires_mechanism_review"] is True
     assert goal["review_policy"]["requires_review_manifest"] is True
     assert goal["synthesis_policy"]["experiments_per_synthesis"] == 5
-    assert goal["research_phase"]["current"] == "open_research"
+    assert goal["research_phase"]["current"] == "neural_regret_field_resolving"
+    assert "regret/policy initializer" in goal["architecture_policy"]["approved_roles"]
     assert (tmp_path / "docs" / "research_protocols" / "poker_review_manifests").is_dir()
 
 
@@ -587,6 +611,38 @@ def test_research_phase_blocks_training_and_slumbot_until_calibration_audit(tmp_
     assert queued["type"] == "calibration_audit"
 
 
+def test_neural_regret_phase_blocks_old_training_path_but_allows_warm_start_knob(tmp_path):
+    init_state(tmp_path)
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    try:
+        enqueue_gpu_training(tmp_path, n_iterations=1, n_traversals=1)
+    except RuntimeError as exc:
+        assert "neural_regret_field_resolving blocks" in str(exc)
+    else:
+        raise AssertionError("generic GPU training should be blocked in neural regret phase")
+
+    try:
+        enqueue_slumbot_smoke(tmp_path, model)
+    except RuntimeError as exc:
+        assert "neural_regret_field_resolving blocks" in str(exc)
+    else:
+        raise AssertionError("Slumbot smoke should be blocked before warm-start resolver gate")
+
+    row = register_research_knob(
+        tmp_path,
+        name="regret_field_initializer_strength",
+        default="1.0",
+        failure_class="search_quality",
+        mechanism="Test one regret warm-start initializer strength inside the resolver.",
+        rationale="Isolates the neural public-belief warm-start mechanism.",
+        removal_criterion="Retire if the warm-start resolver gate does not improve over vanilla CFR.",
+    )
+    assert row["name"] == "regret_field_initializer_strength"
+
+
 def test_objective_audit_blocks_protected_surface_without_review(tmp_path):
     init_state(tmp_path)
 
@@ -658,6 +714,7 @@ def test_objective_audit_allows_protected_surface_with_completed_review(tmp_path
 
 def test_register_research_knob_requires_mechanism_and_enforces_budget(tmp_path):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
 
     for i in range(5):
         register_research_knob(
@@ -688,6 +745,7 @@ def test_register_research_knob_requires_mechanism_and_enforces_budget(tmp_path)
 
 def test_register_research_knob_rejects_sweep_shaped_defaults(tmp_path):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
 
     try:
         register_research_knob(
@@ -743,6 +801,7 @@ def test_enqueue_candidate_comparison_creates_named_gate_from_incumbent(tmp_path
 
 def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
     model = tmp_path / "models" / "candidate.pt"
     model.parent.mkdir()
     model.write_bytes(b"checkpoint")
@@ -779,6 +838,7 @@ def test_enqueue_slumbot_smoke_uses_unique_gate_names_with_same_timestamp(
     monkeypatch,
 ):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
     model = tmp_path / "models" / "candidate.pt"
     model.parent.mkdir()
     model.write_bytes(b"checkpoint")
@@ -878,6 +938,7 @@ def test_enqueue_falsification_ladder_creates_countertest_gate(tmp_path):
 
 def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
 
     queued = enqueue_gpu_training(
         tmp_path,
@@ -910,6 +971,7 @@ def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
 
 def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_path):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
     baseline = tmp_path / "models" / "incumbent.pt"
     baseline.parent.mkdir()
     baseline.write_bytes(b"checkpoint")
@@ -955,6 +1017,7 @@ def test_enqueue_gpu_training_can_request_periodic_checkpoint_comparisons(tmp_pa
 
 def test_continuous_queues_comparisons_for_saved_training_checkpoints(tmp_path):
     init_state(tmp_path)
+    _set_open_research(tmp_path)
     baseline = tmp_path / "models" / "incumbent.pt"
     baseline.parent.mkdir()
     baseline.write_bytes(b"checkpoint")
@@ -1134,6 +1197,7 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
         text=True,
         check=True,
     )
+    _cli_set_open_research(script, tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -1176,6 +1240,7 @@ def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):
         text=True,
         check=True,
     )
+    _cli_set_open_research(script, tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -1213,6 +1278,7 @@ def test_cli_enqueue_review_creates_review_gate(tmp_path):
         text=True,
         check=True,
     )
+    _cli_set_open_research(script, tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -1335,6 +1401,7 @@ def test_cli_add_knob_records_governed_knob(tmp_path):
         text=True,
         check=True,
     )
+    _cli_set_open_research(script, tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -1378,6 +1445,7 @@ def test_cli_objective_audit_blocks_protected_surface(tmp_path):
         text=True,
         check=True,
     )
+    _cli_set_open_research(script, tmp_path)
     result = subprocess.run(
         [
             sys.executable,
@@ -1469,6 +1537,7 @@ def test_cli_enqueue_train_creates_gate(tmp_path):
         text=True,
         check=True,
     )
+    _cli_set_open_research(script, tmp_path)
     result = subprocess.run(
         [
             sys.executable,

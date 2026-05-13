@@ -2880,3 +2880,15 @@
 - Summary: Completed the pending synthesis bundle for root-disjoint successor-cut and action-impact failures. Decision is `gather_more_evidence`: value-only labels, one-cut impact, and sparse structural gates all fail on unseen roots, so the next falsifier should collect denser exact-vs-learned intervention labels across public roots before adding another value-only model or threshold.
 - Metrics file: autoresearch-session/poker_reviews/20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures-synthesis/decision.json and docs/research_protocols/poker_review_manifests/20260513T195205Z-root-disjoint-successor-cut-and-action-impact-failures-synthesis.json
 - Key metrics: `{"decision": "gather_more_evidence", "synthesis_validation_passed": true, "next_test": "collect root-disjoint intervention labels and test whether an action-impact predictor beats baselines"}`
+
+## 20260513T203951Z-neural-regret-field-workflow-pivot - passed
+
+- Timestamp: 2026-05-13T20:39:51Z
+- Type: methodology_update
+- Gate: manual-objective-and-workflow-update
+- Hypothesis: After repeated hard value-cut and direct policy-imitation failures, the workflow should pivot to a more elegant SOTA-oriented learned-search objective: train neural public-belief regret/policy fields that warm-start CFR+/resolving, while search remains the runtime correction operator.
+- Failure class: none
+- Related work: DeepStack was submitted in 2017 and combines learned intuition with continual resolving; ReBeL was submitted in 2020 and reinforces search plus learning in imperfect-information games; Supremus/DCVN reports Slumbot-beating value-network resolving; regret-transfer and strategy-based warm-starting show principled CFR warm starts; AutoCFR motivates learning better regret-minimization mechanisms. The local update adopts the common lesson without assuming hard learned value replacement is safe in this codebase.
+- Summary: Updated the tracked workflow, current findings, continuation target, README, AGENTS guide, and autoresearch default goal to make `neural_regret_field_resolving` the active phase. The phase allows modern neural architectures only when they serve the learned-search primitive and pass a root-disjoint warm-start resolver A/B against a higher-budget teacher; generic GPU Deep CFR training and live Slumbot smokes are blocked until that local gate exists. Retired stale local active knobs for search-target weight and policy-ranking diagnostics so unattended runs do not continue the old benchmark-hacking-prone path.
+- Metrics file: autoresearch-session/poker_reviews/20260513T204052Z-neural-regret-field-resolving-objective-pivot/decision.json and docs/research_protocols/poker_review_manifests/20260513T204052Z-neural-regret-field-resolving-objective-pivot.json
+- Key metrics: `{"active_phase": "neural_regret_field_resolving", "primary_gate": "warm-start low-budget resolver closer than vanilla low-budget resolver to high-budget teacher on root-disjoint public states", "modern_architecture_policy": "allowed when justified by learned-search role and resolver behavior", "promotion": false}`

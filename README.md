@@ -123,10 +123,20 @@ Use the autoresearch workflow for unattended experiments and methodology
 changes. It records resumable state under `autoresearch-session/` and appends
 concise entries to `RESEARCH_LOG.md`.
 
+The current objective is neural regret-field resolving: learn reusable
+public-belief regret/policy initializers that warm-start CFR+/resolving, then
+use search as the runtime correction mechanism. Modern neural architecture is
+allowed when it improves that learned search primitive. Hard learned value cuts,
+direct policy argmax imitation, and broad hyperparameter sweeps are negative
+evidence tracks unless a completed methodology review reopens them.
+
 ```bash
 python scripts/poker_autoresearch.py init
 python scripts/poker_autoresearch.py status
 python scripts/poker_autoresearch.py continuous --sleep-seconds 30
+python scripts/poker_autoresearch.py set-phase \
+  --phase neural_regret_field_resolving \
+  --reason "active SOTA-oriented learned-search objective"
 ```
 
 Before changing a method, evaluation protocol, promotion rule, or persistent
