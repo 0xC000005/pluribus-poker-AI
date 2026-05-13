@@ -33,6 +33,7 @@ from analyze_dual_cfv_cache_errors import (
     merge_record_metadata,
 )
 from build_joint_pbs_continuation_targets import build_joint_payload
+from build_public_belief_cache import build_public_belief_cache
 from eval_joint_pbs_continuation_probe import (
     load_joint_pbs_dataset,
     load_joint_pbs_continuation_checkpoint,
@@ -662,6 +663,37 @@ def test_joint_pbs_continuation_probe_smoke(tmp_path):
     assert "policy_uniform_baseline" in metrics
     assert value_pred.shape == (2, 4, bvp.N_HANDS)
     assert policy_pred.shape == (4, N_ACTIONS)
+
+
+def test_public_belief_cache_builder_skips_cfv_labels(tmp_path):
+    checkpoint = tmp_path / "range.pt"
+    _write_checkpoint(checkpoint)
+    targets_path, cases_path = _write_targets_and_cases(tmp_path)
+    private_features = np.zeros((1, N_FEATURES), dtype=np.float32)
+    private_features[0, 0] = 1.0
+    private_features[0, 1] = 1.0
+    legal_masks = np.ones((1, N_ACTIONS), dtype=np.float32)
+    target_probs = np.ones((1, N_ACTIONS), dtype=np.float32) / float(N_ACTIONS)
+    PolicyTargetBuffer(private_features, legal_masks, target_probs).save_npz(targets_path)
+    cache_path = tmp_path / "belief_cache.npz"
+
+    metrics = build_public_belief_cache(
+        targets_npz=targets_path,
+        cases_json=cases_path,
+        range_checkpoint=checkpoint,
+        output=cache_path,
+        device="cpu",
+    )
+    dataset, records = bvp.load_public_belief_cfv_dataset_cache(cache_path)
+
+    assert metrics["mode"] == "public_belief_cache"
+    assert metrics["value_labels"] == 0
+    assert dataset.features.shape == (1, N_FEATURES)
+    assert dataset.features[:, :52].sum() == 0.0
+    assert dataset.belief.shape == (1, bvp.BELIEF_DIM)
+    assert dataset.values.shape == (1, bvp.N_HANDS)
+    assert dataset.value_masks.sum() == 0.0
+    assert records[0]["mode"] == "public_belief_only"
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):

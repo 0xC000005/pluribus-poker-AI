@@ -81,6 +81,9 @@ failed harder (`MAE 0.3475`). The Deepset value-only sanity passed (`MAE 0.2295`
 `RMSE 0.2870`, policy KL `0.5719` vs legal-uniform `0.6881`).
 A checkpointed rerun also passed (`joint_pbs_turn128x64_deepset_seed20260613.pt`),
 so the next step can consume a durable artifact rather than an in-memory probe.
+The first fresh repeat split also passed (`joint_pbs_turn_repeat128x64_deepset_seed20260617.pt`),
+with value `MAE/RMSE 0.1855/0.2504` and policy KL `0.4350` vs legal-uniform
+`0.5806`.
 
 This is not gameplay-ready. Treat it as evidence to run an independent
 methodology review and fixed resolver A/B with the joint continuation model
