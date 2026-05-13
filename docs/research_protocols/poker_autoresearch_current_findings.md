@@ -40,6 +40,13 @@ writes fixed all-hand labels for that solver-state field. A 4-root smoke wrote
 `4,512` rows with nonnegative target fields and normalized target probabilities;
 scale this to root-disjoint train/holdout slices before fitting the first model.
 
+First learner status: failed. `scripts/train_regret_policy_warm_start.py`
+trains on fixed `128` train roots and evaluates on `64` holdout roots. The
+direct predictor improved neither policy L1 nor KL over the cheap low solver
+(`0.7890` L1, `0.5121` KL vs low `0.5249`/`0.2681`). A residual diagnostic that
+also consumed the low solver's field was better but still failed
+(`0.7166`/`0.4641`). Do not integrate this checkpoint into the resolver.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

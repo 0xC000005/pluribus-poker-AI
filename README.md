@@ -219,6 +219,21 @@ python scripts/build_regret_policy_warm_start_targets.py \
   --reference-iterations 25
 ```
 
+Train the first fixed-artifact probe with:
+
+```bash
+python scripts/train_regret_policy_warm_start.py \
+  --train autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_train128_seed20260657.npz \
+  --holdout autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_holdout64_seed20260657.npz \
+  --output-checkpoint autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_train128_holdout64_seed20260658.pt \
+  --output-json autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_train128_holdout64_seed20260658.json \
+  --device auto \
+  --hidden-dim 256 \
+  --n-layers 2 \
+  --epochs 12 \
+  --batch-size 8192
+```
+
 ## Playing Slumbot
 
 ```bash

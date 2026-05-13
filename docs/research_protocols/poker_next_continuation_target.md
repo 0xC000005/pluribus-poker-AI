@@ -46,6 +46,13 @@ rows, legal masks, low-solver fields, and teacher `regret_sum`/`strategy_sum`
 fields. The next implementation step is a learner for these labels, followed by
 the same root-disjoint warm-start resolver gate.
 
+The first learner did not clear the offline baseline. A direct model and a
+low-state residual diagnostic both failed to beat the 5-iteration solver's
+average policy on 64 unseen roots. This suggests the target must become more
+search-aware than per-hand supervised field regression, or the evaluation
+should learn only selective corrections where the low solver is demonstrably
+wrong rather than distilling all rows uniformly.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

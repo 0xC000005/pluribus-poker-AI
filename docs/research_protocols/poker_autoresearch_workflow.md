@@ -389,6 +389,27 @@ python scripts/build_regret_policy_warm_start_targets.py \
   --reference-iterations 25
 ```
 
+Then train the fixed-artifact probe:
+
+```bash
+python scripts/train_regret_policy_warm_start.py \
+  --train autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_train128_seed20260657.npz \
+  --holdout autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_holdout64_seed20260657.npz \
+  --output-checkpoint autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_train128_holdout64_seed20260658.pt \
+  --output-json autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_train128_holdout64_seed20260658.json \
+  --device auto \
+  --hidden-dim 256 \
+  --n-layers 2 \
+  --epochs 12 \
+  --batch-size 8192
+```
+
+The first direct and low-state residual probes both failed the root-disjoint
+offline baseline. Treat this as evidence that the current supervised field
+target is not enough by itself: the cheap solver's average policy is already
+closer to the teacher than the learned probe. Do not wire this checkpoint into
+resolver play until a field learner beats the low-solver policy baseline first.
+
 Legacy search-consistency, policy-head calibration, and CFV/DCVN scripts remain
 diagnostic tools. Direct target fit is not promotion evidence. A run that only
 learns a target file but worsens resolver drift or collapses into all-in

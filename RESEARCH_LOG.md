@@ -2925,3 +2925,14 @@
 - Summary: Added `scripts/build_regret_policy_warm_start_targets.py`, which solves low-budget and higher-budget resolvers on selected public roots and saves all-hand rows containing public features, private policy features, belief rows, legal masks, low-solver `regret_sum`/`strategy_sum`, and teacher `regret_sum`/`strategy_sum`. A 4-root smoke produced `4,512` rows with nonnegative target fields and normalized target probabilities. Next step: scale to root-disjoint train/holdout label files, train the first solver-state predictor, and evaluate with the warm-start resolver gate.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_smoke4_seed20260657.json
 - Key metrics: `{"n_roots": 4, "n_targets": 4512, "feature_dim": 126, "belief_dim": 2652, "target_regret_mean": 1575.125, "target_strategy_mean": 0.00295508, "low_regret_mean": 1459.80712891, "low_strategy_mean": 0.00059102, "promotion": false}`
+
+## 20260513T214547Z-regret-policy-field-learner - failed
+
+- Timestamp: 2026-05-13T21:45:47Z
+- Type: diagnostic
+- Gate: manual-regret-policy-field-learner
+- Hypothesis: A neural public-belief solver-state predictor trained on fixed root-disjoint regret/policy field labels should beat the cheap 5-iteration solver policy on unseen roots before resolver integration.
+- Failure class: supervised_field_generalization_gap
+- Summary: Added `scripts/train_regret_policy_warm_start.py`, which trains a CUDA/BF16 MLP over public features, private hand, belief, and legal mask to predict selected-node regret and strategy distributions plus masses. The first raw-field parameterization produced NaNs on a tiny smoke due to unbounded decoded field logs; clamped decoding fixed metrics. The corrected distribution-plus-mass parameterization still failed on the 128-root train / 64-root holdout split. Direct prediction produced holdout policy L1/KL `0.7890/0.5121`, worse than the low solver's `0.5249/0.2681`. A low-state residual diagnostic improved to `0.7166/0.4641` but still failed. Do not wire these checkpoints into the resolver gate.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_train128_holdout64_seed20260658.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_lowstate_train128_holdout64_seed20260658.json
+- Key metrics: `{"direct_passed": false, "lowstate_passed": false, "root_disjoint_passed": true, "low_policy_l1": 0.524947, "low_policy_kl": 0.268133, "direct_policy_l1": 0.788988, "direct_policy_kl": 0.512114, "lowstate_policy_l1": 0.716563, "lowstate_policy_kl": 0.464139, "low_policy_top1": 0.744695, "direct_top1": 0.426058, "lowstate_top1": 0.476008, "promotion": false}`

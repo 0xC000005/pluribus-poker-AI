@@ -52,10 +52,11 @@ def normalize_action_rows(
     totals = arr.sum(axis=1, keepdims=True)
     legal_total = float(max(legal.sum(), 1.0))
     fallback = legal.reshape((1, -1)) / legal_total
-    return np.where(totals > 1e-8, arr / np.maximum(totals, 1e-8), fallback).astype(
-        np.float32,
-        copy=False,
-    )
+    out = np.repeat(fallback, arr.shape[0], axis=0).astype(np.float32, copy=False)
+    valid = totals[:, 0] > 1e-8
+    if np.any(valid):
+        out[valid] = arr[valid] / totals[valid]
+    return out.astype(np.float32, copy=False)
 
 
 def _node_legal_mask(node: Any) -> np.ndarray:

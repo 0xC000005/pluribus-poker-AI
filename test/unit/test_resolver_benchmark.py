@@ -45,6 +45,12 @@ from build_learned_river_leaf_cases import (  # noqa: E402
     _summarize_leaf_records,
 )
 from build_regret_policy_warm_start_targets import normalize_action_rows  # noqa: E402
+from train_regret_policy_warm_start import (  # noqa: E402
+    RegretPolicyWarmStartDataset,
+    fields_to_policy,
+    logs_to_fields,
+    root_disjoint_audit,
+)
 from solver import StreetSolver  # noqa: E402
 
 
@@ -356,6 +362,51 @@ def test_normalize_action_rows_masks_illegal_and_falls_back_to_legal_uniform():
     assert normalized[0, 2] == pytest.approx(0.0)
     assert normalized[1, 1] == pytest.approx(0.5)
     assert normalized[1, 8] == pytest.approx(0.5)
+
+
+def test_regret_policy_warm_start_root_disjoint_audit_and_field_policy():
+    n = 2
+    legal = np.zeros((n, N_ACTIONS), dtype=np.float32)
+    legal[:, [1, 8]] = 1.0
+    dataset = RegretPolicyWarmStartDataset(
+        features=np.zeros((n, N_FEATURES), dtype=np.float32),
+        policy_features=np.zeros((n, N_FEATURES), dtype=np.float32),
+        belief=np.zeros((n, N_HANDS * 2), dtype=np.float32),
+        legal_masks=legal,
+        target_regret_sum=np.zeros((n, N_ACTIONS), dtype=np.float32),
+        target_strategy_sum=np.zeros((n, N_ACTIONS), dtype=np.float32),
+        target_probs=legal / legal.sum(axis=1, keepdims=True),
+        low_regret_sum=np.zeros((n, N_ACTIONS), dtype=np.float32),
+        low_strategy_sum=np.zeros((n, N_ACTIONS), dtype=np.float32),
+        labels=("a-hand0", "b-hand0"),
+        root_labels=("root-a", "root-b"),
+    )
+    holdout = RegretPolicyWarmStartDataset(
+        features=dataset.features[:1],
+        policy_features=dataset.policy_features[:1],
+        belief=dataset.belief[:1],
+        legal_masks=dataset.legal_masks[:1],
+        target_regret_sum=dataset.target_regret_sum[:1],
+        target_strategy_sum=dataset.target_strategy_sum[:1],
+        target_probs=dataset.target_probs[:1],
+        low_regret_sum=dataset.low_regret_sum[:1],
+        low_strategy_sum=dataset.low_strategy_sum[:1],
+        labels=("c-hand0",),
+        root_labels=("root-c",),
+    )
+    fields = np.zeros((1, N_ACTIONS), dtype=np.float32)
+    fields[0, 8] = 3.0
+
+    audit = root_disjoint_audit(dataset, holdout)
+    policy = fields_to_policy(fields, holdout.legal_masks)
+
+    assert audit["passed"] is True
+    assert policy[0, 8] == pytest.approx(1.0)
+    assert policy[0, 1] == pytest.approx(0.0)
+    decoded = logs_to_fields(np.full((1, N_ACTIONS), 100.0, dtype=np.float32), holdout.legal_masks)
+    assert np.isfinite(decoded).all()
+    assert decoded[0, 0] == pytest.approx(0.0)
+    assert decoded[0, 1] > 0.0
 
 
 def test_policy_residual_combiner_features_validate_shapes():
