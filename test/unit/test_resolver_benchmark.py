@@ -24,6 +24,7 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
     _global_board_mask,
     _local_ranges_from_belief,
 )
+from build_learned_river_leaf_cases import _summarize_leaf_records  # noqa: E402
 from solver import StreetSolver  # noqa: E402
 
 
@@ -176,6 +177,38 @@ def test_learned_leaf_range_and_mask_helpers_normalize_legal_hands():
     np.testing.assert_allclose(hero, [1.0, 0.0])
     np.testing.assert_allclose(villain, [0.0, 1.0])
     assert int(board_mask.sum()) == 47 * 46 // 2
+
+
+def test_river_leaf_record_summary_reports_dataset_skew():
+    records = [
+        {
+            "source_case": "turn-a",
+            "leaf_action_str": "ck/kk/kk/",
+            "river_card": "2c",
+            "terminal_node_idx": 7,
+        },
+        {
+            "source_case": "turn-a",
+            "leaf_action_str": "ck/kk/kk/",
+            "river_card": "3d",
+            "terminal_node_idx": 7,
+        },
+        {
+            "source_case": "turn-b",
+            "leaf_action_str": "ck/kk/b400",
+            "river_card": "2c",
+            "terminal_node_idx": 9,
+        },
+    ]
+
+    summary = _summarize_leaf_records(records)
+
+    assert summary["sources"]["n_unique"] == 2
+    assert summary["sources"]["max_share"] == pytest.approx(2 / 3)
+    assert summary["terminals"]["n_unique"] == 2
+    assert summary["river_cards"]["top"][0] == {"key": "2c", "count": 2}
+    assert summary["leaf_action_parse_errors"] == 0
+    assert summary["leaf_total_last_bet_to"]["max"] == 500.0
 
 
 def test_resolver_benchmark_cli_emits_json_for_checkpoint(tmp_path):

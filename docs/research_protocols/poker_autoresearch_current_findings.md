@@ -686,6 +686,12 @@ Label-throughput update:
   `0.31`. This confirms that learned river continuations should stay disabled
   until the leaf-value dataset is materially larger and stratified by source and
   terminal structure.
+- The leaf exporter now emits `leaf_distribution` metadata so larger datasets
+  can be checked before labeling. It reports source-case, terminal-node,
+  river-card, and leaf-action concentration plus parsed bet-size summaries. A
+  two-leaf smoke was mechanically green and showed why the gate matters:
+  `max_source_share=1.0` and `max_river_card_share=1.0` despite multiple
+  terminals.
 
 Resolved workflow issue: `rules_parity`.
 

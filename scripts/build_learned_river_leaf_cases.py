@@ -7,6 +7,7 @@ import argparse
 import itertools
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -219,6 +220,72 @@ def _collect_case(
     return collector.cases, collector.features, collector.beliefs, collector.records
 
 
+def _counter_summary(values: list[str], *, top_k: int = 10) -> dict[str, Any]:
+    if not values:
+        return {
+            "n": 0,
+            "n_unique": 0,
+            "max_count": 0,
+            "max_share": 0.0,
+            "top": [],
+        }
+    counts = Counter(values)
+    top = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:top_k]
+    max_count = int(top[0][1])
+    return {
+        "n": int(len(values)),
+        "n_unique": int(len(counts)),
+        "max_count": max_count,
+        "max_share": round(float(max_count / len(values)), 6),
+        "top": [{"key": str(key), "count": int(count)} for key, count in top],
+    }
+
+
+def _numeric_summary(values: list[float]) -> dict[str, Any]:
+    if not values:
+        return {"n": 0, "min": None, "max": None, "mean": None}
+    arr = np.asarray(values, dtype=np.float64)
+    return {
+        "n": int(arr.size),
+        "min": round(float(arr.min()), 6),
+        "max": round(float(arr.max()), 6),
+        "mean": round(float(arr.mean()), 6),
+    }
+
+
+def _summarize_leaf_records(records: list[dict[str, Any]]) -> dict[str, Any]:
+    terminal_keys = [
+        f"{record.get('source_case', '')}:{record.get('terminal_node_idx', '')}"
+        for record in records
+    ]
+    parsed_leaf_actions = [
+        parse_action(str(record.get("leaf_action_str", ""))) for record in records
+    ]
+    valid_leaf_actions = [parsed for parsed in parsed_leaf_actions if "error" not in parsed]
+    return {
+        "sources": _counter_summary(
+            [str(record.get("source_case", "")) for record in records]
+        ),
+        "terminals": _counter_summary(terminal_keys),
+        "river_cards": _counter_summary(
+            [str(record.get("river_card", "")) for record in records]
+        ),
+        "leaf_actions": _counter_summary(
+            [str(record.get("leaf_action_str", "")) for record in records]
+        ),
+        "leaf_total_last_bet_to": _numeric_summary(
+            [float(parsed["total_last_bet_to"]) for parsed in valid_leaf_actions]
+        ),
+        "leaf_street_last_bet_to": _numeric_summary(
+            [float(parsed["street_last_bet_to"]) for parsed in valid_leaf_actions]
+        ),
+        "leaf_last_bet_size": _numeric_summary(
+            [float(parsed["last_bet_size"]) for parsed in valid_leaf_actions]
+        ),
+        "leaf_action_parse_errors": int(len(records) - len(valid_leaf_actions)),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Export river leaf cases/ranges from turn resolver terminals."
@@ -297,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         "max_rivers_per_terminal": int(args.max_rivers_per_terminal),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
+        "leaf_distribution": _summarize_leaf_records(records),
         "records": records,
     }
     if args.output_json:

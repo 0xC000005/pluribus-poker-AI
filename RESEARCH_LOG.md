@@ -2125,3 +2125,14 @@
 - Summary: Added `--max-leaf-states-per-source` to the leaf exporter, then built a `32/16` split capped at four leaf states per turn source and one river per terminal. This improved the pathology but still failed the hardened gate: holdout MAE fell from `9.83` to `0.913`, but zero and train-constant baselines remain around `0.31`. This supports the diagnosis that resolver-leaf value learning needs substantially more generated leaf data and likely source/terminal stratification. Do not promote the river leaf or tune hyperparameters on this tiny split.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river_leaf32x16_strat_deepset64_seed20260592.json
 - Key metrics: `{"passed": false, "mae": 0.91346949, "rmse": 1.10129543, "zero_mae": 0.30796431, "best_constant_mae": 0.30511928, "train_size": 32, "holdout_size": 16, "train_labels": 69184, "holdout_labels": 34592, "exporter_added": ["max_leaf_states_per_source"]}`
+
+## 20260513T061123Z-leaf-export-diversity-summary - passed
+
+- Timestamp: 2026-05-13T06:11:23Z
+- Type: workflow
+- Gate: manual-leaf-export-metadata-smoke
+- Hypothesis: Larger resolver-leaf datasets should not be generated blind; the exporter should report source, terminal, river-card, and bet-size skew before expensive CFV labeling.
+- Failure class: none
+- Summary: Added `leaf_distribution` metadata to `scripts/build_learned_river_leaf_cases.py`, including source-case share, terminal-node share, river-card share, leaf-action share, parse errors, and parsed bet-size summaries. A two-leaf smoke verified the summary on the actual resolver path and immediately exposed a fully single-source/single-river sample (`max_source_share=1.0`, `max_river_card_share=1.0`). Use this metadata as a pre-label gate for larger leaf-value datasets.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_metadata_smoke_seed20260580.json
+- Key metrics: `{"n_leaf_states": 2, "sources": {"n_unique": 1, "max_share": 1.0}, "terminals": {"n_unique": 2, "max_share": 0.5}, "river_cards": {"n_unique": 1, "max_share": 1.0}, "leaf_action_parse_errors": 0}`
