@@ -429,6 +429,10 @@ def _metrics(pred: np.ndarray, dataset: DualCFVDataset) -> dict[str, float]:
     }
 
 
+def _zero_dual_prediction(dataset: DualCFVDataset) -> np.ndarray:
+    return np.zeros((2, dataset.features.shape[0], N_HANDS), dtype=np.float32)
+
+
 def _standardize_dual_datasets(
     train_raw: DualCFVDataset,
     holdout_raw: DualCFVDataset,
@@ -529,6 +533,11 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         use_belief=True,
     )
     holdout_metrics = _metrics(holdout_pred, holdout)
+    zero_metrics = _metrics(_zero_dual_prediction(holdout), holdout)
+    beats_zero = (
+        holdout_metrics["mae"] < zero_metrics["mae"]
+        and holdout_metrics["rmse"] <= zero_metrics["rmse"]
+    )
 
     output_path = Path(output_checkpoint)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -566,7 +575,8 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     )
     return {
         "mode": "public_belief_dual_hand_cfv_checkpoint_train",
-        "passed": bool(np.isfinite(holdout_metrics["mae"])),
+        "passed": bool(np.isfinite(holdout_metrics["mae"]) and beats_zero),
+        "pass_criteria": "belief checkpoint must beat zero-CFV MAE and not worsen zero-CFV RMSE",
         "checkpoint": str(output_path),
         "device": str(resolved_device),
         "solver_iterations": int(solver_iterations),
@@ -598,6 +608,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             holdout.hero_masks.sum() + holdout.villain_masks.sum()
         ),
         "belief_holdout": holdout_metrics,
+        "zero_baseline": zero_metrics,
         "train_dual_record_count": len(train_records),
         "holdout_dual_record_count": len(holdout_records),
     }
@@ -839,12 +850,23 @@ def main(argv: list[str] | None = None) -> int:
         ),
         holdout,
     )
+    zero_metrics = _metrics(_zero_dual_prediction(holdout), holdout)
     mae_delta = round(float(base_metrics["mae"] - belief_metrics["mae"]), 8)
     rmse_delta = round(float(base_metrics["rmse"] - belief_metrics["rmse"]), 8)
+    zero_mae_delta = round(float(zero_metrics["mae"] - belief_metrics["mae"]), 8)
+    zero_rmse_delta = round(float(zero_metrics["rmse"] - belief_metrics["rmse"]), 8)
     metrics = {
         "mode": "public_belief_dual_hand_cfv_probe",
-        "passed": bool(mae_delta > 0 and rmse_delta >= 0),
-        "pass_criteria": "belief_holdout must improve dual-player MAE and not worsen RMSE",
+        "passed": bool(
+            mae_delta > 0
+            and rmse_delta >= 0
+            and zero_mae_delta > 0
+            and zero_rmse_delta >= 0
+        ),
+        "pass_criteria": (
+            "belief_holdout must improve feature baseline and beat zero-CFV MAE "
+            "without worsening feature or zero-CFV RMSE"
+        ),
         "device": str(device),
         "train_size": int(train.features.shape[0]),
         "holdout_size": int(holdout.features.shape[0]),
@@ -866,8 +888,11 @@ def main(argv: list[str] | None = None) -> int:
         "holdout_label_count": int(holdout.hero_masks.sum() + holdout.villain_masks.sum()),
         "base_holdout": base_metrics,
         "belief_holdout": belief_metrics,
+        "zero_baseline": zero_metrics,
         "holdout_mae_delta": mae_delta,
         "holdout_rmse_delta": rmse_delta,
+        "holdout_zero_mae_delta": zero_mae_delta,
+        "holdout_zero_rmse_delta": zero_rmse_delta,
         "train_solver_mean_ms": round(
             float(np.mean([record["solver_latency_ms"] for record in train_records])), 3
         ),

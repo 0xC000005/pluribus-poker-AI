@@ -1883,13 +1883,24 @@
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river128x64_separate_bottleneck32_summary.json
 - Key metrics: `{"pass_count": 3, "n": 3, "train_size": 128, "holdout_size": 64, "mae_delta_mean": 0.08869616666666667, "rmse_delta_mean": 0.10599575, "mae_deltas": [0.07729132, 0.03141874, 0.15737844], "rmse_deltas": [0.05311631, 0.03938302, 0.22548792], "train_label_count": 276736, "holdout_label_count": 138368}`
 
-## 20260513T034659Z-dual-player-cfv-checkpoint - passed
+## 20260513T034659Z-dual-player-cfv-checkpoint - mixed
 
 - Timestamp: 2026-05-13T03:46:59Z
 - Type: implementation
 - Gate: manual-dual-hand-cfv-checkpoint
 - Hypothesis: The larger-surface dual-player belief-bottleneck model should be saved as a reusable checkpoint before any learned-leaf resolver diagnostic is attempted.
 - Failure class: range_belief
-- Summary: Added `scripts/train_public_belief_dual_hand_cfv.py` plus load/predict helpers for saved dual-player public-belief hand-CFV checkpoints. Trained the separate-head 32-dim bottleneck architecture on the larger `128/64` cached river split. The checkpoint loads through the new round-trip path and reproduces the seed `20260530` holdout metrics. This creates the model artifact required for the next fixed resolver-state learned-leaf A/B; it is still not a Slumbot gameplay checkpoint.
+- Summary: Added `scripts/train_public_belief_dual_hand_cfv.py` plus load/predict helpers for saved dual-player public-belief hand-CFV checkpoints. Trained the separate-head 32-dim bottleneck architecture on the larger `128/64` cached river split. The checkpoint loads through the new round-trip path and reproduces the seed `20260530` holdout metrics, but the follow-up zero-baseline gate below shows that these metrics are not sufficient for learned-leaf promotion.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_checkpoint_river128x64_seed20260530.json
-- Key metrics: `{"passed": true, "checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river128x64_separate_bottleneck32_seed20260530.pt", "device": "cuda", "train_size": 128, "holdout_size": 64, "train_label_count": 276736, "holdout_label_count": 138368, "belief_holdout": {"mae": 0.50511733, "rmse": 0.68256008, "bias": 0.06893115}}`
+- Key metrics: `{"checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river128x64_separate_bottleneck32_seed20260530.pt", "device": "cuda", "train_size": 128, "holdout_size": 64, "train_label_count": 276736, "holdout_label_count": 138368, "belief_holdout": {"mae": 0.50511733, "rmse": 0.68256008, "bias": 0.06893115}}`
+
+## 20260513T035238Z-dual-cfv-zero-baseline-falsification - failed
+
+- Timestamp: 2026-05-13T03:52:38Z
+- Type: analysis
+- Gate: manual-dual-hand-cfv-zero-baseline
+- Hypothesis: The saved dual-player CFV checkpoint should beat a trivial zero-CFV baseline before it is treated as a learned leaf candidate.
+- Failure class: eval_invalid
+- Summary: Added `scripts/eval_public_belief_dual_cfv_checkpoint.py` and hardened the dual-player probe/checkpoint pass criteria to require beating zero-CFV MAE and not worsening zero-CFV RMSE. The larger `128/64` river bottleneck model still improves over the feature-only baseline, but fails against zero CFV on every seed. The saved checkpoint is fast enough for leaf use (`0.245 ms/state`, about `7,499x` faster than cached solver labels), so the blocker is target/model quality, not inference speed. Learned-leaf integration is blocked until this zero baseline is beaten.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_checkpoint_eval_river64_seed20260530.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river128x64_separate_bottleneck32_summary.json
+- Key metrics: `{"checkpoint_eval": {"passed": false, "model_holdout": {"mae": 0.50511733, "rmse": 0.68256008, "bias": 0.06893115}, "zero_baseline": {"mae": 0.42573369, "rmse": 0.62972661, "bias": -0.34814383}, "model_ms_per_state": 0.244753, "speedup_vs_solver_mean_per_state": 7499.324, "zero_sum_residual": {"pred_abs_mean": 0.95618114, "target_abs_mean": 0.87269474}}, "probe_zero_hardened": {"pass_count": 0, "n": 3, "zero_mae_deltas": [-0.07938364, -0.07526584, -0.12277238], "zero_rmse_deltas": [-0.05283347, -0.00577159, -0.05067475]}}`
