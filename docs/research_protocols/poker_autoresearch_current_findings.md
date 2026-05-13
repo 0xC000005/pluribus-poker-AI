@@ -599,6 +599,21 @@ river model inside every turn CFR terminal, but mixed turn labels are slow at
 the current solver speed. The next mixed-street step should target label
 throughput or a turn-only split, not a hyperparameter sweep.
 
+Label-throughput update:
+
+- For turn labels, the CPU solver backend beat the current Python-driven
+  `torch-cuda` backend on a four-case check: `1.10s` versus `1.45s` mean per
+  case. This is consistent with the solver note that torch-CUDA is not a fused
+  solver.
+- `--label-jobs` now enables parallel CPU dual-CFV label generation. Naive
+  multiprocessing was slower from BLAS oversubscription; the implementation
+  caps threadpools per worker when `label_jobs > 1`.
+- On an uncached mixed `8/4` CPU benchmark, controlled four-worker generation
+  reduced wall time from `27.26s` to `18.38s` (`1.48x`). Use
+  `--solver-backend cpu --label-jobs 4` for CPU label builds; keep
+  `label_jobs=1` for default single-worker runs and do not combine label jobs
+  with `torch-cuda`.
+
 Resolved workflow issue: `rules_parity`.
 
 The feature-encoding parity script was stale for heads-up postflop order. It

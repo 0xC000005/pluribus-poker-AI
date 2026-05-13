@@ -1982,3 +1982,14 @@
 - Summary: Generalized the dual-player CFV target builder from river-only to turn+river states and ran a cached mixed-street `64/32` probe across three seeds. The result is promising but not stable: all seeds beat the zero baseline on MAE/RMSE, one seed passes the full constant-hardened gate, one seed narrowly misses constant RMSE, and one seed misses train constants. Label generation is now the practical bottleneck for this path: mixed turn labels averaged `3.35s` per train state and `3.84s` per holdout state with the current `torch-cuda` solver backend. Do not promote mixed-street learning yet; scale only after improving label throughput or using a more targeted turn-only split.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_mixed64x32_deepset64_summary.json
 - Key metrics: `{"pass_count": 1, "n": 3, "mae_delta_mean": 0.02482259, "rmse_delta_mean": 0.02831585, "zero_mae_delta_mean": 0.01720883, "zero_rmse_delta_mean": 0.06440819, "best_constant_mae_delta_mean": -0.00255133, "best_constant_rmse_delta_mean": 0.00123265, "train_solver_mean_ms": 3348.036, "holdout_solver_mean_ms": 3840.952}`
+
+## 20260513T045832Z-dual-cfv-label-throughput - passed
+
+- Timestamp: 2026-05-13T04:58:32Z
+- Type: implementation
+- Gate: manual-dual-cfv-label-throughput
+- Hypothesis: Mixed-street CFV label throughput should improve more from CPU backend selection and controlled CPU parallelism than from the current Python-driven torch-CUDA solver.
+- Failure class: performance
+- Summary: Added `--label-jobs` to the dual-CFV probe and checkpoint trainer for parallel CPU label generation, with per-worker threadpool limiting to avoid BLAS oversubscription. A direct four-turn-case backend check showed CPU faster than `torch-cuda` (`1.10s` vs `1.45s` mean per case). A small uncached `8/4` CPU label-generation benchmark showed naive multiprocessing was much worse from thread oversubscription, while the thread-limited four-worker path reduced wall time from the original single-worker `27.26s` to `18.38s` (`1.48x`). Keep default `label_jobs=1`; use `--solver-backend cpu --label-jobs 4` only for CPU label builds, not `torch-cuda`.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_mixed8x4_cpu_jobs1_benchmark.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_mixed8x4_cpu_limited_jobs4_benchmark.json
+- Key metrics: `{"backend_check": {"cpu_mean_ms": 1103.094, "torch_cuda_mean_ms": 1448.142}, "uncached_8x4": {"single_worker_elapsed_s": 27.261, "limited_four_worker_elapsed_s": 18.384, "speedup": 1.483}, "guardrail": "parallel label jobs reject torch-cuda and cap worker threadpools"}`

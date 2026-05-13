@@ -55,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=("flat", "deepset"),
         default="flat",
     )
+    parser.add_argument("--label-jobs", type=int, default=1)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -86,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         head_mode=args.head_mode,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
         card_encoder=args.card_encoder,
+        label_jobs=args.label_jobs,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

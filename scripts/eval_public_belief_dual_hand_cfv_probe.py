@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import itertools
 import json
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -220,6 +222,26 @@ def _case_dual_cfv_target(
     }
 
 
+def _dual_target_worker(args: tuple[Any, np.ndarray, int, str, float, bool]):
+    case, belief_row, solver_iterations, solver_backend, value_scale, limit_threads = args
+    if limit_threads:
+        try:
+            from threadpoolctl import threadpool_limits
+            limit_context = threadpool_limits(limits=1)
+        except Exception:
+            limit_context = contextlib.nullcontext()
+    else:
+        limit_context = contextlib.nullcontext()
+    with limit_context:
+        return _case_dual_cfv_target(
+            case,
+            belief_row,
+            solver_iterations=solver_iterations,
+            solver_backend=solver_backend,
+            value_scale=value_scale,
+        )
+
+
 def _save_dual_cache(dataset: DualCFVDataset, records: list[dict[str, Any]], path: str | Path) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -261,6 +283,7 @@ def _load_or_build_dual_dataset(
     solver_backend: str,
     value_scale: float,
     dual_cache: str | Path | None,
+    label_jobs: int = 1,
 ) -> tuple[DualCFVDataset, list[dict[str, Any]], bool]:
     if dual_cache is not None and Path(dual_cache).exists():
         dataset, records = _load_dual_cache(dual_cache)
@@ -270,19 +293,31 @@ def _load_or_build_dual_dataset(
     if len(cases) != base.features.shape[0]:
         raise ValueError("case count does not match base CFV cache")
     n = min(max(1, int(limit)), len(cases))
+    jobs = max(1, int(label_jobs))
+    if jobs > 1 and solver_backend == "torch-cuda":
+        raise ValueError("parallel label generation is not supported with torch-cuda")
+    worker_args = [
+        (
+            case,
+            base.belief[idx],
+            int(solver_iterations),
+            solver_backend,
+            float(value_scale),
+            jobs > 1,
+        )
+        for idx, case in enumerate(cases[:n])
+    ]
     hero_values = []
     villain_values = []
     hero_masks = []
     villain_masks = []
     records = []
-    for idx, case in enumerate(cases[:n]):
-        hv, vv, hm, vm, record = _case_dual_cfv_target(
-            case,
-            base.belief[idx],
-            solver_iterations=solver_iterations,
-            solver_backend=solver_backend,
-            value_scale=value_scale,
-        )
+    if jobs > 1:
+        with ProcessPoolExecutor(max_workers=jobs) as executor:
+            results = list(executor.map(_dual_target_worker, worker_args))
+    else:
+        results = [_dual_target_worker(item) for item in worker_args]
+    for hv, vv, hm, vm, record in results:
         hero_values.append(hv)
         villain_values.append(vv)
         hero_masks.append(hm)
@@ -542,6 +577,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     head_mode: str = "separate",
     belief_bottleneck_dim: int = 32,
     card_encoder: str = "flat",
+    label_jobs: int = 1,
 ) -> dict[str, Any]:
     """Train and save the belief-conditioned dual-player hand-CFV model."""
     resolved_device = _resolve_device(device)
@@ -553,6 +589,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         solver_backend=solver_backend,
         value_scale=value_scale,
         dual_cache=train_dual_cache,
+        label_jobs=label_jobs,
     )
     holdout_raw, holdout_records, holdout_loaded = _load_or_build_dual_dataset(
         cases_json=holdout_cases_json,
@@ -562,6 +599,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         solver_backend=solver_backend,
         value_scale=value_scale,
         dual_cache=holdout_dual_cache,
+        label_jobs=label_jobs,
     )
     train, holdout, public_mean, public_std, belief_mean, belief_std = (
         _standardize_dual_datasets(train_raw, holdout_raw)
@@ -672,6 +710,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         "head_mode": head_mode,
         "belief_bottleneck_dim": int(belief_bottleneck_dim),
         "card_encoder": card_encoder,
+        "label_jobs": int(label_jobs),
         "train_cfv_cache": str(train_cfv_cache),
         "holdout_cfv_cache": str(holdout_cfv_cache),
         "train_dual_cache": str(train_dual_cache) if train_dual_cache else None,
@@ -869,6 +908,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--weight-decay", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
+        "--label-jobs",
+        type=int,
+        default=1,
+        help="Parallel CPU workers for building dual-CFV labels; not supported with torch-cuda.",
+    )
+    parser.add_argument(
         "--head-mode",
         choices=("shared", "separate"),
         default="shared",
@@ -898,6 +943,7 @@ def main(argv: list[str] | None = None) -> int:
         solver_backend=args.solver_backend,
         value_scale=args.value_scale,
         dual_cache=args.train_dual_cache,
+        label_jobs=args.label_jobs,
     )
     holdout_raw, holdout_records, holdout_loaded = _load_or_build_dual_dataset(
         cases_json=args.holdout_cases,
@@ -907,6 +953,7 @@ def main(argv: list[str] | None = None) -> int:
         solver_backend=args.solver_backend,
         value_scale=args.value_scale,
         dual_cache=args.holdout_dual_cache,
+        label_jobs=args.label_jobs,
     )
     train_features, holdout_features = _standardize(train_raw.features, holdout_raw.features)
     train_belief, holdout_belief = _standardize(train_raw.belief, holdout_raw.belief)
@@ -1032,6 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
         "head_mode": args.head_mode,
         "belief_bottleneck_dim": int(args.belief_bottleneck_dim),
         "card_encoder": args.card_encoder,
+        "label_jobs": int(args.label_jobs),
         "target_mean": round(float(target_mean), 8),
         "target_median": round(float(target_median), 8),
         "target_dim": int(N_HANDS),
