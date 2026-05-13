@@ -88,3 +88,9 @@ with value `MAE/RMSE 0.1855/0.2504` and policy KL `0.4350` vs legal-uniform
 This is not gameplay-ready. Treat it as evidence to run an independent
 methodology review and fixed resolver A/B with the joint continuation model
 before any Slumbot spend.
+
+The first diagnostic resolver A/B did execute, but it did not clear the
+behavior bar: replacing turn terminal equity leaves with joint-PBS values on
+8 holdout states produced action agreement `0.375` and mean action L1 drift
+`0.6281`. The next mechanism should either train leaf-compatible continuation
+targets or compare against a stronger exact reference before any live play.
