@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import itertools
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -47,6 +48,9 @@ from play_slumbot import (  # noqa: E402
     parse_action,
 )
 from solver import StreetSolver, _parse_nav, resolve_solver_backend  # noqa: E402
+
+
+_BET_TOKEN_RE = re.compile(r"b\d+")
 
 
 def _stable_offset(key: str, n: int) -> int:
@@ -273,6 +277,10 @@ def _numeric_summary(values: list[float]) -> dict[str, Any]:
     }
 
 
+def _action_shape(action_str: str) -> str:
+    return _BET_TOKEN_RE.sub("b", action_str)
+
+
 def _summarize_leaf_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     terminal_keys = [
         f"{record.get('source_case', '')}:{record.get('terminal_node_idx', '')}"
@@ -292,6 +300,15 @@ def _summarize_leaf_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "leaf_actions": _counter_summary(
             [str(record.get("leaf_action_str", "")) for record in records]
+        ),
+        "leaf_action_shapes": _counter_summary(
+            [_action_shape(str(record.get("leaf_action_str", ""))) for record in records]
+        ),
+        "leaf_bet_counts": _counter_summary(
+            [
+                str(len(_BET_TOKEN_RE.findall(str(record.get("leaf_action_str", "")))))
+                for record in records
+            ]
         ),
         "leaf_total_last_bet_to": _numeric_summary(
             [float(parsed["total_last_bet_to"]) for parsed in valid_leaf_actions]

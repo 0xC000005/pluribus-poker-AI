@@ -749,6 +749,10 @@ Label-throughput update:
   bet-count `4`/`5`/`6` rises to `0.3558`/`0.4175`/`0.5234`. This points to
   richer continuation targets and terminal/bet-structure coverage, not
   uncertainty or projection gates.
+- Leaf-export metadata now includes `leaf_action_shapes` and `leaf_bet_counts`
+  before exact labeling. These are audit fields for dataset coverage, not
+  gameplay rules. Use them together with source, terminal, and river-card
+  concentration before spending CPU label time on larger resolver-leaf splits.
 - Related-work checkpoint: DeepStack and Supremus support learned
   counterfactual value networks inside depth-limited continual resolving, and
   Supremus specifically reports beating Slumbot with improved deep CFV

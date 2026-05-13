@@ -210,6 +210,8 @@ def test_river_leaf_record_summary_reports_dataset_skew():
     assert summary["sources"]["max_share"] == pytest.approx(2 / 3)
     assert summary["terminals"]["n_unique"] == 2
     assert summary["river_cards"]["top"][0] == {"key": "2c", "count": 2}
+    assert summary["leaf_action_shapes"]["top"][0] == {"key": "ck/kk/kk/", "count": 2}
+    assert summary["leaf_bet_counts"]["top"][0] == {"key": "0", "count": 2}
     assert summary["leaf_action_parse_errors"] == 0
     assert summary["leaf_total_last_bet_to"]["max"] == 500.0
 
