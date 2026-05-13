@@ -23,6 +23,24 @@ T_DECISION = 0
 T_HERO_FOLD = 1
 T_VILLAIN_FOLD = 2
 T_SHOWDOWN = 3
+SOLVER_UPDATES = ("cfr_plus", "dcfr_plus")
+_DCFR_ALPHA = 1.5
+_DCFR_GAMMA = 2.0
+
+
+def _validate_solver_update(solver_update):
+    if solver_update not in SOLVER_UPDATES:
+        allowed = ", ".join(SOLVER_UPDATES)
+        raise ValueError(f"Unknown solver_update: {solver_update}. Expected one of: {allowed}")
+    return solver_update
+
+
+def _dcfr_discount_factors(iteration_index):
+    """Fixed DCFR-style discounts for the opt-in low-budget resolver probe."""
+    t = np.float32(max(int(iteration_index), 1))
+    positive_regret = np.float32((t ** _DCFR_ALPHA) / ((t ** _DCFR_ALPHA) + 1.0))
+    average_strategy = np.float32((t / (t + 1.0)) ** _DCFR_GAMMA)
+    return positive_regret, average_strategy
 
 
 def build_tree_arrays(root):
@@ -194,7 +212,8 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               n_iterations=100, hero_range=None, villain_range=None,
               showdown_leaf_fn=None, cut_node_indices=None, cut_node_fn=None,
               initial_regret_sum=None, initial_strategy_sum=None,
-              trace_node_indices=None, trace_node_fn=None):
+              trace_node_indices=None, trace_node_fn=None,
+              solver_update="cfr_plus"):
     """Run iterative CFR+ with batched terminal evaluation.
 
     Parameters
@@ -227,6 +246,10 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         Optional CPU-only diagnostic hook. Trace nodes are not cut and do not
         alter solving. The hook receives current reaches and exact node values
         after each backward pass.
+    solver_update : {"cfr_plus", "dcfr_plus"}
+        Regret-minimization update rule. ``cfr_plus`` preserves the historical
+        recurrence. ``dcfr_plus`` applies fixed DCFR-style discounts to old
+        positive regret and average-strategy mass before each new update.
 
     Returns
     -------
@@ -239,6 +262,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     player = tree['player']
     children = tree['children']
     decision_actions = tree['decision_actions']
+    solver_update = _validate_solver_update(solver_update)
     cut_idx, cut_mask = _frontier_cut_nodes(tree, cut_node_indices)
     trace_idx = _validated_trace_nodes(tree, trace_node_indices)
     inactive = _descendants_of_cut_nodes(tree, cut_mask)
@@ -321,6 +345,11 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     valid_mT = valid_m.T.copy()
 
     for _iter in range(n_iterations):
+        if solver_update == "dcfr_plus":
+            regret_discount, strategy_discount = _dcfr_discount_factors(_iter + 1)
+            regret_sum *= regret_discount
+            strategy_sum *= strategy_discount
+
         if cut_idx.size:
             hr_at.fill(0.0)
             vr_at.fill(0.0)
@@ -519,13 +548,17 @@ def solve_cfr_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                     pot_start, hero_stack_start, villain_stack_start,
                     n_iterations=100, hero_range=None, villain_range=None,
                     device="cuda", initial_regret_sum=None,
-                    initial_strategy_sum=None):
+                    initial_strategy_sum=None, solver_update="cfr_plus"):
     """Run the same CFR+ recurrence with torch tensors on CPU or CUDA.
 
     This keeps the CPU solver as the reference implementation while allowing
     the dense per-terminal matrix products to run on GPU. The tree walk remains
     Python-driven, so this is an acceleration backend, not a fully fused kernel.
     """
+    solver_update = _validate_solver_update(solver_update)
+    if solver_update != "cfr_plus":
+        raise ValueError("solver_update='dcfr_plus' is only supported by the CPU CFR backend")
+
     torch_device = torch.device(device)
     if torch_device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA solver backend requested but torch.cuda is unavailable.")

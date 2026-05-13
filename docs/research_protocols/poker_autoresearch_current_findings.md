@@ -917,3 +917,8 @@ script passes all 10 checks and is now part of Tier 0.
     shows that simply scaling the same leaf-CFV architecture is not enough;
     prioritize a turn-level PBS value target, joint policy/value continuation,
     or another search-integrated target before another broad A/B.
+11. A fixed `dcfr_plus` low-budget solver update is now available only as an
+    opt-in diagnostic. It failed the same 64-root holdout A/B against the
+    25-iteration CFR+ teacher (`0.5404` candidate L1 vs `0.5254` baseline,
+    `0.3533` candidate KL vs `0.2602` baseline), so keep `cfr_plus` as the
+    default and avoid discount-exponent sweeps.

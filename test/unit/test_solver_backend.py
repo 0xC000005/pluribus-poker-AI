@@ -24,6 +24,32 @@ def test_street_solver_accepts_torch_cpu_backend_and_returns_strategy():
     assert np.isclose(sum(strategy.values()), 1.0)
 
 
+def test_street_solver_explicit_cfr_plus_matches_default_update():
+    board = [0, 5, 10, 15, 20]
+    default_solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+    explicit_solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    default_solver.solve(n_iterations=2)
+    explicit_solver.solve(n_iterations=2, solver_update="cfr_plus")
+
+    np.testing.assert_allclose(explicit_solver._regret_sum, default_solver._regret_sum, atol=1e-5)
+    np.testing.assert_allclose(explicit_solver._strategy_sum, default_solver._strategy_sum, atol=1e-5)
+
+
+def test_street_solver_accepts_dcfr_plus_cpu_update():
+    board = [0, 5, 10, 15, 20]
+    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    solver.solve(n_iterations=2, solver_update="dcfr_plus")
+    strategy = solver.get_strategy((30, 31))
+
+    assert strategy
+    assert set(strategy).issubset(set(range(9)))
+    assert np.isclose(sum(strategy.values()), 1.0)
+    assert np.isfinite(solver._regret_sum).all()
+    assert np.isfinite(solver._strategy_sum).all()
+
+
 def test_street_solver_rejects_unknown_backend():
     board = [0, 5, 10, 15, 20]
     solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
@@ -34,6 +60,30 @@ def test_street_solver_rejects_unknown_backend():
         assert "Unknown solver backend" in str(exc)
     else:
         raise AssertionError("Expected unknown backend to raise ValueError")
+
+
+def test_street_solver_rejects_unknown_solver_update():
+    board = [0, 5, 10, 15, 20]
+    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    try:
+        solver.solve(n_iterations=1, solver_update="bogus")
+    except ValueError as exc:
+        assert "Unknown solver_update" in str(exc)
+    else:
+        raise AssertionError("Expected unknown solver update to raise ValueError")
+
+
+def test_torch_backend_rejects_dcfr_plus_update():
+    board = [0, 5, 10, 15, 20]
+    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    try:
+        solver.solve(n_iterations=1, backend="torch", device="cpu", solver_update="dcfr_plus")
+    except ValueError as exc:
+        assert "only supported by the CPU CFR backend" in str(exc)
+    else:
+        raise AssertionError("Expected torch DCFR update to raise ValueError")
 
 
 def test_solve_street_prunes_low_probability_ranges_and_keeps_hero_hand():

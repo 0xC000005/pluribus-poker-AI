@@ -206,6 +206,23 @@ python scripts/eval_regret_oracle_warm_start.py \
   --min-evaluated 64
 ```
 
+Solver-update variants must use the same fixed A/B before any gameplay use.
+`dcfr_plus` is currently only an opt-in negative-control diagnostic; on the
+64-root holdout it worsened L1/KL versus low-budget CFR+, so `cfr_plus` remains
+the default:
+
+```bash
+python scripts/eval_solver_update_gate.py \
+  --cases autoresearch-session/search_targets/restored200_turn_successor_pool256_policy_seed20260627.cases.json \
+  --cfv-cache autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_successor_pool256_seed20260627_cache.npz \
+  --start-index 128 \
+  --limit 64 \
+  --low-iterations 5 \
+  --reference-iterations 25 \
+  --candidate-update dcfr_plus \
+  --min-evaluated 64
+```
+
 Build the corresponding supervised regret/policy field labels with:
 
 ```bash

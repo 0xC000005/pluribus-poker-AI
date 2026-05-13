@@ -259,7 +259,8 @@ class StreetSolver:
               backend='cpu', device=None, showdown_leaf_fn=None,
               cut_node_indices=None, cut_node_fn=None,
               initial_regret_sum=None, initial_strategy_sum=None,
-              trace_node_indices=None, trace_node_fn=None):
+              trace_node_indices=None, trace_node_fn=None,
+              solver_update='cfr_plus'):
         hr = hero_range.astype(np.float32) if hero_range is not None else None
         vr = villain_range.astype(np.float32) if villain_range is not None else None
         backend, device = resolve_solver_backend(backend, device)
@@ -273,6 +274,7 @@ class StreetSolver:
                 'initial_strategy_sum': initial_strategy_sum,
                 'trace_node_indices': trace_node_indices,
                 'trace_node_fn': trace_node_fn,
+                'solver_update': solver_update,
             }
         elif backend == 'torch':
             if (
@@ -286,6 +288,7 @@ class StreetSolver:
                 'device': device or 'cuda',
                 'initial_regret_sum': initial_regret_sum,
                 'initial_strategy_sum': initial_strategy_sum,
+                'solver_update': solver_update,
             }
         else:
             raise ValueError(f"Unknown solver backend: {backend}")
@@ -343,6 +346,7 @@ def solve_street(
     our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
     action_str='', n_iterations=100, hero_range=None, villain_range=None,
     backend='cpu', device=None, range_prune_threshold=0.0,
+    solver_update='cfr_plus',
 ):
     """Solve a street (turn or river) and return action.
 
@@ -364,7 +368,7 @@ def solve_street(
         board_idx, pot, hero_stack, villain_stack, hero_first,
         active_indices=active_indices)
     solver.solve(n_iterations, hero_range=hero_range, villain_range=villain_range,
-                 backend=backend, device=device)
+                 backend=backend, device=device, solver_update=solver_update)
 
     nav = _parse_nav(action_str, solver)
     node = solver.navigate(nav)

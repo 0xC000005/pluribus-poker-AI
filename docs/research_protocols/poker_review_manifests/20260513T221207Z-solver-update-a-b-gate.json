@@ -1,0 +1,45 @@
+{
+  "decision": "abandon",
+  "files": [
+    {
+      "bytes": 1106,
+      "path": "benchmark_audit.md",
+      "sha256": "ca2afe4f014a00baa071976f357fdc269409a0e4a14a64a5a2e6d12520fcad79"
+    },
+    {
+      "bytes": 541,
+      "path": "decision.json",
+      "sha256": "02a46d9d53aa7c57c9af7ab11612f3ccdf7d70d6fbccb826a7eb2872f15f553c"
+    },
+    {
+      "bytes": 1222,
+      "path": "mechanism_review.md",
+      "sha256": "e8f1037b064f63294d3f9de68d3ce277a67f0c6482e2d84471f7a670a6f5d7d5"
+    },
+    {
+      "bytes": 1204,
+      "path": "related_work.md",
+      "sha256": "569e78c95abc1bbe89cabaa8f647590453ac7492d354bcf63c85f119f55d5118"
+    },
+    {
+      "bytes": 1383,
+      "path": "review.md",
+      "sha256": "6f8892f4d4015a5a9ca7e2d7eb3e5c63d1fc74250fe6bc8fb514af3b3918ad6a"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The fixed DCFR-style candidate is principled enough to keep as an opt-in diagnostic, but it failed the 64-root root-disjoint A/B against the 25-iteration CFR+ teacher and should not be promoted into gameplay.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T221207Z-solver-update-a-b-gate",
+  "review_id": "20260513T221207Z-solver-update-a-b-gate",
+  "sources": [
+    "https://arxiv.org/abs/1809.04040",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_update_dcfr_plus_holdout64_seed20260659.json"
+  ],
+  "written_at": "2026-05-13T22:12:52Z"
+}

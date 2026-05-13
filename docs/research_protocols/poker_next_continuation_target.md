@@ -53,6 +53,15 @@ search-aware than per-hand supervised field regression, or the evaluation
 should learn only selective corrections where the low solver is demonstrably
 wrong rather than distilling all rows uniformly.
 
+A fixed solver-update probe is now also falsified. `dcfr_plus` was added as an
+opt-in diagnostic update and compared with 5-iteration CFR+ against the same
+25-iteration CFR+ teacher on the 64 held-out roots. It failed the gate: L1
+worsened from `0.5254` to `0.5404`, KL worsened from `0.2602` to `0.3533`, and
+top-action agreement fell from `0.7656` to `0.7500`. Keep `cfr_plus` as the
+default. The useful next step is not to tune discount exponents; it is to
+collect or learn a more search-aware correction signal, or test a better
+researched predictive/learned update with the same fixed A/B gate.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

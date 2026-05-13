@@ -19,6 +19,12 @@ allowed. Ad hoc opponent-specific action hacks, street-specific human heuristics
 hard learned value-cut replacement, and benchmark-tuned policy argmax patches are
 not promoted.
 
+Algorithmic solver-update changes are allowed only as opt-in diagnostics until
+they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
+compare any low-budget update against low-budget CFR+ and a higher-budget CFR+
+teacher on the same root-disjoint public states. A failed update should be
+recorded as mechanism evidence, not promoted or tuned into another knob sweep.
+
 ## Workflow Contract
 
 Each cycle follows HEAD:
