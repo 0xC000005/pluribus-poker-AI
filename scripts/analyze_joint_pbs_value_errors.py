@@ -136,6 +136,7 @@ def analyze_joint_pbs_value_errors(
         "group_by": list(group_by),
         "global": _mean_record(state_errors),
         "groups": _group_records(state_errors, metadata_by_label, group_by),
+        "state_errors": state_errors,
         "worst_states": sorted(
             state_errors,
             key=lambda item: float(item["mae"]),

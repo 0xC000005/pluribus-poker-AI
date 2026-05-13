@@ -146,3 +146,13 @@ train-mean constant `0.3173/0.3961`. Do not spend on topology buckets alone.
 The next target should probe reach/range-conditioned value structure: support
 entropy, top-mass, zero-sum residuals, and whether predicting residuals from a
 range-aware baseline is easier than raw per-hand CFVs.
+
+The first reach-shift diagnostic found root-disjoint high-bet train/holdout
+coverage is still poor: `bbc/bbc/bb`, `cbbc/bbc/b`, and `cbc/bbbc/b` appear in
+holdout but not in train, and holdout has materially more concentrated hero
+reach (top-mass SMD about `0.75`, entropy SMD about `-0.64`). Completing the
+full high-bet train pool increased train cuts from `96` to `119`, but the same
+missing shapes remained and the model still failed (`MAE 0.3653` vs best
+constant `0.3184`). The next data step should create a larger successor-frontier
+pool first, then split with explicit action-shape and reach-coverage audits
+before fitting any new continuation network.

@@ -2381,6 +2381,17 @@
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_group_constant_action_shape_seed20260625.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_group_constant_actor_bet_seed20260625.json
 - Key metrics: `{"global_train_mean": {"mae": 0.31732337, "rmse": 0.39611551}, "action_shape": {"grouped_beats_global": false, "mae": 0.32143955, "rmse": 0.39860338, "n_train_groups": 10}, "actor_bet": {"grouped_beats_global": false, "mae": 0.3303969, "rmse": 0.41082458, "n_train_groups": 4}}`
 
+## 20260513T103441Z-successor-frontier-reach-shift - failed
+
+- Timestamp: 2026-05-13T10:34:41Z
+- Type: experiment
+- Gate: manual-successor-frontier-reach-shift
+- Hypothesis: The high-bet successor-frontier failure may be explained by root-disjoint coverage/reach shift; completing the full high-bet train pool should reduce held-out error if early target truncation was the main issue.
+- Failure class: data_distribution_shift
+- Summary: Added `scripts/analyze_joint_pbs_metadata_shift.py` and extended the value-error analyzer to persist per-state errors. The 96-cut train split had three holdout action shapes absent from train (`bbc/bbc/bb`, `cbbc/bbc/b`, `cbc/bbbc/b`) and substantial reach shift: holdout hero top-10/top-1 mass shifted up by standardized differences around `0.75`, while hero entropy shifted down by `-0.64`. Per-state MAE correlated most with bet count (`0.382`), actor/client position (`0.342`), and weakly with hero reach entropy (`0.223`). Completing the full root-disjoint high-bet train pool produced `119` cuts, but the same three holdout shapes remained absent and the model still failed (`MAE/RMSE 0.3653/0.4657` vs best constant `0.3184/0.3935`). This falsifies early target truncation as the main explanation. The next principled step is not another small MLP or filter; it should build a broader successor-frontier pool/split that explicitly audits action-shape and reach coverage before training, or move to a range-conditioned residual objective.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_metadata_shift_seed20260625.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_train_full_seed20260626.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_full_metadata_shift_seed20260626.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/successor_cut_highbet_full_deepset_probe_seed20260626.json
+- Key metrics: `{"initial_shift": {"missing_holdout_shapes": ["bbc/bbc/bb", "cbbc/bbc/b", "cbc/bbbc/b"], "hero_top10_smd": 0.75034629, "hero_entropy_smd": -0.64099522, "mae_corr_bet_count": 0.38187552}, "full_train": {"train_targets": 119, "missing_holdout_shapes": ["bbc/bbc/bb", "cbbc/bbc/b", "cbc/bbbc/b"], "passed": false, "holdout_mae": 0.3653185, "holdout_rmse": 0.46571107, "best_constant_mae": 0.31842321, "best_constant_rmse": 0.39345461}}`
+
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z

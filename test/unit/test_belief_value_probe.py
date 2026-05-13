@@ -33,6 +33,7 @@ from analyze_dual_cfv_cache_errors import (
     merge_record_metadata,
 )
 from analyze_joint_pbs_value_errors import _group_records
+from analyze_joint_pbs_metadata_shift import analyze_joint_pbs_metadata_shift
 from build_joint_pbs_continuation_targets import build_joint_payload
 from build_public_belief_cache import build_public_belief_cache
 from build_successor_cut_pbs_targets import (
@@ -758,6 +759,57 @@ def test_joint_pbs_group_constant_baseline_uses_metadata(tmp_path):
     assert metrics["mode"] == "joint_pbs_group_constant_baseline"
     assert metrics["n_train_groups"] == 2
     assert "mae" in metrics["grouped_constant"]
+
+
+def test_joint_pbs_metadata_shift_reports_numeric_and_error_correlation(tmp_path):
+    train_meta = tmp_path / "train.json"
+    holdout_meta = tmp_path / "holdout.json"
+    errors = tmp_path / "errors.json"
+    train_meta.write_text(
+        json.dumps(
+            {
+                "cut_records": [
+                    {"label": "a", "action_shape": "x", "bet_count": 1, "hero_reach_entropy": 0.1},
+                    {"label": "b", "action_shape": "x", "bet_count": 2, "hero_reach_entropy": 0.2},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    holdout_meta.write_text(
+        json.dumps(
+            {
+                "cut_records": [
+                    {"label": "c", "action_shape": "x", "bet_count": 2, "hero_reach_entropy": 0.3},
+                    {"label": "d", "action_shape": "y", "bet_count": 3, "hero_reach_entropy": 0.4},
+                    {"label": "e", "action_shape": "y", "bet_count": 4, "hero_reach_entropy": 0.5},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    errors.write_text(
+        json.dumps(
+            {
+                "state_errors": [
+                    {"label": "c", "mae": 0.1},
+                    {"label": "d", "mae": 0.2},
+                    {"label": "e", "mae": 0.3},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = analyze_joint_pbs_metadata_shift(
+        train_metadata_json=train_meta,
+        holdout_metadata_json=holdout_meta,
+        error_json=errors,
+    )
+
+    assert metrics["mode"] == "joint_pbs_metadata_shift"
+    assert metrics["categorical_shift"][0]["holdout_missing_in_train"] == ["y"]
+    assert metrics["error_correlations"][0]["field"] in {"bet_count", "hero_reach_entropy"}
 
 
 def test_joint_pbs_continuation_probe_skips_policy_gate_without_policy_labels(tmp_path):
