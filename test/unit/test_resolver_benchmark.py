@@ -9,6 +9,7 @@ import torch
 
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.research.belief_probe import N_HANDS, _HAND_TO_INDEX
 from poker_ai.research.resolver_benchmark import (
     ResolverBenchmarkCase,
     run_resolver_benchmark,
@@ -18,6 +19,11 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
+    _action_path_to_street_string,
+    _global_board_mask,
+    _local_ranges_from_belief,
+)
 from solver import StreetSolver  # noqa: E402
 
 
@@ -135,6 +141,41 @@ def test_street_solver_showdown_leaf_callback_rejects_torch_backend():
 
     with pytest.raises(ValueError, match="CPU CFR backend"):
         solver.solve(n_iterations=1, backend="torch-cpu", showdown_leaf_fn=lambda **_: None)
+
+
+def test_learned_leaf_action_path_reconstructs_turn_sequence():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    node = solver.root.children[1].children[1]
+    node_idx = solver._tree["all_nodes"].index(node)
+
+    street = _action_path_to_street_string(
+        solver._tree,
+        node_idx,
+        hero_stack_start=solver.hero_stack_start,
+        villain_stack_start=solver.villain_stack_start,
+    )
+
+    assert street == "kk"
+
+
+def test_learned_leaf_range_and_mask_helpers_normalize_legal_hands():
+    solver_hands = [(0, 1), (4, 5)]
+    belief = np.zeros(2 * N_HANDS, dtype=np.float32)
+    belief[_HAND_TO_INDEX[(0, 1)]] = 2.0
+    belief[N_HANDS + _HAND_TO_INDEX[(4, 5)]] = 3.0
+
+    hero, villain = _local_ranges_from_belief(belief, solver_hands)
+    board_mask = _global_board_mask([0, 1, 2, 3, 4])
+
+    np.testing.assert_allclose(hero, [1.0, 0.0])
+    np.testing.assert_allclose(villain, [0.0, 1.0])
+    assert int(board_mask.sum()) == 47 * 46 // 2
 
 
 def test_resolver_benchmark_cli_emits_json_for_checkpoint(tmp_path):

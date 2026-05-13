@@ -2037,3 +2037,25 @@
 - Summary: Sampled a new independent 192-state turn-only restored-history surface, built public features/ranges directly to avoid an extra hero-only CFV pass, and generated dual-player labels for a `128/64` split with `--solver-backend cpu --label-jobs 4`. Single seeds all missed the strict constant MAE gate, although all beat zero and improved RMSE. The saved three-checkpoint ensemble passed decisively, beating zero and train-constant MAE/RMSE and improving the value-sum residual over zero prediction. This is the strongest turn-value evidence so far and supports saved ensembles as the current reliable street-specific value primitive. Remaining blocker is integration into resolver A/B, not held-out turn value quality.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_turn_independent128x64_deepset64_summary.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_checkpoint_ensemble_eval_turn_independent128x64_deepset64.json
 - Key metrics: `{"single_seed_pass_count": 0, "n": 3, "single_seed_best_constant_mae_delta_mean": -0.00266937, "ensemble": {"passed": true, "mae": 0.22195954, "rmse": 0.28857942, "best_constant_mae": 0.25000208, "best_constant_rmse": 0.33460337, "zero_mae": 0.26340591, "zero_rmse": 0.37445955, "value_sum_residual_error": 0.23561551, "speedup_vs_solver_mean_per_state": 8662.477}}`
+
+## 20260513T052332Z-independent-turn-range-robustness - passed
+
+- Timestamp: 2026-05-13T05:23:32Z
+- Type: analysis
+- Gate: manual-independent-turn-range-robustness
+- Hypothesis: The larger independent turn ensemble should remain useful under off-blueprint ranges before any resolver A/B integration is trusted.
+- Failure class: range_belief
+- Summary: Evaluated the larger independent turn-only Deepset-64 ensemble on eight held-out turn states with fully uniform legal ranges and re-solved labels. The ensemble still beat zero and train-constant baselines, and improved range-weighted value-sum residual over zero prediction. This closes the immediate value-quality/range-perturbation gate; the remaining blocker is whether learned continuation values improve or destabilize search decisions inside a resolver.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_range_robustness_turn_independent8_mix100_deepset64_ensemble.json
+- Key metrics: `{"passed": true, "model": {"mae": 0.19835766, "rmse": 0.24717295}, "best_constant": {"mae": 0.24391353, "rmse": 0.30755076}, "zero": {"mae": 0.24832945, "rmse": 0.34369433}, "value_sum_residual_error": 0.2836763, "solver_mean_ms": 3661.902, "n_labels": 18048}`
+
+## 20260513T053744Z-learned-river-leaf-resolver-ab - mixed
+
+- Timestamp: 2026-05-13T05:37:44Z
+- Type: implementation
+- Gate: manual-learned-river-leaf-resolver-ab
+- Hypothesis: A saved river dual-CFV ensemble can replace normal turn equity leaves in a fixed turn resolver diagnostic and produce measurable root-action drift before any gameplay integration.
+- Failure class: search_quality
+- Summary: Added `scripts/eval_learned_river_leaf_resolver_ab.py`, a diagnostic that compares a baseline turn resolver against a learned-river-continuation variant. The callback averages the river ensemble over legal river cards, uses terminal reach ranges as public beliefs, and restricts replacement to the measured decision subtree so non-reached leaves do not dominate runtime. A two-case, five-iteration smoke passed mechanically but is not promotable: only one case had an applicable learned leaf, and that case flipped from an all-in-heavy baseline action to call with L1 drift `1.30`. This is useful falsification evidence, not a gameplay path. The next step is to run a broader applicable-case sample and decide whether the drift is correcting equity-only leaves or injecting value-model bias.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent2_iter5_subtree.json
+- Key metrics: `{"passed": true, "n_cases": 2, "n_leaf_applied": 1, "leaf_action_agreement_rate": 0.0, "leaf_mean_action_l1_drift": 1.30174943, "mean_learned_solve_ms": 7936.795, "applicable_case": {"baseline_action": 8, "learned_action": 1, "leaf_prediction_states": 8640, "leaf_prediction_ms": 6868.665}}`

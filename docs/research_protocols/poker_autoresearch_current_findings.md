@@ -633,6 +633,19 @@ Label-throughput update:
   `0.2220/0.2886`, best constants `0.2500/0.3346`, zero `0.2634/0.3745`, and
   about `8,662x` solver-label speedup per state. The remaining blocker is now
   resolver A/B integration, not held-out turn value quality.
+- The same larger independent turn ensemble also passed a full-uniform-range
+  perturbation check on eight held-out turn states: MAE/RMSE `0.1984/0.2472`
+  versus best train-constant `0.2439/0.3076` and zero `0.2483/0.3437`.
+  Value-sum residual error was `0.2837`, below the zero residual target mean
+  `0.3069`. This closes the immediate value-quality/range-robustness gate.
+- Fixed resolver learned-leaf A/B is now implemented as
+  `scripts/eval_learned_river_leaf_resolver_ab.py`. The diagnostic replaces
+  only the measured turn decision subtree's normal equity terminal leaves with
+  a saved river dual-CFV ensemble averaged over legal river cards. A two-case,
+  five-iteration smoke is mechanically green but strategically mixed: only one
+  case had an applicable learned leaf, and it flipped from all-in to call with
+  leaf-only action L1 drift `1.3017`. This is evidence to investigate, not a
+  promotion signal.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -672,7 +685,7 @@ script passes all 10 checks and is now part of Tier 0.
    `python scripts/poker_autoresearch.py enqueue-falsification --candidate <path>
    --mechanism "<mechanism>"` and close the falsification cycle through the
    normal autoresearch log.
-10. For learned river leaves, use the saved Deepset-64 ensemble as the next
-    candidate and run fixed resolver-state A/B against solver leaves with
-    root-action drift, value-sum residual, and latency recorded. Do not
-    integrate the flat dual-CFV checkpoint.
+10. For learned river leaves, broaden the new fixed resolver A/B only on cases
+    where `leaf_applied=true`, and separate desirable corrections from
+    value-model bias before gameplay integration. The flat dual-CFV checkpoint
+    remains blocked.
