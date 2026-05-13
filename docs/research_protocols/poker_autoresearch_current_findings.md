@@ -666,6 +666,14 @@ Label-throughput update:
   prediction stayed near `7.4s`. The diagnostic is now fast enough for small
   samples, but action agreement remains `0/2`, so speed does not change the
   integration blocker.
+- Leaf-range attribution now exports actual river leaf states from turn solver
+  terminal reaches with `scripts/build_learned_river_leaf_cases.py` and
+  re-solves them with the existing dual-CFV evaluator. On four exported river
+  leaf states, the river ensemble failed badly: model MAE/RMSE
+  `0.3553/0.4300` versus zero `0.2560/0.3112`, and value-sum residual error
+  `0.7938` against target residual scale `0.0467`. The action drift is
+  therefore best explained as terminal-reach distribution shift, not a
+  trustworthy correction of equity-only leaves.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -706,8 +714,6 @@ script passes all 10 checks and is now part of Tier 0.
    --mechanism "<mechanism>"` and close the falsification cycle through the
    normal autoresearch log.
 10. For learned river leaves, do not integrate the current river-continuation
-    callback into gameplay. Next work should either explain the high
-    applicable-case action drift or replace the expensive root-turn river
-    expansion with a direct turn-CFV continuation before another broad A/B.
-    If continuing this diagnostic, prioritize drift attribution over more
-    runtime tuning.
+    callback into gameplay. Next work should train/evaluate value networks on
+    resolver-generated leaf reach distributions, or use the turn-CFV ensemble
+    as a street-level continuation target, before another broad A/B.
