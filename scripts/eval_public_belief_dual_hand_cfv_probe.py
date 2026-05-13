@@ -61,16 +61,30 @@ class _DualHandCFVProbeNet(nn.Module):
         use_belief: bool,
         head_mode: str = "shared",
         belief_bottleneck_dim: int = 0,
+        card_encoder: str = "flat",
     ):
         super().__init__()
         self.use_belief = bool(use_belief)
         if head_mode not in ("shared", "separate"):
             raise ValueError(f"unknown head_mode: {head_mode}")
+        if card_encoder not in ("flat", "deepset"):
+            raise ValueError(f"unknown card_encoder: {card_encoder}")
         if belief_bottleneck_dim < 0:
             raise ValueError("belief_bottleneck_dim must be non-negative")
         self.head_mode = head_mode
-        self.public = nn.Linear(N_FEATURES, hidden_dim)
-        self.hand = nn.Linear(52, hidden_dim)
+        self.card_encoder = card_encoder
+        if card_encoder == "flat":
+            self.public = nn.Linear(N_FEATURES, hidden_dim)
+            self.hand = nn.Linear(52, hidden_dim)
+            self.board = None
+            self.public_misc = None
+            self.card_interaction = None
+        else:
+            self.public = None
+            self.hand = nn.Linear(52, hidden_dim, bias=False)
+            self.board = nn.Linear(52, hidden_dim, bias=False)
+            self.public_misc = nn.Linear(N_FEATURES - 104, hidden_dim)
+            self.card_interaction = nn.Linear(hidden_dim, hidden_dim)
         self.player = nn.Linear(2, hidden_dim)
         if use_belief and belief_bottleneck_dim > 0:
             self.belief = nn.Sequential(
@@ -98,7 +112,18 @@ class _DualHandCFVProbeNet(nn.Module):
         player_x: torch.Tensor,
         belief_x: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        hidden = self.public(public_x) + self.hand(hand_x) + self.player(player_x)
+        if self.card_encoder == "flat":
+            hidden = self.public(public_x) + self.hand(hand_x)
+        else:
+            hand_hidden = self.hand(hand_x)
+            board_hidden = self.board(public_x[:, 52:104])
+            hidden = (
+                hand_hidden
+                + board_hidden
+                + self.public_misc(public_x[:, 104:])
+                + self.card_interaction(hand_hidden * board_hidden)
+            )
+        hidden = hidden + self.player(player_x)
         if self.belief is not None:
             if belief_x is None:
                 raise ValueError("belief_x is required when use_belief=True")
@@ -332,6 +357,7 @@ def _fit_model(
     use_belief: bool,
     head_mode: str,
     belief_bottleneck_dim: int,
+    card_encoder: str,
 ) -> _DualHandCFVProbeNet:
     torch.manual_seed(seed)
     case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
@@ -349,6 +375,7 @@ def _fit_model(
         use_belief=use_belief,
         head_mode=head_mode,
         belief_bottleneck_dim=belief_bottleneck_dim if use_belief else 0,
+        card_encoder=card_encoder,
     ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     n = int(case_t.numel())
@@ -512,6 +539,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     seed: int = 0,
     head_mode: str = "separate",
     belief_bottleneck_dim: int = 32,
+    card_encoder: str = "flat",
 ) -> dict[str, Any]:
     """Train and save the belief-conditioned dual-player hand-CFV model."""
     resolved_device = _resolve_device(device)
@@ -552,6 +580,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         use_belief=True,
         head_mode=head_mode,
         belief_bottleneck_dim=belief_bottleneck_dim,
+        card_encoder=card_encoder,
     )
     holdout_pred = _predict(
         model,
@@ -592,6 +621,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             "hidden_dim": int(hidden_dim),
             "head_mode": head_mode,
             "belief_bottleneck_dim": int(belief_bottleneck_dim),
+            "card_encoder": card_encoder,
             "use_belief": True,
             "feature_dim": int(N_FEATURES),
             "belief_dim": int(BELIEF_DIM),
@@ -639,6 +669,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         "seed": int(seed),
         "head_mode": head_mode,
         "belief_bottleneck_dim": int(belief_bottleneck_dim),
+        "card_encoder": card_encoder,
         "train_cfv_cache": str(train_cfv_cache),
         "holdout_cfv_cache": str(holdout_cfv_cache),
         "train_dual_cache": str(train_dual_cache) if train_dual_cache else None,
@@ -680,6 +711,7 @@ def load_public_belief_dual_hand_cfv_checkpoint(
         use_belief=True,
         head_mode=str(payload.get("head_mode", "separate")),
         belief_bottleneck_dim=int(payload.get("belief_bottleneck_dim", 0)),
+        card_encoder=str(payload.get("card_encoder", "flat")),
     ).to(resolved_device)
     model.load_state_dict(payload["model_state"])
     model.eval()
@@ -805,6 +837,12 @@ def main(argv: list[str] | None = None) -> int:
         default=0,
         help="Optional learned bottleneck for the public belief vector; 0 keeps the linear baseline.",
     )
+    parser.add_argument(
+        "--card-encoder",
+        choices=("flat", "deepset"),
+        default="flat",
+        help="Use flat feature projections or learned hand/board card-set interactions.",
+    )
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -862,6 +900,7 @@ def main(argv: list[str] | None = None) -> int:
         use_belief=False,
         head_mode=args.head_mode,
         belief_bottleneck_dim=0,
+        card_encoder=args.card_encoder,
     )
     belief = _fit_model(
         train,
@@ -877,6 +916,7 @@ def main(argv: list[str] | None = None) -> int:
         use_belief=True,
         head_mode=args.head_mode,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
+        card_encoder=args.card_encoder,
     )
     base_metrics = _metrics(
         _predict(
@@ -948,6 +988,7 @@ def main(argv: list[str] | None = None) -> int:
         "seed": int(args.seed),
         "head_mode": args.head_mode,
         "belief_bottleneck_dim": int(args.belief_bottleneck_dim),
+        "card_encoder": args.card_encoder,
         "target_mean": round(float(target_mean), 8),
         "target_median": round(float(target_median), 8),
         "target_dim": int(N_HANDS),

@@ -510,6 +510,37 @@ Workflow governance status:
 - New research-log entries record a metrics artifact path plus key metrics
   instead of pasting full raw command JSON into `RESEARCH_LOG.md`.
 
+## Learned River Leaf Status
+
+- Hero-only river hand-CFV inference is fast enough for search leaves, but a
+  learned leaf cannot be promoted from hero-only values. Resolver leaves need
+  both players' counterfactual value vectors.
+- The first dual-player public-belief hand-CFV path with separate heads and a
+  32-dim belief bottleneck looked positive on `128/64`, but the stricter
+  zero/train-constant baseline invalidated it. Its checkpoint was fast
+  (`0.242 ms/state`, about `7,583x` faster than solver labels), so the blocker
+  is value quality, not inference latency.
+- Scaling the river public-state surface to `384/128` did not rescue the flat
+  additive public+hand+belief MLP. It failed train-constant baselines in all
+  three seeds, and centered-residual checks showed the model was not just
+  missing public-state/player offsets.
+- The first useful representation change is learned card-set interaction:
+  `--card-encoder deepset` projects private hand, board cards, public misc
+  features, player, and belief separately, then adds a learned hand-board
+  interaction. Hidden-64 Deepset beats zero in all three seeds and is near the
+  train-constant gate; hidden-128 regresses, so blind width scaling is not the
+  mechanism.
+- A three-seed Deepset-64 prediction ensemble passes the hardened constant gate
+  on the `384/128` river split: model MAE/RMSE `0.3405/0.4400`, best
+  train-constant `0.4098/0.5292`, zero `0.4480/0.6383`. Treat this as a
+  promising learned-leaf direction, not a search-ready promotion.
+- Related-work anchor: Deep Sets supports permutation-aware learned set
+  encoders for unordered card inputs, while Deep CFR/ReBeL/Supremus support
+  learned value approximators paired with search rather than manual card
+  abstraction. Sources: https://arxiv.org/abs/1703.06114,
+  https://arxiv.org/abs/1811.00164, https://arxiv.org/abs/2007.13544, and
+  https://arxiv.org/abs/2007.10442.
+
 ## Diagnosis
 
 Primary failure class: `distribution_shift`.
@@ -529,6 +560,14 @@ slow to use casually inside every unattended iteration. Slumbot search needs
 separate latency, cache, active-hand-count, and quality gates.
 The first direct solver-performance gate showed the main live bottleneck:
 solver calls averaged `12.2s` and range pruning kept most possible hands.
+
+Current learned-leaf failure class: `range_belief`.
+
+Flat public-belief hand-CFV models mostly learn broad value offsets and fail
+trivial constant baselines on held-out river states. The Deepset-64 ensemble is
+the first local result to beat those baselines, so the next research cycle
+should test reusable learned card/range interaction inside fixed-state
+resolver diagnostics before any Slumbot spend.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -568,3 +607,7 @@ script passes all 10 checks and is now part of Tier 0.
    `python scripts/poker_autoresearch.py enqueue-falsification --candidate <path>
    --mechanism "<mechanism>"` and close the falsification cycle through the
    normal autoresearch log.
+10. For learned river leaves, make the next gate a saved Deepset-64 ensemble or
+    averaged-checkpoint evaluator, then run fixed resolver-state A/B against
+    solver leaves with root-action drift, zero-sum residual, and latency
+    recorded. Do not integrate the flat dual-CFV checkpoint.

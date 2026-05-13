@@ -50,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
         default="separate",
     )
     parser.add_argument("--belief-bottleneck-dim", type=int, default=32)
+    parser.add_argument(
+        "--card-encoder",
+        choices=("flat", "deepset"),
+        default="flat",
+    )
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -80,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         head_mode=args.head_mode,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
+        card_encoder=args.card_encoder,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

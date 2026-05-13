@@ -230,6 +230,29 @@ def test_dual_cfv_probe_accepts_bottlenecked_separate_heads():
     assert out.shape == (3,)
 
 
+def test_dual_cfv_probe_accepts_deepset_card_encoder():
+    model = _DualHandCFVProbeNet(
+        8,
+        use_belief=True,
+        head_mode="separate",
+        belief_bottleneck_dim=4,
+        card_encoder="deepset",
+    )
+    public_x = torch.zeros((3, N_FEATURES), dtype=torch.float32)
+    public_x[:, 52:57] = 1.0
+    hand_x = torch.zeros((3, 52), dtype=torch.float32)
+    hand_x[:, :2] = 1.0
+    player_x = torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    belief_x = torch.zeros((3, bvp.BELIEF_DIM), dtype=torch.float32)
+
+    out = model(public_x, hand_x, player_x, belief_x)
+
+    assert out.shape == (3,)
+
+
 def test_dual_cfv_checkpoint_round_trip_predicts_both_players(tmp_path):
     model = _DualHandCFVProbeNet(
         8,
