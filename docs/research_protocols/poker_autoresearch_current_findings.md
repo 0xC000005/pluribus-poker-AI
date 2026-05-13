@@ -418,6 +418,14 @@ GPU training readiness:
   constant-baseline gate. Inference is fast (`0.242 ms/state`, about `7,583x` faster
   than cached solver labels), so the bottleneck is target/model quality rather
   than deployment latency.
+- Scaling the river surface from `128/64` to `384/128` public states helps but
+  does not solve the constant-baseline failure. The belief model still improves
+  over the feature-only baseline on average (`MAE delta +0.0758`, `RMSE delta
+  +0.0933`) and nearly matches zero MAE in the best seed, but pass count remains
+  `0/3` because train-constant baselines are better (`train-median MAE=0.4098`,
+  `train-mean RMSE=0.5292`). Read: naive data scaling alone is not enough at
+  this size; the next method needs a better value target/objective or stronger
+  generalization regularizer, judged against the constant gate.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
