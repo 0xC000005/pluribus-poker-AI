@@ -48,6 +48,10 @@ Date: 2026-05-13
   cut replacements from roots `128..143` had action agreement `0.6087` and
   mean/max L1 drift `0.5592/1.3602`. The next search-boundary mechanism needs
   action-impact labels or a learned fallback gate, not another value-only split.
+- A first learned structural fallback gate also failed: train-root impact labels
+  averaged `0.2319` L1, but the held-out predictor had negative correlation
+  (`r=-0.1752`) and selected worse cuts (`0.6463` L1) than it rejected
+  (`0.4237`). Do not hand-tune thresholds on this sparse impact set.
 
 ## Metric Snapshot
 

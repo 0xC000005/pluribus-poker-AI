@@ -400,3 +400,10 @@ only `0.6087` action agreement with mean/max single-cut L1 drift
 actions. The useful next target is therefore action-impact-aware: collect
 exact-vs-learned intervention labels and train either a conservative fallback
 gate or a value correction against root action drift.
+
+The simplest learned fallback gate is not enough with the current sparse labels.
+A ridge/log structural predictor trained on train-root one-cut records had
+negative held-out correlation (`r=-0.1752`) and selected higher-drift cuts than
+it rejected. This argues against threshold hacking. The next continuation work
+should collect denser paired interventions across public roots, or optimize a
+search-consistency target that directly penalizes root action drift.

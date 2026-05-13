@@ -2847,3 +2847,15 @@
 - Summary: Added `--start-index` to `scripts/eval_joint_pbs_cut_impact.py` so one-cut diagnostics can use public-root-disjoint slices. On unseen roots `128..143`, the root-disjoint dynamic high-bet GRU checkpoint evaluated `23` single-cut replacements and failed the behavior readout: action agreement was `0.608696`, mean/max L1 drift were `0.559242/1.360224`, and the worst `bc/bbc/bb` cuts on root `0130` changed a baseline call into several bet sizes. This confirms the failed value gate also manifests as search-policy drift. The next mechanism should learn or gate against action-impact labels, not rely on row-level value fit.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_start128_seed20260654.json
 - Key metrics: `{"start_index": 128, "case_scan_limit": 16, "n_cut_evaluated": 23, "action_agreement_rate": 0.60869565, "mean_single_cut_l1_drift": 0.55924223, "max_single_cut_l1_drift": 1.36022399, "worst_root": "blueprint_self_play-0130-street2", "promotion": false}`
+
+## 20260513T195018Z-cut-impact-structural-gate - failed
+
+- Timestamp: 2026-05-13T19:50:18Z
+- Type: diagnostic
+- Gate: manual-cut-impact-structural-gate
+- Hypothesis: If root action sensitivity can be estimated from cut metadata plus root context, then a learned structural predictor trained on train-root one-cut impact records should select lower-drift learned cuts on unseen roots.
+- Failure class: sparse_action_impact_generalization_gap
+- Related work: A conservative learned fallback gate is consistent with search-boundary methods only if the gate generalizes on held-out public roots; otherwise it becomes another benchmark-specific rule.
+- Summary: Added `scripts/fit_joint_pbs_cut_impact_predictor.py`, which fits a ridge/log predictor from one-cut records using action-shape and root-context features. On real dynamic high-bet records, train impact was much lower than holdout (`0.231860` vs `0.559242` mean L1), but the predictor did not generalize: holdout Pearson was `-0.175171`, top-quintile recall was `0.0`, and its median abstention rule selected worse cuts (`0.646348` mean L1) than it rejected (`0.423745`). This retires the simple structural gate on the current sparse impact dataset. The next useful version needs more intervention labels sampled across root contexts, or a differentiable search-consistency objective, before resolver integration.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_start0_seed20260654.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_cut_impact_predictor_seed20260654.json
+- Key metrics: `{"train_impact_mean_l1": 0.23185976, "holdout_impact_mean_l1": 0.55924223, "predictor_holdout_pearson": -0.17517116, "predictor_top_quintile_recall": 0.0, "selected_count": 14, "rejected_count": 9, "selected_mean_l1": 0.64634772, "rejected_mean_l1": 0.42374478, "promotion": false}`
