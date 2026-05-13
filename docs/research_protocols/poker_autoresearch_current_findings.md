@@ -381,6 +381,13 @@ GPU training readiness:
   `compute_villain_cfv_vector` primitive so the next probe can train a
   dual-player public-belief value model instead of forcing a hero-only model
   into solver leaves.
+- The first dual-player river probe is not stable enough for integration. On a
+  tiny `16/8` river split it failed `0/3` seeds. On the full river `64/32`
+  split it passed only `1/3` seeds: MAE deltas were `-0.0171`, `-0.0193`, and
+  `+0.1536`; RMSE deltas were `-0.0381`, `-0.0223`, and `+0.1934`. Read:
+  dual-player CFV learning is the correct target shape, but raw belief with the
+  current small MLP/player-indicator architecture is not promotable as a search
+  leaf yet.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

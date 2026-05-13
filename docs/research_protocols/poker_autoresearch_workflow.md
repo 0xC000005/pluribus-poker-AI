@@ -296,6 +296,12 @@ re-solver needs both hero and villain counterfactual value vectors at the leaf.
 Use the tested `compute_hero_cfv_vector` and `compute_villain_cfv_vector`
 helpers as the target source for the dual-player probe.
 
+Use `scripts/eval_public_belief_dual_hand_cfv_probe.py` for that probe. It
+trains on both players' hand-CFV labels with a player indicator and compares
+public+hand+player against public+hand+player+belief. Do not integrate a
+learned CFV checkpoint into turn search unless this dual-player probe is stable
+across seeds on a balanced river surface.
+
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case
