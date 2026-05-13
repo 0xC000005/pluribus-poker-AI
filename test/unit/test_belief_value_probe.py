@@ -111,6 +111,53 @@ def test_compute_hero_hand_ev_uses_average_strategy():
     assert ev == 80.0
 
 
+def test_compute_hero_cfv_vector_matches_hand_ev():
+    root = Node(player=0, pot=100, stacks=(100, 100), to_call=10, n_raises=0)
+    fold = Node(
+        player=-1,
+        pot=100,
+        stacks=(90, 100),
+        to_call=0,
+        n_raises=0,
+        terminal_type="hero_fold",
+    )
+    showdown = Node(
+        player=-1,
+        pot=120,
+        stacks=(90, 90),
+        to_call=0,
+        n_raises=0,
+        terminal_type="showdown",
+    )
+    root.children[0] = fold
+    root.children[1] = showdown
+    tree = build_tree_arrays(root)
+
+    strategy_sum = np.zeros((tree["n_nodes"], tree["n_actions"], 2), dtype=np.float32)
+    strategy_sum[0, 0, 0] = 1.0
+    strategy_sum[0, 1, 0] = 3.0
+    valid = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)
+    solver = SimpleNamespace(
+        _tree=tree,
+        _strategy_sum=strategy_sum,
+        hands=[(0, 1), (2, 3)],
+        hand_to_idx={(0, 1): 0, (2, 3): 1},
+        n=2,
+        valid=valid,
+        win_m=valid.copy(),
+        lose_m=np.zeros_like(valid),
+        tie_m=np.zeros_like(valid),
+        pot_start=100,
+        hero_stack_start=100,
+        villain_stack_start=100,
+    )
+
+    values, mask = bvp.compute_hero_cfv_vector(solver, root, np.array([0.0, 1.0]))
+
+    assert values[0] == 80.0
+    assert mask[0] == 1.0
+
+
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
     checkpoint = tmp_path / "range.pt"
     _write_checkpoint(checkpoint)
@@ -208,3 +255,69 @@ def test_public_belief_value_probe_reuses_value_cache(tmp_path, monkeypatch):
     assert second["train_loaded_from_cache"] is True
     assert second["holdout_loaded_from_cache"] is True
     assert second["holdout_value_records"][0]["value_scaled"] == 0.125
+
+
+def test_public_belief_cfv_probe_reuses_cache(tmp_path, monkeypatch):
+    checkpoint = tmp_path / "range.pt"
+    _write_checkpoint(checkpoint)
+    targets, cases = _write_targets_and_cases(tmp_path)
+    train_cache = tmp_path / "train_cfv_cache.npz"
+    holdout_cache = tmp_path / "holdout_cfv_cache.npz"
+
+    def fake_cfv_target(case, **kwargs):
+        values = np.zeros(bvp.N_HANDS, dtype=np.float32)
+        mask = np.zeros(bvp.N_HANDS, dtype=np.float32)
+        values[:4] = 0.25
+        mask[:4] = 1.0
+        return values, mask, {
+            "label": case.label,
+            "street": 3,
+            "value_mean": 0.25,
+            "value_std": 0.0,
+            "value_mask_count": 4,
+            "solver_latency_ms": 0.0,
+            "solver_n_hands": 4,
+            "solver_full_n_hands": 4,
+        }
+
+    monkeypatch.setattr(bvp, "_case_cfv_target", fake_cfv_target)
+    first = bvp.run_public_belief_cfv_probe(
+        train_targets_npz=targets,
+        train_cases_json=cases,
+        holdout_targets_npz=targets,
+        holdout_cases_json=cases,
+        range_checkpoint=checkpoint,
+        device="cpu",
+        hidden_dim=8,
+        epochs=1,
+        seed=0,
+        train_cfv_cache=train_cache,
+        holdout_cfv_cache=holdout_cache,
+    )
+    assert train_cache.exists()
+    assert holdout_cache.exists()
+    assert first["train_loaded_from_cache"] is False
+    assert first["target_dim"] == bvp.N_HANDS
+    assert first["train_mask_count"] == 4
+
+    def fail_cfv_target(case, **kwargs):
+        raise AssertionError("CFV labels should have been loaded from cache")
+
+    monkeypatch.setattr(bvp, "_case_cfv_target", fail_cfv_target)
+    second = bvp.run_public_belief_cfv_probe(
+        train_targets_npz=targets,
+        train_cases_json=cases,
+        holdout_targets_npz=targets,
+        holdout_cases_json=cases,
+        range_checkpoint=checkpoint,
+        device="cpu",
+        hidden_dim=8,
+        epochs=1,
+        seed=1,
+        train_cfv_cache=train_cache,
+        holdout_cfv_cache=holdout_cache,
+    )
+
+    assert second["train_loaded_from_cache"] is True
+    assert second["holdout_loaded_from_cache"] is True
+    assert second["holdout_cfv_records"][0]["value_mask_count"] == 4

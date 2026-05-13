@@ -326,6 +326,14 @@ GPU training readiness:
   value path from this small target set. Either scale gameplay-distributed
   value targets first or test a learned/compressed belief encoder as a bounded
   representation probe.
+- A follow-up counterfactual-value vector probe used the more principled
+  DeepStack/ReBeL-shaped target: public features with private-card slots zeroed
+  and one searched hero-CFV vector over all 1326 private hands per public state.
+  This greatly reduced the penalty versus scalar EV but still failed all three
+  seeds on the corrected `64/32` mixed-street split: mean MAE delta `-0.0399`,
+  mean RMSE delta `-0.0627`, with `70,688` train hand-value labels and `35,344`
+  holdout labels. Read: CFV-vector value learning is the right target shape,
+  but raw public-belief input is not yet promotable at this data scale.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

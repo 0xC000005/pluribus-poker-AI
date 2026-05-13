@@ -1739,3 +1739,14 @@
 - Summary: Added a standalone scalar EV probe and cache path, then ran it on the corrected `64/32` mixed turn/river target split. The probe failed in all three seeds: feature-plus-belief overfit the small high-dimensional value-label set and worsened held-out MAE/RMSE versus feature-only. This falsifies wiring raw 2652-dim belief directly into a scalar value head from this small target set; the next belief step needs either more gameplay-distributed value targets or a learned/compressed belief encoder before mainline trainer changes.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_value_probe_mixed64x32_summary.json
 - Key metrics: `{"pass_count": 0, "n": 3, "mae_delta_mean": -0.24931793666666668, "rmse_delta_mean": -0.32979592333333335, "mae_deltas": [-0.32166831, -0.06279998, -0.36348552], "rmse_deltas": [-0.44069192, -0.08180414, -0.46689171], "base_holdout_mae_mean": 0.3769828233333334, "belief_holdout_mae_mean": 0.62630076}`
+
+## 20260513T020359Z-public-belief-cfv-probe-mixed64x32 - failed
+
+- Timestamp: 2026-05-13T02:03:59Z
+- Type: analysis
+- Gate: manual-public-belief-cfv-probe-mixed-streets
+- Hypothesis: A DeepStack/ReBeL-shaped counterfactual value vector target should make public-belief inputs more useful than the sampled scalar hero-EV target.
+- Failure class: range_belief
+- Summary: Added a per-hand counterfactual value-vector probe using public features with private-card slots zeroed. The target shape reduced the belief penalty substantially compared with scalar EV, but raw belief still failed all three seeds on the corrected `64/32` mixed-street split. This supports the literature-shaped CFV target as the right direction, while falsifying direct raw-belief integration at this target scale.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_cfv_probe_mixed64x32_summary.json
+- Key metrics: `{"pass_count": 0, "n": 3, "mae_delta_mean": -0.039853309999999996, "rmse_delta_mean": -0.06265572666666668, "mae_deltas": [-0.04158113, -0.04643343, -0.03154537], "rmse_deltas": [-0.06322263, -0.06908919, -0.05565536], "train_mask_count": 70688, "holdout_mask_count": 35344}`

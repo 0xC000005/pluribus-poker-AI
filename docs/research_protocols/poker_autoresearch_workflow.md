@@ -259,6 +259,13 @@ feature-plus-public-belief regression. Use `--train-value-cache` and
 labels are reused. This probe is also diagnostic only; promotion still requires
 the falsification ladder and Slumbot confirmation.
 
+Use `scripts/eval_public_belief_cfv_probe.py` for the literature-shaped value
+probe. It zeroes private-card feature slots, computes a searched
+counterfactual value vector over all 1326 hero private hands, and trains a
+masked vector regressor. Use `--train-cfv-cache` and `--holdout-cfv-cache` for
+repeated seeds. This is the preferred value-probe shape before any mainline
+public-belief value-head work.
+
 For blueprint rollout targets, set `--blueprint-target-streets` deliberately.
 The default `2,3` collects desired target streets round-robin so target files
 are not accidentally all turn. Use `3` for river-only smoke tests and inspect
