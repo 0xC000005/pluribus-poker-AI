@@ -460,7 +460,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", required=True)
     parser.add_argument("--cfv-cache")
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--limit", type=int, default=4)
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=4,
+        help="Maximum number of cases to scan.",
+    )
+    parser.add_argument(
+        "--target-leaf-applied",
+        type=int,
+        default=0,
+        help="Stop early after this many cases with learned leaves applied; 0 disables.",
+    )
     parser.add_argument("--solver-iterations", type=int, default=5)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--value-scale", type=float, default=20000.0)
@@ -476,23 +487,25 @@ def main(argv: list[str] | None = None) -> int:
         if base_dataset.features.shape[0] != len(cases):
             raise ValueError("case count does not match CFV cache rows")
     loaded = load_public_belief_dual_hand_cfv_ensemble(args.checkpoint, device=device)
-    selected_cases = cases[: max(1, min(int(args.limit), len(cases)))]
+    max_cases = max(1, min(int(args.limit), len(cases)))
+    target_leaf_applied = max(0, int(args.target_leaf_applied))
 
     records = []
-    for idx, case in enumerate(selected_cases):
+    for idx, case in enumerate(cases[:max_cases]):
         belief_row = base_dataset.belief[idx] if base_dataset is not None else None
-        records.append(
-            _solve_case(
-                case,
-                belief_row=belief_row,
-                loaded_ensemble=loaded,
-                device=device,
-                solver_iterations=args.solver_iterations,
-                solver_backend=args.solver_backend,
-                value_scale=args.value_scale,
-                batch_size=args.batch_size,
-            )
+        record = _solve_case(
+            case,
+            belief_row=belief_row,
+            loaded_ensemble=loaded,
+            device=device,
+            solver_iterations=args.solver_iterations,
+            solver_backend=args.solver_backend,
+            value_scale=args.value_scale,
+            batch_size=args.batch_size,
         )
+        records.append(record)
+        if target_leaf_applied and sum(1 for item in records if item.get("leaf_applied")) >= target_leaf_applied:
+            break
     evaluated = [record for record in records if record.get("passed") and "action_l1_drift" in record]
     leaf_evaluated = [record for record in evaluated if record.get("leaf_applied")]
     drift = [float(record["action_l1_drift"]) for record in evaluated]
@@ -512,6 +525,8 @@ def main(argv: list[str] | None = None) -> int:
         "device": str(device),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
+        "case_scan_limit": int(max_cases),
+        "target_leaf_applied": int(target_leaf_applied),
         "n_cases": len(records),
         "n_evaluated": len(evaluated),
         "n_leaf_applied": len(leaf_evaluated),

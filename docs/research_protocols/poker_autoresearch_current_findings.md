@@ -646,6 +646,13 @@ Label-throughput update:
   case had an applicable learned leaf, and it flipped from all-in to call with
   leaf-only action L1 drift `1.3017`. This is evidence to investigate, not a
   promotion signal.
+- A guarded applicable-case scan now uses `--target-leaf-applied` to avoid
+  diluting the A/B with all-in-only cases where no learned leaf is used. The
+  first `target_leaf_applied=2` scan blocks integration: applicable-case action
+  agreement was `0/2`, mean leaf-only L1 drift was `0.7685`, and a root-turn
+  case took `84.9s` for three iterations because it generated `47,664` leaf
+  prediction states. The current learned river continuation path is a useful
+  diagnostic, but it is not a gameplay-ready search component.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -685,7 +692,7 @@ script passes all 10 checks and is now part of Tier 0.
    `python scripts/poker_autoresearch.py enqueue-falsification --candidate <path>
    --mechanism "<mechanism>"` and close the falsification cycle through the
    normal autoresearch log.
-10. For learned river leaves, broaden the new fixed resolver A/B only on cases
-    where `leaf_applied=true`, and separate desirable corrections from
-    value-model bias before gameplay integration. The flat dual-CFV checkpoint
-    remains blocked.
+10. For learned river leaves, do not integrate the current river-continuation
+    callback into gameplay. Next work should either explain the high
+    applicable-case action drift or replace the expensive root-turn river
+    expansion with a direct turn-CFV continuation before another broad A/B.

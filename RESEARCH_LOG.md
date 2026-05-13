@@ -2059,3 +2059,14 @@
 - Summary: Added `scripts/eval_learned_river_leaf_resolver_ab.py`, a diagnostic that compares a baseline turn resolver against a learned-river-continuation variant. The callback averages the river ensemble over legal river cards, uses terminal reach ranges as public beliefs, and restricts replacement to the measured decision subtree so non-reached leaves do not dominate runtime. A two-case, five-iteration smoke passed mechanically but is not promotable: only one case had an applicable learned leaf, and that case flipped from an all-in-heavy baseline action to call with L1 drift `1.30`. This is useful falsification evidence, not a gameplay path. The next step is to run a broader applicable-case sample and decide whether the drift is correcting equity-only leaves or injecting value-model bias.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent2_iter5_subtree.json
 - Key metrics: `{"passed": true, "n_cases": 2, "n_leaf_applied": 1, "leaf_action_agreement_rate": 0.0, "leaf_mean_action_l1_drift": 1.30174943, "mean_learned_solve_ms": 7936.795, "applicable_case": {"baseline_action": 8, "learned_action": 1, "leaf_prediction_states": 8640, "leaf_prediction_ms": 6868.665}}`
+
+## 20260513T055218Z-learned-river-leaf-applicable-scan - failed
+
+- Timestamp: 2026-05-13T05:52:18Z
+- Type: analysis
+- Gate: manual-learned-river-leaf-applicable-scan
+- Hypothesis: When the diagnostic scans until it finds applicable learned-leaf cases, the river continuation ensemble should show stable enough root-action behavior to justify a broader resolver A/B.
+- Failure class: search_quality
+- Summary: Added `--target-leaf-applied` so the learned-leaf A/B scans through non-applicable all-in-only cases until it has a requested number of true learned-leaf replacements. A `target_leaf_applied=2`, three-iteration scan falsified immediate integration: both applicable cases changed the selected action, with mean leaf-only L1 drift `0.768`. The root-turn case is also too slow for unattended broad sweeps, taking `84.9s` for three iterations and `47,664` leaf prediction states. Learned river continuation is now blocked from gameplay integration until we can distinguish useful correction from value-model bias and reduce root-node leaf cost.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/learned_river_leaf_resolver_ab_turn_independent_target2_iter3.json
+- Key metrics: `{"passed": true, "n_cases": 3, "n_leaf_applied": 2, "leaf_action_agreement_rate": 0.0, "leaf_mean_action_l1_drift": 0.76846713, "leaf_max_action_l1_drift": 1.11173773, "mean_learned_solve_ms": 31390.037, "root_turn_case": {"learned_solve_ms": 84869.834, "leaf_prediction_states": 47664, "leaf_prediction_ms": 37640.313}}`
