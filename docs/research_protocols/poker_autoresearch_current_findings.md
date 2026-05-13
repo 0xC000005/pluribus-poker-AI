@@ -394,6 +394,13 @@ GPU training readiness:
   strict criterion passed `2/3`; RMSE deltas were `+0.0394`, `+0.1674`, and
   `-0.0411`. Read: separate hero/villain value heads are the next architecture
   to harden; do not use the older shared scalar head for leaf-value work.
+- A learned belief bottleneck removes the immediate dual-player instability on
+  the same cached river split. With `--head-mode separate
+  --belief-bottleneck-dim 32`, all three seeds passed; MAE deltas were
+  `+0.0989`, `+0.1042`, and `+0.0622`, while RMSE deltas were `+0.1586`,
+  `+0.1659`, and `+0.0839`. Read: the next leaf-value architecture should use
+  separate player heads plus a learned belief compression stage, but it still
+  needs a larger river surface before solver integration.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

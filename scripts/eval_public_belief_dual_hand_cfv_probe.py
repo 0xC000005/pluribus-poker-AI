@@ -52,16 +52,34 @@ class DualCFVDataset:
 
 
 class _DualHandCFVProbeNet(nn.Module):
-    def __init__(self, hidden_dim: int, *, use_belief: bool, head_mode: str = "shared"):
+    def __init__(
+        self,
+        hidden_dim: int,
+        *,
+        use_belief: bool,
+        head_mode: str = "shared",
+        belief_bottleneck_dim: int = 0,
+    ):
         super().__init__()
         self.use_belief = bool(use_belief)
         if head_mode not in ("shared", "separate"):
             raise ValueError(f"unknown head_mode: {head_mode}")
+        if belief_bottleneck_dim < 0:
+            raise ValueError("belief_bottleneck_dim must be non-negative")
         self.head_mode = head_mode
         self.public = nn.Linear(N_FEATURES, hidden_dim)
         self.hand = nn.Linear(52, hidden_dim)
         self.player = nn.Linear(2, hidden_dim)
-        self.belief = nn.Linear(BELIEF_DIM, hidden_dim) if use_belief else None
+        if use_belief and belief_bottleneck_dim > 0:
+            self.belief = nn.Sequential(
+                nn.Linear(BELIEF_DIM, int(belief_bottleneck_dim)),
+                nn.ReLU(),
+                nn.Linear(int(belief_bottleneck_dim), hidden_dim),
+            )
+        elif use_belief:
+            self.belief = nn.Linear(BELIEF_DIM, hidden_dim)
+        else:
+            self.belief = None
         self.body = nn.Sequential(
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
@@ -311,6 +329,7 @@ def _fit_model(
     device: torch.device,
     use_belief: bool,
     head_mode: str,
+    belief_bottleneck_dim: int,
 ) -> _DualHandCFVProbeNet:
     torch.manual_seed(seed)
     case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
@@ -327,6 +346,7 @@ def _fit_model(
         hidden_dim,
         use_belief=use_belief,
         head_mode=head_mode,
+        belief_bottleneck_dim=belief_bottleneck_dim if use_belief else 0,
     ).to(device)
     optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     n = int(case_t.numel())
@@ -439,6 +459,12 @@ def main(argv: list[str] | None = None) -> int:
         default="shared",
         help="Use one scalar output head or separate hero/villain output heads.",
     )
+    parser.add_argument(
+        "--belief-bottleneck-dim",
+        type=int,
+        default=0,
+        help="Optional learned bottleneck for the public belief vector; 0 keeps the linear baseline.",
+    )
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -495,6 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         device=device,
         use_belief=False,
         head_mode=args.head_mode,
+        belief_bottleneck_dim=0,
     )
     belief = _fit_model(
         train,
@@ -509,6 +536,7 @@ def main(argv: list[str] | None = None) -> int:
         device=device,
         use_belief=True,
         head_mode=args.head_mode,
+        belief_bottleneck_dim=args.belief_bottleneck_dim,
     )
     base_metrics = _metrics(
         _predict(
@@ -555,6 +583,7 @@ def main(argv: list[str] | None = None) -> int:
         "batch_size": int(args.batch_size),
         "seed": int(args.seed),
         "head_mode": args.head_mode,
+        "belief_bottleneck_dim": int(args.belief_bottleneck_dim),
         "target_dim": int(N_HANDS),
         "train_label_count": int(train.hero_masks.sum() + train.villain_masks.sum()),
         "holdout_label_count": int(holdout.hero_masks.sum() + holdout.villain_masks.sum()),

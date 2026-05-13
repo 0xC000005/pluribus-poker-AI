@@ -1860,3 +1860,14 @@
 - Summary: Added `--head-mode separate` to the dual-player probe and reran the cached full river `64/32` split across three seeds. MAE improved in all seeds and the strict criterion passed two of three, but one seed still worsened RMSE. This is a clear improvement over the shared scalar head, but still not stable enough to wire into turn search without another architecture hardening step.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river64x32_separate_summary.json
 - Key metrics: `{"pass_count": 2, "n": 3, "mae_delta_mean": 0.06878027, "rmse_delta_mean": 0.05522332, "mae_deltas": [0.03972087, 0.13933148, 0.02728846], "rmse_deltas": [0.03936624, 0.16742925, -0.04112553]}`
+
+## 20260513T033032Z-dual-player-belief-bottleneck - passed
+
+- Timestamp: 2026-05-13T03:30:32Z
+- Type: experiment
+- Gate: manual-public-belief-dual-hand-cfv-bottleneck
+- Hypothesis: A learned bottleneck over the public-belief vector should reduce seed instability in dual-player CFV learning by forcing the model to compress range information before combining it with public state, hand, and player embeddings.
+- Failure class: range_belief
+- Summary: Added `--belief-bottleneck-dim` to the dual-player probe and reran the cached full river `64/32` split with separate player heads and a 32-dim belief bottleneck. All three seeds passed the strict MAE/RMSE criterion, including the seed that previously regressed RMSE with raw linear belief input. This supports separate player heads plus learned belief compression as the next leaf-value architecture to scale on a larger river target surface before any turn-search integration.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river64x32_separate_bottleneck32_summary.json
+- Key metrics: `{"pass_count": 3, "n": 3, "mae_delta_mean": 0.08841748333333334, "rmse_delta_mean": 0.1361116933333333, "mae_deltas": [0.09890925, 0.10416988, 0.06217332], "rmse_deltas": [0.15857678, 0.16588297, 0.08387533]}`

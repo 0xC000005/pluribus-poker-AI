@@ -17,6 +17,7 @@ from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research import belief_value_probe as bvp
 from poker_ai.research.belief_value_probe import compute_hero_hand_ev
+from eval_public_belief_dual_hand_cfv_probe import _DualHandCFVProbeNet
 from solver import Node
 
 
@@ -203,6 +204,26 @@ def test_compute_villain_cfv_vector_uses_hero_reach_and_strategy():
 
     assert values[1] == 20.0
     assert mask[1] == 1.0
+
+
+def test_dual_cfv_probe_accepts_bottlenecked_separate_heads():
+    model = _DualHandCFVProbeNet(
+        8,
+        use_belief=True,
+        head_mode="separate",
+        belief_bottleneck_dim=4,
+    )
+    public_x = torch.zeros((3, N_FEATURES), dtype=torch.float32)
+    hand_x = torch.zeros((3, 52), dtype=torch.float32)
+    player_x = torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]],
+        dtype=torch.float32,
+    )
+    belief_x = torch.zeros((3, bvp.BELIEF_DIM), dtype=torch.float32)
+
+    out = model(public_x, hand_x, player_x, belief_x)
+
+    assert out.shape == (3,)
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):

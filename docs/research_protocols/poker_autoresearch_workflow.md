@@ -302,7 +302,11 @@ public+hand+player against public+hand+player+belief. Do not integrate a
 learned CFV checkpoint into turn search unless this dual-player probe is stable
 across seeds on a balanced river surface. Prefer `--head-mode separate` when
 testing leaf-value architectures; the shared scalar head is retained as a
-baseline because it underfits the two payoff frames.
+baseline because it underfits the two payoff frames. For the current
+dual-player river probe, also use `--belief-bottleneck-dim 32` as the default
+candidate architecture before considering solver integration; it tests a
+learned compression of the public-belief range vector instead of feeding the
+raw range vector directly into the value body.
 
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
