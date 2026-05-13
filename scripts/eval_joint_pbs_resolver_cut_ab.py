@@ -72,6 +72,7 @@ class JointCutStats:
     callback_calls: int = 0
     replaced_cut_nodes: int = 0
     fallback_cut_nodes: int = 0
+    static_belief_nodes: int = 0
     prediction_states: int = 0
     prediction_ms: float = 0.0
 
@@ -305,6 +306,17 @@ def _summarize_cut_risk_records(records: list[dict[str, Any]]) -> list[dict[str,
     return summary
 
 
+def _load_static_belief_by_label(path: str | Path) -> dict[str, np.ndarray]:
+    data = np.load(path, allow_pickle=False)
+    labels = [str(label) for label in data["labels"].tolist()]
+    beliefs = np.asarray(data["belief"], dtype=np.float32)
+    if beliefs.shape[0] != len(labels):
+        raise ValueError("static belief label count does not match belief rows")
+    if beliefs.shape[1] != 2 * N_HANDS:
+        raise ValueError("static belief rows must contain both player hand beliefs")
+    return {label: beliefs[idx] for idx, label in enumerate(labels)}
+
+
 class JointPBSSuccessorCutCallback:
     def __init__(
         self,
@@ -318,6 +330,7 @@ class JointPBSSuccessorCutCallback:
         value_scale: float,
         batch_size: int,
         value_calibration: dict[str, Any] | None = None,
+        static_beliefs_by_node_idx: dict[int, np.ndarray] | None = None,
     ):
         self.case = case
         self.board4 = [int(card) for card in board4]
@@ -333,6 +346,7 @@ class JointPBSSuccessorCutCallback:
         self.value_scale = float(value_scale)
         self.batch_size = int(batch_size)
         self.value_calibration = value_calibration
+        self.static_beliefs_by_node_idx = static_beliefs_by_node_idx or {}
         self.stats = JointCutStats()
 
     def __call__(self, **kwargs):
@@ -355,12 +369,20 @@ class JointPBSSuccessorCutCallback:
             if "error" in parsed:
                 self.stats.fallback_cut_nodes += 1
                 continue
-            hero_belief = np.zeros(N_HANDS, dtype=np.float32)
-            villain_belief = np.zeros(N_HANDS, dtype=np.float32)
-            hero_belief[self._local_to_global] = hero_reach[row]
-            villain_belief[self._local_to_global] = villain_reach[row]
-            hero_belief = _normalize(hero_belief * self.board_mask)
-            villain_belief = _normalize(villain_belief * self.board_mask)
+            static_belief = self.static_beliefs_by_node_idx.get(int(node_idx))
+            if static_belief is not None:
+                belief = np.asarray(static_belief, dtype=np.float32)
+                if belief.shape != (2 * N_HANDS,):
+                    raise ValueError("static belief row has invalid shape")
+                self.stats.static_belief_nodes += 1
+            else:
+                hero_belief = np.zeros(N_HANDS, dtype=np.float32)
+                villain_belief = np.zeros(N_HANDS, dtype=np.float32)
+                hero_belief[self._local_to_global] = hero_reach[row]
+                villain_belief[self._local_to_global] = villain_reach[row]
+                hero_belief = _normalize(hero_belief * self.board_mask)
+                villain_belief = _normalize(villain_belief * self.board_mask)
+                belief = np.concatenate([hero_belief, villain_belief]).astype(np.float32)
             features.append(
                 build_features(
                     [],
@@ -370,7 +392,7 @@ class JointPBSSuccessorCutCallback:
                     parsed,
                 )
             )
-            beliefs.append(np.concatenate([hero_belief, villain_belief]).astype(np.float32))
+            beliefs.append(belief)
             masks.append(self.board_mask)
             tasks.append(row)
 
@@ -440,6 +462,7 @@ def _solve_case(
     target_action_shapes: tuple[str, ...],
     value_calibration: dict[str, Any] | None,
     risk_predictor: StructuralCutRiskPredictor | None,
+    static_belief_by_label: dict[str, np.ndarray] | None,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     if "error" in parsed:
@@ -483,6 +506,13 @@ def _solve_case(
     )
     candidate_cut_indices = [int(record["node_idx"]) for record in candidate_cut_records]
     cut_indices = [int(record["node_idx"]) for record in selected_cut_records]
+    static_beliefs_by_node_idx: dict[int, np.ndarray] = {}
+    if static_belief_by_label is not None:
+        for record in selected_cut_records:
+            label = f"{case.label}-cut{int(record['cut_pos'])}"
+            belief = static_belief_by_label.get(label)
+            if belief is not None:
+                static_beliefs_by_node_idx[int(record["node_idx"])] = belief
     if not cut_indices:
         return {
             "label": case.label,
@@ -526,6 +556,7 @@ def _solve_case(
         value_scale=value_scale,
         batch_size=batch_size,
         value_calibration=value_calibration,
+        static_beliefs_by_node_idx=static_beliefs_by_node_idx,
     )
     callback.solver_hands = list(learned.hands)
     learned.solve(
@@ -574,6 +605,7 @@ def _solve_case(
         "cut_callback_calls": int(callback.stats.callback_calls),
         "replaced_cut_nodes": int(callback.stats.replaced_cut_nodes),
         "fallback_cut_nodes": int(callback.stats.fallback_cut_nodes),
+        "static_belief_cut_nodes": int(callback.stats.static_belief_nodes),
         "solver_n_hands": int(learned.n),
     }
 
@@ -600,6 +632,13 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Optional error predictor JSON produced by eval_joint_pbs_error_predictor.py. "
             "When supplied, only structural low-risk cuts use learned values."
+        ),
+    )
+    parser.add_argument(
+        "--static-belief-joint",
+        help=(
+            "Optional successor-cut joint NPZ. When a cut label is present, the callback "
+            "uses that saved belief instead of current CFR-iteration reaches."
         ),
     )
     parser.add_argument(
@@ -632,6 +671,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.error_predictor_json
         else None
     )
+    static_belief_by_label = (
+        _load_static_belief_by_label(args.static_belief_joint)
+        if args.static_belief_joint
+        else None
+    )
     base_dataset = None
     if args.cfv_cache:
         base_dataset, _records = load_public_belief_cfv_dataset_cache(args.cfv_cache)
@@ -658,6 +702,7 @@ def main(argv: list[str] | None = None) -> int:
                 target_action_shapes=tuple(args.target_action_shapes),
                 value_calibration=value_calibration,
                 risk_predictor=risk_predictor,
+                static_belief_by_label=static_belief_by_label,
             )
         )
 
@@ -686,6 +731,9 @@ def main(argv: list[str] | None = None) -> int:
         sum(int(record.get("risk_rejected_cut_nodes", 0)) for record in records)
     )
     selected_cut_nodes = int(sum(int(record.get("n_cut_nodes", 0)) for record in records))
+    static_belief_cut_nodes = int(
+        sum(int(record.get("static_belief_cut_nodes", 0)) for record in records)
+    )
     mechanical_passed = bool(cut_evaluated and all(record.get("passed") for record in evaluated))
     behavior_passed = bool(
         mechanical_passed
@@ -709,6 +757,7 @@ def main(argv: list[str] | None = None) -> int:
         "checkpoint": str(args.checkpoint),
         "value_calibration_json": str(args.value_calibration_json) if args.value_calibration_json else None,
         "error_predictor_json": str(args.error_predictor_json) if args.error_predictor_json else None,
+        "static_belief_joint": str(args.static_belief_joint) if args.static_belief_joint else None,
         "risk_abstention_rule": risk_predictor.abstention_rule if risk_predictor else None,
         "risk_abstention_predicted_mae_cut": (
             round(float(risk_predictor.abstention_cut), 8) if risk_predictor else None
@@ -729,6 +778,7 @@ def main(argv: list[str] | None = None) -> int:
         "frontier_matching_cut_nodes": frontier_matching_cut_nodes,
         "selected_cut_nodes": selected_cut_nodes,
         "risk_rejected_cut_nodes": risk_rejected_cut_nodes,
+        "static_belief_cut_nodes": static_belief_cut_nodes,
         "selected_cut_coverage": (
             round(float(selected_cut_nodes / frontier_matching_cut_nodes), 8)
             if frontier_matching_cut_nodes

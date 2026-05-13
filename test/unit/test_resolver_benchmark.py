@@ -27,6 +27,7 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
 from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
     StructuralCutRiskPredictor,
     _frontier_action_shape,
+    _load_static_belief_by_label,
     _select_successor_cut_node_records,
     _successor_cut_node_indices,
 )
@@ -495,6 +496,20 @@ def test_structural_risk_predictor_filters_successor_cuts_before_solve():
         for record in candidates
     )
     assert all(record["risk_decision"] == "selected_for_learned_value" for record in selected)
+
+
+def test_static_belief_loader_maps_labels(tmp_path):
+    path = tmp_path / "beliefs.npz"
+    belief = np.zeros((2, 2 * N_HANDS), dtype=np.float32)
+    belief[0, 0] = 1.0
+    belief[1, 1] = 1.0
+    np.savez_compressed(path, labels=np.asarray(["a", "b"]), belief=belief)
+
+    loaded = _load_static_belief_by_label(path)
+
+    assert set(loaded) == {"a", "b"}
+    assert loaded["a"].shape == (2 * N_HANDS,)
+    assert loaded["b"][1] == 1.0
 
 
 def test_learned_leaf_action_path_reconstructs_turn_sequence():

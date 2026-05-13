@@ -355,3 +355,13 @@ quick group-split ridge probe over cut metadata plus root context also failed
 inside the search loop: collect dynamic reach/regret traces or train a
 continuation model with an auxiliary search-consistency loss that penalizes root
 strategy drift directly.
+
+A static-belief callback diagnostic narrows this further. The target exporter
+trained the continuation model on average-strategy frontier beliefs, while the
+cut callback normally supplies current CFR-iteration reaches. Feeding the
+callback saved target-pool beliefs for matching cuts improved the high-bet A/B
+but did not come close to passing: mean action L1 drift fell from `0.8220` to
+`0.7160`, and agreement rose from `0.50` to `0.5625`. Reach distribution
+mismatch is therefore a contributor, not the full cause. The next target should
+train or distill on dynamic callback beliefs gathered during CFR iterations,
+then validate with the same fixed resolver A/B.
