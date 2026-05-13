@@ -726,8 +726,9 @@ Label-throughput update:
   until a broader gate shows strategic benefit.
 - Range-robustness diagnostics can now write `--output-dual-cache`, so exact
   leaf labels can be reused by checkpoint/projection evaluators without
-  re-solving. A one-state high-drift smoke verified cache write/load; use this
-  path for future exact-leaf investigations.
+  re-solving. A one-state high-drift smoke verified cache write/load, and the
+  full 16-state high-drift exact cache is now materialized for future
+  projection, uncertainty, or alternate continuation-value checks.
 
 Resolved workflow issue: `rules_parity`.
 
