@@ -627,6 +627,12 @@ Label-throughput update:
   mix toward uniform legal ranges, MAE/RMSE is `0.1917/0.2531`; with fully
   uniform legal ranges, MAE/RMSE is `0.1995/0.2597`. Both beat zero and
   train-constant baselines after re-solving perturbed labels.
+- A larger independent turn-only `128/64` restored-history surface confirms the
+  ensemble story. Single seeds all missed strict constant MAE, but the saved
+  three-checkpoint Deepset-64 ensemble passed decisively: MAE/RMSE
+  `0.2220/0.2886`, best constants `0.2500/0.3346`, zero `0.2634/0.3745`, and
+  about `8,662x` solver-label speedup per state. The remaining blocker is now
+  resolver A/B integration, not held-out turn value quality.
 
 Resolved workflow issue: `rules_parity`.
 
