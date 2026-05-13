@@ -24,7 +24,10 @@ from eval_learned_river_leaf_resolver_ab import (  # noqa: E402
     _global_board_mask,
     _local_ranges_from_belief,
 )
-from build_learned_river_leaf_cases import _summarize_leaf_records  # noqa: E402
+from build_learned_river_leaf_cases import (  # noqa: E402
+    _rotated_cards,
+    _summarize_leaf_records,
+)
 from solver import StreetSolver  # noqa: E402
 
 
@@ -209,6 +212,19 @@ def test_river_leaf_record_summary_reports_dataset_skew():
     assert summary["river_cards"]["top"][0] == {"key": "2c", "count": 2}
     assert summary["leaf_action_parse_errors"] == 0
     assert summary["leaf_total_last_bet_to"]["max"] == 500.0
+
+
+def test_river_leaf_card_rotation_is_deterministic_and_keyed():
+    cards = [1, 2, 3, 4, 5]
+
+    first = _rotated_cards(cards, key="seed:a")
+    second = _rotated_cards(cards, key="seed:a")
+    other = _rotated_cards(cards, key="seed:b")
+
+    assert first == second
+    assert sorted(first) == cards
+    assert sorted(other) == cards
+    assert first != cards or other != cards
 
 
 def test_resolver_benchmark_cli_emits_json_for_checkpoint(tmp_path):

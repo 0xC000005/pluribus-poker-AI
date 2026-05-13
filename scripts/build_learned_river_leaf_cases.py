@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
 import sys
@@ -48,6 +49,20 @@ from play_slumbot import (  # noqa: E402
 from solver import StreetSolver, _parse_nav, resolve_solver_backend  # noqa: E402
 
 
+def _stable_offset(key: str, n: int) -> int:
+    if n <= 0:
+        return 0
+    digest = hashlib.blake2b(key.encode("utf-8"), digest_size=8).digest()
+    return int.from_bytes(digest, byteorder="little", signed=False) % n
+
+
+def _rotated_cards(cards: list[int], *, key: str) -> list[int]:
+    if not cards:
+        return []
+    offset = _stable_offset(key, len(cards))
+    return [int(cards[(offset + idx) % len(cards)]) for idx in range(len(cards))]
+
+
 class _RiverLeafCollector:
     def __init__(
         self,
@@ -59,6 +74,7 @@ class _RiverLeafCollector:
         solver_hands: list[tuple[int, int]],
         max_leaf_states: int,
         max_rivers_per_terminal: int = 0,
+        river_seed: int = 0,
     ):
         self.source_case = source_case
         self.board4 = [int(card) for card in board4]
@@ -67,6 +83,7 @@ class _RiverLeafCollector:
         self.solver_hands = list(solver_hands)
         self.max_leaf_states = int(max_leaf_states)
         self.max_rivers_per_terminal = max(0, int(max_rivers_per_terminal))
+        self.river_seed = int(river_seed)
         self.river_cards = sorted(set(range(52)) - set(self.board4))
         self.local_to_global = np.asarray(
             [_HAND_TO_INDEX[tuple(sorted(hand))] for hand in self.solver_hands],
@@ -96,7 +113,8 @@ class _RiverLeafCollector:
             ):
                 continue
             emitted_for_terminal = 0
-            for river_card in self.river_cards:
+            river_key = f"{self.river_seed}:{self.source_case.label}:{node_idx}"
+            for river_card in _rotated_cards(self.river_cards, key=river_key):
                 if len(self.cases) >= self.max_leaf_states:
                     break
                 if (
@@ -172,6 +190,7 @@ def _collect_case(
     belief_row: np.ndarray | None,
     max_leaf_states: int,
     max_rivers_per_terminal: int,
+    river_seed: int,
     solver_iterations: int,
     solver_backend: str,
 ) -> tuple[list[ResolverBenchmarkCase], list[np.ndarray], list[np.ndarray], list[dict[str, Any]]]:
@@ -208,6 +227,7 @@ def _collect_case(
         solver_hands=list(solver.hands),
         max_leaf_states=max_leaf_states,
         max_rivers_per_terminal=max_rivers_per_terminal,
+        river_seed=river_seed,
     )
     solver.solve(
         n_iterations=solver_iterations,
@@ -297,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-leaf-states", type=int, default=16)
     parser.add_argument("--max-leaf-states-per-source", type=int, default=0)
     parser.add_argument("--max-rivers-per-terminal", type=int, default=0)
+    parser.add_argument("--river-seed", type=int, default=0)
     parser.add_argument("--solver-iterations", type=int, default=1)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--output-cases", required=True)
@@ -331,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
             belief_row=belief_row,
             max_leaf_states=remaining,
             max_rivers_per_terminal=args.max_rivers_per_terminal,
+            river_seed=args.river_seed,
             solver_iterations=args.solver_iterations,
             solver_backend=args.solver_backend,
         )
@@ -362,6 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         "max_leaf_states": int(args.max_leaf_states),
         "max_leaf_states_per_source": int(per_source_cap),
         "max_rivers_per_terminal": int(args.max_rivers_per_terminal),
+        "river_seed": int(args.river_seed),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
         "leaf_distribution": _summarize_leaf_records(records),

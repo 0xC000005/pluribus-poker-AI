@@ -2136,3 +2136,14 @@
 - Summary: Added `leaf_distribution` metadata to `scripts/build_learned_river_leaf_cases.py`, including source-case share, terminal-node share, river-card share, leaf-action share, parse errors, and parsed bet-size summaries. A two-leaf smoke verified the summary on the actual resolver path and immediately exposed a fully single-source/single-river sample (`max_source_share=1.0`, `max_river_card_share=1.0`). Use this metadata as a pre-label gate for larger leaf-value datasets.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_metadata_smoke_seed20260580.json
 - Key metrics: `{"n_leaf_states": 2, "sources": {"n_unique": 1, "max_share": 1.0}, "terminals": {"n_unique": 2, "max_share": 0.5}, "river_cards": {"n_unique": 1, "max_share": 1.0}, "leaf_action_parse_errors": 0}`
+
+## 20260513T061503Z-leaf-river-card-rotation - passed
+
+- Timestamp: 2026-05-13T06:15:03Z
+- Type: workflow
+- Gate: manual-leaf-export-diversity-gate
+- Hypothesis: The new leaf-distribution report should catch and help fix non-obvious dataset skew before solver labeling.
+- Failure class: none
+- Summary: The first larger pre-label export exposed a deterministic river-card bug: with `--max-rivers-per-terminal 1`, sorted river iteration selected mostly the first legal river (`2c`). Added deterministic per-source/terminal river-card rotation via `--river-seed`. On the same source split, train river diversity improved from `2` unique cards with max share `0.9649` to `44` cards with max share `0.0526`; holdout improved from `3` cards with max share `0.88` to `35` cards with max share `0.06`. Proceed to label/train on the rotated split, not the sorted split.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_train128_rotseed20260593.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_holdout64_rotseed20260594.json
+- Key metrics: `{"train": {"n_leaf_states": 114, "river_unique": 44, "river_max_share": 0.052632, "source_unique": 29, "source_max_share": 0.035088}, "holdout": {"n_leaf_states": 50, "river_unique": 35, "river_max_share": 0.06, "source_unique": 27, "source_max_share": 0.04}, "exporter_added": ["river_seed"]}`

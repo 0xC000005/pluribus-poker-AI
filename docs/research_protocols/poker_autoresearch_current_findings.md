@@ -692,6 +692,13 @@ Label-throughput update:
   two-leaf smoke was mechanically green and showed why the gate matters:
   `max_source_share=1.0` and `max_river_card_share=1.0` despite multiple
   terminals.
+- That metadata immediately caught a river-card sampling bug: sorted iteration
+  plus `--max-rivers-per-terminal 1` made larger exports mostly use `2c`.
+  `--river-seed` now rotates legal river cards deterministically per
+  source/terminal. On the same source split, train river concentration improved
+  from `2` unique cards / `96.5%` max share to `44` / `5.3%`; holdout improved
+  from `3` / `88%` to `35` / `6%`. Use the rotated split for the next leaf CFV
+  training gate.
 
 Resolved workflow issue: `rules_parity`.
 
