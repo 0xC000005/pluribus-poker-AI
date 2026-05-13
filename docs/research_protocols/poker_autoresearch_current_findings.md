@@ -760,8 +760,10 @@ Label-throughput update:
   `8.6-8.8s/state` even with CPU parallelism. Three cached CUDA training seeds
   all improved over feature-only baselines, but failed the strict gate: mean
   zero-MAE delta was `-0.0165`, and mean best-train-constant MAE delta was
-  `-0.0329`. Do not keep scaling this same small leaf-CFV objective; move to a
-  stronger continuation objective/search integration.
+  `-0.0329`. A bounded capacity sanity check also failed: hidden dim `128` with
+  `60` epochs reached MAE/RMSE `0.4247/0.5459`, worse than feature-only, zero,
+  and train-constant baselines. Do not keep scaling this same small leaf-CFV
+  objective; move to a stronger continuation objective/search integration.
 - Related-work checkpoint: DeepStack and Supremus support learned
   counterfactual value networks inside depth-limited continual resolving, and
   Supremus specifically reports beating Slumbot with improved deep CFV

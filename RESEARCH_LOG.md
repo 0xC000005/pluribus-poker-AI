@@ -2225,6 +2225,17 @@
 - Summary: Built a pre-label train/holdout split before exact solving. Train has `256` leaf states from `70` source turn states, all `52` river cards, `43` action shapes, and bet counts up to `7`; holdout has `128` states from `33` sources, `48` river cards, `31` action shapes, and bet counts up to `7`. Exact CPU labels took `8753 ms/state` for train and `8616 ms/state` for holdout with `label_jobs=4`; cached reruns then trained on CUDA. Across seeds `20260603..20260605`, the belief model improved over the feature-only baseline every time, but the strict gate failed every time. Only seed `20260603` beat zero MAE (`0.3460` vs `0.3598`), and none beat the train-median constant (`0.3434`) or train-constant RMSE. This falsifies blind scale-up of the same leaf-value architecture at this size. The next principled step is a different continuation objective/search integration, such as a turn-level PBS value target or a model that predicts a searched continuation policy/value jointly, not more small leaf-data scaling.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_prelabeled256_seed20260601.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_prelabeled128_holdout_seed20260602.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset64_seed20260603.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset64_seed20260604.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset64_seed20260605.json
 - Key metrics: `{"split": {"train_leaf_states": 256, "train_sources": 70, "train_rivers": 52, "train_action_shapes": 43, "holdout_leaf_states": 128, "holdout_sources": 33, "holdout_rivers": 48, "holdout_action_shapes": 31}, "seeds": {"20260603": {"passed": false, "mae": 0.34600768, "zero_mae_delta": 0.013752, "best_constant_mae_delta": -0.00260766}, "20260604": {"passed": false, "mae": 0.38585521, "zero_mae_delta": -0.02609553, "best_constant_mae_delta": -0.04245519}, "20260605": {"passed": false, "mae": 0.39696075, "zero_mae_delta": -0.03720107, "best_constant_mae_delta": -0.05356073}}, "mean": {"mae": 0.37627455, "feature_mae_delta": 0.03362144, "zero_mae_delta": -0.01651487, "best_constant_mae_delta": -0.03287453}}`
+
+## 20260513T080503Z-leaf256-capacity-sanity - failed
+
+- Timestamp: 2026-05-13T08:05:03Z
+- Type: experiment
+- Gate: manual-leaf256-capacity-sanity
+- Hypothesis: The shape-covered leaf failure might be simple undercapacity rather than target/objective mismatch.
+- Failure class: model_objective
+- Summary: Reused the cached `256/128` exact labels and trained one wider Deepset model (`hidden_dim=128`, `epochs=60`, separate heads, bottleneck 32). The wider run failed harder than the 64-wide seeds: holdout MAE/RMSE `0.4247/0.5459`, worse than feature-only MAE (`0.4124`), zero MAE (`0.3598`), and best train-constant MAE/RMSE (`0.3434/0.4390`). Treat this as a bounded capacity sanity check, not a hyperparameter sweep. It supports moving away from the current leaf-CFV objective rather than increasing network size.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset128_seed20260606.json
+- Key metrics: `{"passed": false, "hidden_dim": 128, "epochs": 60, "mae": 0.42468221, "rmse": 0.54593766, "feature_mae": 0.4123719, "zero_mae": 0.35975968, "best_constant_mae": 0.34340002, "best_constant_rmse": 0.43895668}`
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z
@@ -2246,4 +2257,3 @@
 - Summary: Gate methodology-review-20260513T075145Z-shape-covered-leaf256-training passed.
 - Metrics file: autoresearch-session/poker_runs/20260513T080110Z-methodology-review-for-shape-covered-leaf256-training-should/metrics.json
 - Key metrics: `{"decision": "abandon", "gate": "methodology-review-20260513T075145Z-shape-covered-leaf256-training", "passed": true}`
-
