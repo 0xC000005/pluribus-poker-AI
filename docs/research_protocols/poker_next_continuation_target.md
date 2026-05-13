@@ -271,3 +271,12 @@ action. Fixed-margin rank-aware calibration improved holdout L1 (`0.8622 ->
 The next target is confidence-weighted ranking: use the solver distribution's
 top-vs-runner-up probability gap to decide how strongly to enforce rank
 margins, rather than forcing every top label equally.
+
+Confidence-weighted ranking improves the stochastic policy path, not greedy
+argmax. On the coherent `96` holdout, it improved soft fit over fixed rank
+(`L1 0.5818`, `KL 0.2578`) and matched solver mean all-in probability well
+(`0.3907` vs `0.4358`, gap `0.0450`), passing the new resolver probability
+gate with mean action L1 drift `0.5880`. But argmax all-in is still `0.9896`,
+so do not evaluate this checkpoint with `--greedy`. Next target: run stochastic
+fixed/Slumbot smoke for the confidence-weighted rank checkpoint, while reporting
+both probability-level and top-action diagnostics.

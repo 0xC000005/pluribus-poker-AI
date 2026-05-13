@@ -25,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--rank-loss-weight", type=float, default=0.0)
     parser.add_argument("--rank-margin", type=float, default=0.25)
+    parser.add_argument("--rank-confidence-weighted", action="store_true")
     parser.add_argument("--metrics-output")
     args = parser.parse_args(argv)
 
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         device=args.device,
         rank_loss_weight=args.rank_loss_weight,
         rank_margin=args.rank_margin,
+        rank_confidence_weighted=args.rank_confidence_weighted,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)
     if args.metrics_output:

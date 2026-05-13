@@ -211,6 +211,30 @@ def test_top_action_margin_loss_respects_legal_competitors():
     assert loss == torch.tensor(0.3)
 
 
+def test_top_action_margin_loss_can_weight_by_target_confidence():
+    logits = torch.zeros((2, N_ACTIONS), dtype=torch.float32)
+    logits[0, 1] = 0.1
+    logits[1, 1] = 1.0
+    logits[1, 2] = -5.0
+    legal_masks = torch.zeros((2, N_ACTIONS), dtype=torch.float32)
+    legal_masks[:, [0, 1, 2]] = 1.0
+    target_probs = torch.zeros((2, N_ACTIONS), dtype=torch.float32)
+    target_probs[0, 0] = 0.55
+    target_probs[0, 1] = 0.45
+    target_probs[1, 1] = 1.0
+
+    unweighted = masked_top_action_margin_loss(logits, legal_masks, target_probs, margin=0.5)
+    weighted = masked_top_action_margin_loss(
+        logits,
+        legal_masks,
+        target_probs,
+        margin=0.5,
+        confidence_weighted=True,
+    )
+
+    assert 0.0 < weighted < unweighted
+
+
 def test_train_value_network_accepts_search_policy_targets():
     buffer = ReservoirBuffer(8)
     features = np.zeros(N_FEATURES, dtype=np.float32)

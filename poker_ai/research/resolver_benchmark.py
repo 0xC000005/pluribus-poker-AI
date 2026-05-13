@@ -371,6 +371,7 @@ def _case_metrics(
         "policy_head_increment": policy_head.increment,
         "policy_head_action_legal": policy_head_legal,
         "policy_head_allin_selected": bool(policy_head.action == 8),
+        "policy_head_strategy": policy_head.strategy.round(6).tolist(),
         "policy_head_action_l1_drift": float(np.abs(policy_head.strategy - solver.strategy).sum()),
         "solver_action": solver.action,
         "solver_increment": solver.increment,
@@ -399,6 +400,7 @@ def run_resolver_benchmark(
     max_policy_head_allin_rate: float = 0.05,
     max_policy_head_mean_l1_drift: float = 0.75,
     max_policy_head_solver_allin_gap: float | None = None,
+    max_policy_head_solver_allin_prob_gap: float | None = None,
 ) -> dict[str, Any]:
     value_net.eval()
     selected_cases = list(cases) if cases is not None else default_benchmark_cases()
@@ -424,6 +426,10 @@ def run_resolver_benchmark(
         1 for item in results if item.get("policy_head_allin_selected")
     )
     solver_allin_count = sum(1 for item in solver_results if item.get("solver_action") == 8)
+    policy_head_allin_probs = [
+        float(item["policy_head_strategy"][8]) for item in solver_results
+    ]
+    solver_allin_probs = [float(item["solver_strategy"][8]) for item in solver_results]
     allin_changed_count = sum(
         1 for item in results if item.get("allin_removed_action_changed")
     )
@@ -432,8 +438,21 @@ def run_resolver_benchmark(
     policy_head_allin_rate = float(policy_head_allin_count / len(results)) if results else 0.0
     solver_allin_rate = float(solver_allin_count / len(solver_results)) if solver_results else 0.0
     policy_head_solver_allin_gap = abs(policy_head_allin_rate - solver_allin_rate)
+    policy_head_mean_allin_prob = (
+        float(np.mean(policy_head_allin_probs)) if policy_head_allin_probs else 0.0
+    )
+    solver_mean_allin_prob = float(np.mean(solver_allin_probs)) if solver_allin_probs else 0.0
+    policy_head_solver_allin_prob_gap = abs(policy_head_mean_allin_prob - solver_mean_allin_prob)
     policy_head_mean_l1 = float(np.mean(policy_head_drift_values)) if policy_head_drift_values else 0.0
-    if max_policy_head_solver_allin_gap is None:
+    if max_policy_head_solver_allin_prob_gap is not None:
+        policy_head_allin_passed = (
+            policy_head_solver_allin_prob_gap <= float(max_policy_head_solver_allin_prob_gap)
+        )
+        allin_gate = {
+            "mode": "solver_prob_gap",
+            "max_policy_head_solver_allin_prob_gap": float(max_policy_head_solver_allin_prob_gap),
+        }
+    elif max_policy_head_solver_allin_gap is None:
         policy_head_allin_passed = policy_head_allin_rate <= float(max_policy_head_allin_rate)
         allin_gate = {
             "mode": "absolute",
@@ -488,6 +507,9 @@ def run_resolver_benchmark(
         "policy_head_allin_rate": policy_head_allin_rate,
         "solver_allin_rate": solver_allin_rate,
         "policy_head_solver_allin_gap": policy_head_solver_allin_gap,
+        "policy_head_mean_allin_prob": policy_head_mean_allin_prob,
+        "solver_mean_allin_prob": solver_mean_allin_prob,
+        "policy_head_solver_allin_prob_gap": policy_head_solver_allin_prob_gap,
         "illegal_case_count": sum(
             1
             for item in results

@@ -58,6 +58,11 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         help="Use a solver-relative all-in-rate gate instead of an absolute cap.",
     )
+    parser.add_argument(
+        "--max-policy-head-solver-allin-prob-gap",
+        type=float,
+        help="Use a solver-relative mean all-in-probability gate instead of a top-action cap.",
+    )
     parser.add_argument("--max-policy-head-mean-l1-drift", type=float, default=0.75)
     args = parser.parse_args(argv)
 
@@ -77,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         enforce_policy_head_behavior_gate=args.enforce_policy_head_behavior_gate,
         max_policy_head_allin_rate=args.max_policy_head_allin_rate,
         max_policy_head_solver_allin_gap=args.max_policy_head_solver_allin_gap,
+        max_policy_head_solver_allin_prob_gap=args.max_policy_head_solver_allin_prob_gap,
         max_policy_head_mean_l1_drift=args.max_policy_head_mean_l1_drift,
     )
     if args.output_json:

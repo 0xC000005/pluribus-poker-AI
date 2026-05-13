@@ -555,6 +555,7 @@ def masked_top_action_margin_loss(
     target_probs: torch.Tensor,
     *,
     margin: float = 0.25,
+    confidence_weighted: bool = False,
 ) -> torch.Tensor:
     """Encourage the solver-target top action to outrank other legal actions."""
     legal = legal_masks > 0
@@ -567,7 +568,14 @@ def masked_top_action_margin_loss(
     if not bool(valid.any()):
         return logits.sum() * 0.0
     losses = torch.relu(float(margin) - (top_logits - competitor_logits))
-    return losses[valid].mean()
+    if not confidence_weighted:
+        return losses[valid].mean()
+    target_top_probs = target_probs.gather(1, top_actions.unsqueeze(1)).squeeze(1)
+    target_competitor_probs = target_probs.masked_fill(~competitor_mask, -1.0).max(dim=1).values
+    weights = torch.clamp(target_top_probs - target_competitor_probs, min=0.0)[valid]
+    if not bool((weights > 0).any()):
+        return logits.sum() * 0.0
+    return (losses[valid] * weights).sum() / weights.sum().clamp(min=1e-8)
 
 
 def train_policy_head_calibration(
@@ -581,6 +589,7 @@ def train_policy_head_calibration(
     device: str | torch.device = "auto",
     rank_loss_weight: float = 0.0,
     rank_margin: float = 0.25,
+    rank_confidence_weighted: bool = False,
 ) -> dict[str, Any]:
     """Train only the policy head against supervised average-policy targets."""
     resolved_device = _resolve_device(device)
@@ -617,6 +626,7 @@ def train_policy_head_calibration(
                 batch.legal_masks,
                 batch.target_probs,
                 margin=rank_margin,
+                confidence_weighted=rank_confidence_weighted,
             )
         loss.backward()
         torch.nn.utils.clip_grad_norm_(value_net.policy_head.parameters(), max_norm=1.0)
@@ -639,6 +649,7 @@ def train_policy_head_calibration(
         "lr": float(lr),
         "rank_loss_weight": float(rank_loss_weight),
         "rank_margin": float(rank_margin),
+        "rank_confidence_weighted": bool(rank_confidence_weighted),
         "before_loss": round(float(before_loss), 6),
         "after_loss": round(float(after_loss), 6),
     }
@@ -657,6 +668,7 @@ def train_policy_head_calibration(
         "lr": float(lr),
         "rank_loss_weight": float(rank_loss_weight),
         "rank_margin": float(rank_margin),
+        "rank_confidence_weighted": bool(rank_confidence_weighted),
         "before_loss": round(float(before_loss), 6),
         "after_loss": round(float(after_loss), 6),
         "loss_delta": round(float(after_loss - before_loss), 6),
