@@ -80,13 +80,61 @@ def test_sample_blueprint_resolver_cases_uses_reachable_policy_states(tmp_path, 
     assert len(cases) == 4
     assert stats["generated_cases"] == 4
     assert stats["attempts"] >= 1
+    streets = []
     for case in cases:
         parsed = parse_action(case.action_str)
+        streets.append(int(parsed["st"]))
         assert case.source == "blueprint_self_play"
         assert int(parsed["st"]) in (2, 3)
         assert int(parsed["pos"]) == case.client_pos
         assert len(case.board) in (4, 5)
         assert len(set(case.hole_cards + case.board)) == len(case.hole_cards + case.board)
+    assert streets == [2, 3, 2, 3]
+
+
+def test_sample_blueprint_resolver_cases_can_target_river_only(tmp_path, monkeypatch):
+    def passive_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
+        strategy = np.zeros(N_ACTIONS, dtype=np.float64)
+        if legal_mask[1] > 0:
+            strategy[1] = 1.0
+        else:
+            strategy[legal_mask > 0] = 1.0 / max(float(legal_mask.sum()), 1.0)
+        return np.zeros(N_ACTIONS, dtype=np.float32), strategy
+
+    monkeypatch.setattr(
+        "poker_ai.research.search_targets.network_strategy",
+        passive_strategy,
+    )
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    checkpoint = tmp_path / "blueprint.pt"
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "iteration": 4,
+        },
+        checkpoint,
+    )
+
+    stats = {}
+    cases = sample_blueprint_resolver_cases(
+        2,
+        blueprint_checkpoint=checkpoint,
+        seed=20260519,
+        strategy_source="regret",
+        device="cpu",
+        max_attempts=50,
+        target_streets=(3,),
+        stats=stats,
+    )
+
+    assert len(cases) == 2
+    assert stats["target_streets"] == [3]
+    for case in cases:
+        parsed = parse_action(case.action_str)
+        assert int(parsed["st"]) == 3
+        assert len(case.board) == 5
 
 
 def test_policy_target_buffer_masks_and_normalizes_targets():

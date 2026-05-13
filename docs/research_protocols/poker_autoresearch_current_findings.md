@@ -301,6 +301,13 @@ GPU training readiness:
   `2/3` seeds. Read: raw public belief is useful enough to keep investigating,
   but the effect is too small and noisy to wire into mainline Deep CFR without a
   real value-target probe or larger search distribution.
+- The gameplay-distributed target sampler had a target-distribution bug: it
+  captured the first eligible postflop hero decision, so all recorded
+  `restored200_blueprint_*` train/holdout targets were turn cases. The sampler
+  now selects the next desired target street round-robin via
+  `--blueprint-target-streets`. River-only smoke generated `4/4` river targets,
+  and a mixed-street smoke generated `2/2` turn and `2/2` river targets. Old all-turn
+  target artifacts remain useful only as diagnostics.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

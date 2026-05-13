@@ -197,18 +197,23 @@ def sample_blueprint_resolver_cases(
     device: str | torch.device = "auto",
     source: str = "blueprint_self_play",
     max_attempts: int | None = None,
+    target_streets: Iterable[int] = (2, 3),
     stats: dict[str, Any] | None = None,
 ) -> list[ResolverBenchmarkCase]:
     """Sample turn/river cases from learned-policy Slumbot-format rollouts."""
     resolved_device = _resolve_device(device)
     loaded = load_value_network_checkpoint(blueprint_checkpoint, resolved_device)
     assert_strategy_source_supported(loaded, strategy_source)
+    target_streets_tuple = tuple(sorted({int(street) for street in target_streets}))
+    if not target_streets_tuple or any(street not in (2, 3) for street in target_streets_tuple):
+        raise ValueError("target_streets must contain only turn(2) and/or river(3)")
     rng = np.random.default_rng(seed)
     max_attempts = max_attempts or max(200, n_cases * 200)
     cases: list[ResolverBenchmarkCase] = []
     attempts = 0
     while len(cases) < n_cases and attempts < max_attempts:
         attempts += 1
+        target_street = int(target_streets_tuple[len(cases) % len(target_streets_tuple)])
         cards = _sample_cards(rng, 9)
         hero_hole = cards[:2]
         villain_hole = cards[2:4]
@@ -225,7 +230,7 @@ def sample_blueprint_resolver_cases(
             if acting_pos < 0 or street not in (0, 1, 2, 3):
                 break
             visible_board = _visible_board(board, street)
-            if street in (2, 3) and acting_pos == client_pos:
+            if street == target_street and acting_pos == client_pos:
                 cases.append(
                     ResolverBenchmarkCase(
                         label=f"{source}-{len(cases):04d}-street{street}",
@@ -260,6 +265,7 @@ def sample_blueprint_resolver_cases(
         stats["requested_cases"] = int(n_cases)
         stats["generated_cases"] = int(len(cases))
         stats["success_rate"] = round(float(len(cases)) / max(float(attempts), 1.0), 6)
+        stats["target_streets"] = [int(street) for street in target_streets_tuple]
     if len(cases) != n_cases:
         raise RuntimeError(
             f"generated {len(cases)} reachable cases out of requested {n_cases} "
@@ -588,6 +594,7 @@ def save_resolver_policy_targets(
     blueprint_strategy_source: str = "regret",
     blueprint_device: str | torch.device = "auto",
     blueprint_max_attempts: int | None = None,
+    blueprint_target_streets: Iterable[int] = (2, 3),
     seed: int = 0,
     solver_iterations: int = 25,
     solver_backend: str = "auto",
@@ -613,6 +620,7 @@ def save_resolver_policy_targets(
             strategy_source=blueprint_strategy_source,
             device=blueprint_device,
             max_attempts=blueprint_max_attempts,
+            target_streets=blueprint_target_streets,
             stats=blueprint_stats,
         )
         case_source = "blueprint_self_play"
@@ -647,6 +655,9 @@ def save_resolver_policy_targets(
         metadata["blueprint_strategy_source"] = blueprint_strategy_source
         metadata["blueprint_device"] = str(_resolve_device(blueprint_device))
         metadata["blueprint_max_attempts"] = blueprint_max_attempts
+        metadata["blueprint_target_streets"] = [
+            int(street) for street in blueprint_target_streets
+        ]
         metadata["blueprint_sampling"] = blueprint_stats
     metadata_path.write_text(
         json.dumps(metadata, indent=2, sort_keys=True),

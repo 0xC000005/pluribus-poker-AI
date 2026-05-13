@@ -1706,3 +1706,14 @@
 - Summary: The tiny 32/16 split still overfit, but the larger 128/64 gameplay-distributed split showed a small mixed-positive signal. L1 improved in all three probe seeds; KL improved in two of three. Treat this as diagnostic support for a larger public-belief value-target probe, not promotion evidence.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_probe_128x64_summary.json
 - Key metrics: `{"pass_count": 2, "n": 3, "l1_delta_mean": 0.032608, "kl_delta_mean": 0.002178333333333334, "l1_deltas": [0.011446, 0.040372, 0.046006], "kl_deltas": [-0.033725, 0.008247, 0.032013]}`
+
+## 20260513T012751Z-blueprint-target-street-sampler-fix - passed
+
+- Timestamp: 2026-05-13T01:27:51Z
+- Type: implementation
+- Gate: manual-target-distribution-smoke
+- Hypothesis: Blueprint self-play target generation should be able to deliberately collect river cases instead of always capturing the first eligible turn decision.
+- Failure class: search_quality
+- Summary: Added `--blueprint-target-streets` so target generation collects desired streets round-robin before capture. River-only smoke produced `4/4` river cases; mixed `2,3` smoke produced `2/2` turn and `2/2` river cases. Existing restored200 target artifacts are all-turn diagnostics, not balanced turn/river training sets.
+- Metrics file: autoresearch-session/search_targets/river_only_sampler_smoke_20260513.json
+- Key metrics: `{"river_only_street3_count": 4, "mixed_smoke_street2_count": 2, "mixed_smoke_street3_count": 2, "tests": "18 policy target tests passed"}`

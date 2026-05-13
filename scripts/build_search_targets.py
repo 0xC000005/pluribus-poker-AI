@@ -55,6 +55,11 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="Maximum self-play hands to try when collecting learned-policy cases.",
     )
+    parser.add_argument(
+        "--blueprint-target-streets",
+        default="2,3",
+        help="Comma-separated target streets to collect from blueprint rollouts: 2, 3, or 2,3.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--solver-iterations", type=int, default=25)
     parser.add_argument(
@@ -96,6 +101,11 @@ def main(argv: list[str] | None = None) -> int:
         blueprint_strategy_source=args.blueprint_strategy_source,
         blueprint_device=args.blueprint_device,
         blueprint_max_attempts=args.blueprint_max_attempts,
+        blueprint_target_streets=[
+            int(part.strip())
+            for part in args.blueprint_target_streets.split(",")
+            if part.strip()
+        ],
         seed=args.seed,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,

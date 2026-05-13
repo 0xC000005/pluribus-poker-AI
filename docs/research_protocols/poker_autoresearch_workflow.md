@@ -251,6 +251,11 @@ hero/villain range-vector prediction on held-out gameplay-distributed targets.
 It is diagnostic only: passing means the belief representation is worth a
 larger value-target experiment, not that a checkpoint is promotable.
 
+For blueprint rollout targets, set `--blueprint-target-streets` deliberately.
+The default `2,3` collects desired target streets round-robin so target files
+are not accidentally all turn. Use `3` for river-only smoke tests and inspect
+the street histogram in the metadata before using a target artifact.
+
 ## Implemented Automation
 
 The executable runner is `scripts/poker_autoresearch.py`. It automates
