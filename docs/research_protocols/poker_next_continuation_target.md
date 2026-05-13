@@ -345,3 +345,13 @@ build a search-impact dataset: features for the public node plus candidate cut
 metadata/reach/value predictions, labels from one-cut or leave-one-out root
 action drift, and a fixed gate that tests whether predicted low-impact cuts
 actually reduce resolver action drift.
+
+A context-enriched `64`-cut audit shows that static root context is still not
+enough. The diagnostic now records root action shape, root bet count, pot,
+stacks, player position, and first-to-act flag. The larger audit again showed
+no relationship between value-risk score and search impact (`r=-0.0186`), and a
+quick group-split ridge probe over cut metadata plus root context also failed
+(`r=-0.0249`, top-quintile recall `0.2`). The next target should therefore move
+inside the search loop: collect dynamic reach/regret traces or train a
+continuation model with an auxiliary search-consistency loss that penalizes root
+strategy drift directly.

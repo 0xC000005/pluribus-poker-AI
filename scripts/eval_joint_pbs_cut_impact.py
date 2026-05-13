@@ -29,6 +29,7 @@ from eval_joint_pbs_continuation_probe import (  # noqa: E402
 from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
     JointPBSSuccessorCutCallback,
     StructuralCutRiskPredictor,
+    _frontier_action_shape,
     _select_successor_cut_node_records,
 )
 from eval_joint_pbs_resolver_leaf_ab import (  # noqa: E402
@@ -92,6 +93,15 @@ def _case_cut_impacts(
     hero_first = case.client_pos == 0
     street_action = case.action_str.split("/")[2] if len(case.action_str.split("/")) > 2 else ""
     action_prefix = _pre_street_prefix(case.action_str, 2)
+    root_context = {
+        "root_action_shape": _frontier_action_shape(case.action_str),
+        "root_bet_count": int(case.action_str.count("b")),
+        "pot": int(pot),
+        "hero_stack": int(hero_stack),
+        "villain_stack": int(villain_stack),
+        "client_pos": int(case.client_pos),
+        "hero_first": bool(hero_first),
+    }
 
     full_hands = list(itertools.combinations(sorted(set(range(52)) - set(board_idx)), 2))
     hero_range, villain_range = _local_ranges_from_belief(belief_row, full_hands)
@@ -174,6 +184,7 @@ def _case_cut_impacts(
         l1 = float(np.abs(baseline_strategy - learned_strategy).sum())
         item = {
             "label": case.label,
+            **root_context,
             "cut_pos": int(record["cut_pos"]),
             "action_shape": str(record["action_shape"]),
             "bet_count": int(record["bet_count"]),
