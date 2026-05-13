@@ -334,3 +334,14 @@ piece by itself. The next continuation target should train on the quantity the
 solver gate actually cares about: root action drift, cut regret residuals, or a
 search-consistency objective that couples successor values to root policy
 stability.
+
+The one-cut search-impact diagnostic confirms this target mismatch. Replacing
+one high-bet successor cut at a time produced mean/max root action L1 drift
+`0.6291/1.6000` over `24` cut evaluations. The structural predicted-MAE score
+was effectively uncorrelated with this drift (`r=0.0189`), and the median
+abstention rule did not separate safer cuts (`0.6412` selected mean drift vs
+`0.6219` rejected mean drift). The next continuation target should therefore
+build a search-impact dataset: features for the public node plus candidate cut
+metadata/reach/value predictions, labels from one-cut or leave-one-out root
+action drift, and a fixed gate that tests whether predicted low-impact cuts
+actually reduce resolver action drift.
