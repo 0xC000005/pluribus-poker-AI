@@ -545,6 +545,11 @@ Workflow governance status:
   mix `0.5` MAE/RMSE `0.3087/0.3725`, mix `1.0` MAE/RMSE `0.3030/0.3669`.
   Both beat zero and train-constant baselines, so exact-blueprint-range
   overfitting is not the current learned-leaf blocker.
+- CPU CFR now has a `showdown_leaf_fn` diagnostic hook. A passthrough hook
+  exactly reproduces default solver regrets/strategies, and torch backends
+  reject the hook explicitly. This is the first infrastructure piece for fixed
+  resolver-state learned-leaf A/B; it does not yet make the learned leaf part
+  of gameplay.
 - Related-work anchor: Deep Sets supports permutation-aware learned set
   encoders for unordered card inputs, while Deep CFR/ReBeL/Supremus support
   learned value approximators paired with search rather than manual card

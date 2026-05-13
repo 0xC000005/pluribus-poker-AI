@@ -1960,3 +1960,14 @@
 - Summary: Added `scripts/eval_dual_cfv_range_robustness.py`, which perturbs both players' public-belief ranges on held-out river states, re-solves dual-player CFV labels, and evaluates a saved checkpoint ensemble against zero and train-constant baselines. On eight held-out river states, the Deepset-64 ensemble passed both a 50% mix toward uniform legal ranges and fully uniform legal ranges. This removes the immediate concern that the ensemble only works at exact blueprint ranges. The next blocker is not range perturbation; it is integrating the learned river leaf into fixed turn/river resolver diagnostics and measuring root-action drift against solver leaves.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_range_robustness_river8_mix050_deepset64_ensemble.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_range_robustness_river8_mix100_deepset64_ensemble.json
 - Key metrics: `{"mix_0.5": {"passed": true, "model": {"mae": 0.30874174, "rmse": 0.37249867}, "best_constant": {"mae": 0.39622037, "rmse": 0.48479685}, "zero": {"mae": 0.43162574, "rmse": 0.5885438}, "value_sum_residual_error": 0.32800629}, "mix_1.0": {"passed": true, "model": {"mae": 0.30296028, "rmse": 0.36688099}, "best_constant": {"mae": 0.41405375, "rmse": 0.49677467}, "zero": {"mae": 0.46549836, "rmse": 0.63226624}, "value_sum_residual_error": 0.3057241}}`
+
+## 20260513T044049Z-cfr-showdown-leaf-hook - passed
+
+- Timestamp: 2026-05-13T04:40:49Z
+- Type: implementation
+- Gate: manual-cfr-learned-leaf-prerequisite
+- Hypothesis: Fixed resolver-state learned-leaf A/B needs a solver hook that can replace showdown terminal values without changing the default CFR recurrence.
+- Failure class: search_quality
+- Summary: Added a CPU-only `showdown_leaf_fn` hook to `solve_cfr` and `StreetSolver.solve`. The hook receives current terminal reaches plus default showdown counterfactual numerator values and returns replacement terminal values, which is the minimal API needed for learned-leaf diagnostics. The torch backend rejects the hook explicitly so the current experimental torch solver cannot silently run an unsupported path. Unit tests confirm that a passthrough hook exactly reproduces default regrets/strategy sums and that `torch-cpu` rejects the hook.
+- Metrics file: n/a
+- Key metrics: `{"tests": "5 passed in test/unit/test_resolver_benchmark.py", "objective_audit": "passed with completed methodology review", "protected_hits": ["scripts/fast_cfr.py", "scripts/solver.py"]}`

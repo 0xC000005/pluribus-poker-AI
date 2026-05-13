@@ -116,7 +116,8 @@ def build_tree_arrays(root):
 
 def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               pot_start, hero_stack_start, villain_stack_start,
-              n_iterations=100, hero_range=None, villain_range=None):
+              n_iterations=100, hero_range=None, villain_range=None,
+              showdown_leaf_fn=None):
     """Run iterative CFR+ with batched terminal evaluation.
 
     Parameters
@@ -133,6 +134,10 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     pot_start, hero_stack_start, villain_stack_start : int
     n_iterations : int
     hero_range, villain_range : (n,) float32 arrays or None
+    showdown_leaf_fn : callable or None
+        Optional CPU-only diagnostic hook. When provided, it receives the
+        default showdown counterfactual numerator values and current terminal
+        reaches, and returns replacement `(hero_values, villain_values)`.
 
     Returns
     -------
@@ -246,9 +251,41 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
             v_lose = HR_s @ lose_m   # (n_show, n)
             v_tie = HR_s @ tie_m     # (n_show, n)
 
-            # Apply coefficients and store
-            hvals[show_idx] = hw_s * h_win + hl_s * h_lose + ht_s * h_tie
-            vvals[show_idx] = vw_s * v_lose + vl_s * v_win + vt_s * v_tie
+            # Apply coefficients and store. A leaf callback may replace these
+            # values for depth-limited learned-leaf diagnostics; it must return
+            # counterfactual numerator values with shape (n_show, n_hands).
+            default_hvals = hw_s * h_win + hl_s * h_lose + ht_s * h_tie
+            default_vvals = vw_s * v_lose + vl_s * v_win + vt_s * v_tie
+            if showdown_leaf_fn is None:
+                hvals[show_idx] = default_hvals
+                vvals[show_idx] = default_vvals
+            else:
+                leaf_hvals, leaf_vvals = showdown_leaf_fn(
+                    tree=tree,
+                    showdown_indices=show_idx,
+                    hero_reach=HR_s,
+                    villain_reach=VR_s,
+                    valid_m=valid_m,
+                    default_hero_values=default_hvals,
+                    default_villain_values=default_vvals,
+                    pot_start=pot_start,
+                    hero_stack_start=hero_stack_start,
+                    villain_stack_start=villain_stack_start,
+                )
+                leaf_hvals = np.asarray(leaf_hvals, dtype=np.float32)
+                leaf_vvals = np.asarray(leaf_vvals, dtype=np.float32)
+                if leaf_hvals.shape != default_hvals.shape:
+                    raise ValueError(
+                        "showdown_leaf_fn hero values shape "
+                        f"{leaf_hvals.shape} != {default_hvals.shape}"
+                    )
+                if leaf_vvals.shape != default_vvals.shape:
+                    raise ValueError(
+                        "showdown_leaf_fn villain values shape "
+                        f"{leaf_vvals.shape} != {default_vvals.shape}"
+                    )
+                hvals[show_idx] = leaf_hvals
+                vvals[show_idx] = leaf_vvals
 
         # Hero fold terminals
         if len(hfold_idx) > 0:

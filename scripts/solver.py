@@ -256,14 +256,16 @@ class StreetSolver:
     # ------------------------------------------------------------------
 
     def solve(self, n_iterations=100, hero_range=None, villain_range=None,
-              backend='cpu', device=None):
+              backend='cpu', device=None, showdown_leaf_fn=None):
         hr = hero_range.astype(np.float32) if hero_range is not None else None
         vr = villain_range.astype(np.float32) if villain_range is not None else None
         backend, device = resolve_solver_backend(backend, device)
         if backend == 'cpu':
             solver_fn = solve_cfr
-            kwargs = {}
+            kwargs = {'showdown_leaf_fn': showdown_leaf_fn}
         elif backend == 'torch':
+            if showdown_leaf_fn is not None:
+                raise ValueError("showdown_leaf_fn is only supported by the CPU CFR backend")
             solver_fn = solve_cfr_torch
             kwargs = {'device': device or 'cuda'}
         else:

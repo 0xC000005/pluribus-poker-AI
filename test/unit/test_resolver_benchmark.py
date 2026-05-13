@@ -3,6 +3,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
+import pytest
 import torch
 
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
@@ -91,6 +93,48 @@ def test_street_solver_omits_under_minimum_raise_buckets():
 
     assert 2 not in solver.root.children
     assert 3 in solver.root.children
+
+
+def test_street_solver_showdown_leaf_callback_can_reproduce_default():
+    base = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    hooked = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    calls = []
+
+    def passthrough_leaf(**kwargs):
+        calls.append(kwargs["showdown_indices"].shape[0])
+        return kwargs["default_hero_values"], kwargs["default_villain_values"]
+
+    base.solve(n_iterations=2)
+    hooked.solve(n_iterations=2, showdown_leaf_fn=passthrough_leaf)
+
+    assert calls
+    np.testing.assert_allclose(hooked._regret_sum, base._regret_sum, atol=1e-5)
+    np.testing.assert_allclose(hooked._strategy_sum, base._strategy_sum, atol=1e-5)
+
+
+def test_street_solver_showdown_leaf_callback_rejects_torch_backend():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+
+    with pytest.raises(ValueError, match="CPU CFR backend"):
+        solver.solve(n_iterations=1, backend="torch-cpu", showdown_leaf_fn=lambda **_: None)
 
 
 def test_resolver_benchmark_cli_emits_json_for_checkpoint(tmp_path):
