@@ -375,6 +375,12 @@ GPU training readiness:
   the original river holdout MAE `0.4549`, although the sample is still small.
   Read: proceed to a bounded turn-search leaf experiment, but keep range
   robustness in the promotion gate.
+- Direct search integration still needs dual-player CFVs. The current saved
+  hand-CFV model predicts hero values only; DeepStack-style depth-limited
+  re-solving needs value vectors for both players. The code now has a tested
+  `compute_villain_cfv_vector` primitive so the next probe can train a
+  dual-player public-belief value model instead of forcing a hero-only model
+  into solver leaves.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

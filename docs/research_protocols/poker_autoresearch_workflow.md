@@ -290,6 +290,12 @@ those perturbed states, and compares model CFVs against the new labels. Passing
 the original holdout alone is not enough, because search iterations query value
 functions at ranges different from the blueprint tracker distribution.
 
+Before a CFV checkpoint is wired into a solver leaf, require dual-player value
+coverage. A hero-only CFV model is a diagnostic component; a depth-limited
+re-solver needs both hero and villain counterfactual value vectors at the leaf.
+Use the tested `compute_hero_cfv_vector` and `compute_villain_cfv_vector`
+helpers as the target source for the dual-player probe.
+
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case

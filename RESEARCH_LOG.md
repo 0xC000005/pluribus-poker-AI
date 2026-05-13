@@ -1827,3 +1827,14 @@
 - Summary: Added `scripts/eval_hand_cfv_range_robustness.py`, which perturbs cached river public-belief ranges, re-solves those perturbed ranges, and compares the saved model against the new searched CFV labels. On 8 held-out river states, a 50% mix toward uniform legal ranges gave MAE `0.4478` and fully uniform legal ranges gave MAE `0.4790`, close to the original river holdout MAE `0.4549`. This small test does not prove broad range generalization, but it removes the immediate blocker that the model only works at the exact blueprint ranges.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_range_robustness_river8_mix050_seed20260513.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_range_robustness_river8_mix100_seed20260513.json
 - Key metrics: `{"mix_0.5": {"n_evaluated": 8, "n_labels": 8648, "mae": 0.44781216, "rmse": 0.55679146, "solver_mean_ms": 603.484}, "mix_1.0": {"n_evaluated": 8, "n_labels": 8648, "mae": 0.4790497, "rmse": 0.60220341, "solver_mean_ms": 615.466}}`
+
+## 20260513T025846Z-villain-cfv-target-primitive - passed
+
+- Timestamp: 2026-05-13T02:58:46Z
+- Type: implementation
+- Gate: manual-dual-player-cfv-prerequisite
+- Hypothesis: A learned leaf evaluator should not be promoted from hero-only CFV targets; depth-limited re-solving needs both players' counterfactual value vectors.
+- Failure class: range_belief
+- Summary: Added and tested `compute_villain_cfv_vector`, symmetric to the existing hero CFV target extractor. This is a prerequisite for a dual-player public-belief hand-CFV probe that can support solver leaf experiments without pretending a hero-only value model is sufficient for both sides of a zero-sum re-solve.
+- Metrics file: n/a
+- Key metrics: `{"tests": "8 passed", "new_target_helper": "compute_villain_cfv_vector"}`

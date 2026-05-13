@@ -335,6 +335,91 @@ def compute_hero_cfv_vector(
     return values.astype(np.float32), (denominator > 1e-12).astype(np.float32)
 
 
+def compute_villain_cfv_vector(
+    solver: StreetSolver,
+    node: Any,
+    hero_range: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return villain counterfactual values for every solver hand at ``node``."""
+    hero_reach = np.maximum(np.asarray(hero_range, dtype=np.float64), 0.0)
+    if hero_reach.shape != (solver.n,):
+        raise ValueError(
+            f"hero_range shape {hero_reach.shape} does not match solver.n={solver.n}"
+        )
+    if float(hero_reach.sum()) <= 0:
+        hero_reach = np.ones(solver.n, dtype=np.float64)
+
+    tree = solver._tree
+    node_idx_by_id = {id(item): i for i, item in enumerate(tree["all_nodes"])}
+
+    def terminal(node_idx: int, reach: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        valid_weights = solver.valid.astype(np.float64).T * reach.reshape(1, -1)
+        denom = valid_weights.sum(axis=1)
+        terminal_type = int(tree["terminal_type"][node_idx])
+        hero_invested = float(solver.hero_stack_start - tree["stacks_h"][node_idx])
+        villain_invested = float(solver.villain_stack_start - tree["stacks_v"][node_idx])
+
+        if terminal_type == T_HERO_FOLD:
+            return (float(solver.pot_start) + hero_invested) * denom, denom
+        if terminal_type == T_VILLAIN_FOLD:
+            return -villain_invested * denom, denom
+        if terminal_type != T_SHOWDOWN:
+            return np.zeros(solver.n, dtype=np.float64), denom
+
+        win_payoff = float(solver.pot_start) + hero_invested
+        lose_payoff = -villain_invested
+        tie_payoff = (float(solver.pot_start) + hero_invested - villain_invested) / 2.0
+        payoff = (
+            solver.lose_m.astype(np.float64).T * win_payoff
+            + solver.win_m.astype(np.float64).T * lose_payoff
+            + solver.tie_m.astype(np.float64).T * tie_payoff
+        )
+        return (payoff * valid_weights).sum(axis=1), denom
+
+    def visit(current: Any, reach: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        node_idx = node_idx_by_id[id(current)]
+        player = int(tree["player"][node_idx])
+        if player == -1:
+            return terminal(node_idx, reach)
+
+        actions = list(tree["decision_actions"][node_idx])
+        if not actions:
+            return (
+                np.zeros(solver.n, dtype=np.float64),
+                np.zeros(solver.n, dtype=np.float64),
+            )
+        if player == 1:
+            strategy = _strategy_matrix(solver._strategy_sum, node_idx, actions)
+            total_num = np.zeros(solver.n, dtype=np.float64)
+            total_den = np.zeros(solver.n, dtype=np.float64)
+            for action_idx, action in enumerate(actions):
+                child = tree["all_nodes"][int(tree["children"][node_idx, action])]
+                child_num, child_den = visit(child, reach)
+                total_num += strategy[action_idx] * child_num
+                total_den += strategy[action_idx] * child_den
+            return total_num, total_den
+
+        strategy = _strategy_matrix(solver._strategy_sum, node_idx, actions)
+        total_num = np.zeros(solver.n, dtype=np.float64)
+        total_den = np.zeros(solver.n, dtype=np.float64)
+        for action_idx, action in enumerate(actions):
+            next_reach = reach * strategy[action_idx]
+            child = tree["all_nodes"][int(tree["children"][node_idx, action])]
+            child_num, child_den = visit(child, next_reach)
+            total_num += child_num
+            total_den += child_den
+        return total_num, total_den
+
+    numerator, denominator = visit(node, hero_reach)
+    values = np.divide(
+        numerator,
+        denominator,
+        out=np.zeros_like(numerator, dtype=np.float64),
+        where=denominator > 1e-12,
+    )
+    return values.astype(np.float32), (denominator > 1e-12).astype(np.float32)
+
+
 def _public_features(features: np.ndarray) -> np.ndarray:
     public = np.asarray(features, dtype=np.float32).copy()
     public[..., :52] = 0.0

@@ -158,6 +158,53 @@ def test_compute_hero_cfv_vector_matches_hand_ev():
     assert mask[0] == 1.0
 
 
+def test_compute_villain_cfv_vector_uses_hero_reach_and_strategy():
+    root = Node(player=0, pot=100, stacks=(100, 100), to_call=10, n_raises=0)
+    fold = Node(
+        player=-1,
+        pot=100,
+        stacks=(90, 100),
+        to_call=0,
+        n_raises=0,
+        terminal_type="hero_fold",
+    )
+    showdown = Node(
+        player=-1,
+        pot=120,
+        stacks=(90, 90),
+        to_call=0,
+        n_raises=0,
+        terminal_type="showdown",
+    )
+    root.children[0] = fold
+    root.children[1] = showdown
+    tree = build_tree_arrays(root)
+
+    strategy_sum = np.zeros((tree["n_nodes"], tree["n_actions"], 2), dtype=np.float32)
+    strategy_sum[0, 0, 0] = 1.0
+    strategy_sum[0, 1, 0] = 3.0
+    valid = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)
+    solver = SimpleNamespace(
+        _tree=tree,
+        _strategy_sum=strategy_sum,
+        hands=[(0, 1), (2, 3)],
+        hand_to_idx={(0, 1): 0, (2, 3): 1},
+        n=2,
+        valid=valid,
+        win_m=valid.copy(),
+        lose_m=np.zeros_like(valid),
+        tie_m=np.zeros_like(valid),
+        pot_start=100,
+        hero_stack_start=100,
+        villain_stack_start=100,
+    )
+
+    values, mask = bvp.compute_villain_cfv_vector(solver, root, np.array([1.0, 0.0]))
+
+    assert values[1] == 20.0
+    assert mask[1] == 1.0
+
+
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
     checkpoint = tmp_path / "range.pt"
     _write_checkpoint(checkpoint)
