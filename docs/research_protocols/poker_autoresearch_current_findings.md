@@ -401,6 +401,13 @@ GPU training readiness:
   `+0.1659`, and `+0.0839`. Read: the next leaf-value architecture should use
   separate player heads plus a learned belief compression stage, but it still
   needs a larger river surface before solver integration.
+- The larger balanced river surface preserves that signal. On a new
+  gameplay-reachable river pool split into `128/64` public states,
+  separate-head plus 32-dim belief bottleneck again passed `3/3` seeds. MAE
+  deltas were `+0.0773`, `+0.0314`, and `+0.1574`; RMSE deltas were `+0.0531`,
+  `+0.0394`, and `+0.2255`. Read: the architecture is now strong enough to
+  train a saved dual-player checkpoint and run a fixed resolver-state
+  learned-leaf A/B, but not yet to wire into Slumbot.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

@@ -1871,3 +1871,14 @@
 - Summary: Added `--belief-bottleneck-dim` to the dual-player probe and reran the cached full river `64/32` split with separate player heads and a 32-dim belief bottleneck. All three seeds passed the strict MAE/RMSE criterion, including the seed that previously regressed RMSE with raw linear belief input. This supports separate player heads plus learned belief compression as the next leaf-value architecture to scale on a larger river target surface before any turn-search integration.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river64x32_separate_bottleneck32_summary.json
 - Key metrics: `{"pass_count": 3, "n": 3, "mae_delta_mean": 0.08841748333333334, "rmse_delta_mean": 0.1361116933333333, "mae_deltas": [0.09890925, 0.10416988, 0.06217332], "rmse_deltas": [0.15857678, 0.16588297, 0.08387533]}`
+
+## 20260513T033945Z-larger-river-dual-player-cfv - passed
+
+- Timestamp: 2026-05-13T03:39:45Z
+- Type: experiment
+- Gate: manual-larger-river-dual-hand-cfv-bottleneck
+- Hypothesis: The separate-player-head plus learned belief bottleneck signal should survive a larger independent river public-state surface before any saved dual checkpoint or solver-leaf integration is attempted.
+- Failure class: range_belief
+- Summary: Generated a 192-state river-only gameplay-reachable pool from the restored-history blueprint, computed searched hero CFV labels, stratified it by searched-CFV bins into a balanced `128/64` train/holdout split, and built dual-player CFV caches. The separate-head 32-dim belief-bottleneck probe passed all three seeds on the larger holdout. This addresses the verifier's immediate small-split warning, but the result remains a diagnostic: the next gate is a saved dual-player checkpoint plus fixed resolver-state learned-leaf A/B with zero-sum residual and root-action drift.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river128x64_separate_bottleneck32_summary.json
+- Key metrics: `{"pass_count": 3, "n": 3, "train_size": 128, "holdout_size": 64, "mae_delta_mean": 0.08869616666666667, "rmse_delta_mean": 0.10599575, "mae_deltas": [0.07729132, 0.03141874, 0.15737844], "rmse_deltas": [0.05311631, 0.03938302, 0.22548792], "train_label_count": 276736, "holdout_label_count": 138368}`
