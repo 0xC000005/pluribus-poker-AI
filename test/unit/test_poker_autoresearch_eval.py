@@ -7,6 +7,7 @@ import torch
 
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from poker_ai.research.evaluation import (
+    _strategies_from_network,
     assert_strategy_source_supported,
     compare_checkpoint_metrics,
     evaluate_value_nets_head_to_head,
@@ -21,6 +22,19 @@ class _PolicyOnlyProbeNet(torch.nn.Module):
 
     def forward_with_policy(self, features):
         advantages = torch.zeros((features.shape[0], N_ACTIONS), dtype=torch.float32)
+        logits = torch.zeros_like(advantages)
+        logits[:, 1] = 10.0
+        return advantages, logits
+
+
+class _CoveredPolicyProbeNet(torch.nn.Module):
+    def forward(self, features):
+        advantages = torch.zeros((features.shape[0], N_ACTIONS), dtype=torch.float32)
+        advantages[:, 8] = 10.0
+        return advantages
+
+    def forward_with_policy(self, features):
+        advantages = self.forward(features)
         logits = torch.zeros_like(advantages)
         logits[:, 1] = 10.0
         return advantages, logits
@@ -98,6 +112,28 @@ def test_load_value_network_checkpoint_loads_average_policy_net(tmp_path):
     assert getattr(loaded.value_net, "average_policy_net") is loaded.average_policy_net
 
 
+def test_load_value_network_checkpoint_exposes_policy_calibration_metadata(tmp_path):
+    from poker_ai.deep_cfr.networks import ValueNetwork
+
+    value_net = ValueNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    checkpoint = {
+        "iteration": 7,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 20000,
+        "value_net": value_net.state_dict(),
+        "policy_calibration": {"target_streets": [2, 3]},
+    }
+    path = tmp_path / "policy_calibrated.pt"
+    torch.save(checkpoint, path)
+
+    loaded = load_value_network_checkpoint(path, torch.device("cpu"))
+
+    assert loaded.metadata["policy_calibration"]["target_streets"] == [2, 3]
+    assert loaded.value_net.policy_calibration["target_streets"] == [2, 3]
+
+
 def test_strategy_source_guard_rejects_legacy_policy_head_checkpoint(tmp_path):
     checkpoint = {
         "iteration": 7,
@@ -148,6 +184,50 @@ def test_strategy_source_guard_rejects_missing_average_policy_checkpoint(tmp_pat
         assert "does not contain a trained average policy net" in str(exc)
     else:
         raise AssertionError("legacy checkpoint should reject average-policy evaluation")
+
+
+def test_strategy_source_guard_rejects_policy_head_covered_without_metadata(tmp_path):
+    from poker_ai.deep_cfr.networks import ValueNetwork
+
+    value_net = ValueNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    checkpoint = {
+        "iteration": 7,
+        "n_players": 2,
+        "hidden_dim": 16,
+        "n_layers": 1,
+        "initial_chips": 20000,
+        "value_net": value_net.state_dict(),
+    }
+    path = tmp_path / "policy.pt"
+    torch.save(checkpoint, path)
+    loaded = load_value_network_checkpoint(path, torch.device("cpu"))
+
+    try:
+        assert_strategy_source_supported(loaded, "policy-head-covered")
+    except RuntimeError as exc:
+        assert "target_streets" in str(exc)
+    else:
+        raise AssertionError("covered policy source should require coverage metadata")
+
+
+def test_policy_head_covered_routes_by_feature_street():
+    features = torch.zeros((2, N_FEATURES), dtype=torch.float32).numpy()
+    features[0, 104] = 1.0  # preflop: unsupported, use regret fallback
+    features[1, 106] = 1.0  # turn: covered, use policy logits
+    mask = torch.zeros((N_ACTIONS,), dtype=torch.float32).numpy()
+    mask[[1, 8]] = 1.0
+
+    strategies = _strategies_from_network(
+        _CoveredPolicyProbeNet(),
+        features,
+        [mask, mask],
+        torch.device("cpu"),
+        strategy_source="policy-head-covered",
+        checkpoint_metadata={"policy_calibration": {"target_streets": [2, 3]}},
+    )
+
+    assert strategies[0][8] > 0.99
+    assert strategies[1][1] > 0.99
 
 
 def test_evaluate_value_net_vs_random_returns_ci_metrics():

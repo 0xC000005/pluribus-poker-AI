@@ -148,6 +148,20 @@ def _target_summary(targets: np.ndarray) -> dict[str, float]:
     }
 
 
+def _target_street_metadata(features: np.ndarray) -> dict[str, Any]:
+    street_one_hot = np.asarray(features, dtype=np.float32)[:, 104:108]
+    valid = np.max(street_one_hot, axis=1) > 0
+    streets = np.argmax(street_one_hot, axis=1)[valid].astype(np.int64)
+    unique, counts = np.unique(streets, return_counts=True)
+    return {
+        "target_streets": [int(street) for street in unique],
+        "target_street_counts": {
+            str(int(street)): int(count)
+            for street, count in zip(unique, counts, strict=True)
+        },
+    }
+
+
 def _target_diagnostics(targets: np.ndarray, legal_masks: np.ndarray) -> dict[str, Any]:
     if targets.size == 0:
         return {
@@ -644,6 +658,7 @@ def train_policy_head_calibration(
     original["policy_calibration"] = {
         "source_checkpoint": str(checkpoint),
         "target_size": int(targets.size),
+        **_target_street_metadata(targets.features),
         "n_steps": int(n_steps),
         "batch_size": int(batch_size),
         "lr": float(lr),
@@ -663,6 +678,7 @@ def train_policy_head_calibration(
         "output": str(output),
         "device": str(resolved_device),
         "target_size": int(targets.size),
+        **_target_street_metadata(targets.features),
         "n_steps": int(n_steps),
         "batch_size": int(batch_size),
         "lr": float(lr),

@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
     )
     parser.add_argument("--timeout-seconds", type=float, default=300.0)

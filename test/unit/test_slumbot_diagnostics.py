@@ -9,7 +9,13 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from play_slumbot import ActionDiagnostics, _base_policy_action, action_to_slumbot, parse_action
+from play_slumbot import (
+    ActionDiagnostics,
+    _base_policy_action,
+    action_to_slumbot,
+    network_strategy,
+    parse_action,
+)
 
 
 def test_action_diagnostics_records_policy_mapping_drift():
@@ -126,6 +132,35 @@ def test_base_policy_action_can_use_policy_head_instead_of_regret_matching():
     assert regret_incr.startswith("b")
     assert policy_incr == "c"
     assert average_policy_incr == "c"
+
+
+def test_network_strategy_policy_head_covered_routes_by_street():
+    net = _PolicyHeadProbeNet()
+    net.policy_calibration = {"target_streets": [2, 3]}
+    legal_mask = torch.zeros((9,), dtype=torch.float32).numpy()
+    legal_mask[[1, 8]] = 1.0
+    preflop_features = torch.zeros((126,), dtype=torch.float32).numpy()
+    preflop_features[104] = 1.0
+    turn_features = torch.zeros((126,), dtype=torch.float32).numpy()
+    turn_features[106] = 1.0
+
+    _, preflop_strategy = network_strategy(
+        net,
+        preflop_features,
+        legal_mask,
+        torch.device("cpu"),
+        strategy_source="policy-head-covered",
+    )
+    _, turn_strategy = network_strategy(
+        net,
+        turn_features,
+        legal_mask,
+        torch.device("cpu"),
+        strategy_source="policy-head-covered",
+    )
+
+    assert preflop_strategy[8] > 0.99
+    assert turn_strategy[1] > 0.99
 
 
 def test_play_slumbot_script_help_imports_from_repo_root():

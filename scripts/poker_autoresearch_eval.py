@@ -155,18 +155,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--initial-chips", type=int)
     parser.add_argument(
         "--strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
         help="Use advantage regret matching or the trained average-strategy policy head.",
     )
     parser.add_argument(
         "--candidate-strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         help="Override --strategy-source for the candidate in head-to-head mode.",
     )
     parser.add_argument(
         "--baseline-strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         help="Override --strategy-source for the baseline in head-to-head mode.",
     )
     parser.add_argument(

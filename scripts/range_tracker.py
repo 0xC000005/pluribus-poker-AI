@@ -45,6 +45,27 @@ def regret_match(advantages, legal_mask):
     return legal_mask / legal_mask.sum()
 
 
+def _policy_calibration_target_streets(value_net):
+    calibration = getattr(value_net, "policy_calibration", None)
+    if not isinstance(calibration, dict):
+        return ()
+    streets = calibration.get("target_streets")
+    if not streets:
+        return ()
+    return tuple(sorted({int(street) for street in streets}))
+
+
+def _effective_strategy_source(value_net, parsed, strategy_source):
+    if strategy_source != "policy-head-covered":
+        return strategy_source
+    covered_streets = _policy_calibration_target_streets(value_net)
+    if not covered_streets:
+        raise RuntimeError(
+            "policy-head-covered requires policy_calibration.target_streets metadata"
+        )
+    return "policy-head" if int(parsed.get("st", -1)) in covered_streets else "regret"
+
+
 # ---------------------------------------------------------------------------
 # Helpers ported from play_slumbot.py to avoid circular imports.
 # ---------------------------------------------------------------------------
@@ -573,21 +594,23 @@ class RangeTracker:
         features = _build_features_batch(
             hands, board_idx, action_str, pos, parsed)
         legal_mask = _get_legal_mask(parsed, action_str, pos)
+        strategy_source = _effective_strategy_source(
+            self.value_net, parsed, self.strategy_source)
 
         # Batch inference.
         feat_t = torch.from_numpy(features).to(self.device)
         with torch.no_grad():
-            if self.strategy_source == "policy-head":
+            if strategy_source == "policy-head":
                 advantages_t, logits_t = self.value_net.forward_with_policy(feat_t)
                 advantages = advantages_t.cpu().numpy()
                 logits = logits_t.cpu().numpy()
-            elif self.strategy_source == "average-policy":
+            elif strategy_source == "average-policy":
                 average_policy_net = getattr(self.value_net, "average_policy_net", None)
                 if average_policy_net is None:
                     raise RuntimeError("average-policy strategy source requires average_policy_net")
                 advantages = self.value_net(feat_t).cpu().numpy()
                 logits = average_policy_net(feat_t).cpu().numpy()
-            elif self.strategy_source == "regret":
+            elif strategy_source == "regret":
                 advantages = self.value_net(feat_t).cpu().numpy()
                 logits = None
             else:
@@ -597,7 +620,7 @@ class RangeTracker:
         n = len(hands)
         strategies = np.zeros((n, N_ACTIONS), dtype=np.float64)
         for i in range(n):
-            if self.strategy_source in {"policy-head", "average-policy"}:
+            if strategy_source in {"policy-head", "average-policy"}:
                 masked_logits = np.where(legal_mask > 0, logits[i], -1e9)
                 shifted = masked_logits - np.max(masked_logits)
                 probs = np.exp(shifted) * legal_mask

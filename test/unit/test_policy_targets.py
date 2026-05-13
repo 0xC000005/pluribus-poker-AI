@@ -691,6 +691,8 @@ def test_train_policy_head_calibration_reduces_target_loss(tmp_path):
         checkpoint,
     )
     features = np.zeros((32, N_FEATURES), dtype=np.float32)
+    features[:16, 106] = 1.0
+    features[16:, 107] = 1.0
     legal_masks = np.zeros((32, N_ACTIONS), dtype=np.float32)
     legal_masks[:, [1, 2]] = 1.0
     target_probs = np.zeros((32, N_ACTIONS), dtype=np.float32)
@@ -712,3 +714,6 @@ def test_train_policy_head_calibration_reduces_target_loss(tmp_path):
     assert metrics["passed"] is True
     assert output.exists()
     assert metrics["after_loss"] < before
+    assert metrics["target_streets"] == [2, 3]
+    saved = torch.load(output, map_location="cpu", weights_only=False)
+    assert saved["policy_calibration"]["target_street_counts"] == {"2": 16, "3": 16}

@@ -17,6 +17,7 @@ from poker_ai.deep_cfr.vectorized_env import VectorizedPokerEnv
 
 
 BIG_BLIND = 100
+STRATEGY_SOURCES = {"regret", "policy-head", "average-policy", "policy-head-covered"}
 
 
 @dataclass(frozen=True)
@@ -100,36 +101,77 @@ def load_value_network_checkpoint(
         average_policy_net.load_state_dict(checkpoint["average_policy_net"])
         average_policy_net.eval()
         value_net.average_policy_net = average_policy_net
+    policy_calibration = checkpoint.get("policy_calibration")
+    if not isinstance(policy_calibration, dict):
+        policy_calibration = {}
+    metadata = {
+        "checkpoint": str(checkpoint_path),
+        "iteration": checkpoint.get("iteration"),
+        "checkpoint_iteration": checkpoint.get("iteration"),
+        "n_players": n_players,
+        "hidden_dim": hidden_dim,
+        "n_layers": n_layers,
+        "initial_chips": initial_chips,
+        "has_policy_head": has_policy_head,
+        "has_average_policy_net": average_policy_net is not None,
+        "uses_betting_history": uses_betting_history,
+        "policy_calibration": dict(policy_calibration),
+    }
+    value_net.policy_calibration = dict(policy_calibration)
+    value_net.checkpoint_metadata = dict(metadata)
     value_net.eval()
 
     return LoadedValueNetwork(
         value_net=value_net,
-        metadata={
-            "checkpoint": str(checkpoint_path),
-            "iteration": checkpoint.get("iteration"),
-            "checkpoint_iteration": checkpoint.get("iteration"),
-            "n_players": n_players,
-            "hidden_dim": hidden_dim,
-            "n_layers": n_layers,
-            "initial_chips": initial_chips,
-            "has_policy_head": has_policy_head,
-            "has_average_policy_net": average_policy_net is not None,
-            "uses_betting_history": uses_betting_history,
-        },
+        metadata=metadata,
         average_policy_net=average_policy_net,
     )
+
+
+def policy_calibration_target_streets(metadata: dict[str, Any]) -> tuple[int, ...]:
+    """Return streets covered by policy-head calibration metadata."""
+    calibration = metadata.get("policy_calibration")
+    if not isinstance(calibration, dict):
+        return ()
+    streets = calibration.get("target_streets")
+    if not streets:
+        return ()
+    return tuple(sorted({int(street) for street in streets}))
+
+
+def feature_streets(features: np.ndarray) -> np.ndarray:
+    """Infer street indices from the shared 4-way street one-hot slice."""
+    feature_arr = np.asarray(features, dtype=np.float32)
+    if feature_arr.ndim == 1:
+        feature_arr = feature_arr.reshape(1, -1)
+    street_one_hot = feature_arr[:, 104:108]
+    streets = np.argmax(street_one_hot, axis=1).astype(np.int64)
+    streets[np.max(street_one_hot, axis=1) <= 0.0] = -1
+    return streets
 
 
 def assert_strategy_source_supported(
     loaded: LoadedValueNetwork,
     strategy_source: str,
 ) -> None:
-    if strategy_source == "policy-head" and not loaded.metadata.get("has_policy_head"):
+    if (
+        strategy_source in {"policy-head", "policy-head-covered"}
+        and not loaded.metadata.get("has_policy_head")
+    ):
         checkpoint = loaded.metadata.get("checkpoint", "<unknown>")
         raise RuntimeError(
             f"Checkpoint {checkpoint} does not contain a trained policy head; "
             "use --strategy-source regret or retrain/create an incumbent with "
             "policy_head weights."
+        )
+    if (
+        strategy_source == "policy-head-covered"
+        and not policy_calibration_target_streets(loaded.metadata)
+    ):
+        checkpoint = loaded.metadata.get("checkpoint", "<unknown>")
+        raise RuntimeError(
+            f"Checkpoint {checkpoint} does not declare policy_calibration.target_streets; "
+            "covered policy-head evaluation requires calibration coverage metadata."
         )
     if (
         strategy_source == "average-policy"
@@ -140,7 +182,7 @@ def assert_strategy_source_supported(
             f"Checkpoint {checkpoint} does not contain a trained average policy net; "
             "use --strategy-source regret or train with average-strategy collection."
         )
-    if strategy_source not in {"regret", "policy-head", "average-policy"}:
+    if strategy_source not in STRATEGY_SOURCES:
         raise ValueError(f"Unknown strategy source: {strategy_source}")
 
 
@@ -151,6 +193,7 @@ def _strategies_from_network(
     device: torch.device,
     *,
     strategy_source: str,
+    checkpoint_metadata: dict[str, Any] | None = None,
 ) -> list[np.ndarray]:
     """Return legal action probabilities from the requested learned source."""
     feature_tensor = torch.from_numpy(features).to(device)
@@ -159,10 +202,11 @@ def _strategies_from_network(
             advantages = value_net(feature_tensor).cpu().numpy()
         return [regret_match(advantages[i], masks[i]) for i in range(len(masks))]
 
-    if strategy_source == "policy-head":
+    if strategy_source in {"policy-head", "policy-head-covered"}:
         with torch.no_grad():
-            _, logits_t = value_net.forward_with_policy(feature_tensor)
+            advantages_t, logits_t = value_net.forward_with_policy(feature_tensor)
         logits = logits_t.cpu().numpy().astype(np.float64)
+        advantages = advantages_t.cpu().numpy()
     elif strategy_source == "average-policy":
         average_policy_net = getattr(value_net, "average_policy_net", None)
         if average_policy_net is None:
@@ -187,6 +231,26 @@ def _strategies_from_network(
                 strategies.append(mask / mask.sum())
         return strategies
 
+    if strategy_source == "policy-head-covered":
+        metadata = checkpoint_metadata or getattr(value_net, "checkpoint_metadata", {})
+        covered_streets = policy_calibration_target_streets(metadata)
+        if not covered_streets:
+            raise RuntimeError(
+                "policy-head-covered requires policy_calibration.target_streets metadata"
+            )
+        covered = np.isin(feature_streets(features), np.asarray(covered_streets))
+        strategies = []
+        for i, mask in enumerate(masks):
+            if covered[i]:
+                masked_logits = np.where(mask > 0, logits[i], -1e9)
+                shifted = masked_logits - np.max(masked_logits)
+                probs = np.exp(shifted) * mask
+                total = probs.sum()
+                strategies.append(probs / total if total > 0 else mask / mask.sum())
+            else:
+                strategies.append(regret_match(advantages[i], mask))
+        return strategies
+
     raise ValueError(f"Unknown strategy source: {strategy_source}")
 
 
@@ -198,6 +262,7 @@ def _evaluate_payouts_vs_random(
     n_players: int,
     initial_chips: int,
     strategy_source: str,
+    checkpoint_metadata: dict[str, Any],
 ) -> np.ndarray:
     env = VectorizedPokerEnv(n_games, n_players, initial_chips=initial_chips)
     env.reset()
@@ -248,6 +313,7 @@ def _evaluate_payouts_vs_random(
                 masks,
                 device,
                 strategy_source=strategy_source,
+                checkpoint_metadata=checkpoint_metadata,
             )
 
             for j, i in enumerate(agent_indices):
@@ -266,6 +332,7 @@ def _step_model_group(
     device: torch.device,
     *,
     strategy_source: str,
+    checkpoint_metadata: dict[str, Any],
 ) -> None:
     if not indices:
         return
@@ -277,6 +344,7 @@ def _step_model_group(
         masks,
         device,
         strategy_source=strategy_source,
+        checkpoint_metadata=checkpoint_metadata,
     )
 
     for j, env_index in enumerate(indices):
@@ -295,6 +363,8 @@ def _evaluate_head_to_head_payouts(
     initial_chips: int,
     player0_strategy_source: str,
     player1_strategy_source: str,
+    player0_metadata: dict[str, Any],
+    player1_metadata: dict[str, Any],
 ) -> np.ndarray:
     env = VectorizedPokerEnv(n_games, 2, initial_chips=initial_chips)
     env.reset()
@@ -338,6 +408,7 @@ def _evaluate_head_to_head_payouts(
             player0_net,
             device,
             strategy_source=player0_strategy_source,
+            checkpoint_metadata=player0_metadata,
         )
         _step_model_group(
             env,
@@ -345,6 +416,7 @@ def _evaluate_head_to_head_payouts(
             player1_net,
             device,
             strategy_source=player1_strategy_source,
+            checkpoint_metadata=player1_metadata,
         )
 
     return env.get_payouts(0)
@@ -370,6 +442,7 @@ def evaluate_value_net_vs_random(
         n_players=n_players,
         initial_chips=initial_chips,
         strategy_source=strategy_source,
+        checkpoint_metadata=checkpoint_metadata,
     )
     avg = float(payouts.mean())
     std = float(payouts.std(ddof=1)) if len(payouts) > 1 else 0.0
@@ -423,6 +496,8 @@ def evaluate_value_nets_head_to_head(
         initial_chips=initial_chips,
         player0_strategy_source=candidate_strategy_source,
         player1_strategy_source=baseline_strategy_source,
+        player0_metadata=candidate_metadata,
+        player1_metadata=baseline_metadata,
     )
 
     np.random.seed(seed)
@@ -435,6 +510,8 @@ def evaluate_value_nets_head_to_head(
         initial_chips=initial_chips,
         player0_strategy_source=baseline_strategy_source,
         player1_strategy_source=candidate_strategy_source,
+        player0_metadata=baseline_metadata,
+        player1_metadata=candidate_metadata,
     )
     paired = (candidate_seat0 - baseline_seat0) / 2.0
     avg = float(paired.mean())

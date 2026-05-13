@@ -26,7 +26,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--cases-json")
-    parser.add_argument("--strategy-source", choices=("regret", "policy-head", "average-policy"), default="regret")
+    parser.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        default="regret",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument("--max-cases", type=int)
     parser.add_argument("--output")

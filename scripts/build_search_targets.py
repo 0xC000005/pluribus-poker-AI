@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--blueprint-strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
         help="Policy source used for learned-policy case rollouts.",
     )
@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--range-strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
         help="Network source used by the range tracker when --range-checkpoint is set.",
     )

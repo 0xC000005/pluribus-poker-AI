@@ -505,8 +505,37 @@ def regret_match(advantages, legal_mask):
     return legal_mask / legal_mask.sum()
 
 
+def _policy_calibration_target_streets(value_net):
+    calibration = getattr(value_net, "policy_calibration", None)
+    if not isinstance(calibration, dict):
+        return ()
+    streets = calibration.get("target_streets")
+    if not streets:
+        return ()
+    return tuple(sorted({int(street) for street in streets}))
+
+
+def _feature_street(features):
+    street_one_hot = np.asarray(features, dtype=np.float32)[104:108]
+    if float(np.max(street_one_hot)) <= 0.0:
+        return -1
+    return int(np.argmax(street_one_hot))
+
+
+def effective_strategy_source(value_net, features, strategy_source):
+    if strategy_source != "policy-head-covered":
+        return strategy_source
+    covered_streets = _policy_calibration_target_streets(value_net)
+    if not covered_streets:
+        raise RuntimeError(
+            "policy-head-covered requires policy_calibration.target_streets metadata"
+        )
+    return "policy-head" if _feature_street(features) in covered_streets else "regret"
+
+
 def network_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
     """Return (advantages, strategy) from the requested learned policy source."""
+    strategy_source = effective_strategy_source(value_net, features, strategy_source)
     feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
     with torch.no_grad():
         if strategy_source == "policy-head":
@@ -743,8 +772,9 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
             diagnostics.record_fallback(incr)
         return incr
 
+    effective_source = effective_strategy_source(value_net, features, strategy_source)
     if greedy:
-        if strategy_source in {"policy-head", "average-policy"}:
+        if effective_source in {"policy-head", "average-policy"}:
             action_idx = int(np.argmax(strategy))
         else:
             masked_adv = advantages * legal_mask + (1 - legal_mask) * (-1e9)
@@ -985,7 +1015,7 @@ def main():
     )
     parser.add_argument(
         '--strategy-source',
-        choices=('regret', 'policy-head', 'average-policy'),
+        choices=('regret', 'policy-head', 'average-policy', 'policy-head-covered'),
         default='regret',
         help='Learned blueprint source for non-solver decisions and range tracking.',
     )
@@ -1021,6 +1051,10 @@ def main():
     missing, unexpected = value_net.load_state_dict(state, strict=False)
     if unexpected:
         raise RuntimeError(f"Unexpected keys in checkpoint: {unexpected}")
+    policy_calibration = checkpoint.get('policy_calibration')
+    value_net.policy_calibration = (
+        dict(policy_calibration) if isinstance(policy_calibration, dict) else {}
+    )
     # policy_head/seq_proj absent in legacy checkpoints; they are unused at
     # inference time (forward() returns only adv from trunk+adv_head).
     if checkpoint.get('average_policy_net') is not None:

@@ -290,3 +290,14 @@ targets, but full-game policy-head evaluation uses it preflop and flop too.
 Next target: either generate all-street search/teacher targets, or add an
 explicit evaluation/play path that uses blueprint regret before turn and the
 calibrated stochastic policy head only on streets covered by resolver targets.
+
+That coverage-aware path was implemented and falsified. `policy-head-covered`
+now reads checkpoint calibration support, falls back to regret outside covered
+streets, and is available in local eval, Slumbot play, and range tracking. A
+metadata-correct copy of the confidence-rank checkpoint declared turn/river
+coverage from its actual train targets. In duplicate-swapped H2H against the
+same checkpoint using regret, the covered policy route averaged `-16.93`
+chips/hand with lower95 `-55.99` over `12288` games. The simple support-mismatch
+explanation is therefore not enough. Next target: stop tuning policy-head
+imitation losses and move to value/search mechanisms or reached-state policy
+targets that optimize full-game value directly.

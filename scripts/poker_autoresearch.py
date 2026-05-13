@@ -90,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare.add_argument(
         "--strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
         help="Use advantage regret matching or the trained average-strategy policy head.",
     )
@@ -111,7 +111,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     slumbot.add_argument(
         "--strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
     )
     slumbot.add_argument("--timeout-seconds", type=int, default=600)
@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     falsify.add_argument("--max-resolver-cases", type=int)
     falsify.add_argument(
         "--strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
     )
     falsify.add_argument("--timeout-seconds", type=int, default=3600)
@@ -224,7 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--compare-timeout-seconds", type=int, default=2400)
     train.add_argument(
         "--compare-strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
         help="Strategy source to use for auto-queued checkpoint comparisons.",
     )

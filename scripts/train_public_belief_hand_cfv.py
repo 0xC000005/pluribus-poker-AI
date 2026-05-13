@@ -26,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-checkpoint", required=True)
     parser.add_argument(
         "--range-strategy-source",
-        choices=("regret", "policy-head", "average-policy"),
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
     )
     parser.add_argument("--device", default="auto")
