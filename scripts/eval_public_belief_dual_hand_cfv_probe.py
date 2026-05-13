@@ -799,6 +799,47 @@ def predict_public_belief_dual_hand_cfv_checkpoint(
     )
 
 
+def load_public_belief_dual_hand_cfv_ensemble(
+    checkpoints: list[str | Path] | tuple[str | Path, ...],
+    device: str | torch.device = "auto",
+) -> list[tuple[_DualHandCFVProbeNet, dict[str, Any]]]:
+    """Load one or more dual-player hand-CFV checkpoints for prediction averaging."""
+    if not checkpoints:
+        raise ValueError("at least one checkpoint is required")
+    return [
+        load_public_belief_dual_hand_cfv_checkpoint(checkpoint, device=device)
+        for checkpoint in checkpoints
+    ]
+
+
+def predict_public_belief_dual_hand_cfv_ensemble(
+    checkpoints: list[str | Path] | tuple[str | Path, ...],
+    features: np.ndarray,
+    belief: np.ndarray,
+    hero_masks: np.ndarray | None = None,
+    villain_masks: np.ndarray | None = None,
+    *,
+    device: str | torch.device = "auto",
+    batch_size: int = 8192,
+) -> np.ndarray:
+    """Average predictions from multiple saved dual-player hand-CFV checkpoints."""
+    loaded = load_public_belief_dual_hand_cfv_ensemble(checkpoints, device=device)
+    preds = [
+        predict_public_belief_dual_hand_cfv_model(
+            model,
+            payload,
+            features,
+            belief,
+            hero_masks,
+            villain_masks,
+            device=device,
+            batch_size=batch_size,
+        )
+        for model, payload in loaded
+    ]
+    return np.mean(np.stack(preds, axis=0), axis=0, dtype=np.float32)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Compare dual-player public+hand and public+hand+belief CFV probes."

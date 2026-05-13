@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Evaluate a saved dual-player hand-CFV checkpoint on a dual cache."
     )
-    parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--checkpoint", nargs="+", required=True)
     parser.add_argument("--dual-cache", required=True)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--batch-size", type=int, default=8192)
@@ -84,43 +84,41 @@ def main(argv: list[str] | None = None) -> int:
         _load_dual_cache,
         _metrics,
         _zero_dual_prediction,
-        load_public_belief_dual_hand_cfv_checkpoint,
+        load_public_belief_dual_hand_cfv_ensemble,
         predict_public_belief_dual_hand_cfv_model,
     )
 
     device = _resolve_device(args.device)
     dataset, records = _load_dual_cache(args.dual_cache)
-    model, payload = load_public_belief_dual_hand_cfv_checkpoint(
-        args.checkpoint,
-        device=device,
-    )
+    checkpoint_paths = [str(checkpoint) for checkpoint in args.checkpoint]
+    loaded = load_public_belief_dual_hand_cfv_ensemble(checkpoint_paths, device=device)
+    payload = loaded[0][1]
+
+    def _predict_loaded_ensemble() -> np.ndarray:
+        preds = [
+            predict_public_belief_dual_hand_cfv_model(
+                model,
+                loaded_payload,
+                dataset.features,
+                dataset.belief,
+                dataset.hero_masks,
+                dataset.villain_masks,
+                device=device,
+                batch_size=args.batch_size,
+            )
+            for model, loaded_payload in loaded
+        ]
+        return np.mean(np.stack(preds, axis=0), axis=0, dtype=np.float32)
+
     for _ in range(max(0, int(args.warmup))):
-        predict_public_belief_dual_hand_cfv_model(
-            model,
-            payload,
-            dataset.features,
-            dataset.belief,
-            dataset.hero_masks,
-            dataset.villain_masks,
-            device=device,
-            batch_size=args.batch_size,
-        )
+        _predict_loaded_ensemble()
     _sync_if_needed(device)
 
     timings_ms = []
     pred = None
     for _ in range(max(1, int(args.repeats))):
         started = time.perf_counter()
-        pred = predict_public_belief_dual_hand_cfv_model(
-            model,
-            payload,
-            dataset.features,
-            dataset.belief,
-            dataset.hero_masks,
-            dataset.villain_masks,
-            device=device,
-            batch_size=args.batch_size,
-        )
+        pred = _predict_loaded_ensemble()
         _sync_if_needed(device)
         timings_ms.append((time.perf_counter() - started) * 1000.0)
     assert pred is not None
@@ -159,16 +157,27 @@ def main(argv: list[str] | None = None) -> int:
     best_constant_rmse = min(item["rmse"] for item in constant_baselines.values())
     zero_sum = _zero_sum_residuals(pred, dataset, n_hands=N_HANDS)
     metrics = {
-        "mode": "public_belief_dual_hand_cfv_checkpoint_eval",
+        "mode": (
+            "public_belief_dual_hand_cfv_checkpoint_eval"
+            if len(checkpoint_paths) == 1
+            else "public_belief_dual_hand_cfv_checkpoint_ensemble_eval"
+        ),
         "passed": bool(
             n_states > 0
             and n_labels > 0
             and model_metrics["mae"] < zero_metrics["mae"]
             and model_metrics["mae"] < best_constant_mae
             and model_metrics["rmse"] <= best_constant_rmse
+            and zero_sum["pred_minus_target_abs_mean"] < zero_sum["target_abs_mean"]
             and np.isfinite(zero_sum["pred_abs_mean"])
         ),
-        "checkpoint": str(args.checkpoint),
+        "pass_criteria": (
+            "checkpoint must beat zero-CFV and train-constant MAE/RMSE, "
+            "and must improve range-weighted value-sum residual over zero prediction"
+        ),
+        "checkpoint": checkpoint_paths[0],
+        "checkpoints": checkpoint_paths,
+        "checkpoint_count": len(checkpoint_paths),
         "dual_cache": str(args.dual_cache),
         "device": str(device),
         "batch_size": int(args.batch_size),
@@ -182,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         "best_constant_mae": round(float(best_constant_mae), 8),
         "best_constant_rmse": round(float(best_constant_rmse), 8),
         "zero_sum_residual": zero_sum,
+        "value_sum_residual": zero_sum,
         "inference_mean_ms": round(mean_ms, 6),
         "inference_p50_ms": round(p50_ms, 6),
         "inference_p95_ms": round(p95_ms, 6),

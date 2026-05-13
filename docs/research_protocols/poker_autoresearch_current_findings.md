@@ -532,8 +532,13 @@ Workflow governance status:
   mechanism.
 - A three-seed Deepset-64 prediction ensemble passes the hardened constant gate
   on the `384/128` river split: model MAE/RMSE `0.3405/0.4400`, best
-  train-constant `0.4098/0.5292`, zero `0.4480/0.6383`. Treat this as a
-  promising learned-leaf direction, not a search-ready promotion.
+  train-constant `0.4098/0.5292`, zero `0.4480/0.6383`.
+- The saved-checkpoint ensemble path also passes: three persisted Deepset-64
+  checkpoints evaluated together reproduce the same holdout MAE/RMSE, improve
+  range-weighted value-sum residual over zero prediction
+  (`0.3220` residual error vs `0.8756` zero-prediction residual), and run at
+  `0.793 ms/state`, about `2,254x` faster than cached solver labels. Treat
+  this as a promising learned-leaf direction, not a search-ready promotion.
 - Related-work anchor: Deep Sets supports permutation-aware learned set
   encoders for unordered card inputs, while Deep CFR/ReBeL/Supremus support
   learned value approximators paired with search rather than manual card
@@ -564,10 +569,10 @@ solver calls averaged `12.2s` and range pruning kept most possible hands.
 Current learned-leaf failure class: `range_belief`.
 
 Flat public-belief hand-CFV models mostly learn broad value offsets and fail
-trivial constant baselines on held-out river states. The Deepset-64 ensemble is
-the first local result to beat those baselines, so the next research cycle
-should test reusable learned card/range interaction inside fixed-state
-resolver diagnostics before any Slumbot spend.
+trivial constant baselines on held-out river states. The saved Deepset-64
+ensemble is the first reusable local result to beat those baselines, so the
+next research cycle should test learned card/range interaction inside
+fixed-state resolver diagnostics before any Slumbot spend.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -607,7 +612,7 @@ script passes all 10 checks and is now part of Tier 0.
    `python scripts/poker_autoresearch.py enqueue-falsification --candidate <path>
    --mechanism "<mechanism>"` and close the falsification cycle through the
    normal autoresearch log.
-10. For learned river leaves, make the next gate a saved Deepset-64 ensemble or
-    averaged-checkpoint evaluator, then run fixed resolver-state A/B against
-    solver leaves with root-action drift, zero-sum residual, and latency
-    recorded. Do not integrate the flat dual-CFV checkpoint.
+10. For learned river leaves, use the saved Deepset-64 ensemble as the next
+    candidate and run fixed resolver-state A/B against solver leaves with
+    root-action drift, value-sum residual, and latency recorded. Do not
+    integrate the flat dual-CFV checkpoint.
