@@ -44,6 +44,10 @@ Date: 2026-05-13
   train/holdout slices; even a broader `512`-target / `256`-target split failed
   value baselines (`MAE 0.2713` vs best constant `0.1962`). Treat row-level
   successor-cut passes as diagnostics unless they also pass root-disjoint gates.
+- The same checkpoint also failed unseen-root one-cut behavior impact: `23`
+  cut replacements from roots `128..143` had action agreement `0.6087` and
+  mean/max L1 drift `0.5592/1.3602`. The next search-boundary mechanism needs
+  action-impact labels or a learned fallback gate, not another value-only split.
 
 ## Metric Snapshot
 

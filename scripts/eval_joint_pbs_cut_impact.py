@@ -61,6 +61,24 @@ def _mean_or_none(values: list[float]) -> float | None:
     return round(float(np.mean(values)), 8)
 
 
+def _case_window(
+    cases: list[ResolverBenchmarkCase],
+    belief: np.ndarray,
+    *,
+    start_index: int,
+    limit: int,
+) -> tuple[int, list[ResolverBenchmarkCase], np.ndarray]:
+    start = max(0, min(int(start_index), len(cases)))
+    if int(limit) <= 0:
+        stop = len(cases)
+    else:
+        stop = min(start + int(limit), len(cases))
+    selected = cases[start:stop]
+    if not selected:
+        raise ValueError("selected cut-impact case slice is empty")
+    return start, selected, belief[start:stop]
+
+
 def _case_cut_impacts(
     case: ResolverBenchmarkCase,
     *,
@@ -230,6 +248,7 @@ def evaluate_cut_impacts(
     target_action_shapes: tuple[str, ...],
     error_predictor_json: str | Path | None,
     max_cut_evals: int,
+    start_index: int = 0,
 ) -> dict[str, Any]:
     from poker_ai.research.belief_probe import _resolve_device
 
@@ -238,6 +257,12 @@ def evaluate_cut_impacts(
     dataset, _records = load_public_belief_cfv_dataset_cache(cfv_cache)
     if dataset.features.shape[0] != len(cases):
         raise ValueError("case count does not match CFV cache rows")
+    start, selected_cases, selected_beliefs = _case_window(
+        cases,
+        dataset.belief,
+        start_index=start_index,
+        limit=limit,
+    )
     risk_predictor = (
         StructuralCutRiskPredictor.from_json(error_predictor_json)
         if error_predictor_json
@@ -245,12 +270,11 @@ def evaluate_cut_impacts(
     )
     model, payload = load_joint_pbs_continuation_checkpoint(checkpoint, device=resolved_device)
     impacts: list[dict[str, Any]] = []
-    max_cases = max(1, min(int(limit), len(cases)))
-    for idx, case in enumerate(cases[:max_cases]):
+    for idx, case in enumerate(selected_cases):
         impacts.extend(
             _case_cut_impacts(
                 case,
-                belief_row=dataset.belief[idx],
+                belief_row=selected_beliefs[idx],
                 model=model,
                 payload=payload,
                 device=resolved_device,
@@ -293,7 +317,8 @@ def evaluate_cut_impacts(
         "device": str(resolved_device),
         "solver_iterations": int(solver_iterations),
         "solver_backend": solver_backend,
-        "case_scan_limit": int(max_cases),
+        "start_index": int(start),
+        "case_scan_limit": int(len(selected_cases)),
         "max_cut_evals": int(max_cut_evals),
         "min_bet_count": int(min_bet_count),
         "target_action_shapes": list(target_action_shapes),
@@ -325,6 +350,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", required=True)
     parser.add_argument("--cfv-cache", required=True)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--limit", type=int, default=16)
     parser.add_argument("--max-cut-evals", type=int, default=32)
     parser.add_argument("--solver-iterations", type=int, default=5)
@@ -350,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
         target_action_shapes=tuple(args.target_action_shapes),
         error_predictor_json=args.error_predictor_json,
         max_cut_evals=args.max_cut_evals,
+        start_index=args.start_index,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

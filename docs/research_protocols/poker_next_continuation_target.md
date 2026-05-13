@@ -392,3 +392,11 @@ GRU/deepset probe reached `0.2713` MAE versus a `0.1962` train-median constant.
 This makes root extrapolation, not just callback feature plumbing, a recurring
 failure mode. Do not run successor-cut resolver A/B from row-level internal
 passes unless the checkpoint first clears root-disjoint value calibration.
+
+A slice-aware one-cut impact diagnostic confirms the same issue behaviorally.
+On unseen roots `128..143`, the root-disjoint GRU high-bet checkpoint produced
+only `0.6087` action agreement with mean/max single-cut L1 drift
+`0.5592/1.3602`; the worst root changed a baseline call into multiple bet
+actions. The useful next target is therefore action-impact-aware: collect
+exact-vs-learned intervention labels and train either a conservative fallback
+gate or a value correction against root action drift.
