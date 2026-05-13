@@ -1805,3 +1805,14 @@
 - Summary: Extended `scripts/stratify_search_targets.py` with a street filter and built a balanced river-only `64/32` split from the existing cached mixed-street pool. The shared hand-CFV public-belief probe passed all three seeds on river states, with a larger mean improvement than the mixed-street split. A saved river-only checkpoint trained on CUDA and produced compact holdout metrics. This supports using a river CFV value model as the first learned leaf component for turn search rather than integrating mixed turn-equity targets directly.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_river_stratified64x32_summary.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_checkpoint_river_stratified64x32_seed20260513.json
 - Key metrics: `{"probe": {"pass_count": 3, "n": 3, "mae_delta_mean": 0.12536221, "rmse_delta_mean": 0.14373061666666667, "train_mask_count": 69184, "holdout_mask_count": 34592}, "checkpoint": {"passed": true, "checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_river_stratified64x32_seed20260513.pt", "belief_holdout": {"mae": 0.45485312, "rmse": 0.55877539, "bias": -0.0103855}}}`
+
+## 20260513T025036Z-river-hand-cfv-inference-benchmark - passed
+
+- Timestamp: 2026-05-13T02:50:36Z
+- Type: benchmark
+- Gate: manual-public-belief-hand-cfv-inference-speed
+- Hypothesis: A saved river hand-CFV model should be orders of magnitude cheaper than per-public-state river solving, otherwise it is not a useful learned leaf primitive for PC-limited search.
+- Failure class: performance
+- Summary: Added `scripts/benchmark_public_belief_hand_cfv.py` and measured the saved river-only hand-CFV checkpoint on the 32-state river holdout cache. Batched CUDA inference predicted `34,592` valid hand labels in `3.77 ms` mean, about `0.118 ms/state`, while the cached solver labels averaged `1127.5 ms/state`. This validates the compute premise for the next step: plug the learned river CFV evaluator into a bounded turn-search experiment and measure action/EV drift before any live Slumbot promotion.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_benchmark_river_holdout_seed20260513.json
+- Key metrics: `{"inference_mean_ms": 3.771685, "model_ms_per_state": 0.117865, "labels_per_second": 9171497.781, "solver_mean_ms_per_state": 1127.505, "speedup_vs_solver_mean_per_state": 9566.059, "n_states": 32, "n_labels": 34592}`

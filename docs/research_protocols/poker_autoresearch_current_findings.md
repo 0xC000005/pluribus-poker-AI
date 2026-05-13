@@ -364,8 +364,11 @@ GPU training readiness:
   states produced a balanced `64/32` split, and the shared hand-CFV belief probe
   passed `3/3` seeds with mean MAE delta `+0.1254` and mean RMSE delta
   `+0.1437`. The saved river-only checkpoint reached held-out MAE `0.4549` and
-  RMSE `0.5588`. Read: use the river-only learned CFV component first when
-  testing learned leaf values for turn search.
+  RMSE `0.5588`. Batched CUDA inference over the 32-state holdout took
+  `3.77 ms` mean (`0.118 ms/state`, `9.17M` hand labels/sec), compared with
+  `1127.5 ms/state` average solver-label latency in the cache. Read: use the
+  river-only learned CFV component first when testing learned leaf values for
+  turn search.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

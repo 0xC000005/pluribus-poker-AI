@@ -1647,6 +1647,28 @@ def predict_public_belief_hand_cfv_checkpoint(
 ) -> np.ndarray:
     """Predict global hand CFVs from a saved public-belief hand-CFV checkpoint."""
     model, payload = load_public_belief_hand_cfv_checkpoint(checkpoint, device=device)
+    return predict_public_belief_hand_cfv_model(
+        model,
+        payload,
+        features,
+        belief,
+        value_masks,
+        device=device,
+        batch_size=batch_size,
+    )
+
+
+def predict_public_belief_hand_cfv_model(
+    model: _HandCFVProbeNet,
+    payload: dict[str, Any],
+    features: np.ndarray,
+    belief: np.ndarray,
+    value_masks: np.ndarray | None = None,
+    *,
+    device: str | torch.device = "auto",
+    batch_size: int = 8192,
+) -> np.ndarray:
+    """Predict global hand CFVs from a loaded hand-CFV model payload."""
     features = np.asarray(features, dtype=np.float32)
     belief = np.asarray(belief, dtype=np.float32)
     if features.ndim == 1:

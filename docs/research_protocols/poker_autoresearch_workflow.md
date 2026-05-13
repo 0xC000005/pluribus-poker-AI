@@ -278,6 +278,12 @@ metadata with the checkpoint, and exposes a load/predict path for later
 depth-limited search integration. Treat this as a reusable learned component,
 not as a playing-policy promotion by itself.
 
+Use `scripts/benchmark_public_belief_hand_cfv.py` before wiring the learned
+component into search. It measures batched checkpoint inference on a CFV cache
+and compares it to the solver latencies stored with the labels. Learned leaf
+evaluation must be much cheaper than solving the same public states, otherwise
+it is not a useful PC-limited search primitive.
+
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case
