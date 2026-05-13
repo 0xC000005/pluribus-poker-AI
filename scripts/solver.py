@@ -257,7 +257,8 @@ class StreetSolver:
 
     def solve(self, n_iterations=100, hero_range=None, villain_range=None,
               backend='cpu', device=None, showdown_leaf_fn=None,
-              cut_node_indices=None, cut_node_fn=None):
+              cut_node_indices=None, cut_node_fn=None,
+              initial_regret_sum=None, initial_strategy_sum=None):
         hr = hero_range.astype(np.float32) if hero_range is not None else None
         vr = villain_range.astype(np.float32) if villain_range is not None else None
         backend, device = resolve_solver_backend(backend, device)
@@ -267,12 +268,18 @@ class StreetSolver:
                 'showdown_leaf_fn': showdown_leaf_fn,
                 'cut_node_indices': cut_node_indices,
                 'cut_node_fn': cut_node_fn,
+                'initial_regret_sum': initial_regret_sum,
+                'initial_strategy_sum': initial_strategy_sum,
             }
         elif backend == 'torch':
             if showdown_leaf_fn is not None or cut_node_fn is not None:
                 raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
             solver_fn = solve_cfr_torch
-            kwargs = {'device': device or 'cuda'}
+            kwargs = {
+                'device': device or 'cuda',
+                'initial_regret_sum': initial_regret_sum,
+                'initial_strategy_sum': initial_strategy_sum,
+            }
         else:
             raise ValueError(f"Unknown solver backend: {backend}")
         started = time.perf_counter()

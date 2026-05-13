@@ -162,10 +162,24 @@ def _descendants_of_cut_nodes(tree, cut_mask):
     return inactive
 
 
+def _validated_initial_array(initial, expected_shape, name):
+    if initial is None:
+        return None
+    arr = np.asarray(initial, dtype=np.float32)
+    if arr.shape != expected_shape:
+        raise ValueError(f"{name} shape {arr.shape} != {expected_shape}")
+    if not np.isfinite(arr).all():
+        raise ValueError(f"{name} must be finite")
+    if (arr < 0).any():
+        raise ValueError(f"{name} must be non-negative for CFR+ warm starts")
+    return arr.copy()
+
+
 def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               pot_start, hero_stack_start, villain_stack_start,
               n_iterations=100, hero_range=None, villain_range=None,
-              showdown_leaf_fn=None, cut_node_indices=None, cut_node_fn=None):
+              showdown_leaf_fn=None, cut_node_indices=None, cut_node_fn=None,
+              initial_regret_sum=None, initial_strategy_sum=None):
     """Run iterative CFR+ with batched terminal evaluation.
 
     Parameters
@@ -191,6 +205,9 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         terminal frontier states: descendants receive no reach/regret updates,
         and the hook returns replacement counterfactual numerator values with
         shape `(n_cut_nodes, n_hands)`.
+    initial_regret_sum, initial_strategy_sum : array-like or None
+        Optional CFR+ warm-start tensors with shape `(n_nodes, n_actions,
+        n_hands)`. Values must be finite and non-negative.
 
     Returns
     -------
@@ -244,8 +261,21 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         vf_vill_coeff = (-vi_vf).reshape(-1, 1)
 
     # CFR arrays
-    regret_sum = np.zeros((nn, na, n), dtype=np.float32)
-    strategy_sum = np.zeros((nn, na, n), dtype=np.float32)
+    expected_shape = (nn, na, n)
+    regret_sum = _validated_initial_array(
+        initial_regret_sum,
+        expected_shape,
+        "initial_regret_sum",
+    )
+    if regret_sum is None:
+        regret_sum = np.zeros(expected_shape, dtype=np.float32)
+    strategy_sum = _validated_initial_array(
+        initial_strategy_sum,
+        expected_shape,
+        "initial_strategy_sum",
+    )
+    if strategy_sum is None:
+        strategy_sum = np.zeros(expected_shape, dtype=np.float32)
 
     # Reach probability and value arrays
     hr_at = np.zeros((nn, n), dtype=np.float32)
@@ -449,7 +479,8 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
 def solve_cfr_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                     pot_start, hero_stack_start, villain_stack_start,
                     n_iterations=100, hero_range=None, villain_range=None,
-                    device="cuda"):
+                    device="cuda", initial_regret_sum=None,
+                    initial_strategy_sum=None):
     """Run the same CFR+ recurrence with torch tensors on CPU or CUDA.
 
     This keeps the CPU solver as the reference implementation while allowing
@@ -506,8 +537,29 @@ def solve_cfr_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         vf_hero_coeff = float(pot_start) + vi_vf
         vf_vill_coeff = -vi_vf
 
-    regret_sum = torch.zeros((nn, n_actions, n), dtype=torch.float32, device=torch_device)
-    strategy_sum = torch.zeros_like(regret_sum)
+    expected_shape = (nn, n_actions, n)
+    initial_regret_np = _validated_initial_array(
+        initial_regret_sum,
+        expected_shape,
+        "initial_regret_sum",
+    )
+    initial_strategy_np = _validated_initial_array(
+        initial_strategy_sum,
+        expected_shape,
+        "initial_strategy_sum",
+    )
+    if initial_regret_np is None:
+        regret_sum = torch.zeros(expected_shape, dtype=torch.float32, device=torch_device)
+    else:
+        regret_sum = torch.as_tensor(initial_regret_np, dtype=torch.float32, device=torch_device)
+    if initial_strategy_np is None:
+        strategy_sum = torch.zeros_like(regret_sum)
+    else:
+        strategy_sum = torch.as_tensor(
+            initial_strategy_np,
+            dtype=torch.float32,
+            device=torch_device,
+        )
     hr_at = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
     vr_at = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
     hvals = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)

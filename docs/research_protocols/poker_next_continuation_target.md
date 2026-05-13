@@ -215,3 +215,14 @@ action agreement stayed flat at `0.5469`. The all-in top-action rate also stayed
 at `0.6563`. Do not spend on more final-distribution mixing weights. A useful
 policy prior must enter the CFR update/warm-start path, or be trained as a
 residual correction against low-vs-high solver behavior.
+
+The first node-local CFR+ warm-start attempt also failed. The solver now accepts
+optional initial regret and strategy tensors, and zero initializers preserve the
+old behavior. A diagnostic seeded the current public node with policy-head
+regret mass for every private hand, then reran the same `5` vs `25` iteration
+budget comparison. This worsened mean L1 (`0.5969` vs `0.5778` for the plain
+low-budget solver), lowered action agreement (`0.5312` vs `0.5469`), and left
+all-in rate unchanged (`0.6563`). Related work still supports regret-aware
+warm-starting, but this simplified one-node CFR+ seeding is not enough. The next
+mechanism should be either theorem-closer strategy-based warm starting or a
+learned residual correction target, not a sweep over warm-start mass.

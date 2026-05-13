@@ -29,6 +29,7 @@ from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
     _successor_cut_node_indices,
 )
 from eval_policy_prior_solver_budget import mix_strategy  # noqa: E402
+from eval_policy_warm_start_solver_budget import build_policy_warm_start  # noqa: E402
 from build_learned_river_leaf_cases import (  # noqa: E402
     _rotated_cards,
     _summarize_leaf_records,
@@ -166,6 +167,98 @@ def test_street_solver_showdown_leaf_callback_can_reproduce_default():
     assert calls
     np.testing.assert_allclose(hooked._regret_sum, base._regret_sum, atol=1e-5)
     np.testing.assert_allclose(hooked._strategy_sum, base._strategy_sum, atol=1e-5)
+
+
+def test_street_solver_zero_warm_start_reproduces_default():
+    base = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    warmed = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    shape = (
+        warmed._tree["n_nodes"],
+        warmed._tree["n_actions"],
+        warmed.n,
+    )
+    zeros = np.zeros(shape, dtype=np.float32)
+
+    base.solve(n_iterations=2)
+    warmed.solve(
+        n_iterations=2,
+        initial_regret_sum=zeros,
+        initial_strategy_sum=zeros,
+    )
+
+    np.testing.assert_allclose(warmed._regret_sum, base._regret_sum, atol=1e-5)
+    np.testing.assert_allclose(warmed._strategy_sum, base._strategy_sum, atol=1e-5)
+
+
+def test_street_solver_strategy_warm_start_is_visible_without_iterations():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    shape = (solver._tree["n_nodes"], solver._tree["n_actions"], solver.n)
+    initial_strategy = np.zeros(shape, dtype=np.float32)
+    hand = solver.hands[0]
+    action = max(solver.root.children)
+    initial_strategy[0, action, 0] = 1.0
+
+    solver.solve(n_iterations=0, initial_strategy_sum=initial_strategy)
+
+    strategy = solver.get_strategy(hand, solver.root)
+    assert strategy[action] == pytest.approx(1.0)
+
+
+def test_street_solver_warm_start_rejects_bad_shape():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+
+    with pytest.raises(ValueError, match="initial_regret_sum shape"):
+        solver.solve(n_iterations=0, initial_regret_sum=np.zeros((1, 1, 1), dtype=np.float32))
+
+
+def test_build_policy_warm_start_seeds_only_selected_node():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3, 4],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    policy = np.zeros((solver._tree["n_actions"], solver.n), dtype=np.float32)
+    policy[1] = 0.25
+    policy[max(solver.root.children)] = 0.75
+
+    regret, strategy = build_policy_warm_start(
+        solver=solver,
+        node_idx=0,
+        policy_by_action_hand=policy,
+        regret_mass=100.0,
+        strategy_mass=2.0,
+    )
+
+    assert regret.shape == strategy.shape
+    assert regret[0, 1, 0] == pytest.approx(25.0)
+    assert strategy[0, max(solver.root.children), 0] == pytest.approx(1.5)
+    assert regret[1:].sum() == pytest.approx(0.0)
 
 
 def test_street_solver_showdown_leaf_callback_rejects_torch_backend():
