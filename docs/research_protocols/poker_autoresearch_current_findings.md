@@ -753,6 +753,15 @@ Label-throughput update:
   before exact labeling. These are audit fields for dataset coverage, not
   gameplay rules. Use them together with source, terminal, and river-card
   concentration before spending CPU label time on larger resolver-leaf splits.
+- A larger shape-covered resolver-leaf split did not rescue the current leaf
+  value architecture. The pre-label train/holdout split had good coverage
+  (`256/128` leaves, train `70` sources and all `52` rivers, holdout `33`
+  sources and `48` rivers, bet counts up to `7`). Exact labels still cost about
+  `8.6-8.8s/state` even with CPU parallelism. Three cached CUDA training seeds
+  all improved over feature-only baselines, but failed the strict gate: mean
+  zero-MAE delta was `-0.0165`, and mean best-train-constant MAE delta was
+  `-0.0329`. Do not keep scaling this same small leaf-CFV objective; move to a
+  stronger continuation objective/search integration.
 - Related-work checkpoint: DeepStack and Supremus support learned
   counterfactual value networks inside depth-limited continual resolving, and
   Supremus specifically reports beating Slumbot with improved deep CFV
@@ -804,7 +813,7 @@ script passes all 10 checks and is now part of Tier 0.
    normal autoresearch log.
 10. For learned river leaves, do not integrate the current river-continuation
     callback into gameplay. Next work should train/evaluate value networks on
-    a materially larger resolver-generated leaf dataset with source/terminal
-    stratification, prioritize the larger bet/call terminal families exposed by
-    cache attribution, or use the turn-CFV ensemble as a street-level
-    continuation target before another broad A/B.
+    a different continuation target. The shape-covered `256/128` leaf split
+    shows that simply scaling the same leaf-CFV architecture is not enough;
+    prioritize a turn-level PBS value target, joint policy/value continuation,
+    or another search-integrated target before another broad A/B.
