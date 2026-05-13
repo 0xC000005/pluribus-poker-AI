@@ -272,6 +272,12 @@ hand)` pairs with shared public-state and hand-card encoders, and optionally a
 learned public-belief encoder. This is still diagnostic only; require stability
 on a balanced target surface before promoting the architecture.
 
+Use `scripts/train_public_belief_hand_cfv.py` after the diagnostic passes. It
+trains the belief-conditioned shared hand-CFV model, saves normalization
+metadata with the checkpoint, and exposes a load/predict path for later
+depth-limited search integration. Treat this as a reusable learned component,
+not as a playing-policy promotion by itself.
+
 Use `scripts/stratify_search_targets.py` to build that balanced target surface
 from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case

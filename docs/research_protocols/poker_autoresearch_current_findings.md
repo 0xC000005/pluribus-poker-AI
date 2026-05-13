@@ -353,6 +353,12 @@ GPU training readiness:
   mean RMSE delta `+0.0633`. Read: hand-shared public-belief CFV learning is
   now the most promising belief-value direction, but promotion should use the
   stratified evaluation surface and still require gameplay/search integration.
+- The positive hand-CFV representation now has a saved checkpoint path via
+  `scripts/train_public_belief_hand_cfv.py`. On the stratified `128/64`
+  surface, the saved CUDA-trained checkpoint reached held-out MAE `0.3930` and
+  RMSE `0.5233` against searched CFV labels. Read: this is the reusable learned
+  value component to attach to depth-limited search experiments, not a direct
+  Slumbot-play promotion.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

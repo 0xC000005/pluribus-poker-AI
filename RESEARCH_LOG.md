@@ -1783,3 +1783,14 @@
 - Summary: Added `scripts/stratify_search_targets.py` and a reusable splitter that combines search-target artifacts, stratifies by street plus CFV-label bins when caches are available, and writes aligned target/case/cache outputs. On the stratified `128/64` mixed-street surface, the shared hand-CFV public-belief probe passed all three seeds. This upgrades hand-shared belief-conditioned CFV learning from "promising but unstable" to the next trainer-facing mechanism to prototype, while also showing that tiny unstratified diagnostic splits can produce false negative architecture calls.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_stratified128x64_summary.json
 - Key metrics: `{"pass_count": 3, "n": 3, "mae_delta_mean": 0.05726119666666666, "rmse_delta_mean": 0.06325970666666667, "mae_deltas": [0.09499031, 0.03693059, 0.03986269], "rmse_deltas": [0.11452193, 0.04423414, 0.03102305], "train_mask_count": 141376, "holdout_mask_count": 70688, "split_metadata": "autoresearch-session/search_consistency_restored200_100x2k_20260513/stratified128x64_split_metadata.json"}`
+
+## 20260513T024000Z-hand-cfv-checkpoint - passed
+
+- Timestamp: 2026-05-13T02:40:00Z
+- Type: experiment
+- Gate: manual-public-belief-hand-cfv-checkpoint
+- Hypothesis: The positive shared hand-CFV probe should be reusable as a saved learned component with normalization metadata and a load/predict path before any depth-limited search integration is attempted.
+- Failure class: range_belief
+- Summary: Added `scripts/train_public_belief_hand_cfv.py` plus checkpoint save/load/predict helpers. The script trains only the belief-conditioned shared hand-CFV model, stores public/belief/target normalizers with the checkpoint, and emits compact metrics. On the stratified `128/64` cached surface it trained on CUDA and reproduced the seed-20260513 belief-model holdout metrics. This creates the model artifact needed for the next principled step: testing learned CFV leaf evaluation or search priors, rather than wiring raw belief features directly into the action policy.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_checkpoint_stratified128x64_seed20260513.json
+- Key metrics: `{"passed": true, "checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_stratified128x64_seed20260513.pt", "device": "cuda", "train_size": 128, "holdout_size": 64, "train_mask_count": 141376, "holdout_mask_count": 70688, "belief_holdout": {"mae": 0.39303188, "rmse": 0.52325341, "bias": -0.03546923}}`

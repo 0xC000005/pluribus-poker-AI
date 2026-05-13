@@ -874,6 +874,21 @@ def _standardize_masked_targets(
     )
 
 
+def _standardization_stats(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    mean = np.asarray(x, dtype=np.float32).mean(axis=0, keepdims=True)
+    std = np.asarray(x, dtype=np.float32).std(axis=0, keepdims=True)
+    std = np.where(std > 1e-6, std, 1.0).astype(np.float32, copy=False)
+    return mean.astype(np.float32, copy=False), std
+
+
+def _apply_standardization(
+    x: np.ndarray,
+    mean: np.ndarray,
+    std: np.ndarray,
+) -> np.ndarray:
+    return ((np.asarray(x, dtype=np.float32) - mean) / std).astype(np.float32)
+
+
 def _fit_cfv_probe(
     train_x: np.ndarray,
     train_y: np.ndarray,
@@ -1439,6 +1454,227 @@ def run_public_belief_hand_cfv_probe(
         "train_cfv_records": train_records,
         "holdout_cfv_records": holdout_records,
     }
+
+
+def train_public_belief_hand_cfv_checkpoint(
+    *,
+    train_targets_npz: str | Path,
+    train_cases_json: str | Path,
+    holdout_targets_npz: str | Path,
+    holdout_cases_json: str | Path,
+    range_checkpoint: str | Path,
+    output_checkpoint: str | Path,
+    range_strategy_source: str = "regret",
+    device: str | torch.device = "auto",
+    solver_iterations: int = 25,
+    solver_backend: str = "auto",
+    range_prune_threshold: float = 0.0,
+    value_scale: float = 20000.0,
+    hidden_dim: int = 64,
+    epochs: int = 30,
+    batch_size: int = 8192,
+    lr: float = 1e-3,
+    weight_decay: float = 1e-3,
+    seed: int = 0,
+    train_cfv_cache: str | Path | None = None,
+    holdout_cfv_cache: str | Path | None = None,
+) -> dict[str, Any]:
+    """Train and save the belief-conditioned shared hand-CFV model."""
+    resolved_device = _resolve_device(device)
+    train, train_records, train_loaded_from_cache = _load_or_build_cfv_dataset(
+        targets_npz=train_targets_npz,
+        cases_json=train_cases_json,
+        range_checkpoint=range_checkpoint,
+        range_strategy_source=range_strategy_source,
+        device=resolved_device,
+        solver_iterations=solver_iterations,
+        solver_backend=solver_backend,
+        range_prune_threshold=range_prune_threshold,
+        value_scale=value_scale,
+        cache_path=train_cfv_cache,
+    )
+    holdout, holdout_records, holdout_loaded_from_cache = _load_or_build_cfv_dataset(
+        targets_npz=holdout_targets_npz,
+        cases_json=holdout_cases_json,
+        range_checkpoint=range_checkpoint,
+        range_strategy_source=range_strategy_source,
+        device=resolved_device,
+        solver_iterations=solver_iterations,
+        solver_backend=solver_backend,
+        range_prune_threshold=range_prune_threshold,
+        value_scale=value_scale,
+        cache_path=holdout_cfv_cache,
+    )
+
+    public_mean, public_std = _standardization_stats(train.features)
+    belief_mean, belief_std = _standardization_stats(train.belief)
+    train = PublicBeliefCFVDataset(
+        features=_apply_standardization(train.features, public_mean, public_std),
+        belief=_apply_standardization(train.belief, belief_mean, belief_std),
+        values=train.values,
+        value_masks=train.value_masks,
+        labels=train.labels,
+    )
+    holdout = PublicBeliefCFVDataset(
+        features=_apply_standardization(holdout.features, public_mean, public_std),
+        belief=_apply_standardization(holdout.belief, belief_mean, belief_std),
+        values=holdout.values,
+        value_masks=holdout.value_masks,
+        labels=holdout.labels,
+    )
+    train_y, _, target_mean, target_std = _standardize_masked_targets(
+        train.values,
+        holdout.values,
+        train.value_masks,
+        holdout.value_masks,
+    )
+    model = _fit_hand_cfv_probe(
+        train,
+        train_y,
+        hidden_dim=hidden_dim,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr=lr,
+        weight_decay=weight_decay,
+        seed=seed,
+        device=resolved_device,
+        use_belief=True,
+    )
+    holdout_pred = _predict_hand_cfv(
+        model,
+        holdout,
+        target_mean=target_mean,
+        target_std=target_std,
+        batch_size=batch_size,
+        device=resolved_device,
+        use_belief=True,
+    )
+    holdout_metrics = _cfv_metrics(holdout_pred, holdout.values, holdout.value_masks)
+
+    output_path = Path(output_checkpoint)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "mode": "public_belief_hand_cfv_checkpoint",
+            "model_state": {
+                key: value.detach().cpu()
+                for key, value in model.state_dict().items()
+            },
+            "hidden_dim": int(hidden_dim),
+            "use_belief": True,
+            "feature_dim": int(N_FEATURES),
+            "belief_dim": int(BELIEF_DIM),
+            "hand_feature_dim": 52,
+            "target_dim": int(N_HANDS),
+            "public_mean": public_mean,
+            "public_std": public_std,
+            "belief_mean": belief_mean,
+            "belief_std": belief_std,
+            "target_mean": float(target_mean),
+            "target_std": float(target_std),
+            "value_scale": float(value_scale),
+            "range_checkpoint": str(range_checkpoint),
+            "range_strategy_source": range_strategy_source,
+            "solver_iterations": int(solver_iterations),
+            "solver_backend": solver_backend,
+            "range_prune_threshold": float(range_prune_threshold),
+            "train_targets_npz": str(train_targets_npz),
+            "train_cases_json": str(train_cases_json),
+            "train_cfv_cache": str(train_cfv_cache) if train_cfv_cache else None,
+            "seed": int(seed),
+        },
+        output_path,
+    )
+
+    return {
+        "mode": "public_belief_hand_cfv_checkpoint_train",
+        "passed": bool(np.isfinite(holdout_metrics["mae"])),
+        "checkpoint": str(output_path),
+        "device": str(resolved_device),
+        "solver_iterations": int(solver_iterations),
+        "solver_backend": solver_backend,
+        "range_prune_threshold": float(range_prune_threshold),
+        "value_scale": float(value_scale),
+        "hidden_dim": int(hidden_dim),
+        "epochs": int(epochs),
+        "batch_size": int(batch_size),
+        "lr": float(lr),
+        "weight_decay": float(weight_decay),
+        "seed": int(seed),
+        "range_checkpoint": str(range_checkpoint),
+        "range_strategy_source": range_strategy_source,
+        "train_cfv_cache": str(train_cfv_cache) if train_cfv_cache else None,
+        "holdout_cfv_cache": str(holdout_cfv_cache) if holdout_cfv_cache else None,
+        "train_loaded_from_cache": bool(train_loaded_from_cache),
+        "holdout_loaded_from_cache": bool(holdout_loaded_from_cache),
+        "train_size": int(train.features.shape[0]),
+        "holdout_size": int(holdout.features.shape[0]),
+        "feature_dim": int(N_FEATURES),
+        "belief_dim": int(BELIEF_DIM),
+        "hand_feature_dim": 52,
+        "target_dim": int(N_HANDS),
+        "train_mask_count": int(train.value_masks.sum()),
+        "holdout_mask_count": int(holdout.value_masks.sum()),
+        "belief_holdout": holdout_metrics,
+        "train_cfv_record_count": len(train_records),
+        "holdout_cfv_record_count": len(holdout_records),
+    }
+
+
+def load_public_belief_hand_cfv_checkpoint(
+    checkpoint: str | Path,
+    device: str | torch.device = "auto",
+) -> tuple[_HandCFVProbeNet, dict[str, Any]]:
+    """Load a saved belief-conditioned hand-CFV checkpoint."""
+    resolved_device = _resolve_device(device)
+    payload = torch.load(checkpoint, map_location=resolved_device, weights_only=False)
+    if payload.get("mode") != "public_belief_hand_cfv_checkpoint":
+        raise ValueError(f"{checkpoint} is not a public-belief hand-CFV checkpoint")
+    model = _HandCFVProbeNet(int(payload["hidden_dim"]), use_belief=True).to(resolved_device)
+    model.load_state_dict(payload["model_state"])
+    model.eval()
+    return model, payload
+
+
+def predict_public_belief_hand_cfv_checkpoint(
+    checkpoint: str | Path,
+    features: np.ndarray,
+    belief: np.ndarray,
+    value_masks: np.ndarray | None = None,
+    *,
+    device: str | torch.device = "auto",
+    batch_size: int = 8192,
+) -> np.ndarray:
+    """Predict global hand CFVs from a saved public-belief hand-CFV checkpoint."""
+    model, payload = load_public_belief_hand_cfv_checkpoint(checkpoint, device=device)
+    features = np.asarray(features, dtype=np.float32)
+    belief = np.asarray(belief, dtype=np.float32)
+    if features.ndim == 1:
+        features = features.reshape(1, -1)
+    if belief.ndim == 1:
+        belief = belief.reshape(1, -1)
+    if features.shape[0] != belief.shape[0]:
+        raise ValueError("features and belief must have the same number of rows")
+    if value_masks is None:
+        value_masks = np.ones((features.shape[0], N_HANDS), dtype=np.float32)
+    else:
+        value_masks = np.asarray(value_masks, dtype=np.float32)
+    dataset = PublicBeliefCFVDataset(
+        features=_apply_standardization(features, payload["public_mean"], payload["public_std"]),
+        belief=_apply_standardization(belief, payload["belief_mean"], payload["belief_std"]),
+        values=np.zeros((features.shape[0], N_HANDS), dtype=np.float32),
+        value_masks=value_masks,
+        labels=tuple(f"predict-{idx}" for idx in range(features.shape[0])),
+    )
+    return _predict_hand_cfv(
+        model,
+        dataset,
+        target_mean=float(payload["target_mean"]),
+        target_std=float(payload["target_std"]),
+        batch_size=batch_size,
+        device=_resolve_device(device),
+        use_belief=True,
+    )
 
 
 def save_metrics(metrics: dict[str, Any], path: str | Path) -> None:

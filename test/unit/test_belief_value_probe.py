@@ -389,3 +389,62 @@ def test_public_belief_hand_cfv_probe_uses_cached_pair_labels(tmp_path, monkeypa
 
     assert cached["train_loaded_from_cache"] is True
     assert cached["holdout_loaded_from_cache"] is True
+
+
+def test_public_belief_hand_cfv_checkpoint_round_trips_cached_model(tmp_path, monkeypatch):
+    checkpoint = tmp_path / "range.pt"
+    _write_checkpoint(checkpoint)
+    targets, cases = _write_targets_and_cases(tmp_path)
+    train_cache = tmp_path / "train_cfv_cache.npz"
+    holdout_cache = tmp_path / "holdout_cfv_cache.npz"
+    model_path = tmp_path / "hand_cfv.pt"
+
+    def fake_cfv_target(case, **kwargs):
+        values = np.zeros(bvp.N_HANDS, dtype=np.float32)
+        mask = np.zeros(bvp.N_HANDS, dtype=np.float32)
+        values[:4] = np.linspace(0.1, 0.4, 4, dtype=np.float32)
+        mask[:4] = 1.0
+        return values, mask, {
+            "label": case.label,
+            "street": 3,
+            "value_mean": 0.25,
+            "value_std": 0.111803,
+            "value_mask_count": 4,
+            "solver_latency_ms": 0.0,
+            "solver_n_hands": 4,
+            "solver_full_n_hands": 4,
+        }
+
+    monkeypatch.setattr(bvp, "_case_cfv_target", fake_cfv_target)
+    metrics = bvp.train_public_belief_hand_cfv_checkpoint(
+        train_targets_npz=targets,
+        train_cases_json=cases,
+        holdout_targets_npz=targets,
+        holdout_cases_json=cases,
+        range_checkpoint=checkpoint,
+        output_checkpoint=model_path,
+        device="cpu",
+        hidden_dim=8,
+        epochs=1,
+        batch_size=2,
+        seed=0,
+        train_cfv_cache=train_cache,
+        holdout_cfv_cache=holdout_cache,
+    )
+
+    assert model_path.exists()
+    assert metrics["mode"] == "public_belief_hand_cfv_checkpoint_train"
+    assert metrics["belief_holdout"]["mae"] >= 0.0
+
+    cache = np.load(holdout_cache, allow_pickle=False)
+    pred = bvp.predict_public_belief_hand_cfv_checkpoint(
+        model_path,
+        cache["features"],
+        cache["belief"],
+        cache["value_masks"],
+        device="cpu",
+        batch_size=2,
+    )
+
+    assert pred.shape == cache["values"].shape
+    assert np.all(pred[cache["value_masks"] <= 0] == 0.0)
