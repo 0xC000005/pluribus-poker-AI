@@ -1772,3 +1772,14 @@
 - Summary: Added a shared public+hand CFV probe with a learned belief encoder. On the corrected `64/32` split it passed all three seeds, but on the independently generated `128/64` split it failed all three seeds and worsened RMSE. This is the strongest positive representation signal so far, but it is not robust enough for mainline trainer work.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_mixed64x32_summary.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_mixed128x64_summary.json
 - Key metrics: `{"mixed64x32": {"pass_count": 3, "mae_delta_mean": 0.018296633333333333, "rmse_delta_mean": 0.012555036666666667}, "mixed128x64": {"pass_count": 0, "mae_delta_mean": -0.019324853333333333, "rmse_delta_mean": -0.06752217333333332}}`
+
+## 20260513T023353Z-stratified-hand-cfv-probe - passed
+
+- Timestamp: 2026-05-13T02:33:53Z
+- Type: analysis
+- Gate: manual-public-belief-stratified-hand-cfv-probe
+- Hypothesis: The shared hand-CFV probe failure on the independent `128/64` split is driven by small-sample CFV distribution mismatch, so a fixed split stratified by street and searched-CFV mean bins should give a cleaner representation test.
+- Failure class: eval_invalid
+- Summary: Added `scripts/stratify_search_targets.py` and a reusable splitter that combines search-target artifacts, stratifies by street plus CFV-label bins when caches are available, and writes aligned target/case/cache outputs. On the stratified `128/64` mixed-street surface, the shared hand-CFV public-belief probe passed all three seeds. This upgrades hand-shared belief-conditioned CFV learning from "promising but unstable" to the next trainer-facing mechanism to prototype, while also showing that tiny unstratified diagnostic splits can produce false negative architecture calls.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_stratified128x64_summary.json
+- Key metrics: `{"pass_count": 3, "n": 3, "mae_delta_mean": 0.05726119666666666, "rmse_delta_mean": 0.06325970666666667, "mae_deltas": [0.09499031, 0.03693059, 0.03986269], "rmse_deltas": [0.11452193, 0.04423414, 0.03102305], "train_mask_count": 141376, "holdout_mask_count": 70688, "split_metadata": "autoresearch-session/search_consistency_restored200_100x2k_20260513/stratified128x64_split_metadata.json"}`

@@ -270,7 +270,14 @@ Use `scripts/eval_public_belief_hand_cfv_probe.py` when testing representation
 learning over the same CFV labels. It trains on valid `(public state, hero
 hand)` pairs with shared public-state and hand-card encoders, and optionally a
 learned public-belief encoder. This is still diagnostic only; require stability
-across independently generated target splits before promoting the architecture.
+on a balanced target surface before promoting the architecture.
+
+Use `scripts/stratify_search_targets.py` to build that balanced target surface
+from generated gameplay-distributed artifacts. With CFV caches supplied, it
+splits by target street and searched-CFV mean bins, writes matching target/case
+files, and preserves split CFV caches. This prevents tiny independent
+train/holdout files from turning ordinary value-distribution noise into a false
+architecture pass or fail.
 
 For blueprint rollout targets, set `--blueprint-target-streets` deliberately.
 The default `2,3` collects desired target streets round-robin so target files

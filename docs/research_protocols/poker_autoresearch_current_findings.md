@@ -345,10 +345,14 @@ GPU training readiness:
   row, it trains on `(public state, hero hand)` pairs with shared public,
   hand-card, and belief encoders. On the corrected `64/32` split it passed
   `3/3` seeds with mean MAE delta `+0.0183` and mean RMSE delta `+0.0126`.
-  However, the same architecture failed on the independently generated
-  `128/64` split (`0/3`, mean MAE delta `-0.0193`, mean RMSE delta `-0.0675`).
-  Read: hand-shared CFV learning is the most promising belief-value direction
-  so far, but it needs a robustness check before trainer integration.
+  The independently generated `128/64` split initially failed (`0/3`, mean MAE
+  delta `-0.0193`, mean RMSE delta `-0.0675`), but verifier diagnostics traced
+  this to small-split river CFV distribution mismatch rather than a clean
+  architecture falsification. A fixed `128/64` split stratified by street and
+  searched-CFV mean bins passed `3/3` seeds, with mean MAE delta `+0.0573` and
+  mean RMSE delta `+0.0633`. Read: hand-shared public-belief CFV learning is
+  now the most promising belief-value direction, but promotion should use the
+  stratified evaluation surface and still require gameplay/search integration.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
