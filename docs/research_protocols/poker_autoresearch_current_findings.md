@@ -814,7 +814,8 @@ script passes all 10 checks and is now part of Tier 0.
    --mechanism "<mechanism>"` and close the falsification cycle through the
    normal autoresearch log.
 10. For learned river leaves, do not integrate the current river-continuation
-    callback into gameplay. Next work should train/evaluate value networks on
+    callback into gameplay. Next work should follow
+    `docs/research_protocols/poker_next_continuation_target.md`: train/evaluate
     a different continuation target. The shape-covered `256/128` leaf split
     shows that simply scaling the same leaf-CFV architecture is not enough;
     prioritize a turn-level PBS value target, joint policy/value continuation,

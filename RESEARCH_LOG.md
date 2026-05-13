@@ -2236,6 +2236,17 @@
 - Summary: Reused the cached `256/128` exact labels and trained one wider Deepset model (`hidden_dim=128`, `epochs=60`, separate heads, bottleneck 32). The wider run failed harder than the 64-wide seeds: holdout MAE/RMSE `0.4247/0.5459`, worse than feature-only MAE (`0.4124`), zero MAE (`0.3598`), and best train-constant MAE/RMSE (`0.3434/0.4390`). Treat this as a bounded capacity sanity check, not a hyperparameter sweep. It supports moving away from the current leaf-CFV objective rather than increasing network size.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset128_seed20260606.json
 - Key metrics: `{"passed": false, "hidden_dim": 128, "epochs": 60, "mae": 0.42468221, "rmse": 0.54593766, "feature_mae": 0.4123719, "zero_mae": 0.35975968, "best_constant_mae": 0.34340002, "best_constant_rmse": 0.43895668}`
+
+## 20260513T080814Z-next-continuation-target-design - passed
+
+- Timestamp: 2026-05-13T08:08:14Z
+- Type: workflow
+- Gate: manual-next-continuation-target-design
+- Hypothesis: After the leaf-CFV falsification and methodology review, the workflow needs a concrete next mechanism target to avoid drifting into more benchmark-hacking leaf-data scaleups.
+- Failure class: none
+- Summary: Added `docs/research_protocols/poker_next_continuation_target.md`. The design records the reviewed decision to stop scaling the current learned river-leaf CFV objective and move to a search-integrated public-belief continuation target: shared-trunk policy/value outputs, learned action sequence and belief encoders, fixed turn/PBS labels, and fixed resolver A/B before any Slumbot spend. It also records stop conditions: beat zero/train-constant value baselines and policy baselines, improve fixed resolver behavior, and avoid persistent knobs without mechanism rationale.
+- Metrics file: docs/research_protocols/poker_next_continuation_target.md
+- Key metrics: `{"decision": "stop_leaf_only_cfv_scaling", "next_target": "joint_public_belief_policy_value_continuation", "requires_fixed_resolver_ab": true, "live_slumbot_spend": "blocked_until_fixed_state_pass"}`
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z
