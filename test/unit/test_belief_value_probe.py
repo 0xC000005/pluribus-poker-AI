@@ -49,6 +49,7 @@ from eval_joint_pbs_continuation_probe import (
     run_joint_pbs_continuation_probe,
 )
 from eval_joint_pbs_group_constant_baseline import eval_joint_pbs_group_constant_baseline
+from split_joint_pbs_by_metadata import split_joint_pbs_by_metadata
 from solver import Node
 
 
@@ -810,6 +811,60 @@ def test_joint_pbs_metadata_shift_reports_numeric_and_error_correlation(tmp_path
     assert metrics["mode"] == "joint_pbs_metadata_shift"
     assert metrics["categorical_shift"][0]["holdout_missing_in_train"] == ["y"]
     assert metrics["error_correlations"][0]["field"] in {"bet_count", "hero_reach_entropy"}
+
+
+def test_split_joint_pbs_by_metadata_preserves_shape_coverage(tmp_path):
+    joint_path = tmp_path / "joint.npz"
+    metadata_path = tmp_path / "joint.json"
+    train_path = tmp_path / "train_joint.npz"
+    holdout_path = tmp_path / "holdout_joint.npz"
+    _write_joint_pbs_fixture(joint_path, n_states=7)
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "mode": "fixture_joint_pbs",
+                "cut_records": [
+                    {
+                        "label": f"case-{idx}",
+                        "action_shape": "shape-a" if idx < 4 else ("shape-b" if idx < 6 else "shape-c"),
+                        "bet_count": 5 + (idx % 2),
+                        "policy_weight": 0.0,
+                        "hero_mask_count": 4,
+                        "villain_mask_count": 4,
+                        "hero_reach_top10_mass": 0.1 + idx * 0.01,
+                        "villain_reach_top10_mass": 0.2 + idx * 0.01,
+                        "hero_reach_normalized_entropy": 0.7 - idx * 0.01,
+                        "villain_reach_normalized_entropy": 0.6 - idx * 0.01,
+                    }
+                    for idx in range(7)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    metrics = split_joint_pbs_by_metadata(
+        joint_npz=joint_path,
+        metadata_json=metadata_path,
+        train_output=train_path,
+        holdout_output=holdout_path,
+        holdout_fraction=0.5,
+        seed=13,
+        reach_bins=2,
+    )
+    train = np.load(train_path, allow_pickle=False)
+    holdout = np.load(holdout_path, allow_pickle=False)
+    train_meta = json.loads(train_path.with_suffix(".json").read_text(encoding="utf-8"))
+    holdout_meta = json.loads(holdout_path.with_suffix(".json").read_text(encoding="utf-8"))
+
+    assert metrics["mode"] == "joint_pbs_metadata_split_summary"
+    assert train["features"].shape[0] + holdout["features"].shape[0] == 7
+    assert metrics["holdout_missing_in_train_shapes"] == []
+    assert "shape-c" in metrics["train_only_shapes"]
+    assert train_meta["value_label_count"] + holdout_meta["value_label_count"] == 56
+    assert {record["label"] for record in train_meta["cut_records"]}.isdisjoint(
+        {record["label"] for record in holdout_meta["cut_records"]}
+    )
 
 
 def test_joint_pbs_continuation_probe_skips_policy_gate_without_policy_labels(tmp_path):

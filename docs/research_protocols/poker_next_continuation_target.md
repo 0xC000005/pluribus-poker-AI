@@ -156,3 +156,16 @@ missing shapes remained and the model still failed (`MAE 0.3653` vs best
 constant `0.3184`). The next data step should create a larger successor-frontier
 pool first, then split with explicit action-shape and reach-coverage audits
 before fitting any new continuation network.
+
+That controlled split is now implemented. A `256`-case successor pool produced
+`244` high-bet cut targets; the metadata-balanced cut-level split created
+`182/62` train/holdout targets with no holdout-only action shapes and much
+smaller reach shift (largest SMD `0.265`, hero top-10 reach SMD `0.156`). On
+this cleaner split, the same CUDA Deepset continuation probe passed (`MAE/RMSE
+0.1204/0.1911`) against the best constant baseline (`0.2815/0.3660`), while
+action-shape constants remained weak (`MAE 0.2802`). This means successor
+frontier values are learnable when coverage is controlled; the remaining
+bottleneck is sparse frontier context, especially low legal-action-count states
+where residual error is highest. The next principled step should improve the
+continuation interface or target factorization for those sparse legal contexts,
+then rerun fixed successor-cut resolver A/B before any Slumbot evaluation.
