@@ -674,6 +674,11 @@ Label-throughput update:
   `0.7938` against target residual scale `0.0467`. The action drift is
   therefore best explained as terminal-reach distribution shift, not a
   trustworthy correction of equity-only leaves.
+- Tiny resolver-leaf training did not rescue this. The exporter now supports
+  `--start-index` and `--max-rivers-per-terminal` for disjoint, less
+  single-terminal-heavy splits, but a `16/8` diverse leaf split still failed
+  with MAE `9.83` versus zero `0.258`. Treat this as a data-scale/protocol
+  blocker, not a prompt to tune learning rates.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -715,5 +720,6 @@ script passes all 10 checks and is now part of Tier 0.
    normal autoresearch log.
 10. For learned river leaves, do not integrate the current river-continuation
     callback into gameplay. Next work should train/evaluate value networks on
-    resolver-generated leaf reach distributions, or use the turn-CFV ensemble
-    as a street-level continuation target, before another broad A/B.
+    a materially larger resolver-generated leaf dataset with source/terminal
+    stratification, or use the turn-CFV ensemble as a street-level continuation
+    target, before another broad A/B.

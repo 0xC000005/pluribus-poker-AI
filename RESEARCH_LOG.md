@@ -2103,3 +2103,14 @@
 - Summary: Added `scripts/build_learned_river_leaf_cases.py` to export river cases and public-belief ranges from turn resolver terminal reaches, then re-used `scripts/eval_dual_cfv_range_robustness.py` with `mix_uniform=0.0` to solve exact labels for four exported leaf states. The river ensemble failed decisively on these actual search-leaf ranges: model MAE/RMSE `0.3553/0.4300` versus zero `0.2560/0.3112`, and value-sum residual error `0.7938` against target residual scale `0.0467`. This explains the learned-leaf action drift as distribution shift: blueprint/perturbed-root river training is not enough for terminal reach ranges inside turn search.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_range_robustness_river_leaf_smoke4_mix000_deepset64_ensemble.json
 - Key metrics: `{"passed": false, "model": {"mae": 0.35530771, "rmse": 0.42997385, "bias": 0.32226342}, "zero": {"mae": 0.25596983, "rmse": 0.31117567}, "best_constant": {"mae": 0.25596983, "rmse": 0.31117567}, "value_sum_residual_error": 0.79383865, "target_abs_mean": 0.04673604, "solver_mean_ms": 10230.963}`
+
+## 20260513T062930Z-tiny-leaf-distribution-training - failed
+
+- Timestamp: 2026-05-13T06:29:30Z
+- Type: experiment
+- Gate: manual-tiny-leaf-distribution-training
+- Hypothesis: A small resolver-leaf distribution dataset should at least show whether training directly on terminal reach ranges can beat zero/train-constant leaf baselines.
+- Failure class: data_scale
+- Summary: Extended the leaf exporter with `--start-index` and `--max-rivers-per-terminal` so train/holdout leaf states can be disjoint and avoid filling a split with one terminal's river cards. Two tiny training attempts still failed: the naive one-terminal `16/8` split exploded to MAE `42.98`, and the capped multi-terminal split still produced MAE `9.83` versus zero `0.258`. Do not tune learning-rate knobs around this. The principled next step is a materially larger resolver-generated leaf dataset with source/terminal stratification, then re-test whether Deepset dual-CFV can learn this distribution.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river_leaf16x8_deepset64_seed20260590.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river_leaf16x8_diverse_deepset64_seed20260591.json
+- Key metrics: `{"naive_leaf16x8": {"passed": false, "mae": 42.97924655, "zero_mae": 0.57389303}, "diverse_leaf16x8": {"passed": false, "mae": 9.8294682, "zero_mae": 0.258343, "best_constant_mae": 0.258343}, "exporter_added": ["start_index", "max_rivers_per_terminal"]}`

@@ -57,6 +57,7 @@ class _RiverLeafCollector:
         active_subtree_node_idx: int,
         solver_hands: list[tuple[int, int]],
         max_leaf_states: int,
+        max_rivers_per_terminal: int = 0,
     ):
         self.source_case = source_case
         self.board4 = [int(card) for card in board4]
@@ -64,6 +65,7 @@ class _RiverLeafCollector:
         self.active_subtree_node_idx = int(active_subtree_node_idx)
         self.solver_hands = list(solver_hands)
         self.max_leaf_states = int(max_leaf_states)
+        self.max_rivers_per_terminal = max(0, int(max_rivers_per_terminal))
         self.river_cards = sorted(set(range(52)) - set(self.board4))
         self.local_to_global = np.asarray(
             [_HAND_TO_INDEX[tuple(sorted(hand))] for hand in self.solver_hands],
@@ -92,8 +94,14 @@ class _RiverLeafCollector:
                 or int(parsed.get("pos", -1)) < 0
             ):
                 continue
+            emitted_for_terminal = 0
             for river_card in self.river_cards:
                 if len(self.cases) >= self.max_leaf_states:
+                    break
+                if (
+                    self.max_rivers_per_terminal
+                    and emitted_for_terminal >= self.max_rivers_per_terminal
+                ):
                     break
                 board5 = [*self.board4, int(river_card)]
                 board_mask = _global_board_mask(board5)
@@ -144,6 +152,7 @@ class _RiverLeafCollector:
                         "terminal_node_idx": int(node_idx),
                     }
                 )
+                emitted_for_terminal += 1
         return kwargs["default_hero_values"], kwargs["default_villain_values"]
 
     def _terminal_action_str(self, tree: dict[str, Any], node_idx: int) -> str:
@@ -161,6 +170,7 @@ def _collect_case(
     *,
     belief_row: np.ndarray | None,
     max_leaf_states: int,
+    max_rivers_per_terminal: int,
     solver_iterations: int,
     solver_backend: str,
 ) -> tuple[list[ResolverBenchmarkCase], list[np.ndarray], list[np.ndarray], list[dict[str, Any]]]:
@@ -196,6 +206,7 @@ def _collect_case(
         active_subtree_node_idx=active_idx,
         solver_hands=list(solver.hands),
         max_leaf_states=max_leaf_states,
+        max_rivers_per_terminal=max_rivers_per_terminal,
     )
     solver.solve(
         n_iterations=solver_iterations,
@@ -214,8 +225,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--cases", required=True)
     parser.add_argument("--cfv-cache")
+    parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--limit", type=int, default=4)
     parser.add_argument("--max-leaf-states", type=int, default=16)
+    parser.add_argument("--max-rivers-per-terminal", type=int, default=0)
     parser.add_argument("--solver-iterations", type=int, default=1)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--output-cases", required=True)
@@ -234,7 +247,10 @@ def main(argv: list[str] | None = None) -> int:
     features: list[np.ndarray] = []
     beliefs: list[np.ndarray] = []
     records: list[dict[str, Any]] = []
-    for idx, case in enumerate(cases[: max(1, min(int(args.limit), len(cases)))]):
+    start_index = max(0, int(args.start_index))
+    stop_index = max(start_index + 1, min(start_index + int(args.limit), len(cases)))
+    for idx in range(start_index, stop_index):
+        case = cases[idx]
         if len(out_cases) >= int(args.max_leaf_states):
             break
         belief_row = base_dataset.belief[idx] if base_dataset is not None else None
@@ -243,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
             case,
             belief_row=belief_row,
             max_leaf_states=remaining,
+            max_rivers_per_terminal=args.max_rivers_per_terminal,
             solver_iterations=args.solver_iterations,
             solver_backend=args.solver_backend,
         )
@@ -269,8 +286,10 @@ def main(argv: list[str] | None = None) -> int:
         "output_cases": str(args.output_cases),
         "output_cfv_cache": str(args.output_cfv_cache),
         "n_leaf_states": len(out_cases),
+        "start_index": int(start_index),
         "limit": int(args.limit),
         "max_leaf_states": int(args.max_leaf_states),
+        "max_rivers_per_terminal": int(args.max_rivers_per_terminal),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
         "records": records,
