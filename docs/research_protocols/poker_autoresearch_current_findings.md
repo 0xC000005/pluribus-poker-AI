@@ -734,6 +734,27 @@ Label-throughput update:
   std is `0.1077`, lower than several action-agreeing cases. Do not add an
   uncertainty threshold as the next mechanism; prioritize a stronger
   continuation objective/evaluation target.
+- Exact-leaf oracle replacement is currently too expensive for unattended A/B:
+  one exact river leaf label took about `9.0s` even at one CFR iteration, and
+  the high-drift `0128` callback generates thousands of leaf prediction states.
+  The workflow now uses `scripts/analyze_dual_cfv_cache_errors.py` to reuse
+  exact dual-CFV caches and group errors by leaf metadata without re-solving.
+  On the high-drift 16-state exact cache, the worst MAE terminal family is
+  `ck/b200c/b150b525c/` (`0.1840` MAE) and the worst residual miss is
+  `ck/b200c/b150b712c/` (`0.1192`). Zero-sum projection removes predicted
+  residual by construction but leaves the worst MAE essentially intact
+  (`0.1815`). This points to richer continuation targets or terminal/bet
+  stratification, not uncertainty or projection gates.
+- Related-work checkpoint: DeepStack and Supremus support learned
+  counterfactual value networks inside depth-limited continual resolving, and
+  Supremus specifically reports beating Slumbot with improved deep CFV
+  machinery. ReBeL and Student of Games reinforce public-belief-state
+  value/search as the principled training/inference unit. Safe/nested subgame
+  solving reinforces why per-hand leaf MAE is not enough: imperfect-information
+  subgames depend on the broader strategy context, so leaf changes must be
+  judged by resolver action behavior. Sources: https://arxiv.org/abs/1701.01724,
+  https://arxiv.org/abs/2007.10442, https://arxiv.org/abs/2007.13544,
+  https://arxiv.org/abs/2112.03178, and https://arxiv.org/abs/1705.02955.
 
 Resolved workflow issue: `rules_parity`.
 
@@ -776,5 +797,6 @@ script passes all 10 checks and is now part of Tier 0.
 10. For learned river leaves, do not integrate the current river-continuation
     callback into gameplay. Next work should train/evaluate value networks on
     a materially larger resolver-generated leaf dataset with source/terminal
-    stratification, or use the turn-CFV ensemble as a street-level continuation
-    target, before another broad A/B.
+    stratification, prioritize the larger bet/call terminal families exposed by
+    cache attribution, or use the turn-CFV ensemble as a street-level
+    continuation target before another broad A/B.

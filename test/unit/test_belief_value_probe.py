@@ -18,6 +18,7 @@ from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research import belief_value_probe as bvp
 from poker_ai.research.belief_value_probe import compute_hero_hand_ev
 from eval_public_belief_dual_hand_cfv_probe import (
+    DualCFVDataset,
     _DualHandCFVProbeNet,
     load_public_belief_dual_hand_cfv_checkpoint,
     predict_public_belief_dual_hand_cfv_ensemble,
@@ -25,6 +26,7 @@ from eval_public_belief_dual_hand_cfv_probe import (
     predict_public_belief_dual_hand_cfv_model_vectorized,
     project_dual_cfv_zero_sum,
 )
+from analyze_dual_cfv_cache_errors import group_error_records, merge_record_metadata
 from solver import Node
 
 
@@ -411,6 +413,63 @@ def test_dual_cfv_zero_sum_projection_removes_range_weighted_residual():
     assert projected[0, 1, 2] == 5.0
     residual = projected[0, 0, 0] + projected[1, 0, 1]
     assert residual == 0.0
+
+
+def test_dual_cfv_cache_error_attribution_groups_worst_rows():
+    features = np.zeros((2, 3), dtype=np.float32)
+    belief = np.zeros((2, bvp.BELIEF_DIM), dtype=np.float32)
+    belief[:, 0] = 1.0
+    belief[:, bvp.N_HANDS] = 1.0
+    hero_values = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    villain_values = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    hero_values[0, 0] = 1.0
+    villain_values[0, 0] = -1.0
+    hero_values[1, 0] = 3.0
+    villain_values[1, 0] = -3.0
+    masks = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    masks[:, 0] = 1.0
+    dataset = DualCFVDataset(
+        features=features,
+        belief=belief,
+        hero_values=hero_values,
+        villain_values=villain_values,
+        hero_masks=masks,
+        villain_masks=masks,
+        labels=("low", "high"),
+    )
+    pred = np.zeros((2, 2, bvp.N_HANDS), dtype=np.float32)
+    records = [
+        {"leaf_action_str": "ck/kk/"},
+        {"leaf_action_str": "ck/b200c/"},
+    ]
+
+    groups = group_error_records(
+        pred,
+        dataset,
+        records,
+        group_by=("leaf_action_str",),
+        top_k=1,
+    )
+
+    assert [group["key"] for group in groups] == ["ck/b200c/", "ck/kk/"]
+    assert groups[0]["model"]["mae"] == 3.0
+    assert groups[0]["zero_baseline"]["mae"] == 3.0
+    assert groups[0]["worst_states"][0]["label"] == "high"
+
+
+def test_dual_cfv_cache_metadata_merge_keeps_solver_fields():
+    merged = merge_record_metadata(
+        [{"label": "leaf-a", "solver_latency_ms": 12.0}],
+        [{"label": "leaf-a", "leaf_action_str": "ck/b200c/", "solver_latency_ms": 99.0}],
+    )
+
+    assert merged == [
+        {
+            "label": "leaf-a",
+            "leaf_action_str": "ck/b200c/",
+            "solver_latency_ms": 12.0,
+        }
+    ]
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
