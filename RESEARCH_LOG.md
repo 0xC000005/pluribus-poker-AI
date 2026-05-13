@@ -2225,3 +2225,25 @@
 - Summary: Built a pre-label train/holdout split before exact solving. Train has `256` leaf states from `70` source turn states, all `52` river cards, `43` action shapes, and bet counts up to `7`; holdout has `128` states from `33` sources, `48` river cards, `31` action shapes, and bet counts up to `7`. Exact CPU labels took `8753 ms/state` for train and `8616 ms/state` for holdout with `label_jobs=4`; cached reruns then trained on CUDA. Across seeds `20260603..20260605`, the belief model improved over the feature-only baseline every time, but the strict gate failed every time. Only seed `20260603` beat zero MAE (`0.3460` vs `0.3598`), and none beat the train-median constant (`0.3434`) or train-constant RMSE. This falsifies blind scale-up of the same leaf-value architecture at this size. The next principled step is a different continuation objective/search integration, such as a turn-level PBS value target or a model that predicts a searched continuation policy/value jointly, not more small leaf-data scaling.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_prelabeled256_seed20260601.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/turn_leaf_export_prelabeled128_holdout_seed20260602.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset64_seed20260603.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset64_seed20260604.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_leaf256x128_shape_deepset64_seed20260605.json
 - Key metrics: `{"split": {"train_leaf_states": 256, "train_sources": 70, "train_rivers": 52, "train_action_shapes": 43, "holdout_leaf_states": 128, "holdout_sources": 33, "holdout_rivers": 48, "holdout_action_shapes": 31}, "seeds": {"20260603": {"passed": false, "mae": 0.34600768, "zero_mae_delta": 0.013752, "best_constant_mae_delta": -0.00260766}, "20260604": {"passed": false, "mae": 0.38585521, "zero_mae_delta": -0.02609553, "best_constant_mae_delta": -0.04245519}, "20260605": {"passed": false, "mae": 0.39696075, "zero_mae_delta": -0.03720107, "best_constant_mae_delta": -0.05356073}}, "mean": {"mae": 0.37627455, "feature_mae_delta": 0.03362144, "zero_mae_delta": -0.01651487, "best_constant_mae_delta": -0.03287453}}`
+## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
+
+- Timestamp: 2026-05-13T08:01:10Z
+- Type: methodology_review
+- Gate: methodology-review-20260513T031521Z-dual-player-belief-bottleneck-cfv-leaf
+- Hypothesis: Methodology review for Dual-player belief-bottleneck CFV leaf should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260513T031521Z-dual-player-belief-bottleneck-cfv-leaf passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv/metrics.json
+- Key metrics: `{"decision": "gather_more_evidence", "gate": "methodology-review-20260513T031521Z-dual-player-belief-bottleneck-cfv-leaf", "passed": true}`
+
+## 20260513T080110Z-methodology-review-for-shape-covered-leaf256-training-should - passed
+
+- Timestamp: 2026-05-13T08:01:10Z
+- Type: methodology_review
+- Gate: methodology-review-20260513T075145Z-shape-covered-leaf256-training
+- Hypothesis: Methodology review for shape-covered-leaf256-training should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260513T075145Z-shape-covered-leaf256-training passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T080110Z-methodology-review-for-shape-covered-leaf256-training-should/metrics.json
+- Key metrics: `{"decision": "abandon", "gate": "methodology-review-20260513T075145Z-shape-covered-leaf256-training", "passed": true}`
+
