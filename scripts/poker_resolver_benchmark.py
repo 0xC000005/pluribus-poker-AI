@@ -51,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Limit number of cases for smoke tests.",
     )
     parser.add_argument("--output-json")
+    parser.add_argument("--enforce-policy-head-behavior-gate", action="store_true")
+    parser.add_argument("--max-policy-head-allin-rate", type=float, default=0.05)
+    parser.add_argument("--max-policy-head-mean-l1-drift", type=float, default=0.75)
     args = parser.parse_args(argv)
 
     device = _device(args.device)
@@ -66,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
         checkpoint_metadata=loaded.metadata,
+        enforce_policy_head_behavior_gate=args.enforce_policy_head_behavior_gate,
+        max_policy_head_allin_rate=args.max_policy_head_allin_rate,
+        max_policy_head_mean_l1_drift=args.max_policy_head_mean_l1_drift,
     )
     if args.output_json:
         output = Path(args.output_json)

@@ -201,3 +201,6 @@ policy-head solver drift (`0.8880 -> 0.8097`). But its argmax selected all-in on
 as evidence for soft policy priors inside search, not direct policy-head action
 selection. The next gate should evaluate entropy/top-action calibration and a
 solver warm-start/prior path that cannot force unsafe top actions by itself.
+The fixed resolver benchmark now has an optional policy-head behavior gate; the
+calibrated head fails it under max all-in rate `0.05` and max mean L1 drift
+`0.75`.

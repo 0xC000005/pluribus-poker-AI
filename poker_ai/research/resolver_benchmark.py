@@ -395,6 +395,9 @@ def run_resolver_benchmark(
     solver_iterations: int = 25,
     solver_backend: str = "auto",
     checkpoint_metadata: dict[str, Any] | None = None,
+    enforce_policy_head_behavior_gate: bool = False,
+    max_policy_head_allin_rate: float = 0.05,
+    max_policy_head_mean_l1_drift: float = 0.75,
 ) -> dict[str, Any]:
     value_net.eval()
     selected_cases = list(cases) if cases is not None else default_benchmark_cases()
@@ -423,8 +426,25 @@ def run_resolver_benchmark(
         1 for item in results if item.get("allin_removed_action_changed")
     )
     metadata = checkpoint_metadata or {}
+    mechanical_passed = all(bool(item["passed"]) for item in results)
+    policy_head_allin_rate = float(policy_head_allin_count / len(results)) if results else 0.0
+    policy_head_mean_l1 = float(np.mean(policy_head_drift_values)) if policy_head_drift_values else 0.0
+    policy_head_behavior_passed = bool(
+        policy_head_allin_rate <= float(max_policy_head_allin_rate)
+        and policy_head_mean_l1 <= float(max_policy_head_mean_l1_drift)
+    )
     return {
-        "passed": all(bool(item["passed"]) for item in results),
+        "passed": bool(
+            mechanical_passed
+            and (policy_head_behavior_passed or not enforce_policy_head_behavior_gate)
+        ),
+        "mechanical_passed": mechanical_passed,
+        "policy_head_behavior_passed": policy_head_behavior_passed,
+        "enforce_policy_head_behavior_gate": bool(enforce_policy_head_behavior_gate),
+        "policy_head_behavior_gate": {
+            "max_policy_head_allin_rate": float(max_policy_head_allin_rate),
+            "max_policy_head_mean_l1_drift": float(max_policy_head_mean_l1_drift),
+        },
         "mode": "fixed_public_state_resolver_benchmark",
         "n_cases": len(results),
         "n_solver_cases": len(solver_results),
@@ -437,9 +457,7 @@ def run_resolver_benchmark(
         "avg_solver_latency_ms": float(np.mean(latency_values)) if latency_values else 0.0,
         "max_solver_latency_ms": float(np.max(latency_values)) if latency_values else 0.0,
         "mean_action_l1_drift": float(np.mean(drift_values)) if drift_values else 0.0,
-        "policy_head_mean_action_l1_drift": (
-            float(np.mean(policy_head_drift_values)) if policy_head_drift_values else 0.0
-        ),
+        "policy_head_mean_action_l1_drift": policy_head_mean_l1,
         "mean_advantage_delta_proxy": (
             float(np.mean(advantage_deltas)) if advantage_deltas else 0.0
         ),
@@ -449,9 +467,7 @@ def run_resolver_benchmark(
         "no_allin_changed_rate": (
             float(allin_changed_count / len(results)) if results else 0.0
         ),
-        "policy_head_allin_rate": (
-            float(policy_head_allin_count / len(results)) if results else 0.0
-        ),
+        "policy_head_allin_rate": policy_head_allin_rate,
         "illegal_case_count": sum(
             1
             for item in results
