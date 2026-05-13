@@ -28,6 +28,7 @@ from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
     _frontier_action_shape,
     _successor_cut_node_indices,
 )
+from eval_policy_prior_solver_budget import mix_strategy  # noqa: E402
 from build_learned_river_leaf_cases import (  # noqa: E402
     _rotated_cards,
     _summarize_leaf_records,
@@ -121,6 +122,21 @@ def test_street_solver_omits_under_minimum_raise_buckets():
 
     assert 2 not in solver.root.children
     assert 3 in solver.root.children
+
+
+def test_policy_prior_mix_strategy_normalizes_and_validates_weight():
+    base = np.zeros(N_ACTIONS, dtype=np.float32)
+    prior = np.zeros(N_ACTIONS, dtype=np.float32)
+    base[1] = 1.0
+    prior[8] = 1.0
+
+    mixed = mix_strategy(base, prior, 0.25)
+
+    assert mixed[1] == pytest.approx(0.75)
+    assert mixed[8] == pytest.approx(0.25)
+    assert mixed.sum() == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="prior_weight"):
+        mix_strategy(base, prior, 1.5)
 
 
 def test_street_solver_showdown_leaf_callback_can_reproduce_default():

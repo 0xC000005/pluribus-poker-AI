@@ -206,3 +206,12 @@ calibrated head fails it under max all-in rate `0.05` and max mean L1 drift
 `0.75`. The probability-level diagnostics explain why: calibrated mean all-in
 probability matches the target (`0.1469` vs `0.1454`) and entropy is close, but
 argmax behavior is unstable around near-tied soft actions.
+
+A naive soft-prior integration was tested and failed. Mixing the calibrated
+policy-head distribution into the final `5`-iteration solver strategy at weight
+`0.25` did not move the solver closer to a `25`-iteration reference: mean L1
+was `0.5950` for the mix versus `0.5778` for the low-budget solver alone, and
+action agreement stayed flat at `0.5469`. The all-in top-action rate also stayed
+at `0.6563`. Do not spend on more final-distribution mixing weights. A useful
+policy prior must enter the CFR update/warm-start path, or be trained as a
+residual correction against low-vs-high solver behavior.
