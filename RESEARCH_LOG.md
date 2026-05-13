@@ -1794,3 +1794,14 @@
 - Summary: Added `scripts/train_public_belief_hand_cfv.py` plus checkpoint save/load/predict helpers. The script trains only the belief-conditioned shared hand-CFV model, stores public/belief/target normalizers with the checkpoint, and emits compact metrics. On the stratified `128/64` cached surface it trained on CUDA and reproduced the seed-20260513 belief-model holdout metrics. This creates the model artifact needed for the next principled step: testing learned CFV leaf evaluation or search priors, rather than wiring raw belief features directly into the action policy.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_checkpoint_stratified128x64_seed20260513.json
 - Key metrics: `{"passed": true, "checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_stratified128x64_seed20260513.pt", "device": "cuda", "train_size": 128, "holdout_size": 64, "train_mask_count": 141376, "holdout_mask_count": 70688, "belief_holdout": {"mae": 0.39303188, "rmse": 0.52325341, "bias": -0.03546923}}`
+
+## 20260513T024602Z-river-hand-cfv-component - passed
+
+- Timestamp: 2026-05-13T02:46:02Z
+- Type: experiment
+- Gate: manual-public-belief-river-hand-cfv-probe
+- Hypothesis: River-only searched CFV labels should provide the cleanest learned value component for future turn lookahead leaf evaluation, because the current turn solver's terminal model is equity-to-showdown rather than future river betting.
+- Failure class: range_belief
+- Summary: Extended `scripts/stratify_search_targets.py` with a street filter and built a balanced river-only `64/32` split from the existing cached mixed-street pool. The shared hand-CFV public-belief probe passed all three seeds on river states, with a larger mean improvement than the mixed-street split. A saved river-only checkpoint trained on CUDA and produced compact holdout metrics. This supports using a river CFV value model as the first learned leaf component for turn search rather than integrating mixed turn-equity targets directly.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_river_stratified64x32_summary.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_checkpoint_river_stratified64x32_seed20260513.json
+- Key metrics: `{"probe": {"pass_count": 3, "n": 3, "mae_delta_mean": 0.12536221, "rmse_delta_mean": 0.14373061666666667, "train_mask_count": 69184, "holdout_mask_count": 34592}, "checkpoint": {"passed": true, "checkpoint": "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_river_stratified64x32_seed20260513.pt", "belief_holdout": {"mae": 0.45485312, "rmse": 0.55877539, "bias": -0.0103855}}}`

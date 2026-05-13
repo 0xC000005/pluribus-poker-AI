@@ -359,6 +359,13 @@ GPU training readiness:
   RMSE `0.5233` against searched CFV labels. Read: this is the reusable learned
   value component to attach to depth-limited search experiments, not a direct
   Slumbot-play promotion.
+- A river-only stratified CFV surface gives an even cleaner signal for
+  DeepStack-style turn lookahead. Filtering the cached mixed pool to river
+  states produced a balanced `64/32` split, and the shared hand-CFV belief probe
+  passed `3/3` seeds with mean MAE delta `+0.1254` and mean RMSE delta
+  `+0.1437`. The saved river-only checkpoint reached held-out MAE `0.4549` and
+  RMSE `0.5588`. Read: use the river-only learned CFV component first when
+  testing learned leaf values for turn search.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95

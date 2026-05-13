@@ -121,3 +121,36 @@ def test_split_search_targets_stratifies_and_preserves_cache_alignment(tmp_path)
     )
     assert metadata["stratify_by"] == "street+cfv_mean_bin"
     assert sum(item["holdout"] for item in metadata["strata"]) == 4
+
+
+def test_split_search_targets_can_filter_to_river_only(tmp_path):
+    first = _write_artifact(tmp_path, "a", n_turn=4, n_river=4, offset=0.0)
+    second = _write_artifact(tmp_path, "b", n_turn=4, n_river=4, offset=100.0)
+
+    metadata = split_search_targets_stratified(
+        [
+            SearchTargetSplitInput(*first),
+            SearchTargetSplitInput(*second),
+        ],
+        SearchTargetSplitOutput(
+            train_targets_npz=tmp_path / "river_train.npz",
+            train_cases_json=tmp_path / "river_train.cases.json",
+            holdout_targets_npz=tmp_path / "river_holdout.npz",
+            holdout_cases_json=tmp_path / "river_holdout.cases.json",
+            train_cfv_cache_npz=tmp_path / "river_train.cfv.npz",
+            holdout_cfv_cache_npz=tmp_path / "river_holdout.cfv.npz",
+        ),
+        train_size=4,
+        holdout_size=2,
+        seed=23,
+        cfv_bins=2,
+        target_streets=(3,),
+    )
+
+    train_cases = json.loads((tmp_path / "river_train.cases.json").read_text())["cases"]
+    holdout_cases = json.loads((tmp_path / "river_holdout.cases.json").read_text())["cases"]
+
+    assert metadata["target_streets"] == [3]
+    assert len(train_cases) == 4
+    assert len(holdout_cases) == 2
+    assert all(len(case["board"]) == 5 for case in [*train_cases, *holdout_cases])

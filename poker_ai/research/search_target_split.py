@@ -300,6 +300,31 @@ def _subset_cfv(dataset: PublicBeliefCFVDataset, indices: np.ndarray) -> PublicB
     )
 
 
+def _filter_inputs_by_indices(
+    targets: PolicyTargetBuffer,
+    cases: list[ResolverBenchmarkCase],
+    cfv_dataset: PublicBeliefCFVDataset | None,
+    cfv_records: list[dict[str, Any]] | None,
+    indices: np.ndarray,
+) -> tuple[
+    PolicyTargetBuffer,
+    list[ResolverBenchmarkCase],
+    PublicBeliefCFVDataset | None,
+    list[dict[str, Any]] | None,
+]:
+    targets = _subset_targets(targets, indices)
+    cases = [cases[int(idx)] for idx in indices.tolist()]
+    if cfv_dataset is None:
+        return targets, cases, None, None
+    assert cfv_records is not None
+    return (
+        targets,
+        cases,
+        _subset_cfv(cfv_dataset, indices),
+        [cfv_records[int(idx)] for idx in indices.tolist()],
+    )
+
+
 def split_search_targets_stratified(
     inputs: Iterable[SearchTargetSplitInput],
     output: SearchTargetSplitOutput,
@@ -308,10 +333,24 @@ def split_search_targets_stratified(
     holdout_size: int,
     seed: int = 0,
     cfv_bins: int = 4,
+    target_streets: tuple[int, ...] | None = None,
 ) -> dict[str, Any]:
     """Write a deterministic stratified split for search-target diagnostics."""
     targets, cases, cfv_dataset, cfv_records = _concat_inputs(inputs)
     streets = np.asarray([_case_street(case) for case in cases], dtype=np.int64)
+    if target_streets is not None:
+        wanted = tuple(int(item) for item in target_streets)
+        if not wanted:
+            raise ValueError("target_streets cannot be empty")
+        keep = np.where(np.isin(streets, np.asarray(wanted, dtype=np.int64)))[0]
+        targets, cases, cfv_dataset, cfv_records = _filter_inputs_by_indices(
+            targets,
+            cases,
+            cfv_dataset,
+            cfv_records,
+            keep.astype(np.int64),
+        )
+        streets = np.asarray([_case_street(case) for case in cases], dtype=np.int64)
     if cfv_dataset is not None:
         bins = _value_bins(cfv_dataset.values, cfv_dataset.value_masks, streets, cfv_bins)
     else:
@@ -350,6 +389,9 @@ def split_search_targets_stratified(
         **metadata,
         "cfv_bins": int(cfv_bins) if cfv_dataset is not None else None,
         "stratify_by": "street+cfv_mean_bin" if cfv_dataset is not None else "street+target_top_action",
+        "target_streets": [int(item) for item in target_streets]
+        if target_streets is not None
+        else None,
         "train_targets_npz": str(output.train_targets_npz),
         "train_cases_json": str(output.train_cases_json),
         "holdout_targets_npz": str(output.holdout_targets_npz),

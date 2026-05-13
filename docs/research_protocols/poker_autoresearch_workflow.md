@@ -283,7 +283,8 @@ from generated gameplay-distributed artifacts. With CFV caches supplied, it
 splits by target street and searched-CFV mean bins, writes matching target/case
 files, and preserves split CFV caches. This prevents tiny independent
 train/holdout files from turning ordinary value-distribution noise into a false
-architecture pass or fail.
+architecture pass or fail. Use `--streets 3` to isolate river CFV labels before
+testing a learned value function intended for turn lookahead leaf evaluation.
 
 For blueprint rollout targets, set `--blueprint-target-streets` deliberately.
 The default `2,3` collects desired target streets round-robin so target files

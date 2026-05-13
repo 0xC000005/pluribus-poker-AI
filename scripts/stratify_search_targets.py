@@ -54,6 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--holdout-size", required=True, type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--cfv-bins", type=int, default=4)
+    parser.add_argument(
+        "--streets",
+        help="Optional comma-separated target streets to keep before splitting, e.g. 3 or 2,3.",
+    )
     args = parser.parse_args(argv)
 
     from poker_ai.research.search_target_split import (
@@ -76,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
         holdout_size=args.holdout_size,
         seed=args.seed,
         cfv_bins=args.cfv_bins,
+        target_streets=tuple(
+            int(part.strip()) for part in args.streets.split(",") if part.strip()
+        )
+        if args.streets
+        else None,
     )
     print(json.dumps(metadata, indent=2, sort_keys=True))
     return 0
