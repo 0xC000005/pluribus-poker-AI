@@ -192,6 +192,14 @@ GPU training readiness:
   L1 drift `1.375`, policy-head drift `0.632`, and no illegal fixed cases.
   The resolver benchmark remains diagnostic only; live Slumbot confirmation is
   still inconclusive and solver latency is the current practical bottleneck.
+- Extending the same restored-history 4x512 setup to 400 iterations did not
+  improve the local gate. Training slowed to `avg_iter_seconds=9.363`,
+  `iters_per_hour=384.501`, and `traversals_per_second=213.611`. Checkpoints at
+  100 and 200 iterations failed (`-52.790`, lower95 `-90.513`; `-1.202`,
+  lower95 `-45.549`), `iter_300` was a near miss (`+12.702`, lower95 `-1.445`),
+  and `iter_400`/final failed with high variance (`+27.073`, lower95
+  `-96.267`). Do not treat horizon-only scaling beyond 200 iterations as the
+  current mechanism; the next bottleneck is transfer/search quality.
 - Local evaluation can now choose `--strategy-source regret` or
   `--strategy-source policy-head`. Policy-head evaluation is guarded so legacy
   checkpoints without trained `policy_head` weights are rejected instead of
