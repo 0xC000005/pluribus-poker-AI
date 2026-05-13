@@ -30,6 +30,12 @@ Date: 2026-05-13
   review-manifest digests, failure-synthesis status, and a
   `callback_state_calibration_debug` phase that blocks new model-size/search
   expansion until callback-state DCVN calibration is audited.
+- Callback-state failure synthesis passed and selected one falsifier: keep the
+  fixed `32/16` callback-state caches and test reach-aware robust calibration
+  before expanding training or Slumbot spend.
+- The reach-weighted Smooth L1 callback-state DCVN test failed. It did not beat
+  zero or train-constant CFV baselines and failed both projected and unprojected
+  learned-leaf resolver A/B checks, so it is not promotable.
 
 ## Metric Snapshot
 
@@ -91,6 +97,25 @@ Sparse live candidate smoke:
 - `iter900`, no-solver, no-all-in, 10 hands: `-1138` chips/hand,
   CI `1982`, `0.694` seconds/hand. This is too noisy for ranking, but it
   reinforces that local head-to-head gains do not yet prove Slumbot transfer.
+
+Callback-state DCVN calibration:
+
+- Small callback-state DCVN smoke remains the best positive mechanism signal:
+  train roots `0..3`, holdout roots `128..131`, projected leaf A/B agreement
+  `0.75`, mean L1 drift `0.3977`, and not promotable because it used only
+  four roots.
+- Scaling the same interface to `32` train roots and `16` holdout roots failed:
+  holdout MAE/RMSE `0.3857/0.5544` versus zero `0.3582/0.4560`; leaf A/B
+  drift stayed around `0.55`, above the `0.40` gate.
+- The follow-up reach-weighted Smooth L1 calibration failed harder on supervised
+  metrics: holdout MAE/RMSE `0.4028/0.5785` versus zero `0.3582/0.4560` and
+  train-constant `0.3520/0.4489`. Unprojected leaf A/B reached `0.75`
+  agreement but drift was `0.5727`; projected agreement was `0.625` with
+  drift `0.6282`.
+- Current read: the search-boundary DCVN interface is still the principled
+  direction, but the learned callback-state values are not calibrated enough
+  for hard leaf substitution. More model-size or Slumbot runs are blocked until
+  the value target/factorization issue is explained.
 
 Slumbot diagnostic instrumentation:
 

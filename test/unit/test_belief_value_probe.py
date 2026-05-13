@@ -17,10 +17,13 @@ from poker_ai.deep_cfr.networks import ValueNetwork
 from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research import belief_value_probe as bvp
+from poker_ai.research.belief_probe import _HAND_TO_INDEX as HAND_TO_INDEX
 from poker_ai.research.belief_value_probe import compute_hero_hand_ev
 from eval_public_belief_dual_hand_cfv_probe import (
     DualCFVDataset,
     _DualHandCFVProbeNet,
+    _pair_indices,
+    _pair_weights,
     load_public_belief_dual_hand_cfv_checkpoint,
     predict_public_belief_dual_hand_cfv_ensemble,
     predict_public_belief_dual_hand_cfv_model,
@@ -437,6 +440,57 @@ def test_dual_cfv_zero_sum_projection_removes_range_weighted_residual():
     assert projected[0, 1, 2] == 5.0
     residual = projected[0, 0, 0] + projected[1, 0, 1]
     assert residual == 0.0
+
+
+def test_dual_cfv_opponent_reach_weights_emphasize_supported_hands():
+    features = np.zeros((1, N_FEATURES), dtype=np.float32)
+    belief = np.zeros((1, bvp.BELIEF_DIM), dtype=np.float32)
+    blocker_hand = HAND_TO_INDEX[(2, 3)]
+    fallback_hand = HAND_TO_INDEX[(4, 5)]
+    belief[0, blocker_hand] = 0.9
+    belief[0, 1] = 0.1
+    belief[0, bvp.N_HANDS + blocker_hand] = 0.8
+    belief[0, bvp.N_HANDS + fallback_hand] = 0.2
+    values = np.zeros((1, bvp.N_HANDS), dtype=np.float32)
+    masks = np.zeros((1, bvp.N_HANDS), dtype=np.float32)
+    masks[0, :2] = 1.0
+    dataset = DualCFVDataset(
+        features=features,
+        belief=belief,
+        hero_values=values,
+        villain_values=values,
+        hero_masks=masks,
+        villain_masks=masks,
+        labels=("root",),
+    )
+    case_idx, hand_idx, player_idx, _ = _pair_indices(dataset)
+
+    uniform, uniform_summary = _pair_weights(
+        dataset,
+        case_idx=case_idx,
+        hand_idx=hand_idx,
+        player_idx=player_idx,
+        raw_belief=belief,
+        mode="uniform",
+        power=1.0,
+        floor=0.0,
+    )
+    weighted, summary = _pair_weights(
+        dataset,
+        case_idx=case_idx,
+        hand_idx=hand_idx,
+        player_idx=player_idx,
+        raw_belief=belief,
+        mode="opponent-reach",
+        power=1.0,
+        floor=1e-6,
+    )
+
+    assert np.allclose(uniform, 1.0)
+    assert uniform_summary["mode"] == "uniform"
+    assert summary["mode"] == "opponent-reach"
+    assert np.isclose(weighted.mean(), 1.0)
+    assert weighted.std() > 0.0
 
 
 def test_dual_cfv_cache_error_attribution_groups_worst_rows():

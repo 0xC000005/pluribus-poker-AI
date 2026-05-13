@@ -18,6 +18,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +54,28 @@ class DualCFVDataset:
     hero_masks: np.ndarray
     villain_masks: np.ndarray
     labels: tuple[str, ...]
+
+
+_HAND_CARDS = np.zeros((N_HANDS, 2), dtype=np.int16)
+for _cards, _idx in _HAND_TO_INDEX.items():
+    _HAND_CARDS[int(_idx)] = np.asarray(_cards, dtype=np.int16)
+_VALID_HAND_MATRIX: np.ndarray | None = None
+
+
+def _valid_hand_matrix() -> np.ndarray:
+    global _VALID_HAND_MATRIX
+    if _VALID_HAND_MATRIX is None:
+        a0 = _HAND_CARDS[:, 0][:, None]
+        a1 = _HAND_CARDS[:, 1][:, None]
+        b0 = _HAND_CARDS[:, 0][None, :]
+        b1 = _HAND_CARDS[:, 1][None, :]
+        _VALID_HAND_MATRIX = (
+            (a0 != b0)
+            & (a0 != b1)
+            & (a1 != b0)
+            & (a1 != b1)
+        ).astype(np.float32)
+    return _VALID_HAND_MATRIX
 
 
 class _DualHandCFVProbeNet(nn.Module):
@@ -384,6 +407,56 @@ def _pair_indices(dataset: DualCFVDataset) -> tuple[np.ndarray, np.ndarray, np.n
     return case_idx, hand_idx, player_idx, values
 
 
+def _pair_weights(
+    dataset: DualCFVDataset,
+    *,
+    case_idx: np.ndarray,
+    hand_idx: np.ndarray,
+    player_idx: np.ndarray,
+    raw_belief: np.ndarray | None,
+    mode: str,
+    power: float,
+    floor: float,
+) -> tuple[np.ndarray, dict[str, float | str]]:
+    if mode == "uniform":
+        weights = np.ones(case_idx.shape[0], dtype=np.float32)
+    elif mode == "opponent-reach":
+        if raw_belief is None:
+            raise ValueError("raw_belief is required for opponent-reach weights")
+        raw_belief = np.asarray(raw_belief, dtype=np.float32)
+        if raw_belief.shape[0] != dataset.features.shape[0] or raw_belief.shape[1] < 2 * N_HANDS:
+            raise ValueError("raw_belief must have shape (n_states, 2 * N_HANDS)")
+        valid = _valid_hand_matrix()
+        hero_reach = np.maximum(raw_belief[:, :N_HANDS], 0.0)
+        villain_reach = np.maximum(raw_belief[:, N_HANDS : 2 * N_HANDS], 0.0)
+        hero_den = villain_reach @ valid.T
+        villain_den = hero_reach @ valid
+        hero_weights = hero_den[case_idx, hand_idx]
+        villain_weights = villain_den[case_idx, hand_idx]
+        weights = np.where(player_idx == 0, hero_weights, villain_weights).astype(np.float32)
+    else:
+        raise ValueError(f"unknown weight mode: {mode}")
+    weights = np.maximum(weights, float(floor)).astype(np.float32, copy=False)
+    if float(power) != 1.0:
+        weights = np.power(weights, float(power), dtype=np.float32)
+    mean = float(np.mean(weights)) if weights.size else 1.0
+    if mean > 1e-12:
+        weights = weights / mean
+    summary = {
+        "mode": mode,
+        "power": round(float(power), 8),
+        "floor": round(float(floor), 8),
+        "mean": round(float(np.mean(weights)), 8) if weights.size else 0.0,
+        "std": round(float(np.std(weights)), 8) if weights.size else 0.0,
+        "min": round(float(np.min(weights)), 8) if weights.size else 0.0,
+        "p50": round(float(np.quantile(weights, 0.5)), 8) if weights.size else 0.0,
+        "p90": round(float(np.quantile(weights, 0.9)), 8) if weights.size else 0.0,
+        "p99": round(float(np.quantile(weights, 0.99)), 8) if weights.size else 0.0,
+        "max": round(float(np.max(weights)), 8) if weights.size else 0.0,
+    }
+    return weights.astype(np.float32, copy=False), summary
+
+
 def _fit_model(
     dataset: DualCFVDataset,
     *,
@@ -400,14 +473,31 @@ def _fit_model(
     head_mode: str,
     belief_bottleneck_dim: int,
     card_encoder: str,
+    loss_kind: str = "mse",
+    weight_mode: str = "uniform",
+    weight_power: float = 1.0,
+    weight_floor: float = 0.0,
+    smooth_l1_beta: float = 1.0,
+    raw_belief: np.ndarray | None = None,
 ) -> _DualHandCFVProbeNet:
     torch.manual_seed(seed)
     case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
+    weights, weight_summary = _pair_weights(
+        dataset,
+        case_idx=case_idx,
+        hand_idx=hand_idx,
+        player_idx=player_idx,
+        raw_belief=raw_belief,
+        mode=weight_mode,
+        power=weight_power,
+        floor=weight_floor,
+    )
     target = ((values - target_mean) / target_std).astype(np.float32)
     case_t = torch.from_numpy(case_idx).to(device)
     hand_t = torch.from_numpy(hand_idx).to(device)
     player_t = torch.from_numpy(player_idx).to(device)
     target_t = torch.from_numpy(target).to(device)
+    weight_t = torch.from_numpy(weights).to(device)
     public_t = torch.from_numpy(dataset.features).to(device)
     belief_t = torch.from_numpy(dataset.belief).to(device)
     hand_feat_t = torch.from_numpy(_HAND_FEATURES).to(device)
@@ -438,10 +528,27 @@ def _fit_model(
                 player_feat_t.index_select(0, p),
                 belief_batch,
             )
-            loss = torch.mean((pred - target_t.index_select(0, batch)) ** 2)
+            target_batch = target_t.index_select(0, batch)
+            if loss_kind == "mse":
+                element_loss = (pred - target_batch) ** 2
+            elif loss_kind == "smooth-l1":
+                element_loss = F.smooth_l1_loss(
+                    pred,
+                    target_batch,
+                    reduction="none",
+                    beta=float(smooth_l1_beta),
+                )
+            else:
+                raise ValueError(f"unknown loss kind: {loss_kind}")
+            batch_weight = weight_t.index_select(0, batch)
+            loss = torch.sum(element_loss * batch_weight) / torch.clamp(
+                torch.sum(batch_weight),
+                min=1e-12,
+            )
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
+    model._fit_weight_summary = weight_summary  # type: ignore[attr-defined]
     return model
 
 
@@ -585,6 +692,11 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     belief_bottleneck_dim: int = 32,
     card_encoder: str = "flat",
     label_jobs: int = 1,
+    loss_kind: str = "mse",
+    weight_mode: str = "uniform",
+    weight_power: float = 1.0,
+    weight_floor: float = 0.0,
+    smooth_l1_beta: float = 1.0,
 ) -> dict[str, Any]:
     """Train and save the belief-conditioned dual-player hand-CFV model."""
     resolved_device = _resolve_device(device)
@@ -630,6 +742,12 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         head_mode=head_mode,
         belief_bottleneck_dim=belief_bottleneck_dim,
         card_encoder=card_encoder,
+        loss_kind=loss_kind,
+        weight_mode=weight_mode,
+        weight_power=weight_power,
+        weight_floor=weight_floor,
+        smooth_l1_beta=smooth_l1_beta,
+        raw_belief=train_raw.belief,
     )
     holdout_pred = _predict(
         model,
@@ -684,6 +802,11 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             "target_mean": float(target_mean),
             "target_median": float(target_median),
             "target_std": float(target_std),
+            "loss_kind": loss_kind,
+            "weight_mode": weight_mode,
+            "weight_power": float(weight_power),
+            "weight_floor": float(weight_floor),
+            "smooth_l1_beta": float(smooth_l1_beta),
             "value_scale": float(value_scale),
             "solver_iterations": int(solver_iterations),
             "solver_backend": solver_backend,
@@ -722,6 +845,12 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         "belief_bottleneck_dim": int(belief_bottleneck_dim),
         "card_encoder": card_encoder,
         "label_jobs": int(label_jobs),
+        "loss_kind": loss_kind,
+        "weight_mode": weight_mode,
+        "weight_power": float(weight_power),
+        "weight_floor": float(weight_floor),
+        "smooth_l1_beta": float(smooth_l1_beta),
+        "train_weight_summary": getattr(model, "_fit_weight_summary", {}),
         "train_cfv_cache": str(train_cfv_cache),
         "holdout_cfv_cache": str(holdout_cfv_cache),
         "train_dual_cache": str(train_dual_cache) if train_dual_cache else None,
@@ -1098,6 +1227,15 @@ def main(argv: list[str] | None = None) -> int:
         default="flat",
         help="Use flat feature projections or learned hand/board card-set interactions.",
     )
+    parser.add_argument("--loss-kind", choices=("mse", "smooth-l1"), default="mse")
+    parser.add_argument(
+        "--weight-mode",
+        choices=("uniform", "opponent-reach"),
+        default="uniform",
+    )
+    parser.add_argument("--weight-power", type=float, default=1.0)
+    parser.add_argument("--weight-floor", type=float, default=0.0)
+    parser.add_argument("--smooth-l1-beta", type=float, default=1.0)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -1160,6 +1298,12 @@ def main(argv: list[str] | None = None) -> int:
         head_mode=args.head_mode,
         belief_bottleneck_dim=0,
         card_encoder=args.card_encoder,
+        loss_kind=args.loss_kind,
+        weight_mode=args.weight_mode,
+        weight_power=args.weight_power,
+        weight_floor=args.weight_floor,
+        smooth_l1_beta=args.smooth_l1_beta,
+        raw_belief=train_raw.belief,
     )
     belief = _fit_model(
         train,
@@ -1176,6 +1320,12 @@ def main(argv: list[str] | None = None) -> int:
         head_mode=args.head_mode,
         belief_bottleneck_dim=args.belief_bottleneck_dim,
         card_encoder=args.card_encoder,
+        loss_kind=args.loss_kind,
+        weight_mode=args.weight_mode,
+        weight_power=args.weight_power,
+        weight_floor=args.weight_floor,
+        smooth_l1_beta=args.smooth_l1_beta,
+        raw_belief=train_raw.belief,
     )
     base_metrics = _metrics(
         _predict(
@@ -1251,6 +1401,13 @@ def main(argv: list[str] | None = None) -> int:
         "belief_bottleneck_dim": int(args.belief_bottleneck_dim),
         "card_encoder": args.card_encoder,
         "label_jobs": int(args.label_jobs),
+        "loss_kind": args.loss_kind,
+        "weight_mode": args.weight_mode,
+        "weight_power": float(args.weight_power),
+        "weight_floor": float(args.weight_floor),
+        "smooth_l1_beta": float(args.smooth_l1_beta),
+        "base_train_weight_summary": getattr(base, "_fit_weight_summary", {}),
+        "belief_train_weight_summary": getattr(belief, "_fit_weight_summary", {}),
         "target_mean": round(float(target_mean), 8),
         "target_median": round(float(target_median), 8),
         "target_dim": int(N_HANDS),

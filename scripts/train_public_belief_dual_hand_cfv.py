@@ -58,6 +58,15 @@ def main(argv: list[str] | None = None) -> int:
         default="flat",
     )
     parser.add_argument("--label-jobs", type=int, default=1)
+    parser.add_argument("--loss-kind", choices=("mse", "smooth-l1"), default="mse")
+    parser.add_argument(
+        "--weight-mode",
+        choices=("uniform", "opponent-reach"),
+        default="uniform",
+    )
+    parser.add_argument("--weight-power", type=float, default=1.0)
+    parser.add_argument("--weight-floor", type=float, default=0.0)
+    parser.add_argument("--smooth-l1-beta", type=float, default=1.0)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -92,6 +101,11 @@ def main(argv: list[str] | None = None) -> int:
         belief_bottleneck_dim=args.belief_bottleneck_dim,
         card_encoder=args.card_encoder,
         label_jobs=args.label_jobs,
+        loss_kind=args.loss_kind,
+        weight_mode=args.weight_mode,
+        weight_power=args.weight_power,
+        weight_floor=args.weight_floor,
+        smooth_l1_beta=args.smooth_l1_beta,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

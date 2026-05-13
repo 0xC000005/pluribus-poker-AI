@@ -2788,3 +2788,26 @@
 - Summary: Added mechanism-review validation, tracked review-manifest writing under `docs/research_protocols/poker_review_manifests/`, failure-synthesis status and queueing, `callback_state_calibration_debug` phase blocking for new GPU training and Slumbot smokes, and a callback-state calibration audit script. Synced the local workflow phase to `callback_state_calibration_debug`; `synthesis-status` now correctly reports synthesis due after the long run history. Ran the calibration audit on the failed 32/16 callback-state artifacts: root overlap was empty, holdout hero reach entropy was lower than train by `-0.4123`, target absolute mean SMD was `0.1990`, and warnings flagged worse-than-zero/training-constant supervised metrics, leaf drift above gate, and heavy-tailed holdout targets. This supports the next phase: explain calibration before adding capacity or Slumbot runs.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/callback_state_calibration_audit_scale32_seed20260651.json and autoresearch-session/poker_reviews/20260513T184800Z-autoresearch-workflow-hardening-review/
 - Key metrics: `{"unit_tests": "260 passed", "methodology_review_passed": true, "objective_audit_passed": true, "phase": "callback_state_calibration_debug", "synthesis_due": true, "experiments_since_synthesis": 127, "calibration_warnings": ["belief_holdout_mae_not_better_than_zero", "belief_holdout_rmse_not_better_than_zero", "belief_holdout_mae_not_better_than_train_constant", "learned_leaf_action_drift_above_gate", "heavy_tailed_holdout_targets"]}`
+
+## 20260513T185056Z-failure-synthesis-for-callback-state-dcvn-and-policy - passed
+
+- Timestamp: 2026-05-13T18:50:56Z
+- Type: synthesis
+- Gate: failure-synthesis-20260513T185013Z-callback-state-dcvn-and-policy-transfer-failures
+- Hypothesis: Failure synthesis for callback-state DCVN and policy-transfer failures should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260513T185013Z-callback-state-dcvn-and-policy-transfer-failures passed.
+- Metrics file: autoresearch-session/poker_runs/20260513T185056Z-failure-synthesis-for-callback-state-dcvn-and-policy/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "failure-synthesis-20260513T185013Z-callback-state-dcvn-and-policy-transfer-failures", "passed": true}`
+
+## 20260513T190417Z-callback-state-reach-weighted-calibration - failed
+
+- Timestamp: 2026-05-13T19:04:17Z
+- Type: experiment
+- Gate: manual-callback-state-reach-weighted-calibration
+- Hypothesis: If the scaled callback-state DCVN failure is driven by per-state reach/denominator imbalance and heavy-tailed labels, then training the same `32` train-root / `16` holdout-root callback-state checkpoint with opponent-reach-weighted Smooth L1 loss should improve supervised calibration and reduce learned-leaf resolver drift.
+- Failure class: callback_state_scale_generalization_gap
+- Related work: DeepStack/PyStack, Supremus/DCVN, and ReBeL still support the search-boundary value-network interface, but this falsifier shows that simply weighting labels by opponent reach support is not enough to make the local callback-state values calibrated for leaf substitution.
+- Summary: Added optional loss/weight controls to the dual-hand public-belief CFV trainer while keeping the default path unchanged. On the fixed `train32/holdout16` callback-state caches, the reach-weighted Smooth L1 checkpoint failed the supervised gate and worsened the prior MSE checkpoint on holdout value metrics: MAE/RMSE `0.402829/0.578468` versus prior `0.385658/0.554447`, zero baseline `0.358180/0.456029`, and train-constant `0.351969/0.448861`. The computed opponent-reach weights were weakly varying after mean normalization (`std=0.0866`, `p99=1.0895`), so this did not materially refocus learning on the failure cases. Leaf A/B also failed. Without zero-sum projection, action agreement improved to `0.75` but mean L1 drift worsened to `0.572740`; with projection, action agreement dropped to `0.625` and mean L1 drift rose to `0.628189`. This rejects reach-weighted robust loss as the current calibration fix.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/callback_leaf_dcvn_train32_holdout16_reach_smoothl1_seed20260652.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/callback_leaf_dcvn_leaf_ab_holdout16_reach_smoothl1_no_project_seed20260652.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/callback_leaf_dcvn_leaf_ab_holdout16_reach_smoothl1_project_seed20260652.json
+- Key metrics: `{"supervised": {"passed": false, "holdout_mae": 0.40282898, "holdout_rmse": 0.57846779, "zero_mae": 0.35818004, "zero_rmse": 0.45602944, "best_constant_mae": 0.35196885, "best_constant_rmse": 0.44886141}, "weights": {"mode": "opponent-reach", "mean": 1.0, "std": 0.08658841, "p99": 1.0894767}, "leaf_ab_unprojected": {"passed": false, "agreement": 0.75, "mean_l1": 0.57274046, "max_l1": 1.18749234}, "leaf_ab_projected": {"passed": false, "agreement": 0.625, "mean_l1": 0.62818935, "max_l1": 1.2427722}, "promotion": false}`

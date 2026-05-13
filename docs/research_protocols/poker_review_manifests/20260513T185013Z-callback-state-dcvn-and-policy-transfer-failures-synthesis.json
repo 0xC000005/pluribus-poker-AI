@@ -1,0 +1,24 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 306,
+      "path": "decision.json",
+      "sha256": "68546394c80b98b9ce826b1c0a706e32fcb445d8e6b10799cce3b25ee4aed70a"
+    },
+    {
+      "bytes": 2781,
+      "path": "synthesis.md",
+      "sha256": "9a6e5dc480c465e0e7d7161b4bcedccfa9a9e091477ab71886d2ef9d9f34bfe8"
+    }
+  ],
+  "reason": "Synthesis identifies callback-state value calibration, not capacity or Slumbot evaluation, as the next falsifiable blocker.",
+  "review_dir": "autoresearch-session/poker_reviews/20260513T185013Z-callback-state-dcvn-and-policy-transfer-failures-synthesis",
+  "review_id": "20260513T185013Z-callback-state-dcvn-and-policy-transfer-failures-synthesis",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.10442",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-13T18:50:50Z"
+}
