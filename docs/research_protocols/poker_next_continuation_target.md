@@ -115,3 +115,8 @@ with `0` client-policy targets, so the policy gate is inactive by design. The
 Deepset value model failed held-out value baselines (`MAE/RMSE 0.2423/0.3233`
 vs best constant `0.1994/0.2828`). Before scaling this path, inspect successor
 target error by action topology, actor-to-act, reach entropy, and bet size.
+The first attribution pass found the failure is concentrated in compounded
+betting topologies: `bbc/bbc/kb` had MAE `0.5423`, `bbbc/bbc/b` had `0.4650`,
+and `bbbc/bbc/k` had `0.4039`, versus `0.1310-0.2110` for simpler checked/bet
+families. The next data step should stratify frontier exports by action shape
+and high bet count rather than blindly increasing all targets.

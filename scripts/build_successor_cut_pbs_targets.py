@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -47,6 +48,8 @@ from play_slumbot import (  # noqa: E402
     parse_action,
 )
 from solver import StreetSolver, _parse_nav, resolve_solver_backend  # noqa: E402
+
+_BET_TOKEN_RE = re.compile(r"b\d+")
 
 
 def _average_strategy(
@@ -141,6 +144,25 @@ def _legal_uniform(mask: np.ndarray) -> np.ndarray:
     return legal / total
 
 
+def _action_shape(action_str: str) -> str:
+    return _BET_TOKEN_RE.sub("b", action_str)
+
+
+def _reach_summary(prefix: str, reach: np.ndarray) -> dict[str, float | int]:
+    probs = _normalize(reach)
+    positive = probs[probs > 0]
+    entropy = float(-(positive * np.log(positive)).sum()) if positive.size else 0.0
+    denom = float(np.log(max(positive.size, 2))) if positive.size else 1.0
+    sorted_probs = np.sort(probs)[::-1]
+    return {
+        f"{prefix}_support": int(positive.size),
+        f"{prefix}_top1_mass": round(float(sorted_probs[0]) if sorted_probs.size else 0.0, 6),
+        f"{prefix}_top10_mass": round(float(sorted_probs[:10].sum()) if sorted_probs.size else 0.0, 6),
+        f"{prefix}_entropy": round(entropy, 6),
+        f"{prefix}_normalized_entropy": round(entropy / denom if denom > 0 else 0.0, 6),
+    }
+
+
 def _policy_target_for_cut(
     solver: StreetSolver,
     node: Any,
@@ -219,6 +241,7 @@ def export_successor_cut_targets(
     villain_masks: list[np.ndarray] = []
     labels: list[str] = []
     records: list[dict[str, Any]] = []
+    cut_records: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
 
     for root_idx, case in enumerate(cases):
@@ -313,6 +336,24 @@ def export_successor_cut_targets(
             hero_masks.append(hm)
             villain_masks.append(vm)
             labels.append(cut_case.label)
+            cut_records.append(
+                {
+                    "label": cut_case.label,
+                    "root_label": case.label,
+                    "cut_pos": int(cut_pos),
+                    "action_str": action_str,
+                    "action_shape": _action_shape(action_str),
+                    "bet_count": int(len(_BET_TOKEN_RE.findall(action_str))),
+                    "actor_to_act": int(parsed_cut.get("pos", -1)),
+                    "client_pos": int(case.client_pos),
+                    "policy_weight": float(pol_weight),
+                    "legal_action_count": int(np.count_nonzero(legal_mask > 0)),
+                    "hero_mask_count": int(hm.sum()),
+                    "villain_mask_count": int(vm.sum()),
+                    **_reach_summary("hero_reach", reach_h[cut_idx]),
+                    **_reach_summary("villain_reach", reach_v[cut_idx]),
+                }
+            )
             emitted += 1
         records.append(
             {
@@ -357,6 +398,7 @@ def export_successor_cut_targets(
             + sum(float(mask.sum()) for mask in villain_masks)
         ),
         "records": records,
+        "cut_records": cut_records,
         "skipped": skipped,
     }
     metadata_path = output.with_suffix(".json")

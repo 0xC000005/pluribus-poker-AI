@@ -32,6 +32,7 @@ from analyze_dual_cfv_cache_errors import (
     group_error_records,
     merge_record_metadata,
 )
+from analyze_joint_pbs_value_errors import _group_records
 from build_joint_pbs_continuation_targets import build_joint_payload
 from build_public_belief_cache import build_public_belief_cache
 from build_successor_cut_pbs_targets import export_successor_cut_targets
@@ -765,11 +766,33 @@ def test_successor_cut_target_export_writes_joint_pbs_payload(tmp_path):
 
     assert metrics["mode"] == "successor_cut_joint_pbs_targets"
     assert metrics["n_targets"] > 0
+    assert len(metrics["cut_records"]) == metrics["n_targets"]
+    assert {"action_shape", "bet_count", "hero_reach_entropy"} <= set(metrics["cut_records"][0])
     assert payload["features"].shape[1] == N_FEATURES
     assert payload["belief"].shape[1] == 2 * bvp.N_HANDS
     assert payload["hero_values"].shape == payload["hero_masks"].shape
     assert payload["villain_values"].shape == payload["villain_masks"].shape
     assert np.all(payload["policy_weights"] == 0.0)
+
+
+def test_joint_pbs_value_error_grouping_uses_cut_metadata():
+    records = [
+        {"label": "a", "mae": 0.2, "rmse": 0.3, "bias": 0.1, "label_count": 10},
+        {"label": "b", "mae": 0.4, "rmse": 0.5, "bias": -0.1, "label_count": 10},
+        {"label": "c", "mae": 0.1, "rmse": 0.2, "bias": 0.0, "label_count": 5},
+    ]
+    metadata = {
+        "a": {"actor_to_act": 1, "bet_count": 2},
+        "b": {"actor_to_act": 1, "bet_count": 2},
+        "c": {"actor_to_act": 0, "bet_count": 1},
+    }
+
+    groups = _group_records(records, metadata, ("actor_to_act", "bet_count"))
+
+    assert groups[0]["actor_to_act"] == 1
+    assert groups[0]["bet_count"] == 2
+    assert groups[0]["n"] == 2
+    assert groups[0]["mae"] == 0.3
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
