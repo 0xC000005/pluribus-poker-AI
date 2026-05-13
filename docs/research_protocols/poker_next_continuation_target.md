@@ -226,3 +226,16 @@ all-in rate unchanged (`0.6563`). Related work still supports regret-aware
 warm-starting, but this simplified one-node CFR+ seeding is not enough. The next
 mechanism should be either theorem-closer strategy-based warm starting or a
 learned residual correction target, not a sweep over warm-start mass.
+
+A first learned residual combiner also failed the promotion gate. It trained on
+the existing `192` resolver policy targets using public features, the
+`5`-iteration solver distribution, and the calibrated policy-head distribution,
+then evaluated on the fixed `64` holdout targets. It beat the cheap solver
+distribution by a wide margin (`0.0617` vs `0.6929` mean L1), but it did not
+beat the calibrated policy head (`0.0382` mean L1) and still selected all-in as
+the top action too often (`0.28125`). The useful signal is narrower: top-action
+agreement improved over the policy head (`0.28125` vs `0.15625`), so ranking
+information is present but not captured by plain cross-entropy. The next
+mechanism should train decision-aware policy calibration from solver targets,
+for example top-action margin or pairwise ranking loss, with a fixed holdout
+gate.

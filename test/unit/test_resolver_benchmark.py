@@ -30,6 +30,11 @@ from eval_joint_pbs_resolver_cut_ab import (  # noqa: E402
 )
 from eval_policy_prior_solver_budget import mix_strategy  # noqa: E402
 from eval_policy_warm_start_solver_budget import build_policy_warm_start  # noqa: E402
+from train_policy_residual_combiner import (  # noqa: E402
+    make_combiner_features,
+    masked_softmax_np,
+    policy_metrics,
+)
 from build_learned_river_leaf_cases import (  # noqa: E402
     _rotated_cards,
     _summarize_leaf_records,
@@ -259,6 +264,37 @@ def test_build_policy_warm_start_seeds_only_selected_node():
     assert regret[0, 1, 0] == pytest.approx(25.0)
     assert strategy[0, max(solver.root.children), 0] == pytest.approx(1.5)
     assert regret[1:].sum() == pytest.approx(0.0)
+
+
+def test_policy_residual_combiner_features_validate_shapes():
+    features = np.zeros((2, N_FEATURES), dtype=np.float32)
+    masks = np.ones((2, N_ACTIONS), dtype=np.float32)
+    low = np.full((2, N_ACTIONS), 1.0 / N_ACTIONS, dtype=np.float32)
+    policy = low.copy()
+
+    combined = make_combiner_features(features, masks, low, policy)
+
+    assert combined.shape == (2, N_FEATURES + 3 * N_ACTIONS)
+    with pytest.raises(ValueError, match="combiner feature part"):
+        make_combiner_features(features[:1], masks, low, policy)
+
+
+def test_policy_residual_combiner_metrics_mask_and_count_allin():
+    logits = np.zeros((2, N_ACTIONS), dtype=np.float32)
+    logits[0, 8] = 5.0
+    logits[0, 1] = 4.0
+    logits[1, 1] = 5.0
+    masks = np.ones((2, N_ACTIONS), dtype=np.float32)
+    masks[0, 8] = 0.0
+    target = np.zeros((2, N_ACTIONS), dtype=np.float32)
+    target[:, 1] = 1.0
+
+    probs = masked_softmax_np(logits, masks)
+    metrics = policy_metrics(probs, target, masks)
+
+    assert probs[0, 8] == pytest.approx(0.0)
+    assert metrics["top_allin_rate"] == pytest.approx(0.0)
+    assert metrics["top_action_agreement"] == pytest.approx(1.0)
 
 
 def test_street_solver_showdown_leaf_callback_rejects_torch_backend():
