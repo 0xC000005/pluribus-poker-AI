@@ -2247,6 +2247,17 @@
 - Summary: Added `docs/research_protocols/poker_next_continuation_target.md`. The design records the reviewed decision to stop scaling the current learned river-leaf CFV objective and move to a search-integrated public-belief continuation target: shared-trunk policy/value outputs, learned action sequence and belief encoders, fixed turn/PBS labels, and fixed resolver A/B before any Slumbot spend. It also records stop conditions: beat zero/train-constant value baselines and policy baselines, improve fixed resolver behavior, and avoid persistent knobs without mechanism rationale.
 - Metrics file: docs/research_protocols/poker_next_continuation_target.md
 - Key metrics: `{"decision": "stop_leaf_only_cfv_scaling", "next_target": "joint_public_belief_policy_value_continuation", "requires_fixed_resolver_ab": true, "live_slumbot_spend": "blocked_until_fixed_state_pass"}`
+
+## 20260513T081134Z-joint-pbs-target-builder - passed
+
+- Timestamp: 2026-05-13T08:11:34Z
+- Type: workflow
+- Gate: manual-joint-pbs-target-builder-smoke
+- Hypothesis: The next joint policy/value continuation probe needs a safe data builder that refuses to combine misaligned policy targets and dual-CFV labels.
+- Failure class: none
+- Summary: Added `scripts/build_joint_pbs_continuation_targets.py`. The script loads a `PolicyTargetBuffer` and exact dual-CFV cache, requires identical row counts and feature rows, and writes a combined joint PBS target payload with legal masks, policy targets, belief, both-player CFVs, masks, and labels. Unit coverage verifies successful payload construction and rejects feature misalignment. A synthetic CLI smoke wrote a 2-state joint target payload with `max_feature_abs_diff=0.0`.
+- Metrics file: /tmp/joint_pbs_smoke/joint.json
+- Key metrics: `{"n_states": 2, "feature_dim": 126, "belief_dim": 2652, "label_count": 8, "max_feature_abs_diff": 0.0}`
 ## 20260513T080110Z-methodology-review-for-dual-player-belief-bottleneck-cfv - passed
 
 - Timestamp: 2026-05-13T08:01:10Z

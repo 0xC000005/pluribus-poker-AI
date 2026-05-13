@@ -49,7 +49,9 @@ Primary sources:
 ## Smallest Local Test
 
 1. Build a fixed turn/PBS dataset with paired dual-CFV labels and solver policy
-   targets from the same public states.
+   targets from the same public states. Use
+   `scripts/build_joint_pbs_continuation_targets.py` to merge only aligned
+   policy/value rows; it rejects feature mismatches before training.
 2. Train a shared-trunk joint policy/value probe and compare against:
    feature-only value, value-only belief model, zero CFV, train constants, and
    existing search-target policy distillation.

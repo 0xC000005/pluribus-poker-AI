@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +32,7 @@ from analyze_dual_cfv_cache_errors import (
     group_error_records,
     merge_record_metadata,
 )
+from build_joint_pbs_continuation_targets import build_joint_payload
 from solver import Node
 
 
@@ -488,6 +490,52 @@ def test_dual_cfv_cache_leaf_record_enrichment_strips_bet_amounts():
     assert enriched["leaf_action_shape"] == "ck/bc/bbc/"
     assert enriched["leaf_bet_count"] == 3
     assert enriched["leaf_parse_ok"] is True
+
+
+def test_joint_pbs_continuation_builder_requires_feature_alignment():
+    features = np.zeros((2, N_FEATURES), dtype=np.float32)
+    legal_masks = np.ones((2, N_ACTIONS), dtype=np.float32)
+    target_probs = np.zeros((2, N_ACTIONS), dtype=np.float32)
+    target_probs[:, 1] = 1.0
+    policy = PolicyTargetBuffer(features, legal_masks, target_probs)
+    belief = np.zeros((2, bvp.BELIEF_DIM), dtype=np.float32)
+    values = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    masks = np.zeros((2, bvp.N_HANDS), dtype=np.float32)
+    masks[:, :3] = 1.0
+    dual = DualCFVDataset(
+        features=features.copy(),
+        belief=belief,
+        hero_values=values,
+        villain_values=values,
+        hero_masks=masks,
+        villain_masks=masks,
+        labels=("a", "b"),
+    )
+
+    payload, metadata = build_joint_payload(
+        policy,
+        dual,
+        labels=dual.labels,
+        feature_atol=1e-6,
+    )
+
+    assert payload["target_probs"].shape == (2, N_ACTIONS)
+    assert payload["hero_values"].shape == (2, bvp.N_HANDS)
+    assert metadata["n_states"] == 2
+    assert metadata["label_count"] == 12
+    assert metadata["policy_target_mean_entropy"] == 0.0
+
+    misaligned = DualCFVDataset(
+        features=features + 1.0,
+        belief=belief,
+        hero_values=values,
+        villain_values=values,
+        hero_masks=masks,
+        villain_masks=masks,
+        labels=("a", "b"),
+    )
+    with pytest.raises(ValueError, match="misaligned"):
+        build_joint_payload(policy, misaligned, labels=misaligned.labels, feature_atol=1e-6)
 
 
 def test_public_belief_value_probe_emits_metrics(tmp_path, monkeypatch):
