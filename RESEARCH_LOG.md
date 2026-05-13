@@ -1717,3 +1717,14 @@
 - Summary: Added `--blueprint-target-streets` so target generation collects desired streets round-robin before capture. River-only smoke produced `4/4` river cases; mixed `2,3` smoke produced `2/2` turn and `2/2` river cases. Existing restored200 target artifacts are all-turn diagnostics, not balanced turn/river training sets.
 - Metrics file: autoresearch-session/search_targets/river_only_sampler_smoke_20260513.json
 - Key metrics: `{"river_only_street3_count": 4, "mixed_smoke_street2_count": 2, "mixed_smoke_street3_count": 2, "tests": "18 policy target tests passed"}`
+
+## 20260513T013629Z-public-belief-probe-mixed64x32 - passed
+
+- Timestamp: 2026-05-13T01:36:29Z
+- Type: analysis
+- Gate: manual-public-belief-probe-mixed-streets
+- Hypothesis: Public-belief range vectors should still improve held-out resolver-target prediction when search targets are balanced across turn and river instead of sampled only from the first eligible turn decision.
+- Failure class: range_belief
+- Summary: On a corrected `64/32` gameplay-distributed target split with round-robin turn/river sampling, the feature-plus-belief probe passed the strict criterion in all three seeds. This strengthens the public-belief/value-learning direction, but it is still a supervised diagnostic over small resolver-target sets, not a promotable main trainer change.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_probe_mixed64x32_summary.json
+- Key metrics: `{"pass_count": 3, "n": 3, "l1_delta_mean": 0.07975366666666667, "kl_delta_mean": 0.014316999999999998, "l1_deltas": [0.030366, 0.079368, 0.129527], "kl_deltas": [0.016533, 0.022054, 0.004364], "top1_deltas": [0.09375, 0.1875, 0.1875]}`

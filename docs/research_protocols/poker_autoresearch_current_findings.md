@@ -308,6 +308,13 @@ GPU training readiness:
   `--blueprint-target-streets`. River-only smoke generated `4/4` river targets,
   and a mixed-street smoke generated `2/2` turn and `2/2` river targets. Old all-turn
   target artifacts remain useful only as diagnostics.
+- On corrected round-robin turn/river target generation, the public-belief
+  probe signal strengthened. A `64/32` mixed-street split passed the strict
+  criterion in all three probe seeds: L1 deltas were `+0.0304`, `+0.0794`, and
+  `+0.1295`; KL deltas were `+0.0165`, `+0.0221`, and `+0.0044`; top-1 match
+  improved by `+0.0938`, `+0.1875`, and `+0.1875`. Read: learned public belief
+  is the next principled model input to test, preferably through a PBS value
+  target pathway rather than another small action-policy distillation patch.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
