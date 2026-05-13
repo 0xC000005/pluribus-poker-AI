@@ -321,3 +321,71 @@ def test_public_belief_cfv_probe_reuses_cache(tmp_path, monkeypatch):
     assert second["train_loaded_from_cache"] is True
     assert second["holdout_loaded_from_cache"] is True
     assert second["holdout_cfv_records"][0]["value_mask_count"] == 4
+
+
+def test_public_belief_hand_cfv_probe_uses_cached_pair_labels(tmp_path, monkeypatch):
+    checkpoint = tmp_path / "range.pt"
+    _write_checkpoint(checkpoint)
+    targets, cases = _write_targets_and_cases(tmp_path)
+    train_cache = tmp_path / "train_cfv_cache.npz"
+    holdout_cache = tmp_path / "holdout_cfv_cache.npz"
+
+    def fake_cfv_target(case, **kwargs):
+        values = np.zeros(bvp.N_HANDS, dtype=np.float32)
+        mask = np.zeros(bvp.N_HANDS, dtype=np.float32)
+        values[:4] = np.linspace(0.1, 0.4, 4, dtype=np.float32)
+        mask[:4] = 1.0
+        return values, mask, {
+            "label": case.label,
+            "street": 3,
+            "value_mean": 0.25,
+            "value_std": 0.111803,
+            "value_mask_count": 4,
+            "solver_latency_ms": 0.0,
+            "solver_n_hands": 4,
+            "solver_full_n_hands": 4,
+        }
+
+    monkeypatch.setattr(bvp, "_case_cfv_target", fake_cfv_target)
+    metrics = bvp.run_public_belief_hand_cfv_probe(
+        train_targets_npz=targets,
+        train_cases_json=cases,
+        holdout_targets_npz=targets,
+        holdout_cases_json=cases,
+        range_checkpoint=checkpoint,
+        device="cpu",
+        hidden_dim=8,
+        epochs=1,
+        batch_size=2,
+        seed=0,
+        train_cfv_cache=train_cache,
+        holdout_cfv_cache=holdout_cache,
+    )
+
+    assert metrics["mode"] == "public_belief_hand_cfv_probe"
+    assert metrics["hand_feature_dim"] == 52
+    assert metrics["train_mask_count"] == 4
+    assert metrics["holdout_mask_count"] == 4
+    assert metrics["train_loaded_from_cache"] is False
+
+    def fail_cfv_target(case, **kwargs):
+        raise AssertionError("CFV labels should have been loaded from cache")
+
+    monkeypatch.setattr(bvp, "_case_cfv_target", fail_cfv_target)
+    cached = bvp.run_public_belief_hand_cfv_probe(
+        train_targets_npz=targets,
+        train_cases_json=cases,
+        holdout_targets_npz=targets,
+        holdout_cases_json=cases,
+        range_checkpoint=checkpoint,
+        device="cpu",
+        hidden_dim=8,
+        epochs=1,
+        batch_size=2,
+        seed=1,
+        train_cfv_cache=train_cache,
+        holdout_cfv_cache=holdout_cache,
+    )
+
+    assert cached["train_loaded_from_cache"] is True
+    assert cached["holdout_loaded_from_cache"] is True

@@ -1761,3 +1761,14 @@
 - Summary: Generated a larger corrected `128/64` mixed turn/river split and reran the CFV vector probe with cached value labels. The raw-belief model again failed all three seeds, with a larger average MAE/RMSE penalty than the `64/32` split. This falsifies small data-scale alone as the immediate fix for raw-belief value prediction.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_cfv_probe_mixed128x64_summary.json
 - Key metrics: `{"pass_count": 0, "n": 3, "mae_delta_mean": -0.059376816666666665, "rmse_delta_mean": -0.09354858666666667, "mae_deltas": [-0.06473704, -0.05932878, -0.05406463], "rmse_deltas": [-0.09998498, -0.09446186, -0.08619892], "train_mask_count": 141376, "holdout_mask_count": 70688}`
+
+## 20260513T022315Z-public-belief-hand-cfv-probe - mixed
+
+- Timestamp: 2026-05-13T02:23:15Z
+- Type: analysis
+- Gate: manual-public-belief-shared-hand-cfv-probe
+- Hypothesis: A shared per-hand CFV regressor should use the many hand labels in each solved public state better than a public-state vector-output MLP.
+- Failure class: range_belief
+- Summary: Added a shared public+hand CFV probe with a learned belief encoder. On the corrected `64/32` split it passed all three seeds, but on the independently generated `128/64` split it failed all three seeds and worsened RMSE. This is the strongest positive representation signal so far, but it is not robust enough for mainline trainer work.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_mixed64x32_summary.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_hand_cfv_probe_mixed128x64_summary.json
+- Key metrics: `{"mixed64x32": {"pass_count": 3, "mae_delta_mean": 0.018296633333333333, "rmse_delta_mean": 0.012555036666666667}, "mixed128x64": {"pass_count": 0, "mae_delta_mean": -0.019324853333333333, "rmse_delta_mean": -0.06752217333333332}}`

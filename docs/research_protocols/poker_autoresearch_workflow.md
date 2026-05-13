@@ -266,6 +266,12 @@ masked vector regressor. Use `--train-cfv-cache` and `--holdout-cfv-cache` for
 repeated seeds. This is the preferred value-probe shape before any mainline
 public-belief value-head work.
 
+Use `scripts/eval_public_belief_hand_cfv_probe.py` when testing representation
+learning over the same CFV labels. It trains on valid `(public state, hero
+hand)` pairs with shared public-state and hand-card encoders, and optionally a
+learned public-belief encoder. This is still diagnostic only; require stability
+across independently generated target splits before promoting the architecture.
+
 For blueprint rollout targets, set `--blueprint-target-streets` deliberately.
 The default `2,3` collects desired target streets round-robin so target files
 are not accidentally all turn. Use `3` for river-only smoke tests and inspect

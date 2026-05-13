@@ -340,6 +340,15 @@ GPU training readiness:
   simply adding a small amount of supervised CFV data is not the next lever.
   The next belief-value test should change representation learning or
   regularization, not target count alone.
+- A shared per-hand CFV probe is the first positive belief-value representation
+  signal. Instead of predicting a 1326-dimensional vector from one public-state
+  row, it trains on `(public state, hero hand)` pairs with shared public,
+  hand-card, and belief encoders. On the corrected `64/32` split it passed
+  `3/3` seeds with mean MAE delta `+0.0183` and mean RMSE delta `+0.0126`.
+  However, the same architecture failed on the independently generated
+  `128/64` split (`0/3`, mean MAE delta `-0.0193`, mean RMSE delta `-0.0675`).
+  Read: hand-shared CFV learning is the most promising belief-value direction
+  so far, but it needs a robustness check before trainer integration.
 - Policy-head local comparison produced a strong positive signal between two
   newer policy-head-capable checkpoints: `trainsteps2k_4x512_100x2k_final.pt`
   beat `fresh_4x512_175x2k_curve_final.pt` by `104.361` chips/hand with lower95
