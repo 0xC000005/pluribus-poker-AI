@@ -44,6 +44,7 @@ from build_learned_river_leaf_cases import (  # noqa: E402
     _rotated_cards,
     _summarize_leaf_records,
 )
+from build_regret_policy_warm_start_targets import normalize_action_rows  # noqa: E402
 from solver import StreetSolver  # noqa: E402
 
 
@@ -338,6 +339,23 @@ def test_build_regret_oracle_warm_start_copies_teacher_regrets_only_selected_nod
     assert initial_strategy[0, seeded_action, 0] == pytest.approx(0.25)
     assert np.count_nonzero(initial_regret[1:]) == 0
     assert np.count_nonzero(initial_strategy[1:]) == 0
+
+
+def test_normalize_action_rows_masks_illegal_and_falls_back_to_legal_uniform():
+    legal_mask = np.zeros(N_ACTIONS, dtype=np.float32)
+    legal_mask[[1, 8]] = 1.0
+    values = np.zeros((2, N_ACTIONS), dtype=np.float32)
+    values[0, 1] = 3.0
+    values[0, 8] = 1.0
+    values[0, 2] = 99.0
+
+    normalized = normalize_action_rows(values, legal_mask)
+
+    assert normalized[0, 1] == pytest.approx(0.75)
+    assert normalized[0, 8] == pytest.approx(0.25)
+    assert normalized[0, 2] == pytest.approx(0.0)
+    assert normalized[1, 1] == pytest.approx(0.5)
+    assert normalized[1, 8] == pytest.approx(0.5)
 
 
 def test_policy_residual_combiner_features_validate_shapes():

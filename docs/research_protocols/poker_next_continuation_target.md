@@ -40,6 +40,12 @@ interface and narrows the next task: export root-disjoint teacher solver-state
 labels and train a network to predict both regret and average-strategy mass at
 the public decision node.
 
+The first target exporter smoke is also in place. Four train roots produced
+`4,512` all-hand rows with public features, private policy features, belief
+rows, legal masks, low-solver fields, and teacher `regret_sum`/`strategy_sum`
+fields. The next implementation step is a learner for these labels, followed by
+the same root-disjoint warm-start resolver gate.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

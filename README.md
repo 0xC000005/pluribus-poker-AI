@@ -206,6 +206,19 @@ python scripts/eval_regret_oracle_warm_start.py \
   --min-evaluated 64
 ```
 
+Build the corresponding supervised regret/policy field labels with:
+
+```bash
+python scripts/build_regret_policy_warm_start_targets.py \
+  --cases autoresearch-session/search_targets/restored200_turn_successor_pool256_policy_seed20260627.cases.json \
+  --cfv-cache autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_successor_pool256_seed20260627_cache.npz \
+  --output autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_train128_seed20260657.npz \
+  --start-index 0 \
+  --limit 128 \
+  --low-iterations 5 \
+  --reference-iterations 25
+```
+
 ## Playing Slumbot
 
 ```bash

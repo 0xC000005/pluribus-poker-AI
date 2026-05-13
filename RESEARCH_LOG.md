@@ -2914,3 +2914,14 @@
 - Summary: Added `scripts/eval_regret_oracle_warm_start.py` and a unit test for selected-node oracle seeding. The initial regret-only smoke improved L1/top-action behavior but was not well calibrated; after seeding both teacher `regret_sum` and `strategy_sum`, the 64-case holdout gate passed. This validates the solver warm-start interface and shows the next learned target should predict both selected-node regret and average-strategy mass, not just a policy distribution.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_oracle_warm_start_smoke4_seed20260656.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_oracle_warm_start_holdout64_seed20260656.json
 - Key metrics: `{"passed": true, "n_evaluated": 64, "mean_low_l1_to_reference": 0.52537416, "mean_oracle_l1_to_reference": 0.06966234, "mean_low_kl_to_reference": 0.26023225, "mean_oracle_kl_to_reference": 0.00502819, "low_action_agreement": 0.765625, "oracle_action_agreement": 0.96875, "low_allin_prob_gap": 0.07986568, "warm_allin_prob_gap": 0.00404521, "max_illegal_mass": 0.0, "oracle_to_low_latency_ratio": 1.036241, "promotion": false}`
+
+## 20260513T212414Z-regret-policy-target-exporter - passed
+
+- Timestamp: 2026-05-13T21:24:14Z
+- Type: implementation
+- Gate: manual-regret-policy-target-exporter-smoke
+- Hypothesis: After the oracle warm-start pass, the next fixed artifact should export per-hand teacher solver-state labels so a neural initializer can be trained without recomputing labels during each model attempt.
+- Failure class: none
+- Summary: Added `scripts/build_regret_policy_warm_start_targets.py`, which solves low-budget and higher-budget resolvers on selected public roots and saves all-hand rows containing public features, private policy features, belief rows, legal masks, low-solver `regret_sum`/`strategy_sum`, and teacher `regret_sum`/`strategy_sum`. A 4-root smoke produced `4,512` rows with nonnegative target fields and normalized target probabilities. Next step: scale to root-disjoint train/holdout label files, train the first solver-state predictor, and evaluate with the warm-start resolver gate.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_targets_smoke4_seed20260657.json
+- Key metrics: `{"n_roots": 4, "n_targets": 4512, "feature_dim": 126, "belief_dim": 2652, "target_regret_mean": 1575.125, "target_strategy_mean": 0.00295508, "low_regret_mean": 1459.80712891, "low_strategy_mean": 0.00059102, "promotion": false}`

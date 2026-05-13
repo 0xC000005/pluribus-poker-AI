@@ -35,6 +35,11 @@ fell from `0.0799` to `0.0040`, illegal mass stayed `0`, and latency was only
 state field itself, including both regret and average-strategy mass, not just a
 root policy distribution.
 
+Target-export status: `scripts/build_regret_policy_warm_start_targets.py` now
+writes fixed all-hand labels for that solver-state field. A 4-root smoke wrote
+`4,512` rows with nonnegative target fields and normalized target probabilities;
+scale this to root-disjoint train/holdout slices before fitting the first model.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
