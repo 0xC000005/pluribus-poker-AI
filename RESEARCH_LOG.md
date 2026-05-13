@@ -2015,3 +2015,14 @@
 - Summary: Trained three saved turn-only Deepset-64 dual-CFV checkpoints from the cached `64/32` turn labels and evaluated them as an ensemble on the turn holdout dual cache. The ensemble passes the hardened checkpoint gate with a wider margin than any single seed: it beats zero and train-constant baselines, improves the value-sum residual over zero prediction, and runs about `9,180x` faster than the CPU label solver per state. This supports a street-specific dual-CFV value-network path. It still needs a larger independent turn surface before resolver integration or Slumbot spend.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_checkpoint_ensemble_eval_turn64x32_deepset64.json
 - Key metrics: `{"passed": true, "checkpoint_count": 3, "model_holdout": {"mae": 0.21250425, "rmse": 0.28350242, "bias": -0.01551578}, "best_constant": {"mae": 0.23764939, "rmse": 0.31203078}, "zero": {"mae": 0.25050823, "rmse": 0.35341565}, "value_sum_residual": {"pred_abs_mean": 0.32199765, "pred_minus_target_abs_mean": 0.1855074, "target_abs_mean": 0.34565767}, "model_ms_per_state": 0.780799, "speedup_vs_solver_mean_per_state": 9180.22}`
+
+## 20260513T050945Z-turn-dual-cfv-range-robustness - passed
+
+- Timestamp: 2026-05-13T05:09:45Z
+- Type: analysis
+- Gate: manual-turn-dual-cfv-range-robustness
+- Hypothesis: The saved turn-only ensemble should remain useful under off-blueprint ranges before it is considered for larger turn-surface validation.
+- Failure class: range_belief
+- Summary: Extended `scripts/eval_dual_cfv_range_robustness.py` from river-only to turn+river states, then evaluated the saved turn-only Deepset-64 ensemble on eight held-out turn states with 50% and 100% mixes toward uniform legal ranges. Both perturbations passed the hardened baseline/residual gate, beating zero and train-constant baselines after re-solving perturbed labels. This supports street-specific value learning as a robust direction, but the evidence is still small; next gate remains a larger independent turn surface.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_range_robustness_turn8_mix050_deepset64_ensemble.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_range_robustness_turn8_mix100_deepset64_ensemble.json
+- Key metrics: `{"mix_0.5": {"passed": true, "model": {"mae": 0.1916651, "rmse": 0.25312249}, "best_constant": {"mae": 0.2281372, "rmse": 0.28310327}, "zero": {"mae": 0.24439271, "rmse": 0.32700803}, "value_sum_residual_error": 0.11771525}, "mix_1.0": {"passed": true, "model": {"mae": 0.1995269, "rmse": 0.25967357}, "best_constant": {"mae": 0.24197682, "rmse": 0.29775094}, "zero": {"mae": 0.26264593, "rmse": 0.34616955}, "value_sum_residual_error": 0.15583969}}`

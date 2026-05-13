@@ -623,6 +623,10 @@ Label-throughput update:
   `0.2505/0.3534`, and value-sum residual error `0.1855` versus zero
   residual `0.3457`. Inference is `0.781 ms/state`, about `9,180x` faster than
   the CPU label solver. The next gate is a larger independent turn surface.
+- Turn range robustness also passes on eight held-out turn states. With a 50%
+  mix toward uniform legal ranges, MAE/RMSE is `0.1917/0.2531`; with fully
+  uniform legal ranges, MAE/RMSE is `0.1995/0.2597`. Both beat zero and
+  train-constant baselines after re-solving perturbed labels.
 
 Resolved workflow issue: `rules_parity`.
 

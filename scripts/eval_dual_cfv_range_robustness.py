@@ -65,7 +65,7 @@ def _predict_loaded_ensemble(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Perturb river public beliefs and compare a dual-CFV checkpoint "
+            "Perturb turn/river public beliefs and compare a dual-CFV checkpoint "
             "ensemble to re-solved dual-player CFV labels."
         )
     )
@@ -105,9 +105,11 @@ def main(argv: list[str] | None = None) -> int:
     records = []
     for idx, case in enumerate(cases[:limit]):
         parsed = parse_action(case.action_str)
-        if int(parsed.get("st", -1)) != 3:
+        street = int(parsed.get("st", -1))
+        if street not in (2, 3):
             continue
-        board_idx = [card_str_to_index(card) for card in case.board[:5]]
+        n_board = 4 if street == 2 else 5
+        board_idx = [card_str_to_index(card) for card in case.board[:n_board]]
         legal = _legal_global_mask(board_idx)
         base_belief = base_dataset.belief[idx]
         hero = _mix_with_uniform(base_belief[:N_HANDS], legal, args.mix_uniform)
