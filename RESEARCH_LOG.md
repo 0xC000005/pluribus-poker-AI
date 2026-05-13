@@ -2114,3 +2114,14 @@
 - Summary: Extended the leaf exporter with `--start-index` and `--max-rivers-per-terminal` so train/holdout leaf states can be disjoint and avoid filling a split with one terminal's river cards. Two tiny training attempts still failed: the naive one-terminal `16/8` split exploded to MAE `42.98`, and the capped multi-terminal split still produced MAE `9.83` versus zero `0.258`. Do not tune learning-rate knobs around this. The principled next step is a materially larger resolver-generated leaf dataset with source/terminal stratification, then re-test whether Deepset dual-CFV can learn this distribution.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river_leaf16x8_deepset64_seed20260590.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river_leaf16x8_diverse_deepset64_seed20260591.json
 - Key metrics: `{"naive_leaf16x8": {"passed": false, "mae": 42.97924655, "zero_mae": 0.57389303}, "diverse_leaf16x8": {"passed": false, "mae": 9.8294682, "zero_mae": 0.258343, "best_constant_mae": 0.258343}, "exporter_added": ["start_index", "max_rivers_per_terminal"]}`
+
+## 20260513T063820Z-stratified-leaf32-training - failed
+
+- Timestamp: 2026-05-13T06:38:20Z
+- Type: experiment
+- Gate: manual-stratified-leaf32-training
+- Hypothesis: A source/terminal-stratified resolver-leaf split should reduce the catastrophic extrapolation seen in tiny one-source leaf training.
+- Failure class: data_scale
+- Summary: Added `--max-leaf-states-per-source` to the leaf exporter, then built a `32/16` split capped at four leaf states per turn source and one river per terminal. This improved the pathology but still failed the hardened gate: holdout MAE fell from `9.83` to `0.913`, but zero and train-constant baselines remain around `0.31`. This supports the diagnosis that resolver-leaf value learning needs substantially more generated leaf data and likely source/terminal stratification. Do not promote the river leaf or tune hyperparameters on this tiny split.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_river_leaf32x16_strat_deepset64_seed20260592.json
+- Key metrics: `{"passed": false, "mae": 0.91346949, "rmse": 1.10129543, "zero_mae": 0.30796431, "best_constant_mae": 0.30511928, "train_size": 32, "holdout_size": 16, "train_labels": 69184, "holdout_labels": 34592, "exporter_added": ["max_leaf_states_per_source"]}`

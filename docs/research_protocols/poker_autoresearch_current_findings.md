@@ -679,6 +679,13 @@ Label-throughput update:
   single-terminal-heavy splits, but a `16/8` diverse leaf split still failed
   with MAE `9.83` versus zero `0.258`. Treat this as a data-scale/protocol
   blocker, not a prompt to tune learning rates.
+- A wider source-capped leaf split improves the pathology but still fails. The
+  exporter now also supports `--max-leaf-states-per-source`; a `32/16` split
+  capped at four leaf states per turn source and one river per terminal reduced
+  holdout MAE to `0.913`, but zero and train-constant baselines remain near
+  `0.31`. This confirms that learned river continuations should stay disabled
+  until the leaf-value dataset is materially larger and stratified by source and
+  terminal structure.
 
 Resolved workflow issue: `rules_parity`.
 

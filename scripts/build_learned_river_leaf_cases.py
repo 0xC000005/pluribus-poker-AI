@@ -228,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--limit", type=int, default=4)
     parser.add_argument("--max-leaf-states", type=int, default=16)
+    parser.add_argument("--max-leaf-states-per-source", type=int, default=0)
     parser.add_argument("--max-rivers-per-terminal", type=int, default=0)
     parser.add_argument("--solver-iterations", type=int, default=1)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
@@ -249,12 +250,15 @@ def main(argv: list[str] | None = None) -> int:
     records: list[dict[str, Any]] = []
     start_index = max(0, int(args.start_index))
     stop_index = max(start_index + 1, min(start_index + int(args.limit), len(cases)))
+    per_source_cap = max(0, int(args.max_leaf_states_per_source))
     for idx in range(start_index, stop_index):
         case = cases[idx]
         if len(out_cases) >= int(args.max_leaf_states):
             break
         belief_row = base_dataset.belief[idx] if base_dataset is not None else None
         remaining = int(args.max_leaf_states) - len(out_cases)
+        if per_source_cap:
+            remaining = min(remaining, per_source_cap)
         case_items, case_features, case_beliefs, case_records = _collect_case(
             case,
             belief_row=belief_row,
@@ -289,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         "start_index": int(start_index),
         "limit": int(args.limit),
         "max_leaf_states": int(args.max_leaf_states),
+        "max_leaf_states_per_source": int(per_source_cap),
         "max_rivers_per_terminal": int(args.max_rivers_per_terminal),
         "solver_iterations": int(args.solver_iterations),
         "solver_backend": args.solver_backend,
