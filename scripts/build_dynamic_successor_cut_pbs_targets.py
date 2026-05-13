@@ -49,6 +49,27 @@ from play_slumbot import (  # noqa: E402
 from solver import StreetSolver, _parse_nav, resolve_solver_backend  # noqa: E402
 
 _BET_TOKEN_RE = re.compile(r"b\d+")
+_SUITS = ("c", "d", "h", "s")
+_RANKS = tuple("23456789TJQKA")
+
+
+def _card_to_str(card: int) -> str:
+    return _RANKS[int(card) // 4] + _SUITS[int(card) % 4]
+
+
+def _root_policy_target_hands(
+    solver_hands: list[tuple[int, int]],
+    observed_cards: list[int],
+    *,
+    include_all_hands: bool,
+) -> list[tuple[int, int]]:
+    if include_all_hands:
+        return [tuple(sorted(hand)) for hand in solver_hands]
+    return [tuple(sorted(observed_cards))]
+
+
+def _count_value_targets(policy_weights: list[float]) -> int:
+    return int(sum(float(weight) <= 0.0 for weight in policy_weights))
 
 
 def _normalized_strategy_target(strategy: np.ndarray, legal_mask: np.ndarray) -> np.ndarray:
@@ -223,6 +244,7 @@ def export_dynamic_successor_cut_targets(
     value_scale: float,
     value_weight_mode: str = "mask",
     include_root_policy_targets: bool = False,
+    include_all_hand_root_policy_targets: bool = False,
 ) -> dict[str, Any]:
     cases = load_cases_json(cases_json)
     dataset, _records = load_public_belief_cfv_dataset_cache(cfv_cache)
@@ -252,8 +274,10 @@ def export_dynamic_successor_cut_targets(
     skipped: list[dict[str, str]] = []
     max_cases = len(cases) if int(limit) <= 0 else min(int(limit), len(cases))
 
+    root_policy_requested = bool(include_root_policy_targets or include_all_hand_root_policy_targets)
     for idx, case in enumerate(cases[:max_cases]):
-        if 0 < target_cuts <= len(all_features):
+        value_target_count = _count_value_targets(all_policy_weights)
+        if 0 < target_cuts <= value_target_count and not root_policy_requested:
             break
         started = time.perf_counter()
         parsed = parse_action(case.action_str)
@@ -288,12 +312,16 @@ def export_dynamic_successor_cut_targets(
             target_action_shapes=target_action_shapes,
             risk_predictor=None,
         )
-        if not selected:
+        if not selected and not root_policy_requested:
             skipped.append({"label": case.label, "reason": "no_matching_successor_cuts"})
             continue
-        remaining = int(target_cuts - len(all_features)) if target_cuts > 0 else 0
+        remaining = int(target_cuts - value_target_count) if target_cuts > 0 else 0
         max_for_root = remaining if remaining > 0 else 0
-        records_by_node = {int(record["node_idx"]): record for record in selected}
+        records_by_node = (
+            {int(record["node_idx"]): record for record in selected}
+            if max_for_root > 0
+            else {}
+        )
         collector = DynamicTargetCollector(
             case=case,
             board=list(case.board),
@@ -305,19 +333,24 @@ def export_dynamic_successor_cut_targets(
             max_targets=max_for_root,
             value_weight_mode=value_weight_mode,
         )
+        solve_kwargs: dict[str, Any] = {}
+        if records_by_node:
+            solve_kwargs["trace_node_indices"] = list(records_by_node)
+            solve_kwargs["trace_node_fn"] = collector
         solver.solve(
             n_iterations=solver_iterations,
             hero_range=hero_range,
             villain_range=villain_range,
             backend=backend,
             device=backend_device,
-            trace_node_indices=list(records_by_node),
-            trace_node_fn=collector,
+            **solve_kwargs,
         )
-        if include_root_policy_targets and active_node is not None and not active_node.is_terminal:
+        if (
+            (include_root_policy_targets or include_all_hand_root_policy_targets)
+            and active_node is not None
+            and not active_node.is_terminal
+        ):
             our_cards_idx = [card_str_to_index(card) for card in case.hole_cards]
-            hand = tuple(sorted(our_cards_idx))
-            root_strategy = _strategy_vector(solver.get_strategy(hand, active_node))
             legal_mask = get_legal_mask_from_parsed(
                 parsed,
                 case.action_str,
@@ -330,45 +363,64 @@ def export_dynamic_successor_cut_targets(
                 int(case.client_pos),
                 parsed,
             ).astype(np.float32, copy=False)
-            policy_feature = build_features(
-                list(case.hole_cards),
-                list(case.board),
-                case.action_str,
-                int(case.client_pos),
-                parsed,
-            ).astype(np.float32, copy=False)
-            root_label = f"{case.label}-root-policy"
-            collector.features.append(public_feature)
-            collector.policy_features.append(policy_feature)
-            collector.beliefs.append(np.asarray(dataset.belief[idx], dtype=np.float32))
-            collector.legal_masks.append(legal_mask)
-            collector.target_probs.append(_normalized_strategy_target(root_strategy, legal_mask))
-            collector.policy_weights.append(1.0)
-            collector.hero_values.append(np.zeros(N_HANDS, dtype=np.float32))
-            collector.villain_values.append(np.zeros(N_HANDS, dtype=np.float32))
-            collector.hero_masks.append(np.zeros(N_HANDS, dtype=np.float32))
-            collector.villain_masks.append(np.zeros(N_HANDS, dtype=np.float32))
-            collector.hero_value_weights.append(np.zeros(N_HANDS, dtype=np.float32))
-            collector.villain_value_weights.append(np.zeros(N_HANDS, dtype=np.float32))
-            collector.labels.append(root_label)
-            collector.cut_records.append(
-                {
-                    "label": root_label,
-                    "root_label": case.label,
-                    "cut_pos": -1,
-                    "iteration": -1,
-                    "action_str": str(case.action_str),
-                    "action_shape": _frontier_action_shape(str(case.action_str)),
-                    "bet_count": int(len(_BET_TOKEN_RE.findall(case.action_str))),
-                    "actor_to_act": int(parsed.get("pos", -1)),
-                    "client_pos": int(case.client_pos),
-                    "legal_action_count": int(np.count_nonzero(legal_mask > 0)),
-                    "hero_mask_count": 0,
-                    "villain_mask_count": 0,
-                    "policy_weight": 1.0,
-                    "target_kind": "root_policy",
-                }
+            policy_hands = _root_policy_target_hands(
+                list(solver.hands),
+                our_cards_idx,
+                include_all_hands=include_all_hand_root_policy_targets,
             )
+            for policy_hand in policy_hands:
+                root_strategy = _strategy_vector(solver.get_strategy(policy_hand, active_node))
+                hole_cards = [_card_to_str(policy_hand[0]), _card_to_str(policy_hand[1])]
+                policy_feature = build_features(
+                    hole_cards,
+                    list(case.board),
+                    case.action_str,
+                    int(case.client_pos),
+                    parsed,
+                ).astype(np.float32, copy=False)
+                hand_index = int(_HAND_TO_INDEX[tuple(sorted(policy_hand))])
+                root_label = (
+                    f"{case.label}-root-policy-hand{hand_index:04d}"
+                    if include_all_hand_root_policy_targets
+                    else f"{case.label}-root-policy"
+                )
+                collector.features.append(public_feature)
+                collector.policy_features.append(policy_feature)
+                collector.beliefs.append(np.asarray(dataset.belief[idx], dtype=np.float32))
+                collector.legal_masks.append(legal_mask)
+                collector.target_probs.append(_normalized_strategy_target(root_strategy, legal_mask))
+                collector.policy_weights.append(1.0)
+                collector.hero_values.append(np.zeros(N_HANDS, dtype=np.float32))
+                collector.villain_values.append(np.zeros(N_HANDS, dtype=np.float32))
+                collector.hero_masks.append(np.zeros(N_HANDS, dtype=np.float32))
+                collector.villain_masks.append(np.zeros(N_HANDS, dtype=np.float32))
+                collector.hero_value_weights.append(np.zeros(N_HANDS, dtype=np.float32))
+                collector.villain_value_weights.append(np.zeros(N_HANDS, dtype=np.float32))
+                collector.labels.append(root_label)
+                collector.cut_records.append(
+                    {
+                        "label": root_label,
+                        "root_label": case.label,
+                        "cut_pos": -1,
+                        "iteration": -1,
+                        "action_str": str(case.action_str),
+                        "action_shape": _frontier_action_shape(str(case.action_str)),
+                        "bet_count": int(len(_BET_TOKEN_RE.findall(case.action_str))),
+                        "actor_to_act": int(parsed.get("pos", -1)),
+                        "client_pos": int(case.client_pos),
+                        "legal_action_count": int(np.count_nonzero(legal_mask > 0)),
+                        "hero_mask_count": 0,
+                        "villain_mask_count": 0,
+                        "policy_weight": 1.0,
+                        "target_kind": "root_policy",
+                        "root_policy_target_mode": (
+                            "all_hands"
+                            if include_all_hand_root_policy_targets
+                            else "observed_hand"
+                        ),
+                        "hand_index": hand_index,
+                    }
+                )
         all_features.extend(collector.features)
         all_policy_features.extend(collector.policy_features)
         all_beliefs.extend(collector.beliefs)
@@ -427,6 +479,7 @@ def export_dynamic_successor_cut_targets(
         "value_scale": float(value_scale),
         "value_weight_mode": value_weight_mode,
         "include_root_policy_targets": bool(include_root_policy_targets),
+        "include_all_hand_root_policy_targets": bool(include_all_hand_root_policy_targets),
         "n_targets": int(len(all_features)),
         "policy_target_count": int(sum(float(weight) > 0.0 for weight in all_policy_weights)),
         "n_roots": int(len(root_records)),
@@ -462,6 +515,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Also add exact root resolver policy rows for the actual private hand.",
     )
+    parser.add_argument(
+        "--include-all-hand-root-policy-targets",
+        action="store_true",
+        help="Add exact root resolver policy rows for every legal private hand at each public root.",
+    )
     args = parser.parse_args(argv)
     target_action_shapes = tuple(
         part.strip() for part in args.target_action_shapes.split(",") if part.strip()
@@ -479,6 +537,7 @@ def main(argv: list[str] | None = None) -> int:
         value_scale=args.value_scale,
         value_weight_mode=args.value_weight_mode,
         include_root_policy_targets=args.include_root_policy_targets,
+        include_all_hand_root_policy_targets=args.include_all_hand_root_policy_targets,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))
     return 0

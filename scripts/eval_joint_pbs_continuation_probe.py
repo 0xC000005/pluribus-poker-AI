@@ -480,6 +480,11 @@ def _fit_joint_model(
     legal_t = torch.from_numpy(dataset.legal_masks).to(device)
     policy_target_t = torch.from_numpy(dataset.target_probs).to(device)
     policy_weight_t = torch.from_numpy(dataset.policy_weights).to(device)
+    policy_idx_np = np.flatnonzero(np.asarray(dataset.policy_weights, dtype=np.float32) > 0.0).astype(
+        np.int64,
+        copy=False,
+    )
+    policy_idx_t = torch.from_numpy(policy_idx_np).to(device)
     action_token_t = torch.from_numpy(dataset.action_tokens).to(device)
     action_amount_t = torch.from_numpy(dataset.action_amounts).to(device)
     hand_feat_t = torch.from_numpy(_HAND_FEATURES).to(device)
@@ -520,22 +525,29 @@ def _fit_joint_model(
             loss.backward()
             optimizer.step()
 
-        logits = model.policy(
-            public_t,
-            private_t,
-            belief_t,
-            action_token_t,
-            action_amount_t,
-        )
-        policy_loss = _masked_policy_loss(
-            logits,
-            legal_t,
-            policy_target_t,
-            policy_weight_t,
-        )
-        optimizer.zero_grad(set_to_none=True)
-        policy_loss.backward()
-        optimizer.step()
+        if policy_idx_t.numel() > 0:
+            policy_perm = policy_idx_t.index_select(
+                0,
+                torch.randperm(policy_idx_t.numel(), generator=generator, device=device),
+            )
+            for start in range(0, int(policy_perm.numel()), batch_size):
+                p_idx = policy_perm[start : start + batch_size]
+                logits = model.policy(
+                    public_t.index_select(0, p_idx),
+                    private_t.index_select(0, p_idx),
+                    belief_t.index_select(0, p_idx),
+                    action_token_t.index_select(0, p_idx),
+                    action_amount_t.index_select(0, p_idx),
+                )
+                policy_loss = _masked_policy_loss(
+                    logits,
+                    legal_t.index_select(0, p_idx),
+                    policy_target_t.index_select(0, p_idx),
+                    policy_weight_t.index_select(0, p_idx),
+                )
+                optimizer.zero_grad(set_to_none=True)
+                policy_loss.backward()
+                optimizer.step()
     return model
 
 
@@ -587,8 +599,11 @@ def _predict_policy(
     dataset: JointPBSDataset,
     *,
     device: torch.device,
+    batch_size: int = 8192,
 ) -> np.ndarray:
+    batch_size = max(1, int(batch_size))
     model.eval()
+    outputs: list[np.ndarray] = []
     with torch.no_grad():
         public_t = torch.from_numpy(dataset.features).to(device)
         belief_t = torch.from_numpy(dataset.belief).to(device)
@@ -596,14 +611,17 @@ def _predict_policy(
         legal_t = torch.from_numpy(dataset.legal_masks).to(device)
         action_token_t = torch.from_numpy(dataset.action_tokens).to(device)
         action_amount_t = torch.from_numpy(dataset.action_amounts).to(device)
-        logits = model.policy(
-            public_t,
-            private_t,
-            belief_t,
-            action_token_t,
-            action_amount_t,
-        ).masked_fill(legal_t <= 0, -1e4)
-        probs = torch.softmax(logits, dim=1).cpu().numpy().astype(np.float32)
+        for start in range(0, int(dataset.features.shape[0]), batch_size):
+            sl = slice(start, start + batch_size)
+            logits = model.policy(
+                public_t[sl],
+                private_t[sl],
+                belief_t[sl],
+                action_token_t[sl],
+                action_amount_t[sl],
+            ).masked_fill(legal_t[sl] <= 0, -1e4)
+            outputs.append(torch.softmax(logits, dim=1).cpu().numpy().astype(np.float32))
+    probs = np.concatenate(outputs, axis=0) if outputs else np.zeros((0, N_ACTIONS), dtype=np.float32)
     return _normalize_targets(probs, dataset.legal_masks)
 
 
@@ -898,7 +916,7 @@ def run_joint_pbs_continuation_probe(
         target_mean=target_mean,
         target_median=target_median,
     )
-    policy_probs = _predict_policy(model, holdout, device=resolved_device)
+    policy_probs = _predict_policy(model, holdout, device=resolved_device, batch_size=batch_size)
     policy_mask = holdout.policy_weights > 0
     train_policy_label_count = int(np.count_nonzero(train.policy_weights > 0))
     holdout_policy_label_count = int(np.count_nonzero(policy_mask))

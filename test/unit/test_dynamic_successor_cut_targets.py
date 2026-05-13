@@ -12,8 +12,11 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from build_dynamic_successor_cut_pbs_targets import (  # noqa: E402
     DynamicTargetCollector,
+    _card_to_str,
+    _count_value_targets,
     _normalize,
     _normalized_strategy_target,
+    _root_policy_target_hands,
 )
 
 
@@ -41,6 +44,28 @@ def test_normalized_strategy_target_respects_legal_mask_and_uniform_fallback():
 
     np.testing.assert_allclose(target, [4.0 / 9.0, 0.0, 5.0 / 9.0])
     np.testing.assert_allclose(fallback, [0.0, 0.5, 0.5])
+
+
+def test_root_policy_target_hands_support_observed_or_all_hands():
+    observed = _root_policy_target_hands(
+        [(3, 1), (5, 4)],
+        [8, 7],
+        include_all_hands=False,
+    )
+    all_hands = _root_policy_target_hands(
+        [(3, 1), (5, 4)],
+        [8, 7],
+        include_all_hands=True,
+    )
+
+    assert observed == [(7, 8)]
+    assert all_hands == [(1, 3), (4, 5)]
+    assert _card_to_str(0) == "2c"
+    assert _card_to_str(51) == "As"
+
+
+def test_dynamic_target_cut_budget_counts_value_rows_only():
+    assert _count_value_targets([0.0, 1.0, 0.0, 1.0, 1.0]) == 2
 
 
 def test_dynamic_target_collector_exports_denominator_squared_weights():
