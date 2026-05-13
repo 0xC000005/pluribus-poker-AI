@@ -12,6 +12,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from build_dynamic_successor_cut_pbs_targets import (  # noqa: E402
     DynamicTargetCollector,
+    _case_window,
     _card_to_str,
     _count_value_targets,
     _normalize,
@@ -66,6 +67,27 @@ def test_root_policy_target_hands_support_observed_or_all_hands():
 
 def test_dynamic_target_cut_budget_counts_value_rows_only():
     assert _count_value_targets([0.0, 1.0, 0.0, 1.0, 1.0]) == 2
+
+
+def test_dynamic_target_case_window_supports_root_disjoint_slices():
+    cases = [
+        ResolverBenchmarkCase(
+            label=f"case-{idx}",
+            hole_cards=("Ac", "Kd"),
+            board=("2c", "3d", "4h", "5s"),
+            action_str="ck/kk",
+            client_pos=0,
+        )
+        for idx in range(5)
+    ]
+
+    start, selected = _case_window(cases, start_index=2, limit=2)
+    tail_start, tail = _case_window(cases, start_index=4, limit=0)
+
+    assert start == 2
+    assert [case.label for case in selected] == ["case-2", "case-3"]
+    assert tail_start == 4
+    assert [case.label for case in tail] == ["case-4"]
 
 
 def test_dynamic_target_collector_exports_denominator_squared_weights():

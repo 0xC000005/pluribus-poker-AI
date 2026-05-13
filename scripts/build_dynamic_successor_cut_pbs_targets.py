@@ -72,6 +72,23 @@ def _count_value_targets(policy_weights: list[float]) -> int:
     return int(sum(float(weight) <= 0.0 for weight in policy_weights))
 
 
+def _case_window(
+    cases: list[ResolverBenchmarkCase],
+    *,
+    start_index: int,
+    limit: int,
+) -> tuple[int, list[ResolverBenchmarkCase]]:
+    start = max(0, min(int(start_index), len(cases)))
+    if int(limit) <= 0:
+        stop = len(cases)
+    else:
+        stop = min(start + int(limit), len(cases))
+    selected = cases[start:stop]
+    if not selected:
+        raise ValueError("selected dynamic successor target slice is empty")
+    return start, selected
+
+
 def _normalized_strategy_target(strategy: np.ndarray, legal_mask: np.ndarray) -> np.ndarray:
     legal = (np.asarray(legal_mask, dtype=np.float32) > 0).astype(np.float32)
     target = np.asarray(strategy, dtype=np.float32) * legal
@@ -242,6 +259,7 @@ def export_dynamic_successor_cut_targets(
     min_bet_count: int,
     target_action_shapes: tuple[str, ...],
     value_scale: float,
+    start_index: int = 0,
     value_weight_mode: str = "mask",
     include_root_policy_targets: bool = False,
     include_all_hand_root_policy_targets: bool = False,
@@ -255,6 +273,7 @@ def export_dynamic_successor_cut_targets(
         raise ValueError("dynamic successor target export requires CPU backend")
     if value_weight_mode not in ("mask", "denominator_squared"):
         raise ValueError("value_weight_mode must be 'mask' or 'denominator_squared'")
+    start, selected_cases = _case_window(cases, start_index=start_index, limit=limit)
 
     all_features: list[np.ndarray] = []
     all_policy_features: list[np.ndarray] = []
@@ -272,10 +291,10 @@ def export_dynamic_successor_cut_targets(
     cut_records: list[dict[str, Any]] = []
     root_records: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
-    max_cases = len(cases) if int(limit) <= 0 else min(int(limit), len(cases))
 
     root_policy_requested = bool(include_root_policy_targets or include_all_hand_root_policy_targets)
-    for idx, case in enumerate(cases[:max_cases]):
+    for local_idx, case in enumerate(selected_cases):
+        idx = start + local_idx
         value_target_count = _count_value_targets(all_policy_weights)
         if 0 < target_cuts <= value_target_count and not root_policy_requested:
             break
@@ -472,6 +491,7 @@ def export_dynamic_successor_cut_targets(
         "output": str(output),
         "solver_iterations": int(solver_iterations),
         "solver_backend": solver_backend,
+        "start_index": int(start),
         "limit": int(limit),
         "target_cuts": int(target_cuts),
         "min_bet_count": int(min_bet_count),
@@ -500,6 +520,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True)
     parser.add_argument("--solver-iterations", type=int, default=5)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
+    parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--limit", type=int, default=64)
     parser.add_argument("--target-cuts", type=int, default=0)
     parser.add_argument("--min-bet-count", type=int, default=0)
@@ -530,6 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         output=args.output,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
+        start_index=args.start_index,
         limit=args.limit,
         target_cuts=args.target_cuts,
         min_bet_count=args.min_bet_count,

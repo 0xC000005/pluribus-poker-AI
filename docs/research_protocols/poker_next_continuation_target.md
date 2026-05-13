@@ -383,3 +383,12 @@ direct CFV head variant: predict search-consistency residuals against the exact
 resolver, train uncertainty/mixing against root action drift on root-disjoint
 callback states, or collect paired exact-vs-learned callback interventions so
 the model learns which value errors actually matter to the root policy.
+
+The dynamic high-bet successor-cut line was rechecked with public-root-disjoint
+target slices. The old passing probe used a shape-balanced row split inside the
+same public-root pool. With disjoint slices, a small `110/115` target split and
+a broader `512/256` target split both failed value baselines; the broader
+GRU/deepset probe reached `0.2713` MAE versus a `0.1962` train-median constant.
+This makes root extrapolation, not just callback feature plumbing, a recurring
+failure mode. Do not run successor-cut resolver A/B from row-level internal
+passes unless the checkpoint first clears root-disjoint value calibration.

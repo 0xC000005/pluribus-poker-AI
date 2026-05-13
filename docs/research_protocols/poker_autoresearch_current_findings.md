@@ -39,6 +39,11 @@ Date: 2026-05-13
 - A learned state/player-offset plus hand-residual factorization also failed on
   the same fixed caches. This makes the immediate blocker target design and
   search-consistency, not another simple loss or head variant.
+- The earlier dynamic high-bet successor-cut result did not survive public-root
+  disjoint validation. New exporter `--start-index` support created disjoint
+  train/holdout slices; even a broader `512`-target / `256`-target split failed
+  value baselines (`MAE 0.2713` vs best constant `0.1962`). Treat row-level
+  successor-cut passes as diagnostics unless they also pass root-disjoint gates.
 
 ## Metric Snapshot
 
