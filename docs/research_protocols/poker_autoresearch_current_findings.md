@@ -932,3 +932,12 @@ script passes all 10 checks and is now part of Tier 0.
     25-iteration CFR+ teacher (`0.5404` candidate L1 vs `0.5254` baseline,
     `0.3533` candidate KL vs `0.2602` baseline), so keep `cfr_plus` as the
     default and avoid discount-exponent sweeps.
+12. The native pure-RL branch is now operational but not a mainline
+    replacement. It has full-deck 9-action NFSP/DQN training, reservoir
+    average-policy memory, target-network bootstrapping, checkpoint save/load,
+    and duplicate-swapped native H2H. The 10k hidden-512 CUDA scale check was
+    only mildly positive against the 2k checkpoint and failed confidence
+    (`+0.0149`, lower95 `-0.0076`), while the Double-DQN target-network variant
+    was negative against the previous 2k reservoir checkpoint. Treat this as a
+    control branch and shift back to learned-search/public-belief methods
+    before spending Slumbot hands.

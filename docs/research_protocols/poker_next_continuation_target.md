@@ -81,6 +81,18 @@ sweep:
   NFSP/RM-FSP, R-NaD/DeepNash-style, ReBeL, or Student-of-Games-inspired module
   that can run locally and be judged by the same root-disjoint decision gate.
 
+The first pure-RL alternative has now been built as a native full-deck NFSP/DQN
+control branch: episode-level NFSP mode sampling, same-player next-decision
+DQN targets, reservoir average-policy memory, target-network bootstrapping,
+checkpoint save/load, and duplicate-swapped native H2H are all in place. This
+branch is useful infrastructure, but the results do not justify making it the
+mainline: 10k CUDA episodes failed to beat the 2k checkpoint with positive
+confidence, and the Double-DQN target-network variant was negative/inconclusive.
+Do not keep scaling native NFSP alone unless it clears duplicate-swapped H2H;
+the next principled work should return to learned-search/public-belief methods
+or a substantially stronger game-theoretic RL mechanism such as R-NaD-style
+regularized policy dynamics coupled to an evaluation gate.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
