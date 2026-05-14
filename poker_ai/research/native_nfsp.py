@@ -8,6 +8,7 @@ terminal returns as the first best-response learner target.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 import random
 import time
 
@@ -44,6 +45,7 @@ class NativeNFSPConfig:
     max_steps_per_hand: int = 256
     seed: int = 20260514
     device: str = "auto"
+    checkpoint_path: str | None = None
 
 
 class _MLP(nn.Module):
@@ -333,7 +335,7 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
         torch.cuda.synchronize()
     eval_seconds = time.perf_counter() - eval_start
 
-    return {
+    metrics = {
         "algorithm": "native_nfsp_mc",
         "role": "native_game_theoretic_rl_pilot",
         "environment": "poker_ai:full_deck_hu_nlhe",
@@ -356,3 +358,36 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
         "last_sl_loss": last_sl_loss,
         "promotion": False,
     }
+    if cfg.checkpoint_path:
+        path = Path(cfg.checkpoint_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        metrics["checkpoint_path"] = str(path)
+        torch.save(
+            {
+                "algorithm": metrics["algorithm"],
+                "role": metrics["role"],
+                "environment": metrics["environment"],
+                "num_actions": N_ACTIONS,
+                "num_features": N_FEATURES,
+                "hidden_dim": int(cfg.hidden_dim),
+                "q_net_state_dict": q_net.state_dict(),
+                "avg_net_state_dict": avg_net.state_dict(),
+                "config": {
+                    "train_episodes": int(cfg.train_episodes),
+                    "eval_games": int(cfg.eval_games),
+                    "hidden_dim": int(cfg.hidden_dim),
+                    "batch_size": int(cfg.batch_size),
+                    "min_buffer_size_to_learn": int(cfg.min_buffer_size_to_learn),
+                    "anticipatory_param": float(cfg.anticipatory_param),
+                    "epsilon": float(cfg.epsilon),
+                    "lr": float(cfg.lr),
+                    "initial_chips": int(cfg.initial_chips),
+                    "max_steps_per_hand": int(cfg.max_steps_per_hand),
+                    "seed": int(cfg.seed),
+                    "device": str(cfg.device),
+                },
+                "metrics": metrics,
+            },
+            path,
+        )
+    return metrics

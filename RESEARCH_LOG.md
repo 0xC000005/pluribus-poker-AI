@@ -3052,3 +3052,15 @@
 - Summary: Added `sample_episode_policy_modes()` and wired `_play_hand()` to use one policy mode per player for the whole hand. The repeated device diagnostic still shows the crossover point: hidden 64 is CPU-faster, but hidden 512 is CUDA-faster. This remains plumbing evidence only; random-opponent payoff is too noisy for promotion.
 - Metrics file: autoresearch-session/native_nfsp_episode_mode_cpu_seed20260514.json, autoresearch-session/native_nfsp_episode_mode_cuda_seed20260514.json, autoresearch-session/native_nfsp_episode_mode_cpu_h512_seed20260514.json, and autoresearch-session/native_nfsp_episode_mode_cuda_h512_seed20260514.json
 - Key metrics: `{"hidden64_cpu_episodes_per_second": 90.3741, "hidden64_cuda_episodes_per_second": 72.8376, "hidden512_cpu_episodes_per_second": 46.8892, "hidden512_cuda_episodes_per_second": 63.8458, "hidden512_cpu_train_steps_per_second": 161.7678, "hidden512_cuda_train_steps_per_second": 300.7137, "promotion": false}`
+
+## 20260514T211500Z-native-nfsp-checkpointed-gpu-pilot - passed
+
+- Timestamp: 2026-05-14T21:15:00Z
+- Type: implementation_compute_diagnostic
+- Gate: native-nfsp-checkpoint-output-and-2k-gpu-smoke
+- Hypothesis: The native full-deck NFSP pilot should produce a durable learned artifact before longer unattended scaling is useful.
+- Failure class: none
+- Related work: NFSP-style average-policy learning is only operationally useful if the average policy can be checkpointed and later evaluated against the same gates as other agents. This remains a pure game-theoretic RL pilot, not a Slumbot-promotion path.
+- Summary: Added `--checkpoint-out` to `scripts/run_native_nfsp_pilot.py` and checkpoint serialization for both Q and average-policy networks, feature/action counts, config, and metrics. A 2,000-episode hidden-512 CUDA pilot saved a checkpoint and completed with positive random-opponent mean payoff, but random-opponent payoff is not strategy-quality evidence.
+- Metrics file: autoresearch-session/native_nfsp_episode_mode_cuda_h512_2k_seed20260514.json and models/native_nfsp_episode_mode_h512_2k_seed20260514.pt
+- Key metrics: `{"train_episodes": 2000, "eval_games": 500, "device": "cuda", "episodes_per_second": 76.5466, "train_steps_per_second": 275.7208, "mean_eval_payoff_p0_vs_random": 0.085384, "checkpoint_saved": true, "promotion": false}`

@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from poker_ai.games.full_deck.state import N_ACTIONS, new_game
 from poker_ai.research.native_nfsp import (
@@ -75,6 +76,30 @@ def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():
     assert metrics["train_seconds"] >= 0.0
 
 
+def test_run_native_nfsp_pilot_writes_checkpoint(tmp_path):
+    checkpoint_path = tmp_path / "native_nfsp.pt"
+
+    metrics = run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=321,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    assert metrics["checkpoint_path"] == str(checkpoint_path)
+    assert payload["algorithm"] == "native_nfsp_mc"
+    assert payload["num_actions"] == 9
+    assert "avg_net_state_dict" in payload
+    assert "q_net_state_dict" in payload
+
+
 def test_native_nfsp_cli_builds_config_from_args():
     from scripts.run_native_nfsp_pilot import build_config
 
@@ -90,6 +115,8 @@ def test_native_nfsp_cli_builds_config_from_args():
             "16",
             "--device",
             "cpu",
+            "--checkpoint-out",
+            "models/native.pt",
             "--seed",
             "42",
         ]
@@ -100,4 +127,5 @@ def test_native_nfsp_cli_builds_config_from_args():
     assert cfg.hidden_dim == 32
     assert cfg.batch_size == 16
     assert cfg.device == "cpu"
+    assert cfg.checkpoint_path == "models/native.pt"
     assert cfg.seed == 42

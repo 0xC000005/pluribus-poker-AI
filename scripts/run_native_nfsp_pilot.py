@@ -36,6 +36,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=20260514)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--output-json")
+    parser.add_argument("--checkpoint-out")
     return parser
 
 
@@ -54,6 +55,7 @@ def build_config(argv: list[str] | None = None) -> NativeNFSPConfig:
         max_steps_per_hand=args.max_steps_per_hand,
         seed=args.seed,
         device=args.device,
+        checkpoint_path=args.checkpoint_out,
     )
 
 

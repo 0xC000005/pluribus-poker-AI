@@ -51,7 +51,7 @@
 - Queue candidate resolver check: `python scripts/poker_autoresearch.py enqueue-resolver --model models/candidate.pt`
 - RL baseline role check: `python scripts/poker_rl_baseline_plan.py --algorithm nfsp` or `python scripts/poker_rl_baseline_plan.py --algorithm ppo --allow-control-baseline`
 - RLCard NFSP framework-control pilot: `uv run python scripts/run_rlcard_nfsp_pilot.py --train-episodes 100 --eval-games 100 --device auto --output-json autoresearch-session/rlcard_nfsp_pilot.json`
-- Native 9-action NFSP-style pilot: `uv run python scripts/run_native_nfsp_pilot.py --train-episodes 200 --eval-games 100 --hidden-dim 512 --batch-size 512 --device cuda --output-json autoresearch-session/native_nfsp_cuda.json`
+- Native 9-action NFSP-style pilot: `uv run python scripts/run_native_nfsp_pilot.py --train-episodes 2000 --eval-games 500 --hidden-dim 512 --batch-size 512 --device cuda --output-json autoresearch-session/native_nfsp_cuda.json --checkpoint-out models/native_nfsp.pt`
 - Unit checks: `pytest -q test/unit/test_network_mask.py test/unit/test_slumbot_mapping.py test/unit/test_legal_mask_parity.py test/unit/test_policy_targets.py test/unit/test_sd_cfr_mixture.py`
 
 ## Coding Style & Naming Conventions
