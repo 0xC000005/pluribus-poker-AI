@@ -50,6 +50,7 @@
 - Queue candidate comparison: `python scripts/poker_autoresearch.py enqueue-compare --candidate models/candidate.pt --head-to-head`
 - Queue candidate resolver check: `python scripts/poker_autoresearch.py enqueue-resolver --model models/candidate.pt`
 - RL baseline role check: `python scripts/poker_rl_baseline_plan.py --algorithm nfsp` or `python scripts/poker_rl_baseline_plan.py --algorithm ppo --allow-control-baseline`
+- RLCard NFSP framework-control pilot: `uv run python scripts/run_rlcard_nfsp_pilot.py --train-episodes 100 --eval-games 100 --output-json autoresearch-session/rlcard_nfsp_pilot.json`
 - Unit checks: `pytest -q test/unit/test_network_mask.py test/unit/test_slumbot_mapping.py test/unit/test_legal_mask_parity.py test/unit/test_policy_targets.py test/unit/test_sd_cfr_mixture.py`
 
 ## Coding Style & Naming Conventions
@@ -69,6 +70,7 @@
 - Solver update candidates must be opt-in diagnostics until a root-disjoint A/B beats the same-budget CFR+ baseline against a higher-budget teacher. Keep `cfr_plus` as the default unless the gate and objective audit both pass.
 - The active research target is publication-grade game-theoretic RL / learned search: prefer pure self-play/equilibrium-learning methods where possible, and use CFR+/resolving as a principled imperfect-information evaluator, teacher, or correction operator. Slumbot is a transfer benchmark, not the objective to hack. Do not revive hard learned leaf/successor value replacement, final-distribution policy mixing sweeps, policy argmax imitation, or Slumbot-specific action patches as the mainline without a completed methodology review and root-disjoint resolver gate.
 - Generic RL algorithms such as PPO, DQN, and Rainbow are control baselines unless paired with a game-theoretic/equilibrium layer such as NFSP-style average-policy fictitious self-play. Use `poker_rl_baseline_plan.py` before adding framework-specific code.
+- RLCard/PettingZoo are framework-control dependencies only. RLCard no-limit Hold'em uses a 5-action environment, so its NFSP pilot is useful for algorithm plumbing but is not Slumbot-parity or 9-action promotion evidence.
 - Policy-head calibration targets are behavior-cloning diagnostics for range-likelihood calibration. Target temperature may soften legal teacher distributions, but it must not suppress legal all-in actions or encode street-specific rules. Treat improved target loss or range dispersion as mechanism evidence only; do not promote without head-to-head, resolver, and Slumbot confidence evidence.
 - Deep CFR can collect legal-mask average-strategy targets during traversal with `--average-strategy-weight > 0` and save an explicit `average-policy` network, but this path is experimental and off by default. First 5-iteration A/Bs regressed H2H, so do not scale it without stronger regret-network or averaging evidence.
 - Diagnose teacher collapse before scaling calibration: a dominant top action or all-in majority is a teacher-quality blocker, not a signal to sweep more calibration hyperparameters.

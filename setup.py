@@ -1,13 +1,26 @@
 import glob
+import re
 import setuptools
+from pathlib import Path
 from typing import List
-
-import poker_ai
 
 
 def get_scripts_from_bin() -> List[str]:
     """Get all local scripts from bin so they are included in the package."""
     return glob.glob("bin/*")
+
+
+def get_version() -> str:
+    """Read package version without importing poker_ai during isolated builds."""
+    init_path = Path(__file__).parent / "poker_ai" / "__init__.py"
+    match = re.search(
+        r'^__version__\s*=\s*[\'"]([^\'"]+)[\'"]',
+        init_path.read_text(encoding="utf-8"),
+        re.MULTILINE,
+    )
+    if match is None:
+        raise RuntimeError("Unable to find __version__ in poker_ai/__init__.py")
+    return match.group(1)
 
 
 def get_package_description() -> str:
@@ -28,7 +41,7 @@ def get_requirements() -> List[str]:
 
 setuptools.setup(
     name="poker_ai",
-    version=poker_ai.__version__,
+    version=get_version(),
     author="Leon Fedden, Colin Manko",
     author_email="leonfedden@gmail.com",
     description="Open source implementation of a CFR based poker AI player.",

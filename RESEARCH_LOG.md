@@ -3004,3 +3004,15 @@
 - Summary: Added `poker_ai.research.game_theoretic_rl` with legal-mask-safe softmax, epsilon-greedy controls, NFSP anticipatory policy mixing, and an algorithm profile guard. Added `scripts/poker_rl_baseline_plan.py` so autoresearch can classify `nfsp` as a mainline candidate and `ppo`/`rainbow` as control baselines before any framework-specific code is introduced.
 - Metrics file: test/unit/test_game_theoretic_rl.py
 - Key metrics: `{"unit_tests": 6, "passed": true, "mainline_candidate": "nfsp", "control_baselines": ["ppo", "rainbow_dqn"], "promotion": false}`
+
+## 20260514T195500Z-rlcard-nfsp-framework-control-pilot - passed
+
+- Timestamp: 2026-05-14T19:55:00Z
+- Type: framework_control_pilot
+- Gate: rlcard-nfsp-smoke
+- Hypothesis: RLCard can provide a small NFSP control pilot for isolating algorithm plumbing, while remaining explicitly non-promotional because its no-limit Hold'em environment uses 5 actions rather than the repo's 9-action Slumbot-parity contract.
+- Failure class: none
+- Related work: RLCard supports DQN, NFSP, and CFR examples for card games; PettingZoo wraps RLCard no-limit Hold'em. Both are useful controls but do not replace the native full-deck 9-action engine.
+- Summary: Fixed isolated editable builds by removing the `setup.py` import of `poker_ai`, installed `rlcard`, `pettingzoo`, `pip`, and `pygame`, added `scripts/run_rlcard_nfsp_pilot.py`, and ran a 100-episode NFSP-vs-random RLCard no-limit smoke. The result is plumbing evidence only; it did not improve the noisy random baseline and must not be treated as a candidate checkpoint.
+- Metrics file: autoresearch-session/rlcard_nfsp_pilot_seed20260514.json
+- Key metrics: `{"algorithm": "nfsp", "environment": "rlcard:no-limit-holdem", "num_actions": 5, "train_episodes": 100, "eval_games": 100, "pre_payoff_player0": 2.57, "post_payoff_player0": 1.62, "delta_player0": -0.95, "promotion": false}`
