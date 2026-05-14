@@ -1,8 +1,8 @@
 """Native full-deck 9-action NFSP-style pilot.
 
 This is intentionally a small autoresearch pilot, not a promoted agent. It
-keeps the repository's full-deck state/action contract and uses Monte-Carlo
-terminal returns as the first best-response learner target.
+keeps the repository's full-deck state/action contract and uses same-player
+next-decision transitions for the first DQN-style best-response learner target.
 """
 
 from __future__ import annotations
@@ -48,6 +48,17 @@ class NativeNFSPConfig:
     checkpoint_path: str | None = None
 
 
+@dataclass(frozen=True)
+class BestResponseTransition:
+    features: np.ndarray
+    legal_mask: np.ndarray
+    action: int
+    reward: float
+    next_features: np.ndarray
+    next_legal_mask: np.ndarray
+    done: bool
+
+
 class _MLP(nn.Module):
     def __init__(self, hidden_dim: int):
         super().__init__()
@@ -89,6 +100,25 @@ class _SampleBuffer:
         )
 
     def sample(self, batch_size: int, rng: np.random.Generator):
+        n = min(int(batch_size), len(self.items))
+        indices = rng.choice(len(self.items), size=n, replace=False)
+        return [self.items[int(i)] for i in indices]
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+
+class _TransitionBuffer:
+    def __init__(self, capacity: int = 20_000):
+        self.capacity = int(capacity)
+        self.items: list[BestResponseTransition] = []
+
+    def add(self, transition: BestResponseTransition) -> None:
+        if len(self.items) >= self.capacity:
+            self.items.pop(0)
+        self.items.append(transition)
+
+    def sample(self, batch_size: int, rng: np.random.Generator) -> list[BestResponseTransition]:
         n = min(int(batch_size), len(self.items))
         indices = rng.choice(len(self.items), size=n, replace=False)
         return [self.items[int(i)] for i in indices]
@@ -152,6 +182,41 @@ def sample_episode_policy_modes(
     return tuple(bool(rng.random() < eta) for _ in range(int(n_players)))
 
 
+def build_player_transitions(
+    records: list[tuple[int, np.ndarray, np.ndarray, int, bool]],
+    payouts: list[float],
+) -> list[BestResponseTransition]:
+    """Build same-player next-decision transitions from one completed hand."""
+    transitions: list[BestResponseTransition] = []
+    for i, (player, features, legal_mask, action_idx, _best_response_mode) in enumerate(records):
+        next_record = next(
+            (record for record in records[i + 1 :] if record[0] == player),
+            None,
+        )
+        if next_record is None:
+            next_features = np.zeros_like(features, dtype=np.float32)
+            next_legal_mask = np.zeros_like(legal_mask, dtype=np.float32)
+            reward = float(payouts[player])
+            done = True
+        else:
+            next_features = np.asarray(next_record[1], dtype=np.float32)
+            next_legal_mask = np.asarray(next_record[2], dtype=np.float32)
+            reward = 0.0
+            done = False
+        transitions.append(
+            BestResponseTransition(
+                features=np.asarray(features, dtype=np.float32),
+                legal_mask=np.asarray(legal_mask, dtype=np.float32),
+                action=int(action_idx),
+                reward=reward,
+                next_features=next_features,
+                next_legal_mask=next_legal_mask,
+                done=done,
+            )
+        )
+    return transitions
+
+
 def select_action(
     probs: np.ndarray,
     legal_mask: np.ndarray,
@@ -183,7 +248,7 @@ def _q_values(net: nn.Module, features: np.ndarray, device: torch.device) -> np.
 def _train_q(
     q_net: nn.Module,
     optimizer: optim.Optimizer,
-    buffer: _SampleBuffer,
+    buffer: _TransitionBuffer,
     batch_size: int,
     rng: np.random.Generator,
     device: torch.device,
@@ -191,9 +256,15 @@ def _train_q(
     if len(buffer) <= 0:
         return None
     batch = buffer.sample(batch_size, rng)
-    features = torch.tensor(np.stack([b[0] for b in batch]), device=device)
-    actions = torch.tensor([int(b[2]) for b in batch], device=device, dtype=torch.long)
-    targets = torch.tensor([float(b[3]) for b in batch], device=device, dtype=torch.float32)
+    features = torch.tensor(np.stack([b.features for b in batch]), device=device)
+    actions = torch.tensor([int(b.action) for b in batch], device=device, dtype=torch.long)
+    rewards = torch.tensor([float(b.reward) for b in batch], device=device, dtype=torch.float32)
+    next_features = torch.tensor(np.stack([b.next_features for b in batch]), device=device)
+    next_legal_masks = torch.tensor(np.stack([b.next_legal_mask for b in batch]), device=device)
+    dones = torch.tensor([bool(b.done) for b in batch], device=device, dtype=torch.bool)
+    with torch.no_grad():
+        next_values = q_net(next_features).masked_fill(next_legal_masks <= 0, -1e4).max(dim=1).values
+        targets = torch.where(dones, rewards, rewards + next_values)
     pred = q_net(features).gather(1, actions[:, None]).squeeze(1)
     loss = ((pred - targets) ** 2).mean()
     optimizer.zero_grad(set_to_none=True)
@@ -284,7 +355,7 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     avg_net = _MLP(cfg.hidden_dim).to(device)
     q_opt = optim.Adam(q_net.parameters(), lr=cfg.lr)
     avg_opt = optim.Adam(avg_net.parameters(), lr=cfg.lr)
-    q_buffer = _SampleBuffer()
+    q_buffer = _TransitionBuffer()
     sl_buffer = _SampleBuffer()
 
     train_start = time.perf_counter()
@@ -303,9 +374,9 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
         )
         total_steps += steps
         payoffs.append(payouts[0])
-        for player, features, legal_mask, action_idx, best_response_mode in records:
-            payoff = payouts[player]
-            q_buffer.add(features, legal_mask, action_idx, payoff)
+        for transition in build_player_transitions(records, payouts):
+            q_buffer.add(transition)
+        for _player, features, legal_mask, action_idx, best_response_mode in records:
             if best_response_mode:
                 sl_buffer.add(features, legal_mask, action_idx)
         if len(q_buffer) >= cfg.min_buffer_size_to_learn:
@@ -336,10 +407,10 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     eval_seconds = time.perf_counter() - eval_start
 
     metrics = {
-        "algorithm": "native_nfsp_mc",
+        "algorithm": "native_nfsp_dqn",
         "role": "native_game_theoretic_rl_pilot",
         "environment": "poker_ai:full_deck_hu_nlhe",
-        "warning": "Monte-Carlo NFSP pilot for plumbing and compute diagnostics; not a promoted poker agent.",
+        "warning": "DQN-style NFSP pilot for plumbing and compute diagnostics; not a promoted poker agent.",
         **device_info,
         "num_actions": N_ACTIONS,
         "train_episodes": int(cfg.train_episodes),
@@ -452,7 +523,7 @@ def evaluate_native_nfsp_checkpoint(
     eval_seconds = time.perf_counter() - eval_start
 
     return {
-        "algorithm": str(payload.get("algorithm", "native_nfsp_mc")),
+        "algorithm": str(payload.get("algorithm", "native_nfsp_dqn")),
         "role": "native_game_theoretic_rl_checkpoint_eval",
         "environment": str(payload.get("environment", "poker_ai:full_deck_hu_nlhe")),
         "source_checkpoint": str(checkpoint_path),

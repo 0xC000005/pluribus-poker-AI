@@ -3076,3 +3076,15 @@
 - Summary: Added `evaluate_native_nfsp_checkpoint()` and `--checkpoint-in` to the native pilot CLI. The saved 2,000-episode CUDA checkpoint loaded and evaluated successfully against the random opponent. This verifies artifact reuse but remains non-promotional.
 - Metrics file: autoresearch-session/native_nfsp_episode_mode_cuda_h512_2k_eval_seed20260515.json
 - Key metrics: `{"source_checkpoint": "models/native_nfsp_episode_mode_h512_2k_seed20260514.pt", "eval_games": 500, "eval_games_per_second": 112.9011, "mean_eval_payoff_p0_vs_random": 0.103344, "num_actions": 9, "promotion": false}`
+
+## 20260514T214500Z-native-nfsp-dqn-transition-targets - passed
+
+- Timestamp: 2026-05-14T21:45:00Z
+- Type: methodology_correction
+- Gate: native-nfsp-dqn-transition-smoke
+- Hypothesis: The native NFSP best-response learner should use same-player next-decision DQN targets instead of assigning the final hand payoff to every action.
+- Failure class: none
+- Related work: NFSP uses a DQN-style approximate best response plus supervised average-policy learning. In a turn-based poker hand, the relevant bootstrap target for a shared player-perspective learner is the next decision by the same player, not the opponent's intervening observation.
+- Summary: Added `BestResponseTransition` and `build_player_transitions()` to link each player decision to that player's next decision or terminal payoff, and updated Q training to bootstrap from legal next-action values. The hidden-512 200-episode A/B remains CUDA-faster than CPU. A 2,000-episode CUDA run saved and reloaded a DQN-labeled checkpoint. This is more principled than the earlier MC target, but still only a native RL pilot evaluated against random opponents.
+- Metrics file: autoresearch-session/native_nfsp_dqn_transition_cpu_h512_v2_seed20260514.json, autoresearch-session/native_nfsp_dqn_transition_cuda_h512_v2_seed20260514.json, autoresearch-session/native_nfsp_dqn_transition_cuda_h512_2k_seed20260514.json, and autoresearch-session/native_nfsp_dqn_transition_h512_2k_eval_seed20260515.json
+- Key metrics: `{"hidden512_cpu_episodes_per_second": 37.4478, "hidden512_cuda_episodes_per_second": 62.8081, "hidden512_cpu_train_steps_per_second": 172.8218, "hidden512_cuda_train_steps_per_second": 293.6277, "two_k_cuda_episodes_per_second": 44.4166, "two_k_cuda_train_steps_per_second": 320.0880, "checkpoint_eval_mean_payoff_vs_random": 0.174208, "promotion": false}`

@@ -4,6 +4,7 @@ import torch
 from poker_ai.games.full_deck.state import N_ACTIONS, new_game
 from poker_ai.research.native_nfsp import (
     NativeNFSPConfig,
+    build_player_transitions,
     evaluate_native_nfsp_checkpoint,
     get_legal_mask,
     masked_uniform,
@@ -55,6 +56,29 @@ def test_sample_episode_policy_modes_once_per_player():
     assert never_br == (False, False)
 
 
+def test_build_player_transitions_links_next_decision_for_same_player():
+    features0 = np.full(4, 0.1, dtype=np.float32)
+    features1 = np.full(4, 0.2, dtype=np.float32)
+    features2 = np.full(4, 0.3, dtype=np.float32)
+    mask = np.array([1.0, 1.0], dtype=np.float32)
+    records = [
+        (0, features0, mask, 0, True),
+        (1, features1, mask, 1, False),
+        (0, features2, mask, 1, True),
+    ]
+
+    transitions = build_player_transitions(records, [0.75, -0.75])
+
+    assert len(transitions) == 3
+    np.testing.assert_allclose(transitions[0].next_features, features2)
+    assert transitions[0].reward == 0.0
+    assert transitions[0].done is False
+    assert transitions[1].reward == -0.75
+    assert transitions[1].done is True
+    assert transitions[2].reward == 0.75
+    assert transitions[2].done is True
+
+
 def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():
     metrics = run_native_nfsp_pilot(
         NativeNFSPConfig(
@@ -68,7 +92,7 @@ def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():
         )
     )
 
-    assert metrics["algorithm"] == "native_nfsp_mc"
+    assert metrics["algorithm"] == "native_nfsp_dqn"
     assert metrics["environment"] == "poker_ai:full_deck_hu_nlhe"
     assert metrics["num_actions"] == 9
     assert metrics["resolved_device"] == "cpu"
@@ -95,7 +119,7 @@ def test_run_native_nfsp_pilot_writes_checkpoint(tmp_path):
     payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
     assert metrics["checkpoint_path"] == str(checkpoint_path)
-    assert payload["algorithm"] == "native_nfsp_mc"
+    assert payload["algorithm"] == "native_nfsp_dqn"
     assert payload["num_actions"] == 9
     assert "avg_net_state_dict" in payload
     assert "q_net_state_dict" in payload
@@ -123,7 +147,7 @@ def test_evaluate_native_nfsp_checkpoint_roundtrip(tmp_path):
         seed=778,
     )
 
-    assert metrics["algorithm"] == "native_nfsp_mc"
+    assert metrics["algorithm"] == "native_nfsp_dqn"
     assert metrics["source_checkpoint"] == str(checkpoint_path)
     assert metrics["eval_games"] == 2
     assert metrics["resolved_device"] == "cpu"
