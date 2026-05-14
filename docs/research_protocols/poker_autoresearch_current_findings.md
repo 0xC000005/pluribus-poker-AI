@@ -4,10 +4,12 @@ Date: 2026-05-13
 
 ## Current Objective Pivot
 
-The active objective is now neural regret-field resolving: learn a
-public-belief regret/policy initializer that warm-starts CFR+/resolving, then
-let search correct it at runtime. This replaces the previous mainline of hard
-learned CFV leaf/successor replacement and direct policy imitation.
+The active objective is now publication-grade game-theoretic RL / learned
+search. Prefer pure self-play/equilibrium-learning methods where possible, and
+use CFR+/resolving as a principled imperfect-information evaluator, teacher, or
+runtime correction operator when necessary. Slumbot is a transfer benchmark and
+integration test, not the objective to hack. This replaces the previous mainline
+of hard learned CFV leaf/successor replacement and direct policy imitation.
 
 Reason: value-only successor cuts, callback-state DCVN variants, final policy
 mixing, direct policy imitation, and sparse impact gates repeatedly fit local
@@ -46,6 +48,14 @@ direct predictor improved neither policy L1 nor KL over the cheap low solver
 (`0.7890` L1, `0.5121` KL vs low `0.5249`/`0.2681`). A residual diagnostic that
 also consumed the low solver's field was better but still failed
 (`0.7166`/`0.4641`). Do not integrate this checkpoint into the resolver.
+
+Objective refinement: the next research loop should attack the root
+target/search-alignment problem, not surface metrics. Two allowed mainlines are:
+decision-focused learned-search correction targets, and pure game-theoretic RL
+alternatives such as NFSP/RM-FSP, R-NaD/DeepNash-style dynamics, ReBeL-style
+public-belief self-play, or Student-of-Games-style guided search. Knobs are
+acceptable only when they isolate one mechanism; benchmark-maxing Slumbot quirks
+is explicitly out of scope.
 
 ## Incumbent
 

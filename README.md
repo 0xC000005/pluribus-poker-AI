@@ -123,12 +123,18 @@ Use the autoresearch workflow for unattended experiments and methodology
 changes. It records resumable state under `autoresearch-session/` and appends
 concise entries to `RESEARCH_LOG.md`.
 
-The current objective is neural regret-field resolving: learn reusable
-public-belief regret/policy initializers that warm-start CFR+/resolving, then
-use search as the runtime correction mechanism. Modern neural architecture is
-allowed when it improves that learned search primitive. Hard learned value cuts,
-direct policy argmax imitation, and broad hyperparameter sweeps are negative
-evidence tracks unless a completed methodology review reopens them.
+The current objective is publication-grade game-theoretic RL / learned search:
+learn from self-play and public-belief experience in a way that is
+AlphaZero-like in spirit but valid for imperfect information. CFR+/resolving may
+be used as a principled evaluator, teacher, or runtime correction operator, but
+not as a license for Slumbot-specific action rules. Modern neural architecture
+is allowed when it improves the learned search primitive. Hard learned value
+cuts, direct policy argmax imitation, and broad hyperparameter sweeps are
+negative evidence tracks unless a completed methodology review reopens them.
+
+Slumbot is a transfer benchmark and integration test, not the objective to
+hack. A change should be defensible as a general poker-learning method before
+it gets Slumbot confidence spend.
 
 ```bash
 python scripts/poker_autoresearch.py init
@@ -136,7 +142,7 @@ python scripts/poker_autoresearch.py status
 python scripts/poker_autoresearch.py continuous --sleep-seconds 30
 python scripts/poker_autoresearch.py set-phase \
   --phase neural_regret_field_resolving \
-  --reason "active SOTA-oriented learned-search objective"
+  --reason "publication-grade game-theoretic RL and learned-search objective"
 ```
 
 Before changing a method, evaluation protocol, promotion rule, or persistent

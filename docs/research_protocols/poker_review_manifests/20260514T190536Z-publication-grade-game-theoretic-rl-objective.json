@@ -1,0 +1,54 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1598,
+      "path": "benchmark_audit.md",
+      "sha256": "8960c071dbbc2e3d51a82805b896ea6f61f50f1fd8546358c39f76465c64ff98"
+    },
+    {
+      "bytes": 877,
+      "path": "decision.json",
+      "sha256": "f9b45af451ce7e7d83df5766822e5472c78e9374a7f8cec23c99cb2f032be4c4"
+    },
+    {
+      "bytes": 1969,
+      "path": "mechanism_review.md",
+      "sha256": "2eb870a857dd7b42a2e9e7c7cbab23e9df396cd97f026aaeb9e7153b161edbff"
+    },
+    {
+      "bytes": 2507,
+      "path": "related_work.md",
+      "sha256": "a26eb6492ee793421a464b31b21059aad4eb29686583254afedd8c07f99d17db"
+    },
+    {
+      "bytes": 1696,
+      "path": "review.md",
+      "sha256": "6fc42c8bb0be6c4acaa4f9499adbe4567797a02981e8019b9b23c7bcee3e0319"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The objective update is methodology-only, does not weaken protected evaluation surfaces, and is grounded in imperfect-information game-theoretic RL/search literature. It should authorize a small root-disjoint experiment family, not checkpoint promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T190536Z-publication-grade-game-theoretic-rl-objective",
+  "review_id": "20260514T190536Z-publication-grade-game-theoretic-rl-objective",
+  "sources": [
+    "autoresearch-session/poker_goal.json",
+    "docs/research_protocols/poker_autoresearch_workflow.md",
+    "docs/research_protocols/poker_next_continuation_target.md",
+    "docs/research_protocols/poker_autoresearch_current_findings.md",
+    "README.md",
+    "AGENTS.md",
+    "RESEARCH_LOG.md",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/2206.15378",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.10442"
+  ],
+  "written_at": "2026-05-14T19:07:06Z"
+}

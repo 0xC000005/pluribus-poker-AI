@@ -2948,3 +2948,48 @@
 - Summary: Added `dcfr_plus` as an opt-in CPU solver update, kept `cfr_plus` as the default, and added `scripts/eval_solver_update_gate.py` to compare low-budget solver updates against a higher-budget teacher. The 64-root holdout gate rejected `dcfr_plus`: L1/KL worsened and action agreement fell, with zero illegal mass and modest extra latency. Do not promote this update into Slumbot play or tune discount exponents; use the gate for future better-researched update candidates.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_update_dcfr_plus_holdout64_seed20260659.json and docs/research_protocols/poker_review_manifests/20260513T221207Z-solver-update-a-b-gate.json
 - Key metrics: `{"passed": false, "n_evaluated": 64, "mean_low_l1_to_reference": 0.52537416, "mean_candidate_l1_to_reference": 0.54042345, "mean_low_kl_to_reference": 0.26023225, "mean_candidate_kl_to_reference": 0.35331115, "low_action_agreement": 0.765625, "candidate_action_agreement": 0.75, "low_allin_prob_gap": 0.07986568, "candidate_allin_prob_gap": 0.11251545, "candidate_to_low_latency_ratio": 1.11862382, "promotion": false}`
+
+## 20260514T000000Z-publication-grade-game-theoretic-rl-objective - passed
+
+- Timestamp: 2026-05-14T00:00:00Z
+- Type: methodology_update
+- Gate: manual-workflow-objective-update
+- Hypothesis: The autoresearch objective should prefer elegant publication-grade game-theoretic RL / learned-search methods and treat Slumbot as a transfer benchmark, not an optimization target.
+- Failure class: none
+- Related work: NFSP learns approximate equilibria from self-play without prior domain knowledge; DeepNash/R-NaD shows a pure model-free game-theoretic RL philosophy for imperfect-information games; ReBeL and Student of Games combine public-belief/self-play learning with guided search; DeepStack/Supremus show why resolving and learned counterfactual values remain useful in poker when pure lookahead is invalid.
+- Summary: Updated the durable workflow objective, README, AGENTS guide, current findings, and continuation target. The workflow now states that knobs are not inherently bad, but broad knob sweeps and Slumbot-specific benchmark hacking are out of scope. The preferred next research families are decision-focused learned-search corrections and pure game-theoretic RL alternatives such as NFSP/RM-FSP, R-NaD/DeepNash-style dynamics, ReBeL-style public-belief self-play, or Student-of-Games-style guided search.
+- Metrics file: docs/research_protocols/poker_autoresearch_workflow.md and docs/research_protocols/poker_next_continuation_target.md
+- Key metrics: `{"objective_updated": true, "preferred_philosophy": "pure_game_theoretic_rl_when_possible", "slumbot_rule": "transfer_benchmark_not_objective_to_hack", "next_mainlines": ["decision_focused_learned_search_corrections", "pure_game_theoretic_rl_alternatives"], "promotion": false}`
+## 20260514T190728Z-methodology-review-for-solver-update-a-b-gate - passed
+
+- Timestamp: 2026-05-14T19:07:28Z
+- Type: methodology_review
+- Gate: methodology-review-20260513T221207Z-solver-update-a-b-gate
+- Hypothesis: Methodology review for Solver update A/B gate should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260513T221207Z-solver-update-a-b-gate passed.
+- Metrics file: autoresearch-session/poker_runs/20260514T190728Z-methodology-review-for-solver-update-a-b-gate/metrics.json
+- Key metrics: `{"decision": "abandon", "gate": "methodology-review-20260513T221207Z-solver-update-a-b-gate", "passed": true}`
+
+## 20260514T190758Z-methodology-review-for-publication-grade-game-theoretic-rl - passed
+
+- Timestamp: 2026-05-14T19:07:58Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T190536Z-publication-grade-game-theoretic-rl-objective
+- Hypothesis: Methodology review for Publication-grade game-theoretic RL objective should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260514T190536Z-publication-grade-game-theoretic-rl-objective passed.
+- Metrics file: autoresearch-session/poker_runs/20260514T190758Z-methodology-review-for-publication-grade-game-theoretic-rl/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260514T190536Z-publication-grade-game-theoretic-rl-objective", "passed": true}`
+
+## 20260514T191046Z-methodology-review-for-minimal-pure-game-theoretic-rl - passed
+
+- Timestamp: 2026-05-14T19:10:46Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T190937Z-minimal-pure-game-theoretic-rl-pilot
+- Hypothesis: Methodology review for Minimal pure game-theoretic RL pilot should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260514T190937Z-minimal-pure-game-theoretic-rl-pilot passed.
+- Metrics file: autoresearch-session/poker_runs/20260514T191046Z-methodology-review-for-minimal-pure-game-theoretic-rl/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260514T190937Z-minimal-pure-game-theoretic-rl-pilot", "passed": true}`
+

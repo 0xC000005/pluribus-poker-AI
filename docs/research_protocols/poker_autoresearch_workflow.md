@@ -6,18 +6,33 @@ knob-governance gates.
 
 ## Objective
 
-Build a research loop for an elegant, novel, SOTA-oriented heads-up no-limit
-hold'em engine that can train on a personal PC, use learned search knowledge
-during play, and beat Slumbot plus stronger public baselines without
-hand-crafted poker-strategy rules.
+Build a research loop for an elegant, novel, publication-grade heads-up
+no-limit hold'em method that can train on a personal PC, use learned
+game-theoretic knowledge during play, and beat Slumbot plus stronger public
+baselines without hand-crafted poker-strategy rules. The preferred philosophy is
+pure/game-theoretic RL: AlphaZero-like in spirit, but valid for imperfect
+information. The standard is a method that would be defensible as a
+NeurIPS/AAAI/ICLR-style contribution: a clear mechanism, root-cause diagnosis,
+related-work grounding, falsifiers, and transfer evidence.
 
-The active direction is **neural regret-field resolving**: learn reusable
-public-belief regret/policy initializers, use them to warm-start CFR+/resolving,
-and let search remain the correction operator. Search, abstraction, regret
-matching, legality handling, and learned public-belief representations are
-allowed. Ad hoc opponent-specific action hacks, street-specific human heuristics,
-hard learned value-cut replacement, and benchmark-tuned policy argmax patches are
-not promoted.
+The active direction is **decision-focused game-theoretic RL / learned search**:
+learn from self-play dynamics and public-belief experience, with CFR/search used
+only as a principled imperfect-information evaluator, teacher, or correction
+operator where pure AlphaZero-style search is invalid. Public-belief
+representations, equilibrium-oriented RL dynamics, regret/policy initializers,
+and learned search corrections are allowed. Ad hoc opponent-specific action
+hacks, street-specific human heuristics, hard learned value-cut replacement, and
+benchmark-tuned policy argmax patches are not promoted.
+
+The goal is not “fewer research knobs.” Knobs are acceptable when they isolate a
+mechanism. The workflow rejects knob sweeps that substitute for understanding.
+Every major cycle should ask whether it attacks the root problem: learned
+objects have fit value/policy targets but have not yet improved search decisions
+on unseen public states.
+
+Slumbot is a transfer benchmark and integration test, not the objective to
+hack. A change that only exploits Slumbot quirks, action mapping edge cases, or
+visible evaluation thresholds is a failure even if chips/hand improves.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
@@ -127,7 +142,10 @@ python scripts/poker_autoresearch.py objective-audit \
 
 The long-term objective remains the controlling policy: novel, compute-efficient
 Texas hold'em methods that transfer to Slumbot and stronger bots on personal-PC
-hardware. Visible smoke metrics are diagnostics, not promotion targets.
+hardware. Visible smoke metrics are diagnostics, not promotion targets. A
+paper-acceptable cycle must name the learned object, the search or RL boundary,
+why related work predicts the mechanism, what simpler explanation it falsifies,
+and how it will fail safely.
 
 ## Falsification Ladder
 
@@ -199,7 +217,14 @@ Approved next actions in this phase:
 
 - implement solver warm-start interfaces that preserve zero-initializer parity;
 - export root-disjoint teacher targets from higher-budget resolving;
-- train a public-belief regret/policy initializer, not a hard value oracle;
+- build decision-focused correction targets from interventions that actually
+  reduce root action L1/KL after search;
+- train a public-belief regret/policy initializer or correction model, not a
+  hard value oracle;
+- review and prototype pure game-theoretic RL alternatives such as NFSP,
+  RM-FSP, R-NaD/DeepNash-style dynamics, ReBeL-style public-belief self-play, or
+  Student-of-Games-style guided search when they address the same root
+  decision-transfer problem;
 - evaluate low-budget vanilla CFR+ versus neural-warm-start CFR+ against the
   same higher-budget teacher.
 
@@ -207,6 +232,8 @@ Blocked anti-patterns:
 
 - scaling hard learned leaf/successor value replacement as the mainline;
 - sweeping final-distribution policy mixing weights;
+- sweeping discount/loss/model-size knobs without a mechanism review;
+- adding Slumbot-specific exploit patches or action-mapping tricks as a method;
 - adding model-size knobs before a root-disjoint warm-start resolver gate;
 - queueing generic GPU Deep CFR training or live Slumbot smokes before the
   local warm-start resolver gate passes.

@@ -7,20 +7,22 @@ Date: 2026-05-13
 Stop scaling hard learned leaf/successor value substitution and direct policy
 argmax imitation as mainline methods. The latest root-disjoint successor-cut,
 callback-state DCVN, policy mixing, and impact-gating checks all failed resolver
-behavior gates. The next target is **neural regret-field resolving**: learn a
-public-belief regret/policy initializer that warm-starts CFR+/resolving, then
-let search refine the decision during play.
+behavior gates. The next target is **publication-grade game-theoretic RL /
+learned search**: prefer pure self-play/equilibrium-learning methods where
+possible, and use CFR+/resolving as a principled imperfect-information
+evaluator, teacher, or correction operator when necessary.
 
 The required first gate is not Slumbot. It is a root-disjoint resolver A/B:
 compare low-budget vanilla CFR+ against low-budget neural-warm-start CFR+, both
 against the same higher-budget teacher, reporting root action L1/KL,
 top-action agreement, illegal-action count, and latency.
 
-Use modern neural architecture where it helps the learned search primitive:
-set/card encoders, attention over public action tokens, residual trunks,
-uncertainty heads, and mixed precision are all valid candidates. They must still
-be evaluated as search initializers. A larger network that improves offline
-target fit but fails the root-disjoint resolver A/B is not progress.
+Use modern neural architecture where it helps the learned game-theoretic
+primitive: public-belief encoders, set/card encoders, action-sequence attention,
+residual trunks, equilibrium/RL update heads, uncertainty heads, and mixed
+precision are all valid candidates. They must still be evaluated by downstream
+decision quality. A larger network that improves offline target fit but fails
+the root-disjoint resolver A/B is not progress.
 
 The first implementation of this gate is now in place. Reusing the old
 joint-PBS policy checkpoint as the initializer failed the 64-root holdout gate:
@@ -62,6 +64,23 @@ default. The useful next step is not to tune discount exponents; it is to
 collect or learn a more search-aware correction signal, or test a better
 researched predictive/learned update with the same fixed A/B gate.
 
+The objective is now sharpened further: do not make Slumbot the thing to hack.
+Slumbot is a transfer benchmark. The preferred research path is an elegant
+general method, closer in spirit to AlphaZero/Student-of-Games/DeepNash than to
+benchmark-specific poker patches: self-play learning, public-belief
+representations, equilibrium-oriented RL dynamics, and search or resolving only
+where imperfect information makes pure lookahead invalid. The next local work
+should therefore compare two root-cause families before another engineering
+sweep:
+
+- **Decision-focused learned-search correction:** generate interventions that
+  actually reduce root action L1/KL after low-budget resolving, then train a
+  model to predict those search-effective corrections rather than raw teacher
+  fields.
+- **Pure game-theoretic RL alternative:** review and prototype the smallest
+  NFSP/RM-FSP, R-NaD/DeepNash-style, ReBeL, or Student-of-Games-inspired module
+  that can run locally and be judged by the same root-disjoint decision gate.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
@@ -93,6 +112,8 @@ context, so per-hand leaf MAE is not enough.
 
 Primary sources:
 
+- NFSP: https://arxiv.org/abs/1603.01121
+- DeepNash / R-NaD: https://arxiv.org/abs/2206.15378
 - DeepStack: https://arxiv.org/abs/1701.01724
 - Supremus / deep CFV networks: https://arxiv.org/abs/2007.10442
 - ReBeL: https://arxiv.org/abs/2007.13544

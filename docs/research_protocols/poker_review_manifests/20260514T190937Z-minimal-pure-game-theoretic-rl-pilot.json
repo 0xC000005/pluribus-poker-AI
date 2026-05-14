@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1598,
+      "path": "benchmark_audit.md",
+      "sha256": "5813a80182538f98fd7b7972f3c05a98699481f5ab723a53ffa9bc4065c103b6"
+    },
+    {
+      "bytes": 849,
+      "path": "decision.json",
+      "sha256": "aa8a59280adb2489778ddf7c852160849d0f00339a10ab0eec252534b95971f1"
+    },
+    {
+      "bytes": 1858,
+      "path": "mechanism_review.md",
+      "sha256": "7c871ed028c9f56e8262cdec95b3c062365e5a8a47ec35fcb71856d9cf930681"
+    },
+    {
+      "bytes": 2564,
+      "path": "related_work.md",
+      "sha256": "62dbf5f8f160ff12575badfc2a4f527e8ba8f468237a32ba38d130a10b25d8ef"
+    },
+    {
+      "bytes": 1918,
+      "path": "review.md",
+      "sha256": "57e757f47ba415c2e758c2715878ec263b168e7f7a91259c2a374de99b54dbb5"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with a narrowly scoped NFSP/RM-FSP-first pilot. It is the smallest pure game-theoretic RL step that can reuse existing average-policy machinery while preserving the root-disjoint decision gate and avoiding Slumbot-specific tuning.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T190937Z-minimal-pure-game-theoretic-rl-pilot",
+  "review_id": "20260514T190937Z-minimal-pure-game-theoretic-rl-pilot",
+  "sources": [
+    "poker_ai/deep_cfr/networks.py",
+    "poker_ai/deep_cfr/policy_targets.py",
+    "scripts/poker_resolver_benchmark.py",
+    "docs/research_protocols/poker_autoresearch_workflow.md",
+    "docs/research_protocols/poker_next_continuation_target.md",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/1903.09569",
+    "https://www.sciencedirect.com/science/article/pii/S0925231223005945",
+    "https://arxiv.org/abs/2206.15378",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178"
+  ],
+  "written_at": "2026-05-14T19:10:41Z"
+}
