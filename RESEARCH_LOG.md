@@ -107,6 +107,19 @@
 - Metrics file: `docs/research_protocols/poker_review_manifests/20260514T221524Z-nonlinear-public-belief-trace-delta-model.json`
 - Key metrics: `{"decision": "proceed", "diagnostic_only": true, "requires_low_and_uniform_baselines": true, "promotion": false}`
 
+## 20260514T222315Z-nonlinear-trace-delta-mlp - failed
+
+- Timestamp: 2026-05-14T22:23:15Z
+- Type: search_consistency_diagnostic
+- Gate: nonlinear trace-delta MLP vs low/uniform trace baselines
+- Hypothesis: A small nonlinear CUDA MLP over low-iteration trace features should predict the low-to-uniform trace update better than the shallow linear residual and improve held-out root decisions.
+- Failure class: search_target_alignment
+- Related work: The reviewed sources support learned public-belief/regret objects coupled to CFR correction, but the local trace record currently contains only compact regret/strategy/mass features rather than a full public-belief state.
+- Summary: Added `scripts/train_cfr_trace_delta_mlp.py` and `test/unit/test_cfr_trace_delta_mlp.py`. The synthetic unit tests verify legal-mask-safe nonlinear update fitting and prevent target-fit-only promotion. On the fixed 32/32 root-disjoint trace split, CUDA training fit the iteration-10 target slightly better than low (`0.3216` vs `0.3266` L1-to-target), but failed the decision gate: predicted final L1 was worse than low and far worse than simply using the uniform iteration-10 trace.
+- Metrics file: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_delta_mlp_train32_holdout32_seed20260661.json`
+- Key metrics: `{"device": "cuda", "target_fit_passed": true, "decision_passed": false, "mean_pred_l1_to_reference": 0.52531976, "mean_low_l1_to_reference": 0.52017487, "mean_uniform_l1_to_reference": 0.31188308, "promotion": false}`
+- Decision: do not tune MLP capacity, epochs, or learning rate as the next research move. The failure points to missing state/target semantics: richer public-belief/counterfactual inputs or a stronger advantage/regret target are needed before another trace model.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z

@@ -194,6 +194,12 @@ single-row residuals at the current scale.
   correction operator, low and uniform trace baselines are mandatory, and the
   tracked digest is
   `docs/research_protocols/poker_review_manifests/20260514T221524Z-nonlinear-public-belief-trace-delta-model.json`.
+- The first nonlinear trace-delta MLP on the compact trace rows failed the
+  decision gate even though it used CUDA and slightly improved target fit:
+  final L1 `0.5253` versus low `0.5202` and uniform `0.3119`. This makes
+  hidden-size/epoch tuning the wrong next move; the missing piece is richer
+  public-belief/counterfactual state or a more faithful advantage/regret
+  target.
 
 ## Metric Snapshot
 

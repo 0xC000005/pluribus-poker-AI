@@ -159,6 +159,14 @@ uniform trace baselines, and leaves Slumbot/promotion surfaces untouched. The
 tracked manifest is
 `docs/research_protocols/poker_review_manifests/20260514T221524Z-nonlinear-public-belief-trace-delta-model.json`.
 
+The first nonlinear implementation on the existing compact trace rows is also
+negative. A CUDA MLP slightly beat the low trace on target fit
+(`0.3216` vs `0.3266` L1 to iteration-10 target) but failed decision quality
+(`0.5253` final L1 vs `0.5202` low and `0.3119` uniform). This rules out
+capacity tuning on the current trace-row features as the next move. The next
+trace attempt must add richer public-belief/counterfactual inputs or switch to
+a stronger regret/advantage target.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
