@@ -86,3 +86,18 @@ def test_trace_policy_residual_can_learn_final_policy_mapping():
     assert metrics["mean_pred_l1_to_reference"] < metrics["mean_low_l1_to_reference"]
     assert metrics["mean_pred_l1_to_reference"] < metrics["mean_uniform_l1_to_reference"]
     assert metrics["pred_top_match_rate"] == 1.0
+
+
+def test_trace_policy_residual_can_target_later_uniform_trace():
+    metrics = fit_trace_policy_residual_from_payloads(
+        _payload(),
+        _payload(),
+        low_trace_iteration=5,
+        target_trace_iteration=10,
+        uniform_trace_iteration=10,
+        reference_trace_iteration=24,
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["target_trace_iteration"] == 10
+    assert metrics["mean_pred_l1_to_target"] < metrics["mean_low_l1_to_target"]

@@ -145,6 +145,12 @@ single test: predict the low-to-later regret/strategy change, not the final
 policy. This keeps the target closer to the update operator and avoids treating
 the 25-iteration strategy as a one-step imitation label.
 
+The shallow low-to-later delta implementation failed, so the target family
+survives only in a stronger form. Do not keep adding linear residual probes.
+The next version must use either a nonlinear public-belief trace model with
+enough root-disjoint data or a target closer to counterfactual regret/advantage
+updates, and it must continue reporting low and uniform baselines.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

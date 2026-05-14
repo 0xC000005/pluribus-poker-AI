@@ -78,8 +78,22 @@
 - Evidence:
   - Synthesis: `autoresearch-session/poker_reviews/20260514T222500Z-trace-derived-search-failures-synthesis`
   - Manifest: `docs/research_protocols/poker_review_manifests/20260514T222500Z-trace-derived-search-failures-synthesis.json`
-  - Validator: `uv run python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260514T222500Z-trace-derived-search-failures-synthesis --require-complete` -> passed.
+- Validator: `uv run python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260514T222500Z-trace-derived-search-failures-synthesis --require-complete` -> passed.
 - Decision: gather more evidence with a counterfactual delta target. The next single test should predict low-to-later regret/strategy changes and compare against both low and uniform trace baselines on root-disjoint states.
+
+## 20260514T223020Z-cfr-trace-low-to-uniform-delta - failed
+
+- Timestamp: 2026-05-14T22:30:20Z
+- Type: diagnostic
+- Gate: low-to-uniform trace delta vs low/uniform baselines
+- Hypothesis: targeting the iteration-10 uniform trace instead of the final iteration-24 policy should make the residual easier and produce a cheap correction that improves the low iteration-5 trace.
+- Failure class: search_quality
+- Summary: Extended `scripts/train_cfr_trace_policy_residual.py` with `--target-trace-iteration`. The first low-to-uniform target still failed on the fixed 32/32 root-disjoint trace split.
+- Evidence:
+  - Delta metrics: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_policy_delta_to_uniform10_train32_holdout32_seed20260660.json`
+  - Test: `uv run pytest -q test/unit/test_cfr_trace_policy_residual.py` -> `2 passed`.
+- Metrics: predicted L1 to final was `0.5609852`, worse than low `0.52017487` and uniform `0.31188308`. Predicted L1 to the iteration-10 target was `0.40710424`, also worse than the low trace's distance to that target (`0.32659132`). Top-match rate was `0.6875`, below low `0.78125` and uniform `0.84375`.
+- Decision: retire shallow linear trace-row residuals for this data scale. The next attempt must change model class and/or target semantics, not just the trace target iteration.
 
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 

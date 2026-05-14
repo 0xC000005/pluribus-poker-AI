@@ -109,6 +109,12 @@ compute switches are misaligned with how CFR updates coupled public-belief
 strategies. The next live hypothesis is a counterfactual low-to-later delta
 target, not another direct final-policy imitation target.
 
+Low-to-later delta status: the first shallow version failed too. Targeting the
+iteration-10 uniform trace produced holdout final L1 `0.5610`, worse than low
+`0.5202`, and predicted distance to the iteration-10 target `0.4071`, worse
+than the low trace's distance to that target `0.3266`. This retires linear
+single-row residuals at the current scale.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -179,6 +185,9 @@ target, not another direct final-policy imitation target.
   uniform trace baselines in the report.
 - Failure synthesis selects one next falsifier: predict low-to-later
   regret/strategy deltas and evaluate against low and uniform trace baselines.
+- The first linear low-to-later delta failed. A next attempt must be
+  materially different: nonlinear public-belief trace model, counterfactual
+  advantage target, or broader root-disjoint trace data.
 
 ## Metric Snapshot
 

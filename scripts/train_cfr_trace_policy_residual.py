@@ -144,24 +144,30 @@ def fit_trace_policy_residual_from_payloads(
     holdout_payload: dict[str, Any],
     *,
     low_trace_iteration: int = 5,
+    target_trace_iteration: int | None = None,
     uniform_trace_iteration: int = 10,
     reference_trace_iteration: int = 24,
 ) -> dict[str, Any]:
+    if target_trace_iteration is None:
+        target_trace_iteration = reference_trace_iteration
     train_low = _record_map(train_payload, low_trace_iteration)
-    train_final = _record_map(train_payload, reference_trace_iteration)
-    _train_labels, x_train, y_train = _build_xy(train_low, train_final)
+    train_target = _record_map(train_payload, int(target_trace_iteration))
+    _train_labels, x_train, y_train = _build_xy(train_low, train_target)
     x_train, feature_mean, feature_std = _standardize(x_train)
     weights = _fit_ridge(x_train, y_train)
 
     holdout_low = _record_map(holdout_payload, low_trace_iteration)
+    holdout_target = _record_map(holdout_payload, int(target_trace_iteration))
     holdout_uniform = _record_map(holdout_payload, uniform_trace_iteration)
     holdout_final = _record_map(holdout_payload, reference_trace_iteration)
-    labels, x_holdout, y_holdout = _build_xy(holdout_low, holdout_final)
+    labels, x_holdout, _y_target = _build_xy(holdout_low, holdout_target)
     x_holdout, _, _ = _standardize(x_holdout, mean=feature_mean, std=feature_std)
     raw_pred = x_holdout @ weights
 
     pred_l1: list[float] = []
+    pred_to_target_l1: list[float] = []
     low_l1: list[float] = []
+    low_to_target_l1: list[float] = []
     uniform_l1: list[float] = []
     pred_match: list[bool] = []
     low_match: list[bool] = []
@@ -169,8 +175,10 @@ def fit_trace_policy_residual_from_payloads(
     records: list[dict[str, Any]] = []
     for row_idx, label in enumerate(labels):
         low_record = holdout_low[label]
+        target_record = holdout_target[label]
         uniform_record = holdout_uniform[label]
         reference = np.asarray(holdout_final[label]["strategy_policy"], dtype=np.float64)
+        target = np.asarray(target_record["strategy_policy"], dtype=np.float64)
         low_policy = np.asarray(low_record["strategy_policy"], dtype=np.float64)
         uniform_policy = np.asarray(uniform_record["strategy_policy"], dtype=np.float64)
         pred_policy = _normalize_prediction(
@@ -179,10 +187,14 @@ def fit_trace_policy_residual_from_payloads(
             fallback=low_policy,
         )
         pred_value = float(np.abs(pred_policy - reference).sum())
+        pred_to_target_value = float(np.abs(pred_policy - target).sum())
         low_value = float(np.abs(low_policy - reference).sum())
+        low_to_target_value = float(np.abs(low_policy - target).sum())
         uniform_value = float(np.abs(uniform_policy - reference).sum())
         pred_l1.append(pred_value)
+        pred_to_target_l1.append(pred_to_target_value)
         low_l1.append(low_value)
+        low_to_target_l1.append(low_to_target_value)
         uniform_l1.append(uniform_value)
         pred_match.append(_top_match(pred_policy, reference))
         low_match.append(_top_match(low_policy, reference))
@@ -191,7 +203,9 @@ def fit_trace_policy_residual_from_payloads(
             {
                 "label": label,
                 "pred_l1_to_reference": round(pred_value, 8),
+                "pred_l1_to_target": round(pred_to_target_value, 8),
                 "low_l1_to_reference": round(low_value, 8),
+                "low_l1_to_target": round(low_to_target_value, 8),
                 "uniform_l1_to_reference": round(uniform_value, 8),
                 "pred_top_matches_reference": bool(pred_match[-1]),
                 "low_top_matches_reference": bool(low_match[-1]),
@@ -200,20 +214,29 @@ def fit_trace_policy_residual_from_payloads(
             }
         )
     mean_pred = _mean(pred_l1)
+    mean_pred_to_target = _mean(pred_to_target_l1)
     mean_low = _mean(low_l1)
+    mean_low_to_target = _mean(low_to_target_l1)
     mean_uniform = _mean(uniform_l1)
-    passed = mean_pred < mean_low and mean_pred < mean_uniform
+    target_is_reference = int(target_trace_iteration) == int(reference_trace_iteration)
+    if target_is_reference:
+        passed = mean_pred < mean_low and mean_pred < mean_uniform
+    else:
+        passed = mean_pred < mean_low and mean_pred_to_target < mean_low_to_target
     return {
         "mode": "cfr_trace_policy_residual",
         "passed": bool(passed),
         "promotion": False,
         "low_trace_iteration": int(low_trace_iteration),
+        "target_trace_iteration": int(target_trace_iteration),
         "uniform_trace_iteration": int(uniform_trace_iteration),
         "reference_trace_iteration": int(reference_trace_iteration),
         "n_train": int(len(_train_labels)),
         "n_holdout": int(len(labels)),
         "mean_pred_l1_to_reference": mean_pred,
+        "mean_pred_l1_to_target": mean_pred_to_target,
         "mean_low_l1_to_reference": mean_low,
+        "mean_low_l1_to_target": mean_low_to_target,
         "mean_uniform_l1_to_reference": mean_uniform,
         "pred_top_match_rate": _rate(pred_match),
         "low_top_match_rate": _rate(low_match),
@@ -233,6 +256,7 @@ def fit_trace_policy_residual(
     train_trace_json: str | Path,
     holdout_trace_json: str | Path,
     low_trace_iteration: int = 5,
+    target_trace_iteration: int | None = None,
     uniform_trace_iteration: int = 10,
     reference_trace_iteration: int = 24,
 ) -> dict[str, Any]:
@@ -240,6 +264,7 @@ def fit_trace_policy_residual(
         _load_payload(train_trace_json),
         _load_payload(holdout_trace_json),
         low_trace_iteration=low_trace_iteration,
+        target_trace_iteration=target_trace_iteration,
         uniform_trace_iteration=uniform_trace_iteration,
         reference_trace_iteration=reference_trace_iteration,
     )
@@ -253,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--train-trace-json", required=True)
     parser.add_argument("--holdout-trace-json", required=True)
     parser.add_argument("--low-trace-iteration", type=int, default=5)
+    parser.add_argument("--target-trace-iteration", type=int)
     parser.add_argument("--uniform-trace-iteration", type=int, default=10)
     parser.add_argument("--reference-trace-iteration", type=int, default=24)
     parser.add_argument("--output-json")
@@ -261,6 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         train_trace_json=args.train_trace_json,
         holdout_trace_json=args.holdout_trace_json,
         low_trace_iteration=args.low_trace_iteration,
+        target_trace_iteration=args.target_trace_iteration,
         uniform_trace_iteration=args.uniform_trace_iteration,
         reference_trace_iteration=args.reference_trace_iteration,
     )
