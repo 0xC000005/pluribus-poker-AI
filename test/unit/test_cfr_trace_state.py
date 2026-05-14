@@ -2,6 +2,7 @@ import numpy as np
 
 from scripts.diagnose_cfr_trace_state import (
     action_policy_from_field,
+    action_advantage_from_trace,
     belief_summary_features,
     summarize_trace_records,
 )
@@ -16,6 +17,43 @@ def test_action_policy_from_field_uses_legal_actions_and_uniform_fallback():
 
     fallback = action_policy_from_field(np.zeros(4, dtype=np.float32), legal_actions=(0, 3))
     np.testing.assert_allclose(fallback, np.array([0.5, 0.0, 0.0, 0.5], dtype=np.float32))
+
+
+def test_action_advantage_from_trace_uses_current_player_values():
+    hero_action_values = np.array(
+        [
+            [1.0, 2.0],
+            [3.0, 5.0],
+            [7.0, 11.0],
+            [13.0, 17.0],
+        ],
+        dtype=np.float32,
+    )
+    villain_action_values = -hero_action_values
+    hero_values = np.array([0.5, 4.0], dtype=np.float32)
+    villain_values = np.array([-0.5, -4.0], dtype=np.float32)
+
+    hero_advantage = action_advantage_from_trace(
+        hero_action_values=hero_action_values,
+        villain_action_values=villain_action_values,
+        hero_values=hero_values,
+        villain_values=villain_values,
+        player=0,
+        hand_idx=1,
+        legal_actions=(0, 1, 3),
+    )
+    villain_advantage = action_advantage_from_trace(
+        hero_action_values=hero_action_values,
+        villain_action_values=villain_action_values,
+        hero_values=hero_values,
+        villain_values=villain_values,
+        player=1,
+        hand_idx=1,
+        legal_actions=(0, 1, 3),
+    )
+
+    np.testing.assert_allclose(hero_advantage, np.array([-2.0, 1.0, 0.0, 13.0], dtype=np.float32))
+    np.testing.assert_allclose(villain_advantage, np.array([2.0, -1.0, 0.0, -13.0], dtype=np.float32))
 
 
 def test_summarize_trace_records_reports_iteration_l1_curve():

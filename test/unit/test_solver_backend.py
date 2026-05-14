@@ -101,6 +101,25 @@ def test_torch_backend_rejects_non_default_solver_updates():
             raise AssertionError(f"Expected torch {update} update to raise ValueError")
 
 
+def test_trace_callback_receives_per_action_counterfactual_values():
+    board = [0, 5, 10, 15, 20]
+    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+    records = []
+
+    def capture_trace(**kwargs):
+        records.append(kwargs)
+
+    solver.solve(n_iterations=1, trace_node_indices=[0], trace_node_fn=capture_trace)
+
+    assert records
+    record = records[0]
+    assert record["hero_action_values"].shape == (1, solver._tree["n_actions"], solver.n)
+    assert record["villain_action_values"].shape == (1, solver._tree["n_actions"], solver.n)
+    for action in solver._tree["decision_actions"][0]:
+        assert np.isfinite(record["hero_action_values"][0, action]).all()
+        assert np.isfinite(record["villain_action_values"][0, action]).all()
+
+
 def test_solve_street_prunes_low_probability_ranges_and_keeps_hero_hand():
     board = [0, 5, 10, 15, 20]
     probe = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)

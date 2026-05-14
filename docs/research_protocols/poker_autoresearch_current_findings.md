@@ -133,6 +133,17 @@ iteration-10 uniform trace produced holdout final L1 `0.5610`, worse than low
 than the low trace's distance to that target `0.3266`. This retires linear
 single-row residuals at the current scale.
 
+Counterfactual-advantage trace status: observable but not directly reusable.
+The CPU trace callback now records per-action child counterfactual values for
+the traced node, and `scripts/analyze_cfr_trace_advantage_signal.py` compares
+the derived instantaneous `advantage_policy` against low/uniform/reference
+strategies. On the held-out 32 roots, raw advantage policy failed hard
+(`0.9789` L1, top-match `0.3750`) versus low average strategy (`0.5202`,
+`0.7813`) and uniform iteration 10 (`0.3119`, `0.8438`). Cumulative regret
+policy at iteration 5 was a partial signal (`0.4745` L1) but still did not beat
+uniform. This falsifies raw advantage cloning and points toward smoother
+learned regret-update or continuous budget allocation.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -228,6 +239,9 @@ single-row residuals at the current scale.
   and failed KL/action/latency gates, so it remains a mechanism diagnostic.
 - The reviewed source-backed PDCFR+ CPU update is also available as an opt-in
   diagnostic, but it failed the 64-root solver-update A/B and is not promotable.
+- Per-action counterfactual advantage tracing is available for diagnostics, but
+  raw low-iteration `advantage_policy` lost badly to low and uniform baselines.
+  Do not make it a direct policy target without a new mechanism review.
 
 ## Metric Snapshot
 

@@ -573,6 +573,17 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                     strategy_sum[i, a] += vr_at[i] * strat_cache[a]
 
         if trace_idx.size:
+            hero_action_values = np.zeros(
+                (len(trace_idx), tree['n_actions'], n),
+                dtype=np.float32,
+            )
+            villain_action_values = np.zeros_like(hero_action_values)
+            for trace_row, node_i in enumerate(trace_idx):
+                for action in decision_actions[node_i]:
+                    child_i = children[node_i, action]
+                    if child_i >= 0:
+                        hero_action_values[trace_row, action] = hvals[child_i]
+                        villain_action_values[trace_row, action] = vvals[child_i]
             trace_node_fn(
                 iteration=int(_iter),
                 tree=tree,
@@ -581,6 +592,8 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 villain_reach=vr_at[trace_idx],
                 hero_values=hvals[trace_idx],
                 villain_values=vvals[trace_idx],
+                hero_action_values=hero_action_values,
+                villain_action_values=villain_action_values,
                 regret_sum=regret_sum[trace_idx],
                 strategy_sum=strategy_sum[trace_idx],
                 valid_m=valid_m,

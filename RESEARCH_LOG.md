@@ -3392,3 +3392,36 @@
 - Summary: Added `pdcfr_plus` as an opt-in CPU solver update and extended the solver-update A/B gate. The source-backed update is mechanically valid and keeps illegal mass at zero, but it failed the 64-root root-disjoint gate: mean L1, KL, and top-action agreement all worsened versus low-budget CFR+. This rules out fixed published solver-update swaps as the next mainline and keeps `cfr_plus` as the default.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_update_pdcfr_plus_holdout64_seed20260664.json
 - Key metrics: `{"mean_low_l1": 0.52537418, "mean_candidate_l1": 0.70621518, "mean_low_kl": 0.2602323, "mean_candidate_kl": 0.98936968, "low_action_agreement": 0.765625, "candidate_action_agreement": 0.625, "candidate_to_low_latency_ratio": 1.47829066, "max_illegal_mass": 0.0, "promotion": false}`
+## 20260514T230007Z-methodology-review-for-r-nad-style-native-policy - passed
+
+- Timestamp: 2026-05-14T23:00:07Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T210513Z-r-nad-style-native-policy-dynamics
+- Hypothesis: Methodology review for R-NaD style native policy dynamics should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260514T210513Z-r-nad-style-native-policy-dynamics passed.
+- Metrics file: autoresearch-session/poker_runs/20260514T230007Z-methodology-review-for-r-nad-style-native-policy/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260514T210513Z-r-nad-style-native-policy-dynamics", "passed": true}`
+
+## 20260514T230007Z-methodology-review-for-nonlinear-public-belief-trace-delta - passed
+
+- Timestamp: 2026-05-14T23:00:07Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T221524Z-nonlinear-public-belief-trace-delta-model
+- Hypothesis: Methodology review for nonlinear public-belief trace delta model should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260514T221524Z-nonlinear-public-belief-trace-delta-model passed.
+- Metrics file: autoresearch-session/poker_runs/20260514T230007Z-methodology-review-for-nonlinear-public-belief-trace-delta/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260514T221524Z-nonlinear-public-belief-trace-delta-model", "passed": true}`
+
+## 20260514T231000Z-counterfactual-advantage-trace-signal - failed
+
+- Timestamp: 2026-05-14T23:10:00Z
+- Type: search_consistency_diagnostic
+- Gate: cfr-trace-counterfactual-advantage-holdout32
+- Hypothesis: Low-iteration per-action counterfactual advantages from the traced CFR node should be more action-aligned with the final reference strategy than low average strategy and a uniform iteration-10 baseline.
+- Failure class: search_target_alignment
+- Related work: Deep CFR-style methods learn counterfactual regret/advantage signals, and the current nonlinear trace-delta review allows update-aligned trace diagnostics. This test checks the local raw signal before another neural target.
+- Summary: Extended the CPU trace callback to expose per-action child counterfactual values, added derived `counterfactual_advantage` and `advantage_policy` trace fields, and added `scripts/analyze_cfr_trace_advantage_signal.py`. The held-out 32-root diagnostic falsified raw instantaneous advantage cloning: advantage policy was much worse than low average strategy and uniform iteration 10. Cumulative regret policy at iteration 5 was a partial L1 improvement over low but still lost to uniform, so the next target should use smoother learned update/budget dynamics rather than one-step advantage imitation.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_advantage_signal_holdout32_seed20260665.json
+- Key metrics: `{"mean_low_l1": 0.52017488, "mean_regret_l1": 0.47452081, "mean_advantage_l1": 0.97889782, "mean_uniform_l1": 0.3118831, "low_top_match": 0.78125, "regret_top_match": 0.65625, "advantage_top_match": 0.375, "uniform_top_match": 0.84375, "promotion": false}`

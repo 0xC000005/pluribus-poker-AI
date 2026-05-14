@@ -49,6 +49,39 @@ def action_policy_from_field(values: np.ndarray, legal_actions: tuple[int, ...])
     return out
 
 
+def action_advantage_from_trace(
+    *,
+    hero_action_values: np.ndarray,
+    villain_action_values: np.ndarray,
+    hero_values: np.ndarray,
+    villain_values: np.ndarray,
+    player: int,
+    hand_idx: int,
+    legal_actions: tuple[int, ...],
+) -> np.ndarray:
+    """Return per-action counterfactual advantages for the acting player."""
+    if int(player) == 0:
+        action_values = np.asarray(hero_action_values, dtype=np.float32)
+        node_values = np.asarray(hero_values, dtype=np.float32)
+    elif int(player) == 1:
+        action_values = np.asarray(villain_action_values, dtype=np.float32)
+        node_values = np.asarray(villain_values, dtype=np.float32)
+    else:
+        raise ValueError("player must be 0 or 1")
+    if action_values.ndim != 2:
+        raise ValueError("action value arrays must have shape (n_actions, n_hands)")
+    hand = int(hand_idx)
+    if hand < 0 or hand >= action_values.shape[1] or hand >= node_values.shape[0]:
+        raise ValueError("hand_idx out of bounds for trace values")
+    advantages = np.zeros(action_values.shape[0], dtype=np.float32)
+    node_value = float(node_values[hand])
+    for action in legal_actions:
+        action_idx = int(action)
+        if 0 <= action_idx < advantages.shape[0]:
+            advantages[action_idx] = float(action_values[action_idx, hand]) - node_value
+    return advantages
+
+
 def _normalized_range(values: np.ndarray) -> np.ndarray:
     arr = np.maximum(np.asarray(values, dtype=np.float32).reshape(-1), 0.0)
     total = float(arr.sum())
@@ -150,6 +183,7 @@ def _trace_case(
     if hand_idx is None:
         return [], {"label": case.label, "reason": "hole_cards_not_in_solver_hands"}
     legal_actions = tuple(sorted(int(action) for action in active_node.children.keys()))
+    active_player = int(active_node.player)
     records: list[dict[str, Any]] = []
 
     def collect_trace(**kwargs: Any) -> None:
@@ -157,6 +191,16 @@ def _trace_case(
         strategy_field = np.asarray(kwargs["strategy_sum"], dtype=np.float32)[0, :, hand_idx]
         regret_policy = action_policy_from_field(regret_field, legal_actions)
         strategy_policy = action_policy_from_field(strategy_field, legal_actions)
+        counterfactual_advantage = action_advantage_from_trace(
+            hero_action_values=np.asarray(kwargs["hero_action_values"], dtype=np.float32)[0],
+            villain_action_values=np.asarray(kwargs["villain_action_values"], dtype=np.float32)[0],
+            hero_values=np.asarray(kwargs["hero_values"], dtype=np.float32)[0],
+            villain_values=np.asarray(kwargs["villain_values"], dtype=np.float32)[0],
+            player=active_player,
+            hand_idx=hand_idx,
+            legal_actions=legal_actions,
+        )
+        advantage_policy = action_policy_from_field(counterfactual_advantage, legal_actions)
         records.append(
             {
                 "label": str(case.label),
@@ -170,6 +214,9 @@ def _trace_case(
                 "public_belief_features": context_features,
                 "regret_top_action": int(np.argmax(regret_policy)),
                 "strategy_top_action": int(np.argmax(strategy_policy)),
+                "acting_player": active_player,
+                "counterfactual_advantage": counterfactual_advantage.astype(float).round(8).tolist(),
+                "advantage_policy": advantage_policy.astype(float).round(8).tolist(),
                 "regret_policy": regret_policy.astype(float).round(8).tolist(),
                 "strategy_policy": strategy_policy.astype(float).round(8).tolist(),
             }

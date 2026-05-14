@@ -196,6 +196,16 @@ enough with the action decision and is too slow. The next step should not be a
 bigger MLP; it should learn a selective or counterfactual correction that is
 evaluated by action-quality improvement per unit of extra compute.
 
+The raw counterfactual-advantage trace diagnostic is now also negative. The
+resolver can expose per-action child values at traced public nodes, and the
+diagnostic derives an `advantage_policy` for the acting player. On the same
+32-root holdout split, iteration-5 instantaneous advantage policy was much
+worse than both the low average strategy and a uniform iteration-10 baseline
+(`0.9789` L1 vs `0.5202` low and `0.3119` uniform; top-match `0.3750` vs
+`0.7813`/`0.8438`). Cumulative regret policy was mildly better than low in L1
+(`0.4745`) but still lost to uniform. Do not train a raw one-step advantage
+imitator; use the trace as input to a smoother regret-update or budget policy.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
