@@ -3028,3 +3028,15 @@
 - Summary: Added `--device {auto,cpu,cuda}` and timing metrics to `scripts/run_rlcard_nfsp_pilot.py`. Torch sees the RTX 3070 Ti, and explicit CUDA works, but the controlled 200-episode RLCard NFSP benchmark was faster on CPU (`977.15` episodes/sec, `957.61` train steps/sec) than CUDA (`615.15` episodes/sec, `575.17` train steps/sec). `--device auto` now defaults to CPU for this framework-control path and records the policy in JSON.
 - Metrics file: autoresearch-session/rlcard_nfsp_pilot_cpu_seed20260514.json and autoresearch-session/rlcard_nfsp_pilot_cuda_seed20260514.json
 - Key metrics: `{"cuda_available": true, "device_name": "NVIDIA GeForce RTX 3070 Ti", "cpu_episodes_per_second": 977.1541, "cuda_episodes_per_second": 615.1511, "cpu_train_steps_per_second": 957.6110, "cuda_train_steps_per_second": 575.1663, "auto_resolved_device": "cpu", "promotion": false}`
+
+## 20260514T203500Z-native-nfsp-full-deck-device-ab - passed
+
+- Timestamp: 2026-05-14T20:35:00Z
+- Type: implementation_compute_diagnostic
+- Gate: native-nfsp-full-deck-smoke-and-device-ab
+- Hypothesis: A native NFSP-style pilot should preserve the repo's full-deck 9-action contract and only claim GPU usefulness when a same-config A/B shows higher throughput.
+- Failure class: none
+- Related work: NFSP/RM-FSP are pure game-theoretic RL candidates because they learn an average policy through self-play. This implementation remains a Monte-Carlo plumbing diagnostic; it is not a promoted Slumbot agent and does not replace Deep CFR or resolver gates.
+- Summary: Added `poker_ai.research.native_nfsp` and `scripts/run_native_nfsp_pilot.py` for a native full-deck heads-up no-limit pilot with legal-mask-safe action selection, average-policy imitation of best-response actions, explicit CPU/CUDA selection, and JSON metrics. Unit coverage verifies the 9-action legal mask, illegal-action masking, smoke training, and CLI config parsing. On the RTX 3070 Ti, hidden 64 remained CPU-faster, but hidden 512 became CUDA-faster, confirming that GPU acceleration is real only after enough neural work is batched into the pilot.
+- Metrics file: autoresearch-session/native_nfsp_cpu_seed20260514.json, autoresearch-session/native_nfsp_cuda_seed20260514.json, autoresearch-session/native_nfsp_cpu_h512_seed20260514.json, and autoresearch-session/native_nfsp_cuda_h512_seed20260514.json
+- Key metrics: `{"num_actions": 9, "hidden64_cpu_episodes_per_second": 103.1937, "hidden64_cuda_episodes_per_second": 93.9338, "hidden512_cpu_episodes_per_second": 75.1467, "hidden512_cuda_episodes_per_second": 97.2969, "hidden512_cpu_train_steps_per_second": 198.3872, "hidden512_cuda_train_steps_per_second": 258.3233, "best_device_for_hidden512": "cuda", "promotion": false}`
