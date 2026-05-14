@@ -6,6 +6,7 @@ from poker_ai.research.native_nfsp import (
     get_legal_mask,
     masked_uniform,
     run_native_nfsp_pilot,
+    sample_episode_policy_modes,
     select_action,
 )
 
@@ -34,6 +35,22 @@ def test_masked_uniform_falls_back_to_legal_distribution():
     probs = masked_uniform(legal_mask)
 
     np.testing.assert_allclose(probs, np.array([0.0, 0.5, 0.0, 0.5]))
+
+
+def test_sample_episode_policy_modes_once_per_player():
+    always_br = sample_episode_policy_modes(
+        n_players=2,
+        anticipatory_param=1.0,
+        rng=np.random.default_rng(1),
+    )
+    never_br = sample_episode_policy_modes(
+        n_players=2,
+        anticipatory_param=0.0,
+        rng=np.random.default_rng(1),
+    )
+
+    assert always_br == (True, True)
+    assert never_br == (False, False)
 
 
 def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():

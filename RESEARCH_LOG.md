@@ -3040,3 +3040,15 @@
 - Summary: Added `poker_ai.research.native_nfsp` and `scripts/run_native_nfsp_pilot.py` for a native full-deck heads-up no-limit pilot with legal-mask-safe action selection, average-policy imitation of best-response actions, explicit CPU/CUDA selection, and JSON metrics. Unit coverage verifies the 9-action legal mask, illegal-action masking, smoke training, and CLI config parsing. On the RTX 3070 Ti, hidden 64 remained CPU-faster, but hidden 512 became CUDA-faster, confirming that GPU acceleration is real only after enough neural work is batched into the pilot.
 - Metrics file: autoresearch-session/native_nfsp_cpu_seed20260514.json, autoresearch-session/native_nfsp_cuda_seed20260514.json, autoresearch-session/native_nfsp_cpu_h512_seed20260514.json, and autoresearch-session/native_nfsp_cuda_h512_seed20260514.json
 - Key metrics: `{"num_actions": 9, "hidden64_cpu_episodes_per_second": 103.1937, "hidden64_cuda_episodes_per_second": 93.9338, "hidden512_cpu_episodes_per_second": 75.1467, "hidden512_cuda_episodes_per_second": 97.2969, "hidden512_cpu_train_steps_per_second": 198.3872, "hidden512_cuda_train_steps_per_second": 258.3233, "best_device_for_hidden512": "cuda", "promotion": false}`
+
+## 20260514T205500Z-native-nfsp-episode-policy-mode - passed
+
+- Timestamp: 2026-05-14T20:55:00Z
+- Type: methodology_correction
+- Gate: native-nfsp-episode-mode-and-device-ab
+- Hypothesis: The native NFSP pilot should sample best-response versus average-policy mode once per player per hand, matching the standard NFSP episode-policy contract, instead of resampling at each decision.
+- Failure class: none
+- Related work: RLCard's NFSP agent calls `sample_episode_policy()` once and then acts in either best-response or average-policy mode for that episode. The native pilot now follows the same contract while preserving the full-deck 9-action environment.
+- Summary: Added `sample_episode_policy_modes()` and wired `_play_hand()` to use one policy mode per player for the whole hand. The repeated device diagnostic still shows the crossover point: hidden 64 is CPU-faster, but hidden 512 is CUDA-faster. This remains plumbing evidence only; random-opponent payoff is too noisy for promotion.
+- Metrics file: autoresearch-session/native_nfsp_episode_mode_cpu_seed20260514.json, autoresearch-session/native_nfsp_episode_mode_cuda_seed20260514.json, autoresearch-session/native_nfsp_episode_mode_cpu_h512_seed20260514.json, and autoresearch-session/native_nfsp_episode_mode_cuda_h512_seed20260514.json
+- Key metrics: `{"hidden64_cpu_episodes_per_second": 90.3741, "hidden64_cuda_episodes_per_second": 72.8376, "hidden512_cpu_episodes_per_second": 46.8892, "hidden512_cuda_episodes_per_second": 63.8458, "hidden512_cpu_train_steps_per_second": 161.7678, "hidden512_cuda_train_steps_per_second": 300.7137, "promotion": false}`

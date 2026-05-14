@@ -139,6 +139,17 @@ def masked_uniform(legal_mask: np.ndarray) -> np.ndarray:
     return mask / total
 
 
+def sample_episode_policy_modes(
+    *,
+    n_players: int,
+    anticipatory_param: float,
+    rng: np.random.Generator,
+) -> tuple[bool, ...]:
+    """Sample NFSP best-response modes once per player for the whole hand."""
+    eta = float(np.clip(anticipatory_param, 0.0, 1.0))
+    return tuple(bool(rng.random() < eta) for _ in range(int(n_players)))
+
+
 def select_action(
     probs: np.ndarray,
     legal_mask: np.ndarray,
@@ -223,6 +234,11 @@ def _play_hand(
 ) -> tuple[list[tuple[int, np.ndarray, np.ndarray, int, bool]], list[float], int]:
     state = new_game(2, initial_chips=cfg.initial_chips)
     records: list[tuple[int, np.ndarray, np.ndarray, int, bool]] = []
+    episode_best_response_modes = sample_episode_policy_modes(
+        n_players=len(state.players),
+        anticipatory_param=cfg.anticipatory_param,
+        rng=rng,
+    )
     n_steps = 0
     while not state.is_terminal and n_steps < cfg.max_steps_per_hand:
         player = state.player_i
@@ -240,7 +256,7 @@ def _play_hand(
             )
             avg_probs = _network_probs(avg_net, features, legal_mask, device)
             if training:
-                best_response_mode = bool(rng.random() < cfg.anticipatory_param)
+                best_response_mode = episode_best_response_modes[player]
                 probs = br_probs if best_response_mode else avg_probs
             else:
                 best_response_mode = False
