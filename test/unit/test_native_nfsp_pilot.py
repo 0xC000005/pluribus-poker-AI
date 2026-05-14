@@ -6,6 +6,7 @@ from poker_ai.research.native_nfsp import (
     NativeNFSPConfig,
     ReservoirPolicyBuffer,
     build_player_transitions,
+    evaluate_native_nfsp_head_to_head,
     evaluate_native_nfsp_checkpoint,
     get_legal_mask,
     masked_uniform,
@@ -167,6 +168,38 @@ def test_evaluate_native_nfsp_checkpoint_roundtrip(tmp_path):
     assert metrics["source_checkpoint"] == str(checkpoint_path)
     assert metrics["eval_games"] == 2
     assert metrics["resolved_device"] == "cpu"
+    assert metrics["promotion"] is False
+
+
+def test_evaluate_native_nfsp_head_to_head_roundtrip(tmp_path):
+    checkpoint_path = tmp_path / "native_nfsp.pt"
+    run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=779,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+
+    metrics = evaluate_native_nfsp_head_to_head(
+        str(checkpoint_path),
+        str(checkpoint_path),
+        n_games=2,
+        device="cpu",
+        seed=780,
+    )
+
+    assert metrics["algorithm"] == "native_nfsp_dqn_h2h"
+    assert metrics["candidate_checkpoint"] == str(checkpoint_path)
+    assert metrics["baseline_checkpoint"] == str(checkpoint_path)
+    assert metrics["n_games"] == 2
+    assert metrics["resolved_device"] == "cpu"
+    assert abs(metrics["mean_candidate_payoff"]) < 1e-6
     assert metrics["promotion"] is False
 
 

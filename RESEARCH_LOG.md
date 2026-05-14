@@ -3100,3 +3100,27 @@
 - Summary: Replaced the FIFO supervised policy buffer with `ReservoirPolicyBuffer`, added a deterministic unit check that it tracks total seen items and does not degenerate to last-two FIFO storage, and reran a hidden-512 CUDA smoke. This is an algorithm-alignment correction, not a performance promotion.
 - Metrics file: autoresearch-session/native_nfsp_dqn_reservoir_cuda_h512_seed20260514.json
 - Key metrics: `{"train_episodes": 200, "device": "cuda", "episodes_per_second": 59.9896, "train_steps_per_second": 301.4478, "mean_eval_payoff_p0_vs_random": 0.18843, "promotion": false}`
+
+## 20260514T221000Z-native-nfsp-reservoir-2k-artifact - passed
+
+- Timestamp: 2026-05-14T22:10:00Z
+- Type: artifact_reuse_diagnostic
+- Gate: native-nfsp-reservoir-2k-cuda-eval
+- Hypothesis: The corrected native NFSP path should produce a reusable hidden-512 CUDA artifact after 2,000 episodes.
+- Failure class: none
+- Related work: This is still a minimal NFSP/DQN pilot. Random-opponent evaluation is a health check only; the next meaningful gate needs native-vs-native or resolver-compatible strategic evaluation.
+- Summary: Ran the reservoir/DQN native pilot for 2,000 CUDA episodes and evaluated the saved checkpoint in a fresh process. The checkpoint reload path worked and the random-opponent proxy was positive, but no promotion claim is made.
+- Metrics file: autoresearch-session/native_nfsp_dqn_reservoir_cuda_h512_2k_seed20260514.json and autoresearch-session/native_nfsp_dqn_reservoir_h512_2k_eval_seed20260515.json
+- Key metrics: `{"checkpoint": "models/native_nfsp_dqn_reservoir_h512_2k_seed20260514.pt", "train_episodes": 2000, "episodes_per_second": 47.3106, "train_steps_per_second": 317.1229, "train_eval_mean_payoff_vs_random": 0.199172, "fresh_eval_mean_payoff_vs_random": 0.233458, "promotion": false}`
+
+## 20260514T222500Z-native-nfsp-duplicate-swapped-h2h - passed
+
+- Timestamp: 2026-05-14T22:25:00Z
+- Type: evaluation_hardness
+- Gate: native-nfsp-duplicate-swapped-h2h
+- Hypothesis: Native checkpoint comparisons need a duplicate-swapped H2H gate; alternating seats with different deals is biased and can make self-comparison nonzero.
+- Failure class: evaluation_bias
+- Related work: The repo's Deep CFR candidate comparisons already use duplicate-swapped local comparisons to reduce seat and deal variance. Native NFSP needs the same principle before comparing RL variants.
+- Summary: Added native checkpoint H2H evaluation and fixed it to use paired duplicate deals/action seeds. The initial unmatched-deal H2H produced a nonzero self-compare; the corrected duplicate-swapped version gives exactly zero for reservoir-vs-itself over 200 hands. Reservoir-vs-prior-DQN is essentially flat, so reservoir memory is algorithmically correct but not yet positive strategy evidence.
+- Metrics file: autoresearch-session/native_nfsp_reservoir_self_h2h_swapped_seed20260516.json and autoresearch-session/native_nfsp_reservoir_vs_transition_h2h_swapped_seed20260516.json
+- Key metrics: `{"self_compare_mean_payoff": 0.0, "reservoir_vs_transition_mean_payoff": 0.001385, "n_games": 200, "eval_games_per_second": 51.4130, "promotion": false}`

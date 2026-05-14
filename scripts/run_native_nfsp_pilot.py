@@ -21,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 from poker_ai.research.native_nfsp import (  # noqa: E402
     NativeNFSPConfig,
     evaluate_native_nfsp_checkpoint,
+    evaluate_native_nfsp_head_to_head,
     run_native_nfsp_pilot,
 )
 
@@ -41,6 +42,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--output-json")
     parser.add_argument("--checkpoint-in")
+    parser.add_argument("--baseline-checkpoint")
     parser.add_argument("--checkpoint-out")
     return parser
 
@@ -66,7 +68,15 @@ def build_config(argv: list[str] | None = None) -> NativeNFSPConfig:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    if args.checkpoint_in:
+    if args.checkpoint_in and args.baseline_checkpoint:
+        metrics = evaluate_native_nfsp_head_to_head(
+            args.checkpoint_in,
+            args.baseline_checkpoint,
+            n_games=args.eval_games,
+            device=args.device,
+            seed=args.seed,
+        )
+    elif args.checkpoint_in:
         metrics = evaluate_native_nfsp_checkpoint(
             args.checkpoint_in,
             eval_games=args.eval_games,
