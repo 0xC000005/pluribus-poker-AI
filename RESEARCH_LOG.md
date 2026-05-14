@@ -3148,3 +3148,15 @@
 - Summary: Ran a larger 1,000-hand duplicate-swapped native H2H. The reservoir checkpoint did not beat the prior DQN checkpoint with positive confidence; the mean was slightly negative and the CI crossed zero. Keep reservoir memory as the correct default, but do not claim strength improvement from this run.
 - Metrics file: autoresearch-session/native_nfsp_reservoir_vs_transition_h2h_1k_ci_seed20260516.json
 - Key metrics: `{"mean_candidate_payoff": -0.00807, "lower95_candidate_payoff": -0.028179, "upper95_candidate_payoff": 0.012039, "n_games": 1000, "n_pairs": 500, "promotion": false}`
+
+## 20260514T231000Z-native-nfsp-10k-scale-check - inconclusive
+
+- Timestamp: 2026-05-14T23:10:00Z
+- Type: scale_check
+- Gate: native-nfsp-10k-vs-2k-h2h
+- Hypothesis: Scaling the corrected native NFSP/DQN/reservoir pilot from 2,000 to 10,000 CUDA episodes should improve native H2H against the 2,000-episode checkpoint.
+- Failure class: strategy_quality
+- Related work: Bitter-lesson scaling is useful only when the learning signal and evaluation gate show monotonic decision improvement. More self-play episodes alone are not enough if the algorithm remains too weak or the evaluation cannot show a confidence-positive delta.
+- Summary: Ran a 10,000-episode hidden-512 CUDA native NFSP checkpoint and compared it to the 2,000-episode reservoir checkpoint with 1,000 duplicate-swapped hands. The mean was slightly positive but lower95 remained negative. This suggests the native NFSP pilot is now operational, but the immediate bottleneck is learning signal/algorithm strength rather than checkpoint plumbing or GPU visibility.
+- Metrics file: autoresearch-session/native_nfsp_dqn_reservoir_cuda_h512_10k_seed20260517.json and autoresearch-session/native_nfsp_reservoir_10k_vs_2k_h2h_1k_ci_seed20260518.json
+- Key metrics: `{"train_episodes": 10000, "train_seconds": 231.6486, "episodes_per_second": 43.1688, "train_steps_per_second": 312.0718, "random_eval_mean_payoff": 0.201965, "h2h_mean_candidate_payoff": 0.0149, "h2h_lower95_candidate_payoff": -0.007575, "h2h_upper95_candidate_payoff": 0.037375, "promotion": false}`
