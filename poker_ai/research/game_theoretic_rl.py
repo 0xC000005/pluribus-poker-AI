@@ -164,6 +164,38 @@ def anticipatory_mixture(
     return _normalize_legal(eta * br + (1.0 - eta) * avg, legal_mask)
 
 
+def regularized_policy_update(
+    current_policy: np.ndarray,
+    advantages: np.ndarray,
+    legal_mask: np.ndarray,
+    *,
+    reference_policy: np.ndarray | None = None,
+    step_size: float = 0.1,
+    regularization_strength: float = 0.1,
+) -> np.ndarray:
+    """One legal-mask-safe regularized exponentiated policy update.
+
+    This is a small R-NaD-inspired primitive, not a full R-NaD trainer. The
+    update improves actions with positive advantage while adding a KL-style
+    pull toward a full-support reference policy.
+    """
+    mask = _legal_mask_array(legal_mask)
+    current = _normalize_legal(current_policy, mask)
+    if reference_policy is None:
+        reference = mask / float(mask.sum())
+    else:
+        reference = _normalize_legal(reference_policy, mask)
+    adv = np.asarray(advantages, dtype=np.float32).reshape(mask.shape)
+    eps = 1e-8
+    current_safe = np.clip(current, eps, 1.0)
+    reference_safe = np.clip(reference, eps, 1.0)
+    regularized_advantage = adv - float(regularization_strength) * (
+        np.log(current_safe) - np.log(reference_safe)
+    )
+    logits = np.log(current_safe) + float(step_size) * regularized_advantage
+    return legal_softmax(logits, mask)
+
+
 def algorithm_profile(name: str) -> AlgorithmProfile:
     """Return a normalized profile for a game-theoretic RL candidate/control."""
     key = name.strip().lower().replace("-", "_")

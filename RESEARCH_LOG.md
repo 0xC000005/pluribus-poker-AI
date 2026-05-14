@@ -3196,3 +3196,15 @@
 - Summary: Completed the review bundle with independent verification, related work, mechanism review, benchmark-hacking audit, and a decision. The decision is `proceed`, but only for a bounded prototype: first validate a legal-mask-safe R-NaD-style policy-dynamics primitive, then native H2H against the NFSP reservoir control, then resolver/public-belief gates before any Slumbot spend.
 - Metrics file: autoresearch-session/poker_reviews/20260514T210513Z-r-nad-style-native-policy-dynamics
 - Key metrics: `{"decision": "proceed", "bounded": true, "requires_native_h2h_positive_lower95": true, "promotion": false}`
+
+## 20260515T000500Z-rnad-policy-update-primitive - passed
+
+- Timestamp: 2026-05-15T00:05:00Z
+- Type: implementation
+- Gate: rnad-regularized-policy-update-unit
+- Hypothesis: The first safe R-NaD-style implementation unit should be a legal-mask-safe regularized policy update, not a full trainer.
+- Failure class: none
+- Related work: R-NaD motivates regularized policy dynamics, while the native poker stack requires strict legal-mask handling and no opponent-specific rules.
+- Summary: Added `regularized_policy_update()` to `poker_ai.research.game_theoretic_rl`. The primitive performs an exponentiated policy update using advantages plus a KL-style pull toward a reference policy. Unit tests verify illegal actions receive zero mass, advantaged legal actions increase, and neutral advantages move toward the reference.
+- Metrics file: test/unit/test_game_theoretic_rl.py
+- Key metrics: `{"unit_tests": 8, "primitive": "regularized_policy_update", "promotion": false}`

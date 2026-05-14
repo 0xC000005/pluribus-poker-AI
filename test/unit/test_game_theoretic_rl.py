@@ -7,6 +7,7 @@ from poker_ai.research.game_theoretic_rl import (
     anticipatory_mixture,
     epsilon_greedy_distribution,
     legal_softmax,
+    regularized_policy_update,
     validate_baseline_plan,
 )
 
@@ -45,6 +46,44 @@ def test_anticipatory_mixture_combines_best_response_and_average_policy():
     )
 
     np.testing.assert_allclose(probs, np.array([0.45, 0.4, 0.0, 0.15]))
+
+
+def test_regularized_policy_update_is_legal_and_advantage_sensitive():
+    current = np.array([0.45, 0.45, 0.10], dtype=np.float32)
+    reference = np.array([0.70, 0.20, 0.10], dtype=np.float32)
+    advantages = np.array([0.0, 1.0, 10.0], dtype=np.float32)
+    legal_mask = np.array([1.0, 1.0, 0.0], dtype=np.float32)
+
+    updated = regularized_policy_update(
+        current,
+        advantages,
+        legal_mask,
+        reference_policy=reference,
+        step_size=0.5,
+        regularization_strength=0.2,
+    )
+
+    assert updated[2] == 0.0
+    np.testing.assert_allclose(updated.sum(), 1.0)
+    assert updated[1] > current[1]
+
+
+def test_regularized_policy_update_moves_toward_reference_without_advantage():
+    current = np.array([0.1, 0.9], dtype=np.float32)
+    reference = np.array([0.8, 0.2], dtype=np.float32)
+    legal_mask = np.array([1.0, 1.0], dtype=np.float32)
+
+    updated = regularized_policy_update(
+        current,
+        np.zeros(2, dtype=np.float32),
+        legal_mask,
+        reference_policy=reference,
+        step_size=1.0,
+        regularization_strength=0.5,
+    )
+
+    assert updated[0] > current[0]
+    assert updated[1] < current[1]
 
 
 def test_algorithm_profile_classifies_framework_controls_separately_from_nfsp():
