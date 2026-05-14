@@ -151,6 +151,15 @@ latency about `350 ms`. This is better than the failed learned warm-start
 checkpoint and all fixed solver-update swaps. Future learned-search candidates
 must beat this 10-iteration baseline, not just 5-iteration CFR+.
 
+Resolver backend status: forcing the current `torch-cuda` street-solver backend
+is still not an acceleration path for fixed-state solving. A fresh four-case
+CFR10 smoke passed legality but averaged `1219 ms` on `torch-cuda` versus
+`743 ms` on CPU. The practical bottleneck is the Python-driven CFR recurrence
+and small-operation overhead, not missing a flag that would make the existing
+backend saturate the GPU. Future GPU work should mean a batched/fused solver
+kernel or a coarser learned-search boundary, and it must be benchmarked against
+CPU before use in autoresearch or Slumbot play.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -251,6 +260,9 @@ must beat this 10-iteration baseline, not just 5-iteration CFR+.
   Do not make it a direct policy target without a new mechanism review.
 - Uniform 10-iteration CFR+ is the strongest current cheap resolver baseline;
   use it in learned-search comparisons and latency tradeoff claims.
+- The existing `torch-cuda` resolver backend is slower than CPU on the latest
+  CFR10 fixed-state smoke (`1219 ms` versus `743 ms` over four cases). Treat
+  it as a regression benchmark, not the default compute path.
 
 ## Metric Snapshot
 

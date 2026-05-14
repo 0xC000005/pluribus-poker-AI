@@ -3437,3 +3437,15 @@
 - Summary: Reused `eval_solver_update_gate.py` with `low_iterations=10` and `reference_iterations=25` on the 64 held-out roots. CFR10 materially improved over the prior CFR5 baseline and outperformed the failed learned warm-start, raw advantage, DCFR+, and PDCFR+ diagnostics, while staying much cheaper than the 25-iteration teacher. Treat CFR10 as the current cheap resolver baseline any learned method must beat.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_budget_cfr10_vs_ref25_holdout64_seed20260666.json
 - Key metrics: `{"mean_l1": 0.36302507, "mean_kl": 0.12510618, "top_action_agreement": 0.8125, "allin_prob_gap": 0.05444019, "mean_latency_ms": 349.97098438, "reference_latency_ms": 859.37704688, "promotion": false}`
+
+## 20260514T233500Z-resolver-backend-cpu-vs-torchcuda-smoke - failed
+
+- Timestamp: 2026-05-14T23:35:00Z
+- Type: compute_backend_diagnostic
+- Gate: fixed-state-cfr10-cpu-vs-torchcuda-smoke
+- Hypothesis: Forcing the existing `torch-cuda` resolver backend should improve fixed-state CFR10 latency if GPU underuse is the main current bottleneck.
+- Failure class: compute_backend_overhead
+- Related work: This is an implementation diagnostic, not a new algorithm. It checks whether the current Python-driven torch backend is a valid acceleration path before spending more research cycles on GPU-only claims.
+- Summary: Ran the fixed public-state resolver benchmark with `solver_iterations=10` for both CPU and `torch-cuda`. Both backends passed legality on the four built-in fixed cases, but `torch-cuda` was slower than CPU. This supports the existing finding that the current solver recurrence is dominated by Python tree walking, small tensor operations, and transfer overhead rather than large fused GPU work.
+- Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_backend_cpu_iter10_smoke8_seed20260667.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_backend_torchcuda_iter10_smoke8_seed20260667.json
+- Key metrics: `{"n_cases": 4, "cpu_avg_solver_latency_ms": 742.94675, "torchcuda_avg_solver_latency_ms": 1219.0915, "torchcuda_to_cpu_latency_ratio": 1.6409, "promotion": false}`

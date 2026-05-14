@@ -214,6 +214,14 @@ agreement to `0.8125`, with mean latency about `350 ms` versus `182 ms` for
 model, or update-rule candidate must beat this 10-iteration baseline on both
 decision quality and latency-adjusted value before it is worth scaling.
 
+The current `torch-cuda` resolver backend is not the answer to the GPU-use
+concern. A fresh CFR10 fixed-state smoke over the four built-in public states
+averaged `1219 ms` with `torch-cuda` versus `743 ms` on CPU. This means the
+next compute improvement should not be "force torch-CUDA"; it should either
+batch/fuse the CFR recurrence so the GPU receives coarse work, or move the
+learned-search boundary to a compact public-belief correction that reduces
+solver calls. Any such change must clear the CPU CFR10 baseline above.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
