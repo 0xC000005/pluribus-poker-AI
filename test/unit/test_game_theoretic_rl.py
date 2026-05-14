@@ -49,11 +49,18 @@ def test_anticipatory_mixture_combines_best_response_and_average_policy():
 
 def test_algorithm_profile_classifies_framework_controls_separately_from_nfsp():
     nfsp = algorithm_profile("nfsp")
+    rnad = algorithm_profile("rnad")
+    rebel = algorithm_profile("rebel")
+    student = algorithm_profile("student_of_games")
     rainbow = algorithm_profile("rainbow_dqn")
     ppo = algorithm_profile("ppo")
 
     assert nfsp.equilibrium_mechanism == "average-policy fictitious self-play"
     assert nfsp.primary_role == "game_theoretic_rl_candidate"
+    assert rnad.primary_role == "game_theoretic_rl_candidate"
+    assert "regularized" in rnad.equilibrium_mechanism
+    assert rebel.search_dependency == "public-belief search"
+    assert student.search_dependency == "guided search"
     assert rainbow.primary_role == "rl_control_baseline"
     assert ppo.primary_role == "rl_control_baseline"
     assert "not an equilibrium method by itself" in ppo.warning

@@ -44,6 +44,30 @@ _PROFILES: dict[str, AlgorithmProfile] = {
         search_dependency="none",
         candidate_frameworks=("native",),
     ),
+    "rnad": AlgorithmProfile(
+        name="rnad",
+        primary_role="game_theoretic_rl_candidate",
+        equilibrium_mechanism="regularized Nash dynamics",
+        search_dependency="none",
+        candidate_frameworks=("native",),
+        warning="R-NaD-style training is a mechanism target, not a drop-in trainer yet.",
+    ),
+    "rebel": AlgorithmProfile(
+        name="rebel",
+        primary_role="game_theoretic_rl_candidate",
+        equilibrium_mechanism="public-belief self-play with value/policy learning",
+        search_dependency="public-belief search",
+        candidate_frameworks=("native",),
+        warning="ReBeL-style work must pass public-belief/resolver gates before gameplay use.",
+    ),
+    "student_of_games": AlgorithmProfile(
+        name="student_of_games",
+        primary_role="game_theoretic_rl_candidate",
+        equilibrium_mechanism="self-play learning with game-theoretic search",
+        search_dependency="guided search",
+        candidate_frameworks=("native",),
+        warning="Student-of-Games-style work needs a bounded local search/evaluation contract.",
+    ),
     "rainbow_dqn": AlgorithmProfile(
         name="rainbow_dqn",
         primary_role="rl_control_baseline",
@@ -145,6 +169,10 @@ def algorithm_profile(name: str) -> AlgorithmProfile:
     key = name.strip().lower().replace("-", "_")
     if key == "rainbow":
         key = "rainbow_dqn"
+    if key in {"deepnash", "regularized_nash_dynamics"}:
+        key = "rnad"
+    if key in {"sog", "student_of_game", "player_of_games"}:
+        key = "student_of_games"
     if key not in _PROFILES:
         known = ", ".join(sorted(_PROFILES))
         raise ValueError(f"unknown algorithm profile '{name}'; known: {known}")
@@ -169,4 +197,3 @@ def validate_baseline_plan(
         allowed_role="control_baseline" if is_control else "mainline_candidate",
         requires_equilibrium_layer=is_control,
     )
-

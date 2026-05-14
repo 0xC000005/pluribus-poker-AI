@@ -3172,3 +3172,15 @@
 - Summary: Added target-network sync support and ran a 2,000-episode CUDA checkpoint with one target sync. The implementation is useful infrastructure, but the first H2H against the previous 2,000-episode reservoir checkpoint was negative/inconclusive. Keep the target-network mechanism available, but do not promote it as an improvement without a stronger gate.
 - Metrics file: autoresearch-session/native_nfsp_double_dqn_cuda_h512_2k_seed20260519.json and autoresearch-session/native_nfsp_double_dqn_vs_reservoir_h2h_1k_ci_seed20260520.json
 - Key metrics: `{"q_updates": 1973, "q_target_syncs": 1, "episodes_per_second": 70.6344, "train_steps_per_second": 264.0315, "h2h_mean_candidate_payoff": -0.013106, "h2h_lower95_candidate_payoff": -0.039705, "h2h_upper95_candidate_payoff": 0.013493, "promotion": false}`
+
+## 20260514T234500Z-game-theoretic-rl-method-registry - passed
+
+- Timestamp: 2026-05-14T23:45:00Z
+- Type: workflow_primitive
+- Gate: game-theoretic-rl-method-registry
+- Hypothesis: After native NFSP failed to show confidence-positive scaling, the workflow should distinguish stronger game-theoretic learned-search families from generic RL controls before queuing the next method.
+- Failure class: none
+- Related work: NFSP remains the pure-RL control branch. R-NaD/DeepNash provides regularized Nash dynamics for model-free imperfect-information self-play; ReBeL combines public-belief self-play learning with search; Student of Games combines guided search, self-play, and game-theoretic reasoning. Sources: https://arxiv.org/abs/2206.15378, https://arxiv.org/abs/2007.13544, and https://arxiv.org/abs/2112.03178.
+- Summary: Extended `poker_ai.research.game_theoretic_rl` so `rnad`, `rebel`, and `student_of_games` are mainline game-theoretic candidates rather than generic RL baselines. This does not implement those algorithms; it prevents the next workflow step from collapsing back into PPO/DQN-style controls.
+- Metrics file: test/unit/test_game_theoretic_rl.py
+- Key metrics: `{"profiles_added": ["rnad", "rebel", "student_of_games"], "rnad_allowed_role": "mainline_candidate", "promotion": false}`
