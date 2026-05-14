@@ -4,6 +4,7 @@ import torch
 from poker_ai.games.full_deck.state import N_ACTIONS, new_game
 from poker_ai.research.native_nfsp import (
     NativeNFSPConfig,
+    ReservoirPolicyBuffer,
     build_player_transitions,
     evaluate_native_nfsp_checkpoint,
     get_legal_mask,
@@ -77,6 +78,21 @@ def test_build_player_transitions_links_next_decision_for_same_player():
     assert transitions[1].done is True
     assert transitions[2].reward == 0.75
     assert transitions[2].done is True
+
+
+def test_reservoir_policy_buffer_tracks_seen_items_without_fifo_bias():
+    buffer = ReservoirPolicyBuffer(capacity=2)
+    rng = np.random.default_rng(3)
+    feature = np.array([0.0], dtype=np.float32)
+    mask = np.array([1.0], dtype=np.float32)
+
+    for action in range(10):
+        buffer.add(feature + action, mask, action, rng=rng)
+
+    stored_actions = [item[2] for item in buffer.items]
+    assert len(buffer) == 2
+    assert buffer.n_seen == 10
+    assert stored_actions != [8, 9]
 
 
 def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():

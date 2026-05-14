@@ -3088,3 +3088,15 @@
 - Summary: Added `BestResponseTransition` and `build_player_transitions()` to link each player decision to that player's next decision or terminal payoff, and updated Q training to bootstrap from legal next-action values. The hidden-512 200-episode A/B remains CUDA-faster than CPU. A 2,000-episode CUDA run saved and reloaded a DQN-labeled checkpoint. This is more principled than the earlier MC target, but still only a native RL pilot evaluated against random opponents.
 - Metrics file: autoresearch-session/native_nfsp_dqn_transition_cpu_h512_v2_seed20260514.json, autoresearch-session/native_nfsp_dqn_transition_cuda_h512_v2_seed20260514.json, autoresearch-session/native_nfsp_dqn_transition_cuda_h512_2k_seed20260514.json, and autoresearch-session/native_nfsp_dqn_transition_h512_2k_eval_seed20260515.json
 - Key metrics: `{"hidden512_cpu_episodes_per_second": 37.4478, "hidden512_cuda_episodes_per_second": 62.8081, "hidden512_cpu_train_steps_per_second": 172.8218, "hidden512_cuda_train_steps_per_second": 293.6277, "two_k_cuda_episodes_per_second": 44.4166, "two_k_cuda_train_steps_per_second": 320.0880, "checkpoint_eval_mean_payoff_vs_random": 0.174208, "promotion": false}`
+
+## 20260514T220000Z-native-nfsp-reservoir-average-memory - passed
+
+- Timestamp: 2026-05-14T22:00:00Z
+- Type: methodology_correction
+- Gate: native-nfsp-reservoir-memory-smoke
+- Hypothesis: The NFSP supervised average-policy memory should use reservoir sampling, not FIFO eviction, so the average policy represents historical best-response behavior rather than only recent hands.
+- Failure class: none
+- Related work: NFSP uses a reservoir buffer for supervised average-policy learning and a separate replay memory for the best-response learner. This change keeps the Q replay FIFO while correcting the average-policy memory.
+- Summary: Replaced the FIFO supervised policy buffer with `ReservoirPolicyBuffer`, added a deterministic unit check that it tracks total seen items and does not degenerate to last-two FIFO storage, and reran a hidden-512 CUDA smoke. This is an algorithm-alignment correction, not a performance promotion.
+- Metrics file: autoresearch-session/native_nfsp_dqn_reservoir_cuda_h512_seed20260514.json
+- Key metrics: `{"train_episodes": 200, "device": "cuda", "episodes_per_second": 59.9896, "train_steps_per_second": 301.4478, "mean_eval_payoff_p0_vs_random": 0.18843, "promotion": false}`

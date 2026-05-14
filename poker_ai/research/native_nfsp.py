@@ -76,10 +76,11 @@ class _MLP(nn.Module):
         return self.net(x)
 
 
-class _SampleBuffer:
+class ReservoirPolicyBuffer:
     def __init__(self, capacity: int = 20_000):
         self.capacity = int(capacity)
         self.items: list[tuple[np.ndarray, np.ndarray, int, float]] = []
+        self.n_seen = 0
 
     def add(
         self,
@@ -87,17 +88,22 @@ class _SampleBuffer:
         legal_mask: np.ndarray,
         action: int,
         value: float = 0.0,
+        *,
+        rng: np.random.Generator,
     ) -> None:
-        if len(self.items) >= self.capacity:
-            self.items.pop(0)
-        self.items.append(
-            (
-                np.asarray(feature, dtype=np.float32),
-                np.asarray(legal_mask, dtype=np.float32),
-                int(action),
-                float(value),
-            )
+        item = (
+            np.asarray(feature, dtype=np.float32),
+            np.asarray(legal_mask, dtype=np.float32),
+            int(action),
+            float(value),
         )
+        self.n_seen += 1
+        if len(self.items) < self.capacity:
+            self.items.append(item)
+            return
+        replacement_idx = int(rng.integers(self.n_seen))
+        if replacement_idx < self.capacity:
+            self.items[replacement_idx] = item
 
     def sample(self, batch_size: int, rng: np.random.Generator):
         n = min(int(batch_size), len(self.items))
@@ -276,7 +282,7 @@ def _train_q(
 def _train_avg_policy(
     avg_net: nn.Module,
     optimizer: optim.Optimizer,
-    buffer: _SampleBuffer,
+    buffer: ReservoirPolicyBuffer,
     batch_size: int,
     rng: np.random.Generator,
     device: torch.device,
@@ -356,7 +362,7 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     q_opt = optim.Adam(q_net.parameters(), lr=cfg.lr)
     avg_opt = optim.Adam(avg_net.parameters(), lr=cfg.lr)
     q_buffer = _TransitionBuffer()
-    sl_buffer = _SampleBuffer()
+    sl_buffer = ReservoirPolicyBuffer()
 
     train_start = time.perf_counter()
     total_steps = 0
@@ -378,7 +384,7 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
             q_buffer.add(transition)
         for _player, features, legal_mask, action_idx, best_response_mode in records:
             if best_response_mode:
-                sl_buffer.add(features, legal_mask, action_idx)
+                sl_buffer.add(features, legal_mask, action_idx, rng=rng)
         if len(q_buffer) >= cfg.min_buffer_size_to_learn:
             last_q_loss = _train_q(q_net, q_opt, q_buffer, cfg.batch_size, rng, device)
         if len(sl_buffer) >= cfg.min_buffer_size_to_learn:
