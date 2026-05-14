@@ -1,11 +1,14 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+import eval_cfr_budget_frontier as frontier  # noqa: E402
 from eval_cfr_budget_frontier import summarize_budget_frontier_records  # noqa: E402
 
 
@@ -68,3 +71,53 @@ def test_budget_frontier_summary_fails_when_reference_has_illegal_mass():
 
     assert metrics["passed"] is False
     assert metrics["max_illegal_mass"] == 0.5
+
+
+def test_case_budget_frontier_reuses_one_solver_for_all_budgets(monkeypatch):
+    node = SimpleNamespace(children={0: None, 8: None}, is_terminal=False)
+    built = []
+
+    class FakeSolver:
+        def __init__(self, *args, **kwargs):
+            self.solve_calls = []
+            self.last_iterations = None
+            built.append(self)
+
+        def solve(self, *, n_iterations, **kwargs):
+            self.solve_calls.append(n_iterations)
+            self.last_iterations = n_iterations
+
+        def navigate(self, nav):
+            return node
+
+    def fake_decision(case, parsed, solver, current_node, *, latency_ms=None):
+        assert current_node is node
+        allin_prob = solver.last_iterations / 100.0
+        strategy = np.array([1.0 - allin_prob, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, allin_prob])
+        return SimpleNamespace(strategy=strategy, latency_ms=float(solver.last_iterations))
+
+    monkeypatch.setattr(
+        frontier,
+        "_solver_context",
+        lambda case, parsed: ([0, 1, 2, 3], [], 100, 1000, 1000, True, "ck/"),
+    )
+    monkeypatch.setattr(frontier, "_local_ranges_from_belief", lambda belief, hands: (None, None))
+    monkeypatch.setattr(frontier, "_strategy_decision", fake_decision)
+    monkeypatch.setattr(frontier, "_parse_nav", lambda action_str, solver: action_str)
+
+    record = frontier._solve_case_budget_frontier(
+        case=SimpleNamespace(label="case-0"),
+        parsed={"st": 2},
+        belief_row=np.ones(1),
+        budgets=[5, 10],
+        reference_iterations=25,
+        solver_backend="cpu",
+        solver_update="cfr_plus",
+        solver_factory=FakeSolver,
+    )
+
+    assert len(built) == 1
+    assert built[0].solve_calls == [25, 5, 10]
+    assert record["passed"] is True
+    assert record["reference_allin_prob"] == 0.25
+    assert record["budgets"]["10"]["latency_ms"] == 10.0

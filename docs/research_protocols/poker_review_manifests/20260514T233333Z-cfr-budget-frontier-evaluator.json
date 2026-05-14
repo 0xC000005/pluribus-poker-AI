@@ -2,14 +2,14 @@
   "decision": "proceed",
   "files": [
     {
-      "bytes": 1173,
+      "bytes": 1367,
       "path": "benchmark_audit.md",
-      "sha256": "4e2cd7653cab9618080a274ea471dffc6dea9dd4f5e8583de62382d2505788c8"
+      "sha256": "80580434e66d2cfb119ac9345dd419254e073e8dd5655a070e495e1800bccfc9"
     },
     {
-      "bytes": 452,
+      "bytes": 480,
       "path": "decision.json",
-      "sha256": "272320b65cd9c8733fa9256dd9c2475a6ee55a60a38f1d245156016449dfd7fe"
+      "sha256": "242832c37a15714721e03f924c33b2b03295884e5d71caf6d9a5126ffad56878"
     },
     {
       "bytes": 1156,
@@ -22,9 +22,9 @@
       "sha256": "ce6ccff07c7a7d4f8fc02265d02f8a7691a54e42f27f738f0527e1e94eb19be5"
     },
     {
-      "bytes": 1334,
+      "bytes": 1567,
       "path": "review.md",
-      "sha256": "79d6fc77ef358b0e9e8706966e38066714964b981ecd1b21d8ebb6ad1c08bff8"
+      "sha256": "ada16c9fc56057f11763d6b007a2c1fc2294284027b0601af55517aae9d8ff6a"
     },
     {
       "bytes": 396,
@@ -32,7 +32,7 @@
       "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
     }
   ],
-  "reason": "The evaluator is diagnostic-only, has focused tests, records a root-disjoint CFR5/CFR10 versus CFR25 frontier without duplicate baseline solves, and is now protected by objective audit.",
+  "reason": "The evaluator is diagnostic-only, has focused tests, records a root-disjoint CFR5/CFR10 versus CFR25 frontier without duplicate baseline solves, reuses one solver per root, and is now protected by objective audit.",
   "review_dir": "autoresearch-session/poker_reviews/20260514T233333Z-cfr-budget-frontier-evaluator",
   "review_id": "20260514T233333Z-cfr-budget-frontier-evaluator",
   "sources": [
@@ -40,5 +40,5 @@
     "https://arxiv.org/abs/1701.01724",
     "https://arxiv.org/abs/2007.13544"
   ],
-  "written_at": "2026-05-14T23:35:09Z"
+  "written_at": "2026-05-14T23:46:31Z"
 }

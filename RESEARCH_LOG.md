@@ -3472,3 +3472,15 @@
 - Summary: Added `scripts/eval_cfr_budget_frontier.py`, protected it in the objective-audit surface list, and added focused tests for summary semantics and protected-surface registration. The 64-root holdout confirms CFR10 as the current cheap-search frontier and records CFR5/CFR10 latency directly without duplicate baseline solves. This is diagnostic-only and emits `promotion=false`.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_5_10_vs25_holdout64_seed20260668.json
 - Key metrics: `{"n_evaluated": 64, "cfr5_l1": 0.52537418, "cfr5_kl": 0.2602323, "cfr5_action_agreement": 0.765625, "cfr5_latency_ms": 185.89682813, "cfr10_l1": 0.36302507, "cfr10_kl": 0.12510618, "cfr10_action_agreement": 0.8125, "cfr10_latency_ms": 345.1984375, "cfr10_to_cfr5_latency_ratio": 1.8569356, "max_illegal_mass": 0.0, "promotion": false}`
+
+## 20260514T234500Z-cfr-budget-frontier-solver-reuse - passed
+
+- Timestamp: 2026-05-14T23:45:00Z
+- Type: evaluation_throughput_optimization
+- Gate: cfr-budget-frontier-reuse-solver-profile-smoke
+- Hypothesis: Reusing one `StreetSolver` per root inside the budget frontier should remove repeated turn-equity/tree construction without changing budget-vs-teacher decision metrics.
+- Failure class: none
+- Related work: This is evaluator efficiency, not a poker method. It preserves the CFR+ search boundary and the same fixed public-state metrics.
+- Summary: Updated `scripts/eval_cfr_budget_frontier.py` to build one solver per root and solve the teacher plus budgets through that solver. Added a unit test proving one solver instance handles the teacher, CFR5, and CFR10 calls. The 8-root cProfile smoke dropped from `60.5M` to `23.0M` calls and from `32.711s` to `18.787s`; `StreetSolver.__init__` calls fell from `24` to `8`. A full 64-root rerun preserved the decision metrics and legality, so the remaining speed target is now the actual `fast_cfr.solve_cfr` recurrence.
+- Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_smoke8_seed20260669.prof, autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_smoke8_reuse_solver_seed20260670.prof, and autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_5_10_vs25_reuse_solver_holdout64_seed20260670.json
+- Key metrics: `{"profile_before_seconds": 32.711, "profile_after_seconds": 18.787, "speedup": 1.7412, "calls_before": 60514562, "calls_after": 22986651, "solver_inits_before": 24, "solver_inits_after": 8, "holdout64_cfr5_l1": 0.52537418, "holdout64_cfr10_l1": 0.36302507, "max_illegal_mass": 0.0, "promotion": false}`

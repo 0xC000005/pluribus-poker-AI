@@ -216,11 +216,15 @@ decision quality and latency-adjusted value before it is worth scaling.
 
 The budget baseline now has a dedicated evaluator. Use
 `scripts/eval_cfr_budget_frontier.py` for future CFR budget claims because it
-solves the teacher once per root and each requested budget once, then reports
-quality and latency without pretending this is a promotion gate. The first
-64-root frontier confirms the current target: CFR10 reaches `0.3630` L1 and
-`0.1251` KL at `1.8569x` CFR5 latency. A learned or fused method must improve
-this decision-quality-per-compute frontier, not just beat CFR5.
+builds one solver per root, solves the teacher once and each requested budget
+once, then reports quality and latency without pretending this is a promotion
+gate. The first 64-root frontier confirms the current target: CFR10 reaches
+`0.3630` L1 and `0.1251` KL at about `1.9x` CFR5 latency. The solver-reuse
+implementation improved the 8-root cProfile smoke from `32.711s` to `18.787s`;
+the next acceleration target is therefore the actual `fast_cfr.solve_cfr`
+recurrence, not more evaluator-level construction caching. A learned or fused
+method must improve this decision-quality-per-compute frontier, not just beat
+CFR5.
 
 The current `torch-cuda` resolver backend is not the answer to the GPU-use
 concern. A fresh CFR10 fixed-state smoke over the four built-in public states

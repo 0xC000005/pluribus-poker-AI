@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import sys
 from pathlib import Path
@@ -28,9 +29,12 @@ from eval_joint_pbs_policy_warm_start import (  # noqa: E402
     _kl_to_reference,
     _mean,
     _rate,
+    _solver_context,
+    _strategy_decision,
 )
-from eval_solver_update_gate import _solve_with_update  # noqa: E402
+from eval_joint_pbs_resolver_leaf_ab import _local_ranges_from_belief  # noqa: E402
 from play_slumbot import parse_action  # noqa: E402
+from solver import StreetSolver, _parse_nav, resolve_solver_backend  # noqa: E402
 
 
 def _unique_budgets(budgets: list[int]) -> list[int]:
@@ -140,6 +144,85 @@ def summarize_budget_frontier_records(
     }
 
 
+def _solve_case_budget_frontier(
+    *,
+    case: Any,
+    parsed: dict[str, Any],
+    belief_row: np.ndarray,
+    budgets: list[int],
+    reference_iterations: int,
+    solver_backend: str,
+    solver_update: str,
+    solver_factory: Any = StreetSolver,
+) -> dict[str, Any]:
+    street = int(parsed["st"])
+    if street not in (2, 3):
+        return {"label": case.label, "passed": False, "skipped": "unsupported_street"}
+    board_idx, _our_cards_idx, pot, hero_stack, villain_stack, hero_first, street_action = _solver_context(
+        case,
+        parsed,
+    )
+    full_hands = list(itertools.combinations(sorted(set(range(52)) - set(board_idx)), 2))
+    hero_range, villain_range = _local_ranges_from_belief(belief_row, full_hands)
+    backend, backend_device = resolve_solver_backend(solver_backend)
+    solver = solver_factory(board_idx, pot, hero_stack, villain_stack, hero_first)
+    node = solver.navigate(_parse_nav(street_action, solver))
+    if node is None or getattr(node, "is_terminal", False):
+        return {"label": case.label, "passed": False, "skipped": "solver_skipped"}
+
+    decisions: dict[int, Any] = {}
+    nodes: dict[int, Any] = {}
+    for iterations in [int(reference_iterations), *budgets]:
+        solver.solve(
+            n_iterations=iterations,
+            hero_range=hero_range,
+            villain_range=villain_range,
+            backend=backend,
+            device=backend_device,
+            solver_update=solver_update,
+        )
+        current_node = solver.navigate(_parse_nav(street_action, solver))
+        if current_node is None or getattr(current_node, "is_terminal", False):
+            return {"label": case.label, "passed": False, "skipped": f"budget_{iterations}_skipped"}
+        decisions[int(iterations)] = _strategy_decision(
+            case,
+            parsed,
+            solver,
+            current_node,
+            latency_ms=float(getattr(solver, "last_solve_ms", 0.0)),
+        )
+        nodes[int(iterations)] = current_node
+
+    reference = decisions[int(reference_iterations)]
+    reference_node = nodes[int(reference_iterations)]
+    budget_metrics: dict[str, dict[str, Any]] = {}
+    for budget in budgets:
+        decision = decisions[int(budget)]
+        current_node = nodes[int(budget)]
+        budget_metrics[str(budget)] = {
+            "action": int(np.argmax(decision.strategy)),
+            "l1_to_reference": round(
+                float(np.abs(decision.strategy - reference.strategy).sum()),
+                8,
+            ),
+            "kl_to_reference": _kl_to_reference(decision.strategy, reference.strategy),
+            "allin_prob": round(float(decision.strategy[8]), 8),
+            "allin_selected": bool(int(np.argmax(decision.strategy)) == 8),
+            "illegal_mass": _illegal_mass(decision.strategy, current_node),
+            "latency_ms": round(float(decision.latency_ms), 3),
+        }
+    return {
+        "label": case.label,
+        "passed": True,
+        "reference_action": int(np.argmax(reference.strategy)),
+        "reference_allin_prob": round(float(reference.strategy[8]), 8),
+        "reference_allin_selected": bool(int(np.argmax(reference.strategy)) == 8),
+        "reference_illegal_mass": _illegal_mass(reference.strategy, reference_node),
+        "reference_latency_ms": round(float(reference.latency_ms), 3),
+        "budgets": budget_metrics,
+    }
+
+
 def eval_cfr_budget_frontier(
     *,
     cases_json: str | Path,
@@ -165,64 +248,16 @@ def eval_cfr_budget_frontier(
         if "error" in parsed:
             records.append({"label": case.label, "passed": False, "skipped": parsed["error"]})
             continue
-        belief_row = base_dataset.belief[case_idx]
-        reference_solved = _solve_with_update(
-            case,
-            parsed,
-            belief_row=belief_row,
-            solver_iterations=reference_iterations,
-            solver_backend=solver_backend,
-            solver_update=solver_update,
-        )
-        if reference_solved is None:
-            records.append({"label": case.label, "passed": False, "skipped": "reference_skipped"})
-            continue
-        reference_node = reference_solved[1]
-        reference = reference_solved[2]
-        budget_metrics: dict[str, dict[str, Any]] = {}
-        skipped = None
-        for budget in budgets:
-            solved = reference_solved
-            if int(budget) != int(reference_iterations):
-                solved = _solve_with_update(
-                    case,
-                    parsed,
-                    belief_row=belief_row,
-                    solver_iterations=int(budget),
-                    solver_backend=solver_backend,
-                    solver_update=solver_update,
-                )
-            if solved is None:
-                skipped = f"budget_{budget}_skipped"
-                break
-            node = solved[1]
-            decision = solved[2]
-            budget_metrics[str(budget)] = {
-                "action": int(np.argmax(decision.strategy)),
-                "l1_to_reference": round(
-                    float(np.abs(decision.strategy - reference.strategy).sum()),
-                    8,
-                ),
-                "kl_to_reference": _kl_to_reference(decision.strategy, reference.strategy),
-                "allin_prob": round(float(decision.strategy[8]), 8),
-                "allin_selected": bool(int(np.argmax(decision.strategy)) == 8),
-                "illegal_mass": _illegal_mass(decision.strategy, node),
-                "latency_ms": round(float(decision.latency_ms), 3),
-            }
-        if skipped is not None:
-            records.append({"label": case.label, "passed": False, "skipped": skipped})
-            continue
         records.append(
-            {
-                "label": case.label,
-                "passed": True,
-                "reference_action": int(np.argmax(reference.strategy)),
-                "reference_allin_prob": round(float(reference.strategy[8]), 8),
-                "reference_allin_selected": bool(int(np.argmax(reference.strategy)) == 8),
-                "reference_illegal_mass": _illegal_mass(reference.strategy, reference_node),
-                "reference_latency_ms": round(float(reference.latency_ms), 3),
-                "budgets": budget_metrics,
-            }
+            _solve_case_budget_frontier(
+                case=case,
+                parsed=parsed,
+                belief_row=base_dataset.belief[case_idx],
+                budgets=budgets,
+                reference_iterations=reference_iterations,
+                solver_backend=solver_backend,
+                solver_update=solver_update,
+            )
         )
     summary = summarize_budget_frontier_records(
         records,
