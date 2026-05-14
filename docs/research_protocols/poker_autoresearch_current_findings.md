@@ -200,6 +200,11 @@ single-row residuals at the current scale.
   hidden-size/epoch tuning the wrong next move; the missing piece is richer
   public-belief/counterfactual state or a more faithful advantage/regret
   target.
+- Enriched trace rows now carry `public_belief_features` from the CFV cache and
+  compact range-shape summaries. That helped but did not solve the alignment
+  problem: enriched MLP final L1 `0.4983` beat low `0.5202` but still lost to
+  uniform `0.3119`. Context alone is insufficient; the target must move closer
+  to counterfactual regret/advantage updates or be evaluated inside a resolver.
 
 ## Metric Snapshot
 

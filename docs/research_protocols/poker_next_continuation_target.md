@@ -167,6 +167,14 @@ capacity tuning on the current trace-row features as the next move. The next
 trace attempt must add richer public-belief/counterfactual inputs or switch to
 a stronger regret/advantage target.
 
+Adding public-belief cache features and range-shape summaries improved the
+same diagnostic but did not pass it. The enriched MLP reached `0.4983` final
+L1, better than low `0.5202`, but still much worse than uniform `0.3119`.
+This narrows the blocker further: context helps, but the low-to-uniform
+policy-delta target is still not the right learned object. The next step should
+target counterfactual advantages/regret fields or test predicted fields inside
+an actual resolver update.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

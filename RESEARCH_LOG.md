@@ -120,6 +120,19 @@
 - Key metrics: `{"device": "cuda", "target_fit_passed": true, "decision_passed": false, "mean_pred_l1_to_reference": 0.52531976, "mean_low_l1_to_reference": 0.52017487, "mean_uniform_l1_to_reference": 0.31188308, "promotion": false}`
 - Decision: do not tune MLP capacity, epochs, or learning rate as the next research move. The failure points to missing state/target semantics: richer public-belief/counterfactual inputs or a stronger advantage/regret target are needed before another trace model.
 
+## 20260514T222915Z-enriched-trace-delta-mlp - failed
+
+- Timestamp: 2026-05-14T22:29:15Z
+- Type: search_consistency_diagnostic
+- Gate: enriched nonlinear trace-delta MLP vs low/uniform trace baselines
+- Hypothesis: Adding public-belief cache features and compact range-shape summaries to dynamic trace records should give the nonlinear trace-delta model enough context to beat low and uniform trace baselines.
+- Failure class: search_target_alignment
+- Related work: Public-belief state is the right abstraction in DeepStack/ReBeL-style methods, but simply appending compact PBS features to a low-to-uniform policy-delta target may still be target-misaligned.
+- Summary: Extended `scripts/diagnose_cfr_trace_state.py` to emit `public_belief_features` for each trace record, and updated the MLP diagnostic to consume optional context features. Regenerated root-disjoint 32/32 trace files. The enriched CUDA MLP improved over the compact-row version and beat the low trace on final L1, but still failed the real decision gate because the uniform iteration-10 trace remained far better.
+- Metrics file: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_delta_mlp_enriched_train32_holdout32_seed20260662.json`
+- Key metrics: `{"device": "cuda", "target_fit_passed": true, "decision_passed": false, "mean_pred_l1_to_reference": 0.49831669, "mean_low_l1_to_reference": 0.52017487, "mean_uniform_l1_to_reference": 0.31188308, "pred_top_match_rate": 0.75, "promotion": false}`
+- Decision: enriched public-belief context helps, but the low-to-uniform policy-delta target is still not enough. The next target should move closer to counterfactual advantage/regret updates or evaluate predicted fields inside a resolver step, rather than tuning this MLP.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z

@@ -49,6 +49,48 @@ def action_policy_from_field(values: np.ndarray, legal_actions: tuple[int, ...])
     return out
 
 
+def _normalized_range(values: np.ndarray) -> np.ndarray:
+    arr = np.maximum(np.asarray(values, dtype=np.float32).reshape(-1), 0.0)
+    total = float(arr.sum())
+    if total <= 1e-12:
+        return np.zeros_like(arr, dtype=np.float32)
+    return arr / total
+
+
+def _range_entropy(probs: np.ndarray) -> float:
+    nz = probs[probs > 1e-12]
+    if nz.size == 0:
+        return 0.0
+    return float(-(nz * np.log(nz)).sum())
+
+
+def _topk_mass(probs: np.ndarray, k: int = 5) -> float:
+    if probs.size == 0:
+        return 0.0
+    k = max(1, min(int(k), int(probs.size)))
+    return float(np.sort(probs)[-k:].sum())
+
+
+def belief_summary_features(hero_range: np.ndarray, villain_range: np.ndarray) -> list[float]:
+    """Return compact public-belief range-shape features for trace diagnostics."""
+    hero = _normalized_range(hero_range)
+    villain = _normalized_range(villain_range)
+    hero_entropy = _range_entropy(hero)
+    villain_entropy = _range_entropy(villain)
+    hero_top = float(hero.max()) if hero.size else 0.0
+    villain_top = float(villain.max()) if villain.size else 0.0
+    return [
+        round(hero_entropy, 8),
+        round(villain_entropy, 8),
+        round(hero_top, 8),
+        round(_topk_mass(hero), 8),
+        round(float(np.exp(hero_entropy)) if hero_entropy > 0.0 else 0.0, 8),
+        round(float(np.exp(villain_entropy)) if villain_entropy > 0.0 else 0.0, 8),
+        round(villain_top, 8),
+        round(_topk_mass(villain), 8),
+    ]
+
+
 def summarize_trace_records(records: list[dict[str, Any]]) -> dict[str, Any]:
     by_iteration: dict[int, list[float]] = defaultdict(list)
     for record in records:
@@ -69,6 +111,7 @@ def _trace_case(
     case: Any,
     *,
     belief_row: np.ndarray,
+    public_features: np.ndarray | None = None,
     solver_iterations: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     parsed = parse_action(case.action_str)
@@ -85,6 +128,18 @@ def _trace_case(
     ) = _solver_context(case, parsed)
     full_hands = list(itertools.combinations(sorted(set(range(52)) - set(board_idx)), 2))
     hero_range, villain_range = _local_ranges_from_belief(belief_row, full_hands)
+    context_features = belief_summary_features(hero_range, villain_range)
+    if public_features is not None:
+        public_context = (
+            np.asarray(public_features, dtype=np.float32)
+            .reshape(-1)
+            .round(8)
+            .astype(float)
+            .tolist()
+        )
+        context_features = (
+            public_context + context_features
+        )
     solver = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
     active_node = solver.navigate(_parse_nav(street_action, solver))
     if active_node is None or active_node.is_terminal:
@@ -112,6 +167,7 @@ def _trace_case(
                 "strategy_mass": round(float(np.maximum(strategy_field[list(legal_actions)], 0.0).sum()), 8),
                 "hero_reach_mass": round(float(np.asarray(kwargs["hero_reach"], dtype=np.float32)[0].sum()), 8),
                 "villain_reach_mass": round(float(np.asarray(kwargs["villain_reach"], dtype=np.float32)[0].sum()), 8),
+                "public_belief_features": context_features,
                 "regret_top_action": int(np.argmax(regret_policy)),
                 "strategy_top_action": int(np.argmax(strategy_policy)),
                 "regret_policy": regret_policy.astype(float).round(8).tolist(),
@@ -160,6 +216,7 @@ def diagnose_cfr_trace_state(
         case_records, skip = _trace_case(
             cases[case_idx],
             belief_row=np.asarray(dataset.belief[case_idx], dtype=np.float32),
+            public_features=np.asarray(dataset.features[case_idx], dtype=np.float32),
             solver_iterations=solver_iterations,
         )
         trace_records.extend(case_records)

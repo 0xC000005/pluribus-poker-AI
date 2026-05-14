@@ -90,7 +90,8 @@ def _build_dataset(
                 legal_mask[action] = 1.0
         if float(legal_mask.sum()) <= 0.0:
             raise ValueError(f"record {label} has no legal actions")
-        features.append(_feature_row(low_record, action_dim))
+        context = np.asarray(low_record.get("public_belief_features", ()), dtype=np.float64).reshape(-1)
+        features.append(np.concatenate([_feature_row(low_record, action_dim), context]))
         low_policies.append(low_policy)
         target_deltas.append(target_policy - low_policy)
         legal_masks.append(legal_mask)
