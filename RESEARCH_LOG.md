@@ -3136,3 +3136,15 @@
 - Summary: Added lower/upper 95% metrics to native H2H using duplicate-pair payoff deltas. The self-compare remains exactly zero with zero CI. Reservoir-vs-prior-DQN remains inconclusive because the lower bound is negative.
 - Metrics file: autoresearch-session/native_nfsp_reservoir_self_h2h_ci_seed20260516.json and autoresearch-session/native_nfsp_reservoir_vs_transition_h2h_ci_seed20260516.json
 - Key metrics: `{"self_mean": 0.0, "self_lower95": 0.0, "reservoir_vs_transition_mean": 0.001385, "reservoir_vs_transition_lower95": -0.049859, "reservoir_vs_transition_upper95": 0.052629, "n_pairs": 100, "promotion": false}`
+
+## 20260514T224500Z-native-nfsp-reservoir-h2h-1k - inconclusive
+
+- Timestamp: 2026-05-14T22:45:00Z
+- Type: evaluation
+- Gate: native-nfsp-reservoir-vs-transition-1k-h2h
+- Hypothesis: The method-corrected reservoir average-policy checkpoint should beat the previous non-reservoir DQN checkpoint under duplicate-swapped native H2H.
+- Failure class: strategy_quality
+- Related work: Reservoir memory is required by NFSP methodology, but a methodologically correct change still needs decision-quality evidence. This gate separates algorithm alignment from observed strategy improvement.
+- Summary: Ran a larger 1,000-hand duplicate-swapped native H2H. The reservoir checkpoint did not beat the prior DQN checkpoint with positive confidence; the mean was slightly negative and the CI crossed zero. Keep reservoir memory as the correct default, but do not claim strength improvement from this run.
+- Metrics file: autoresearch-session/native_nfsp_reservoir_vs_transition_h2h_1k_ci_seed20260516.json
+- Key metrics: `{"mean_candidate_payoff": -0.00807, "lower95_candidate_payoff": -0.028179, "upper95_candidate_payoff": 0.012039, "n_games": 1000, "n_pairs": 500, "promotion": false}`
