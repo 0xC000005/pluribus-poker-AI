@@ -64,6 +64,15 @@ default. The useful next step is not to tune discount exponents; it is to
 collect or learn a more search-aware correction signal, or test a better
 researched predictive/learned update with the same fixed A/B gate.
 
+The source-backed PDCFR+ update has now been tested under the same rule. Its
+methodology review passed because it is a published predictive CFR+ diagnostic,
+not a Slumbot-specific patch, but the 64-root root-disjoint gate failed badly:
+mean L1 worsened to `0.7062`, KL worsened to `0.9894`, and top-action agreement
+fell to `0.6250` versus low CFR+ `0.5254`/`0.2602`/`0.7656`. This rules out
+fixed published solver-update swaps as the immediate path. Keep them opt-in
+negative controls and return to learned counterfactual/search-derived
+corrections evaluated inside the resolver.
+
 The objective is now sharpened further: do not make Slumbot the thing to hack.
 Slumbot is a transfer benchmark. The preferred research path is an elegant
 general method, closer in spirit to AlphaZero/Student-of-Games/DeepNash than to

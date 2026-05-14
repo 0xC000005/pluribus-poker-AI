@@ -3380,3 +3380,15 @@
 - Summary: Added `scripts/eval_regret_policy_warm_start.py` and a unit test for selected-node field seeding. The 64-root holdout evaluator used CUDA for model inference and CPU CFR for low/reference/warm solves. The checkpoint moved mean L1 in the right direction and greatly reduced all-in probability gap, but it failed KL, top-action agreement, and latency gates. Do not promote or scale this checkpoint; the next target needs a more action-aligned counterfactual correction and a lower-latency inference boundary.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_solver_holdout64_seed20260663.json
 - Key metrics: `{"mean_low_l1": 0.52537416, "mean_warm_l1": 0.50283383, "mean_low_kl": 0.26023225, "mean_warm_kl": 0.26876749, "low_action_agreement": 0.765625, "warm_action_agreement": 0.703125, "low_allin_prob_gap": 0.07986568, "warm_allin_prob_gap": 0.01166927, "warm_to_low_latency_ratio": 7.66327511, "improved_l1_count": 34, "worse_l1_count": 30, "promotion": false}`
+
+## 20260514T225647Z-pdcfr-plus-solver-update - failed
+
+- Timestamp: 2026-05-14T22:56:47Z
+- Type: solver_update_diagnostic
+- Gate: pdcfr-plus-vs-cfr-plus-holdout64
+- Hypothesis: Source-backed PDCFR+ optimistic regret updates might improve low-budget resolver decisions against the same 25-iteration CFR+ teacher without adding neural inference latency.
+- Failure class: solver_update_alignment
+- Related work: PDCFR+ reports predictive discounted CFR+ updates with published defaults (`alpha=2.3`, `gamma=5`). The local review used the paper and reference implementation before adding the opt-in CPU update. Sources are recorded in `docs/research_protocols/poker_review_manifests/20260514T224753Z-pdcfr-plus-solver-update.json`.
+- Summary: Added `pdcfr_plus` as an opt-in CPU solver update and extended the solver-update A/B gate. The source-backed update is mechanically valid and keeps illegal mass at zero, but it failed the 64-root root-disjoint gate: mean L1, KL, and top-action agreement all worsened versus low-budget CFR+. This rules out fixed published solver-update swaps as the next mainline and keeps `cfr_plus` as the default.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_update_pdcfr_plus_holdout64_seed20260664.json
+- Key metrics: `{"mean_low_l1": 0.52537418, "mean_candidate_l1": 0.70621518, "mean_low_kl": 0.2602323, "mean_candidate_kl": 0.98936968, "low_action_agreement": 0.765625, "candidate_action_agreement": 0.625, "candidate_to_low_latency_ratio": 1.47829066, "max_illegal_mass": 0.0, "promotion": false}`

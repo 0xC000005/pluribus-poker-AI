@@ -59,6 +59,14 @@ agreement fell (`0.7031` vs `0.7656`), and latency was `7.66x` vanilla
 low-budget. This is diagnostic evidence that the field interface can affect
 search, not a promotable method.
 
+Solver-update status: fixed update-rule swaps are negative controls, not the
+root fix. `dcfr_plus` already failed the same 64-root gate, and the
+source-backed PDCFR+ implementation also failed despite a completed methodology
+review and related-work manifest. PDCFR+ worsened L1 (`0.7062` vs `0.5254`),
+KL (`0.9894` vs `0.2602`), and top-action agreement (`0.6250` vs `0.7656`)
+against the 25-iteration teacher. Keep `cfr_plus` as default and avoid tuning
+discount exponents as a research loop.
+
 Objective refinement: the next research loop should attack the root
 target/search-alignment problem, not surface metrics. Two allowed mainlines are:
 decision-focused learned-search correction targets, and pure game-theoretic RL
@@ -218,6 +226,8 @@ single-row residuals at the current scale.
 - Direct resolver evaluation for trained regret/policy warm-start checkpoints is
   now available. The first low-state checkpoint improved mean L1 only slightly
   and failed KL/action/latency gates, so it remains a mechanism diagnostic.
+- The reviewed source-backed PDCFR+ CPU update is also available as an opt-in
+  diagnostic, but it failed the 64-root solver-update A/B and is not promotable.
 
 ## Metric Snapshot
 

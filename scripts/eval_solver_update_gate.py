@@ -273,8 +273,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--low-iterations", type=int, default=5)
     parser.add_argument("--reference-iterations", type=int, default=25)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
-    parser.add_argument("--baseline-update", choices=("cfr_plus", "dcfr_plus"), default="cfr_plus")
-    parser.add_argument("--candidate-update", choices=("cfr_plus", "dcfr_plus"), default="dcfr_plus")
+    parser.add_argument(
+        "--baseline-update",
+        choices=("cfr_plus", "dcfr_plus", "pdcfr_plus"),
+        default="cfr_plus",
+    )
+    parser.add_argument(
+        "--candidate-update",
+        choices=("cfr_plus", "dcfr_plus", "pdcfr_plus"),
+        default="dcfr_plus",
+    )
     parser.add_argument("--min-evaluated", type=int, default=1)
     parser.add_argument("--max-candidate-latency-ratio", type=float, default=2.0)
     parser.add_argument("--output-json")

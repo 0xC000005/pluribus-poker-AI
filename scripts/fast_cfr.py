@@ -23,9 +23,11 @@ T_DECISION = 0
 T_HERO_FOLD = 1
 T_VILLAIN_FOLD = 2
 T_SHOWDOWN = 3
-SOLVER_UPDATES = ("cfr_plus", "dcfr_plus")
+SOLVER_UPDATES = ("cfr_plus", "dcfr_plus", "pdcfr_plus")
 _DCFR_ALPHA = 1.5
 _DCFR_GAMMA = 2.0
+_PDCFR_ALPHA = 2.3
+_PDCFR_GAMMA = 5.0
 
 
 def _validate_solver_update(solver_update):
@@ -41,6 +43,21 @@ def _dcfr_discount_factors(iteration_index):
     positive_regret = np.float32((t ** _DCFR_ALPHA) / ((t ** _DCFR_ALPHA) + 1.0))
     average_strategy = np.float32((t / (t + 1.0)) ** _DCFR_GAMMA)
     return positive_regret, average_strategy
+
+
+def _pdcfr_discount_factor(iteration_index):
+    """PDCFR+ optimistic-regret discount using the published default alpha."""
+    t = np.float32(max(int(iteration_index), 1))
+    base = np.power(max(t - np.float32(1.0), np.float32(0.0)), _PDCFR_ALPHA)
+    return np.float32(base / (base + np.float32(1.0))) if base > 0 else np.float32(0.0)
+
+
+def _pdcfr_strategy_discount(iteration_index):
+    """Published PDCFR+ average-strategy discount with gamma=5."""
+    t = np.float32(max(int(iteration_index), 1))
+    if t <= 1:
+        return np.float32(0.0)
+    return np.float32(((t - np.float32(1.0)) / t) ** _PDCFR_GAMMA)
 
 
 def build_tree_arrays(root):
@@ -246,10 +263,12 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         Optional CPU-only diagnostic hook. Trace nodes are not cut and do not
         alter solving. The hook receives current reaches and exact node values
         after each backward pass.
-    solver_update : {"cfr_plus", "dcfr_plus"}
+    solver_update : {"cfr_plus", "dcfr_plus", "pdcfr_plus"}
         Regret-minimization update rule. ``cfr_plus`` preserves the historical
         recurrence. ``dcfr_plus`` applies fixed DCFR-style discounts to old
         positive regret and average-strategy mass before each new update.
+        ``pdcfr_plus`` applies the PDCFR+ optimistic-regret update from the
+        published default coefficients.
 
     Returns
     -------
@@ -324,6 +343,11 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     )
     if strategy_sum is None:
         strategy_sum = np.zeros(expected_shape, dtype=np.float32)
+    prev_imm_regret = (
+        np.zeros_like(regret_sum, dtype=np.float32)
+        if solver_update == "pdcfr_plus"
+        else None
+    )
 
     # Reach probability and value arrays
     hr_at = np.zeros((nn, n), dtype=np.float32)
@@ -345,10 +369,18 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     valid_mT = valid_m.T.copy()
 
     for _iter in range(n_iterations):
+        iteration_number = _iter + 1
+        policy_regret_sum = regret_sum
         if solver_update == "dcfr_plus":
-            regret_discount, strategy_discount = _dcfr_discount_factors(_iter + 1)
+            regret_discount, strategy_discount = _dcfr_discount_factors(iteration_number)
             regret_sum *= regret_discount
             strategy_sum *= strategy_discount
+        elif solver_update == "pdcfr_plus":
+            strategy_sum *= _pdcfr_strategy_discount(iteration_number)
+            policy_regret_sum = np.maximum(
+                regret_sum * _pdcfr_discount_factor(iteration_number) + prev_imm_regret,
+                0.0,
+            )
 
         if cut_idx.size:
             hr_at.fill(0.0)
@@ -369,7 +401,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 continue
             acts = decision_actions[i]
             # Compute strategy from regret_sum
-            rs_acts = np.stack([regret_sum[i, a] for a in acts])  # (n_acts, n)
+            rs_acts = np.stack([policy_regret_sum[i, a] for a in acts])  # (n_acts, n)
             pos = np.maximum(rs_acts, 0)
             tot = pos.sum(axis=0)
             safe = np.where(tot > 0, tot, np.float32(1.0))
@@ -488,7 +520,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 continue
 
             acts = decision_actions[i]
-            rs_acts = np.stack([regret_sum[i, a] for a in acts])
+            rs_acts = np.stack([policy_regret_sum[i, a] for a in acts])
             pos = np.maximum(rs_acts, 0)
             tot = pos.sum(axis=0)
             safe = np.where(tot > 0, tot, np.float32(1.0))
@@ -514,15 +546,29 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
             if player[i] == 0:
                 for a in acts:
                     ci = children[i, a]
-                    regret_sum[i, a] = np.maximum(
-                        regret_sum[i, a] + hvals[ci] - hval, 0)
+                    instant = hvals[ci] - hval
+                    if solver_update == "pdcfr_plus":
+                        regret_sum[i, a] = np.maximum(
+                            regret_sum[i, a] * _pdcfr_discount_factor(iteration_number) + instant,
+                            0,
+                        )
+                        prev_imm_regret[i, a] = instant
+                    else:
+                        regret_sum[i, a] = np.maximum(regret_sum[i, a] + instant, 0)
                 for a in acts:
                     strategy_sum[i, a] += hr_at[i] * strat_cache[a]
             else:
                 for a in acts:
                     ci = children[i, a]
-                    regret_sum[i, a] = np.maximum(
-                        regret_sum[i, a] + vvals[ci] - vval, 0)
+                    instant = vvals[ci] - vval
+                    if solver_update == "pdcfr_plus":
+                        regret_sum[i, a] = np.maximum(
+                            regret_sum[i, a] * _pdcfr_discount_factor(iteration_number) + instant,
+                            0,
+                        )
+                        prev_imm_regret[i, a] = instant
+                    else:
+                        regret_sum[i, a] = np.maximum(regret_sum[i, a] + instant, 0)
                 for a in acts:
                     strategy_sum[i, a] += vr_at[i] * strat_cache[a]
 
@@ -559,7 +605,7 @@ def solve_cfr_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     """
     solver_update = _validate_solver_update(solver_update)
     if solver_update != "cfr_plus":
-        raise ValueError("solver_update='dcfr_plus' is only supported by the CPU CFR backend")
+        raise ValueError(f"solver_update={solver_update!r} is only supported by the CPU CFR backend")
 
     torch_device = torch.device(device)
     if torch_device.type == "cuda" and not torch.cuda.is_available():

@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 864,
+      "path": "benchmark_audit.md",
+      "sha256": "36c308a74ac815bc0b143b0a8a218823911ed203a8d17b5d0ebe59a48d752bb2"
+    },
+    {
+      "bytes": 640,
+      "path": "decision.json",
+      "sha256": "95e5c75ab36cccfa906cc604d0192fd9795e1ed3efa13866e284f601a1130f89"
+    },
+    {
+      "bytes": 1434,
+      "path": "mechanism_review.md",
+      "sha256": "fc91e5159f780b027edd1ba9747b9caf67fb4ff5b61f2b3eb6789c1dca6be556"
+    },
+    {
+      "bytes": 1279,
+      "path": "related_work.md",
+      "sha256": "90c35331bcbb4b24986190b1cb40ae087e20df8b011134dd11c4848274812d29"
+    },
+    {
+      "bytes": 1672,
+      "path": "review.md",
+      "sha256": "ae071ee36311532d9268309fa16816e43d49b75a7037daca7327865e515cea61"
+    },
+    {
+      "bytes": 426,
+      "path": "team_review.md",
+      "sha256": "f1ae9b44ff30eec3d5761dda38c8f9d1389b8f064e38171508f34275a7a121dd"
+    }
+  ],
+  "reason": "PDCFR+ is a source-backed, opt-in search-update diagnostic with no Slumbot-specific rules and no neural inference latency boundary. It must pass the same root-disjoint solver-update A/B before any promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T224753Z-pdcfr-plus-solver-update",
+  "review_id": "20260514T224753Z-pdcfr-plus-solver-update",
+  "sources": [
+    "https://arxiv.org/abs/2404.13891",
+    "https://www.ijcai.org/proceedings/2024/0583",
+    "https://github.com/rpSebastian/PDCFRPlus/blob/main/pdcfrplus/cfr/pdcfr_plus.py",
+    "https://github.com/rpSebastian/PDCFRPlus/blob/main/pdcfrplus/cfr/pcfr_plus.py",
+    "https://github.com/rpSebastian/PDCFRPlus/blob/main/pdcfrplus/cfr/dcfr_plus.py"
+  ],
+  "written_at": "2026-05-14T22:49:00Z"
+}

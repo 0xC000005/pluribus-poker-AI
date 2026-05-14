@@ -50,6 +50,20 @@ def test_street_solver_accepts_dcfr_plus_cpu_update():
     assert np.isfinite(solver._strategy_sum).all()
 
 
+def test_street_solver_accepts_pdcfr_plus_cpu_update():
+    board = [0, 5, 10, 15, 20]
+    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    solver.solve(n_iterations=2, solver_update="pdcfr_plus")
+    strategy = solver.get_strategy((30, 31))
+
+    assert strategy
+    assert set(strategy).issubset(set(range(9)))
+    assert np.isclose(sum(strategy.values()), 1.0)
+    assert np.isfinite(solver._regret_sum).all()
+    assert np.isfinite(solver._strategy_sum).all()
+
+
 def test_street_solver_rejects_unknown_backend():
     board = [0, 5, 10, 15, 20]
     solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
@@ -74,16 +88,17 @@ def test_street_solver_rejects_unknown_solver_update():
         raise AssertionError("Expected unknown solver update to raise ValueError")
 
 
-def test_torch_backend_rejects_dcfr_plus_update():
+def test_torch_backend_rejects_non_default_solver_updates():
     board = [0, 5, 10, 15, 20]
-    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
 
-    try:
-        solver.solve(n_iterations=1, backend="torch", device="cpu", solver_update="dcfr_plus")
-    except ValueError as exc:
-        assert "only supported by the CPU CFR backend" in str(exc)
-    else:
-        raise AssertionError("Expected torch DCFR update to raise ValueError")
+    for update in ("dcfr_plus", "pdcfr_plus"):
+        solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+        try:
+            solver.solve(n_iterations=1, backend="torch", device="cpu", solver_update=update)
+        except ValueError as exc:
+            assert "only supported by the CPU CFR backend" in str(exc)
+        else:
+            raise AssertionError(f"Expected torch {update} update to raise ValueError")
 
 
 def test_solve_street_prunes_low_probability_ranges_and_keeps_hero_hand():
