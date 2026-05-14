@@ -2993,3 +2993,14 @@
 - Metrics file: autoresearch-session/poker_runs/20260514T191046Z-methodology-review-for-minimal-pure-game-theoretic-rl/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260514T190937Z-minimal-pure-game-theoretic-rl-pilot", "passed": true}`
 
+## 20260514T191500Z-rl-baseline-role-contract - passed
+
+- Timestamp: 2026-05-14T19:15:00Z
+- Type: implementation
+- Gate: test-game-theoretic-rl-contract
+- Hypothesis: PPO, DQN, and Rainbow can be useful control baselines for isolating RL algorithm effects, but they should not be promoted as the main poker method unless wrapped in an equilibrium/game-theoretic layer.
+- Failure class: none
+- Related work: NFSP provides the main pure game-theoretic RL baseline contract via average-policy fictitious self-play; PPO/Rainbow-style frameworks are useful for controls but do not solve imperfect-information equilibrium learning by themselves.
+- Summary: Added `poker_ai.research.game_theoretic_rl` with legal-mask-safe softmax, epsilon-greedy controls, NFSP anticipatory policy mixing, and an algorithm profile guard. Added `scripts/poker_rl_baseline_plan.py` so autoresearch can classify `nfsp` as a mainline candidate and `ppo`/`rainbow` as control baselines before any framework-specific code is introduced.
+- Metrics file: test/unit/test_game_theoretic_rl.py
+- Key metrics: `{"unit_tests": 6, "passed": true, "mainline_candidate": "nfsp", "control_baselines": ["ppo", "rainbow_dqn"], "promotion": false}`
