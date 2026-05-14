@@ -14,6 +14,7 @@ import io
 import json
 import random
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,34 @@ def _to_float_list(values) -> list[float]:
     return [float(v) for v in values]
 
 
+def resolve_device(requested_device: str = "auto") -> dict:
+    requested = requested_device.strip().lower()
+    cuda_available = bool(torch.cuda.is_available())
+    if requested == "auto":
+        resolved = "cpu"
+        device_policy = "cpu_default_for_rlcard_framework_control"
+    elif requested == "cuda":
+        if not cuda_available:
+            raise ValueError("CUDA requested but torch.cuda.is_available() is false")
+        resolved = "cuda"
+        device_policy = "explicit_cuda"
+    elif requested == "cpu":
+        resolved = "cpu"
+        device_policy = "explicit_cpu"
+    else:
+        raise ValueError("device must be one of: auto, cpu, cuda")
+    return {
+        "requested_device": requested,
+        "resolved_device": resolved,
+        "device_policy": device_policy,
+        "torch_cuda_available": cuda_available,
+        "torch_device_count": int(torch.cuda.device_count()) if cuda_available else 0,
+        "torch_device_name": (
+            torch.cuda.get_device_name(0) if cuda_available else ""
+        ),
+    }
+
+
 def run_pilot(
     *,
     train_episodes: int = 50,
@@ -36,6 +65,7 @@ def run_pilot(
     seed: int = 20260514,
     hidden_dim: int = 32,
     min_buffer_size_to_learn: int = 8,
+    device: str = "auto",
 ) -> dict:
     import rlcard
     from rlcard.agents import NFSPAgent, RandomAgent
@@ -44,6 +74,7 @@ def run_pilot(
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    device_info = resolve_device(device)
 
     env = rlcard.make("no-limit-holdem", config={"game_num_players": 2, "seed": seed})
     agent = NFSPAgent(
@@ -61,12 +92,15 @@ def run_pilot(
         q_train_every=1,
         q_mlp_layers=[hidden_dim],
         evaluate_with="average_policy",
-        device="cpu",
+        device=device_info["resolved_device"],
     )
     random_agent = RandomAgent(num_actions=env.num_actions)
     env.set_agents([agent, random_agent])
 
+    t0 = time.perf_counter()
     pre_payoffs = _to_float_list(tournament(env, int(eval_games)))
+    pre_eval_seconds = time.perf_counter() - t0
+    train_start = time.perf_counter()
     for _ in range(int(train_episodes)):
         agent.sample_episode_policy()
         trajectories, payoffs = env.run(is_training=True)
@@ -74,13 +108,22 @@ def run_pilot(
         for transition in trajectories[0]:
             with contextlib.redirect_stdout(io.StringIO()):
                 agent.feed(transition)
+    if device_info["resolved_device"] == "cuda":
+        torch.cuda.synchronize()
+    train_seconds = time.perf_counter() - train_start
+    post_eval_start = time.perf_counter()
     post_payoffs = _to_float_list(tournament(env, int(eval_games)))
+    if device_info["resolved_device"] == "cuda":
+        torch.cuda.synchronize()
+    post_eval_seconds = time.perf_counter() - post_eval_start
+    total_seconds = pre_eval_seconds + train_seconds + post_eval_seconds
 
     return {
         "algorithm": "nfsp",
         "role": "framework_control_pilot",
         "environment": "rlcard:no-limit-holdem",
         "warning": "RLCard no-limit Hold'em uses 5 actions; this is not the repo's 9-action Slumbot-parity environment.",
+        **device_info,
         "seed": int(seed),
         "num_actions": int(env.num_actions),
         "train_episodes": int(train_episodes),
@@ -89,6 +132,13 @@ def run_pilot(
         "post_payoffs": post_payoffs,
         "delta_player0": float(post_payoffs[0] - pre_payoffs[0]),
         "agent_total_t": int(agent.total_t),
+        "pre_eval_seconds": float(pre_eval_seconds),
+        "train_seconds": float(train_seconds),
+        "post_eval_seconds": float(post_eval_seconds),
+        "eval_seconds": float(pre_eval_seconds + post_eval_seconds),
+        "total_seconds": float(total_seconds),
+        "episodes_per_second": float(train_episodes / max(train_seconds, 1e-9)),
+        "train_steps_per_second": float(agent.total_t / max(train_seconds, 1e-9)),
         "promotion": False,
     }
 
@@ -100,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=20260514)
     parser.add_argument("--hidden-dim", type=int, default=32)
     parser.add_argument("--min-buffer-size-to-learn", type=int, default=8)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -109,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         hidden_dim=args.hidden_dim,
         min_buffer_size_to_learn=args.min_buffer_size_to_learn,
+        device=args.device,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)
     if args.output_json:
@@ -121,4 +173,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -3016,3 +3016,15 @@
 - Summary: Fixed isolated editable builds by removing the `setup.py` import of `poker_ai`, installed `rlcard`, `pettingzoo`, `pip`, and `pygame`, added `scripts/run_rlcard_nfsp_pilot.py`, and ran a 100-episode NFSP-vs-random RLCard no-limit smoke. The result is plumbing evidence only; it did not improve the noisy random baseline and must not be treated as a candidate checkpoint.
 - Metrics file: autoresearch-session/rlcard_nfsp_pilot_seed20260514.json
 - Key metrics: `{"algorithm": "nfsp", "environment": "rlcard:no-limit-holdem", "num_actions": 5, "train_episodes": 100, "eval_games": 100, "pre_payoff_player0": 2.57, "post_payoff_player0": 1.62, "delta_player0": -0.95, "promotion": false}`
+
+## 20260514T201500Z-rlcard-nfsp-device-ab - passed
+
+- Timestamp: 2026-05-14T20:15:00Z
+- Type: compute_diagnostic
+- Gate: rlcard-nfsp-device-ab
+- Hypothesis: The RLCard NFSP framework-control pilot should use the device that actually improves throughput; CUDA visibility alone is not evidence that the run is GPU-appropriate.
+- Failure class: none
+- Related work: This is an implementation diagnostic, not a poker-method claim. NFSP remains a framework-control pilot until a native 9-action/full-deck path exists.
+- Summary: Added `--device {auto,cpu,cuda}` and timing metrics to `scripts/run_rlcard_nfsp_pilot.py`. Torch sees the RTX 3070 Ti, and explicit CUDA works, but the controlled 200-episode RLCard NFSP benchmark was faster on CPU (`977.15` episodes/sec, `957.61` train steps/sec) than CUDA (`615.15` episodes/sec, `575.17` train steps/sec). `--device auto` now defaults to CPU for this framework-control path and records the policy in JSON.
+- Metrics file: autoresearch-session/rlcard_nfsp_pilot_cpu_seed20260514.json and autoresearch-session/rlcard_nfsp_pilot_cuda_seed20260514.json
+- Key metrics: `{"cuda_available": true, "device_name": "NVIDIA GeForce RTX 3070 Ti", "cpu_episodes_per_second": 977.1541, "cuda_episodes_per_second": 615.1511, "cpu_train_steps_per_second": 957.6110, "cuda_train_steps_per_second": 575.1663, "auto_resolved_device": "cpu", "promotion": false}`
