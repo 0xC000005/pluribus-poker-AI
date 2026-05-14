@@ -576,6 +576,7 @@ def evaluate_native_nfsp_head_to_head(
     initial_chips = int(config_payload.get("initial_chips", 1000))
     max_steps_per_hand = int(config_payload.get("max_steps_per_hand", 256))
     candidate_payoffs: list[float] = []
+    candidate_pair_payoffs: list[float] = []
     total_steps = 0
 
     eval_start = time.perf_counter()
@@ -583,6 +584,7 @@ def evaluate_native_nfsp_head_to_head(
     while len(candidate_payoffs) < int(n_games):
         game_seed = int(seed) + pair_i
         action_seed = int(seed) + 1_000_000 + pair_i
+        pair_payoffs: list[float] = []
         for candidate_seat in (0, 1):
             if len(candidate_payoffs) >= int(n_games):
                 break
@@ -605,11 +607,18 @@ def evaluate_native_nfsp_head_to_head(
                 state = state.apply_action(INDEX_TO_ACTION[action_idx])
                 n_steps += 1
             total_steps += n_steps
-            candidate_payoffs.append(float(state.payout.get(candidate_seat, 0)) / float(initial_chips))
+            payoff = float(state.payout.get(candidate_seat, 0)) / float(initial_chips)
+            candidate_payoffs.append(payoff)
+            pair_payoffs.append(payoff)
+        if pair_payoffs:
+            candidate_pair_payoffs.append(float(np.mean(pair_payoffs)))
         pair_i += 1
     if resolved_device.type == "cuda":
         torch.cuda.synchronize()
     eval_seconds = time.perf_counter() - eval_start
+    payoff_mean = float(np.mean(candidate_pair_payoffs)) if candidate_pair_payoffs else 0.0
+    payoff_std = float(np.std(candidate_pair_payoffs, ddof=1)) if len(candidate_pair_payoffs) > 1 else 0.0
+    payoff_se = payoff_std / float(np.sqrt(len(candidate_pair_payoffs))) if candidate_pair_payoffs else 0.0
 
     return {
         "algorithm": "native_nfsp_dqn_h2h",
@@ -621,10 +630,14 @@ def evaluate_native_nfsp_head_to_head(
         **device_info,
         "num_actions": N_ACTIONS,
         "n_games": int(n_games),
+        "n_pairs": int(len(candidate_pair_payoffs)),
         "eval_seconds": float(eval_seconds),
         "eval_steps": int(total_steps),
         "eval_games_per_second": float(n_games / max(eval_seconds, 1e-9)),
         "eval_steps_per_second": float(total_steps / max(eval_seconds, 1e-9)),
-        "mean_candidate_payoff": float(np.mean(candidate_payoffs)) if candidate_payoffs else 0.0,
+        "mean_candidate_payoff": payoff_mean,
+        "std_candidate_payoff": payoff_std,
+        "lower95_candidate_payoff": payoff_mean - 1.96 * payoff_se,
+        "upper95_candidate_payoff": payoff_mean + 1.96 * payoff_se,
         "promotion": False,
     }

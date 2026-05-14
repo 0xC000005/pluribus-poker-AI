@@ -3124,3 +3124,15 @@
 - Summary: Added native checkpoint H2H evaluation and fixed it to use paired duplicate deals/action seeds. The initial unmatched-deal H2H produced a nonzero self-compare; the corrected duplicate-swapped version gives exactly zero for reservoir-vs-itself over 200 hands. Reservoir-vs-prior-DQN is essentially flat, so reservoir memory is algorithmically correct but not yet positive strategy evidence.
 - Metrics file: autoresearch-session/native_nfsp_reservoir_self_h2h_swapped_seed20260516.json and autoresearch-session/native_nfsp_reservoir_vs_transition_h2h_swapped_seed20260516.json
 - Key metrics: `{"self_compare_mean_payoff": 0.0, "reservoir_vs_transition_mean_payoff": 0.001385, "n_games": 200, "eval_games_per_second": 51.4130, "promotion": false}`
+
+## 20260514T223500Z-native-nfsp-h2h-confidence - passed
+
+- Timestamp: 2026-05-14T22:35:00Z
+- Type: evaluation_hardness
+- Gate: native-nfsp-h2h-confidence
+- Hypothesis: Native checkpoint H2H should report confidence intervals over duplicate-pair deltas, not individual hands, so self-comparison has zero mean and zero uncertainty.
+- Failure class: none
+- Related work: Duplicate-swapped H2H gates need pair-level statistics; treating each swapped hand as independent overstates uncertainty for self-comparison and can obscure whether a candidate has a positive lower bound.
+- Summary: Added lower/upper 95% metrics to native H2H using duplicate-pair payoff deltas. The self-compare remains exactly zero with zero CI. Reservoir-vs-prior-DQN remains inconclusive because the lower bound is negative.
+- Metrics file: autoresearch-session/native_nfsp_reservoir_self_h2h_ci_seed20260516.json and autoresearch-session/native_nfsp_reservoir_vs_transition_h2h_ci_seed20260516.json
+- Key metrics: `{"self_mean": 0.0, "self_lower95": 0.0, "reservoir_vs_transition_mean": 0.001385, "reservoir_vs_transition_lower95": -0.049859, "reservoir_vs_transition_upper95": 0.052629, "n_pairs": 100, "promotion": false}`

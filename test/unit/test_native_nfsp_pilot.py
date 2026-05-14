@@ -200,6 +200,8 @@ def test_evaluate_native_nfsp_head_to_head_roundtrip(tmp_path):
     assert metrics["n_games"] == 2
     assert metrics["resolved_device"] == "cpu"
     assert abs(metrics["mean_candidate_payoff"]) < 1e-6
+    assert abs(metrics["lower95_candidate_payoff"]) < 1e-6
+    assert abs(metrics["upper95_candidate_payoff"]) < 1e-6
     assert metrics["promotion"] is False
 
 
