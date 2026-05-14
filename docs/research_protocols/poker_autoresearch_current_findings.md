@@ -90,6 +90,13 @@ count, and street improved holdout MAE from a train-mean constant `0.2802` to
 versus `0.4424` for the rest. This supports a trace-derived uncertainty or
 selective-correction gate, not a direct solver replacement.
 
+Selective-budget status: the first hard uncertainty gate failed. Spending
+reference iterations on the top predicted-error quintile improved low trace L1
+from `0.5202` to `0.3456`, but a uniform comparable budget at trace iteration
+`10` reached `0.3119` with the same top-match rate `0.8438`. A useful signal is
+there, but hard top-quintile escalation is not better than simply running more
+CFR everywhere at this scale.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -151,6 +158,10 @@ selective-correction gate, not a direct solver replacement.
   bounded step should connect this signal to a decision rule that either runs
   more CFR iterations on uncertain roots or trains a correction target, then
   compares against the same higher-budget teacher.
+- The first hard selective-budget decision failed against a uniform compute
+  baseline. The next trace-derived step should use the signal as a learned
+  residual/correction target or a continuous budget policy, not as a binary
+  top-quintile switch.
 
 ## Metric Snapshot
 

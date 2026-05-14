@@ -41,6 +41,20 @@
 - Metrics: both trace splits scanned `32` cases, skipped `0`, and produced `800` records. Best iteration was `5`: holdout L1 mean `0.52017486`, ridge MAE `0.22140209` vs train-mean MAE `0.28024782`, Pearson `0.42826531`, top-quintile recall `0.28571429`, and predicted-high actual L1 `0.79806154` vs predicted-low `0.4423666`.
 - Decision: dynamic trace features have enough signal to justify one bounded next step: build a root-disjoint trace-derived uncertainty/correction gate. Do not treat this as sufficient for Slumbot spend or policy promotion.
 
+## 20260514T221318Z-cfr-trace-selective-budget-gate - failed
+
+- Timestamp: 2026-05-14T22:13:18Z
+- Type: diagnostic
+- Gate: selective search budget vs uniform budget
+- Hypothesis: selecting the top predicted-error roots from iteration-5 trace features and spending reference iterations there should beat a uniform comparable-iteration budget against the 25-iteration final strategy.
+- Failure class: search_quality
+- Summary: Added `scripts/eval_cfr_trace_budget_gate.py`. The gate uses the fixed trace predictor only for selection, compares adaptive trace L1 against low and uniform trace iterations, and marks `promotion=false`.
+- Evidence:
+  - Gate metrics: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_trace_budget_gate_train32_holdout32_seed20260660.json`
+  - Test: `uv run pytest -q test/unit/test_cfr_trace_budget_gate.py` -> `1 passed`.
+- Metrics: selected `7/32` roots. Adaptive compute averaged `10.15625` trace iterations versus uniform `11.0`. Adaptive improved low L1 (`0.34559891` vs `0.52017486`) and top-match rate (`0.84375` vs `0.78125`), but failed against the uniform budget: uniform L1 was lower (`0.31188308`) with the same top-match rate (`0.84375`).
+- Decision: do not promote hard top-quintile uncertainty escalation. The trace signal is not yet a search policy; next work should learn a correction/residual target or a smoother budget allocation and keep comparing against uniform compute.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z

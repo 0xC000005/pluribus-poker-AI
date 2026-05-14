@@ -124,6 +124,14 @@ search budget gate: use early trace features to decide where to spend extra
 CFR iterations, and compare equal or explicitly reported compute budgets
 against the 25-iteration teacher on root-disjoint states.
 
+That first selective budget gate is now negative. The binary top-quintile rule
+selected `7/32` roots and improved low trace L1 (`0.3456` adaptive vs `0.5202`
+low), but it did not beat a uniform comparable-iteration budget (`0.3119`).
+This is a useful falsifier: trace features identify some hard roots, but a hard
+switch is too lossy. The next continuation target should predict a residual
+correction to the low solver's strategy/regret field, or learn a smooth compute
+allocation, and continue to report uniform-budget baselines.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
