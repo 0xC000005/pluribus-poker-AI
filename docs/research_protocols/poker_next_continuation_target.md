@@ -151,6 +151,14 @@ The next version must use either a nonlinear public-belief trace model with
 enough root-disjoint data or a target closer to counterfactual regret/advantage
 updates, and it must continue reporting low and uniform baselines.
 
+A methodology review now permits exactly that bounded next step. The reviewed
+decision is `proceed`, but diagnostic-only: a nonlinear public-belief
+trace-delta model may be tested if it predicts update-aligned regret/strategy
+deltas, keeps CFR+/resolving as the correction operator, reports low and
+uniform trace baselines, and leaves Slumbot/promotion surfaces untouched. The
+tracked manifest is
+`docs/research_protocols/poker_review_manifests/20260514T221524Z-nonlinear-public-belief-trace-delta-model.json`.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

@@ -95,6 +95,18 @@
 - Metrics: predicted L1 to final was `0.5609852`, worse than low `0.52017487` and uniform `0.31188308`. Predicted L1 to the iteration-10 target was `0.40710424`, also worse than the low trace's distance to that target (`0.32659132`). Top-match rate was `0.6875`, below low `0.78125` and uniform `0.84375`.
 - Decision: retire shallow linear trace-row residuals for this data scale. The next attempt must change model class and/or target semantics, not just the trace target iteration.
 
+## 20260514T221524Z-nonlinear-public-belief-trace-delta-review - passed
+
+- Timestamp: 2026-05-14T22:18:07Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T221524Z-nonlinear-public-belief-trace-delta-model
+- Hypothesis: A nonlinear public-belief trace-delta model is the next principled diagnostic after trace signal was found but binary budget selection and shallow linear residuals failed.
+- Failure class: none
+- Related work: DeepStack and ReBeL support learned public-belief/search objects coupled to resolving; Deep CFR, ReCFR-B, DREAM, and Deep Predictive Discounted CFR support regret/advantage-aligned neural targets; strategy-based warm starting supports preserving CFR correction semantics. Sources: https://arxiv.org/abs/1701.01724, https://arxiv.org/abs/1811.00164, https://arxiv.org/abs/2007.13544, https://ojs.aaai.org/index.php/AAAI/article/view/10056, https://doi.org/10.1109/TG.2022.3158649, https://arxiv.org/abs/2006.10410, and https://arxiv.org/abs/2511.08174.
+- Summary: Completed the methodology review, independent-verifier notes, related-work review, mechanism review, and benchmark-hacking audit. The decision is `proceed`, but only for a diagnostic fixed falsifier: train or test a nonlinear update-aligned trace-delta model, keep low and uniform trace baselines, and keep promotion disabled until a root-disjoint resolver gate passes.
+- Metrics file: `docs/research_protocols/poker_review_manifests/20260514T221524Z-nonlinear-public-belief-trace-delta-model.json`
+- Key metrics: `{"decision": "proceed", "diagnostic_only": true, "requires_low_and_uniform_baselines": true, "promotion": false}`
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z

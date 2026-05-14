@@ -1,0 +1,49 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1805,
+      "path": "benchmark_audit.md",
+      "sha256": "9459dcebddcd075fb1d1050fd4ad856cbf992aea52c73d6514d2fd146cb6e0a4"
+    },
+    {
+      "bytes": 742,
+      "path": "decision.json",
+      "sha256": "23aed80d064ec46ef96aa4fbfa2e747cb794e06b917990d84614211aa7113d98"
+    },
+    {
+      "bytes": 2133,
+      "path": "mechanism_review.md",
+      "sha256": "2344446d666b2f088d911efee990249890d60201906b12967082fdfa0baacf17"
+    },
+    {
+      "bytes": 3420,
+      "path": "related_work.md",
+      "sha256": "d1ce5110af3ebd91f47e23b14d099dc18a68776a4793f526f22891708452a533"
+    },
+    {
+      "bytes": 3572,
+      "path": "review.md",
+      "sha256": "33f3b655b2dcd560c843c3c2bf2f9d507d00639e413e8e1bf7148998f229f83e"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only with a diagnostic nonlinear public-belief trace-delta test. Local artifacts show trace signal but falsify binary selection and shallow linear residuals, while related work supports learned public-belief/regret objects coupled to CFR correction rather than direct policy replacement.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T221524Z-nonlinear-public-belief-trace-delta-model",
+  "review_id": "20260514T221524Z-nonlinear-public-belief-trace-delta-model",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/2007.13544",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/10056",
+    "https://doi.org/10.1109/TG.2022.3158649",
+    "https://arxiv.org/abs/2006.10410",
+    "https://arxiv.org/abs/2511.08174",
+    "https://doi.org/10.1016/j.artint.2024.104232"
+  ],
+  "written_at": "2026-05-14T22:18:07Z"
+}

@@ -188,6 +188,12 @@ single-row residuals at the current scale.
 - The first linear low-to-later delta failed. A next attempt must be
   materially different: nonlinear public-belief trace model, counterfactual
   advantage target, or broader root-disjoint trace data.
+- A completed methodology review now allows the nonlinear public-belief
+  trace-delta diagnostic as the next bounded step. It is not a promotion:
+  target semantics must be update-aligned, CFR+/resolving remains the
+  correction operator, low and uniform trace baselines are mandatory, and the
+  tracked digest is
+  `docs/research_protocols/poker_review_manifests/20260514T221524Z-nonlinear-public-belief-trace-delta-model.json`.
 
 ## Metric Snapshot
 
