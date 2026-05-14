@@ -93,6 +93,15 @@ the next principled work should return to learned-search/public-belief methods
 or a substantially stronger game-theoretic RL mechanism such as R-NaD-style
 regularized policy dynamics coupled to an evaluation gate.
 
+The first R-NaD-style local primitive also has a falsified control result. A
+native full-deck regularized-policy pilot trained one policy net from sampled
+terminal payoff targets and passed legal-mask/unit checks, but the 2k CUDA
+checkpoint lost badly to the 10k native NFSP reservoir control under 1k paired
+duplicate-swapped H2H (`mean=-0.1122`, lower95 `-0.1402`). This does not reject
+regularized Nash dynamics; it rejects using sparse terminal sampled payoff as
+the policy-update signal. The next version must use a stronger counterfactual
+or search-derived advantage target before any scale-up.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

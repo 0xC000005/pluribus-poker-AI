@@ -57,6 +57,15 @@ public-belief self-play, or Student-of-Games-style guided search. Knobs are
 acceptable only when they isolate one mechanism; benchmark-maxing Slumbot quirks
 is explicitly out of scope.
 
+Native game-theoretic RL control status: NFSP/DQN/reservoir is operational and
+CUDA-capable but has not produced a confidence-positive H2H improvement. The
+first R-NaD-style regularized-policy pilot is also falsified as implemented:
+its sampled terminal-payoff target passed mechanics but lost to the 10k NFSP
+reservoir control by `-0.1122` chips/chip-normalized payoff with lower95
+`-0.1402` over 1,000 paired hands. Treat this as evidence that the policy
+dynamics needs counterfactual/search-derived advantages, not another scale run
+of sparse terminal targets.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Run the native full-deck regularized policy-dynamics pilot."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from poker_ai.research.native_regularized_policy import (  # noqa: E402
+    NativeRegularizedPolicyConfig,
+    evaluate_native_regularized_policy_head_to_head,
+    run_native_regularized_policy_pilot,
+)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--train-episodes", type=int, default=100)
+    parser.add_argument("--eval-games", type=int, default=100)
+    parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--min-buffer-size-to-learn", type=int, default=32)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--policy-step-size", type=float, default=0.35)
+    parser.add_argument("--regularization-strength", type=float, default=0.1)
+    parser.add_argument("--buffer-capacity", type=int, default=20_000)
+    parser.add_argument("--initial-chips", type=int, default=1000)
+    parser.add_argument("--max-steps-per-hand", type=int, default=256)
+    parser.add_argument("--seed", type=int, default=20260514)
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument("--output-json")
+    parser.add_argument("--checkpoint-in")
+    parser.add_argument("--baseline-checkpoint")
+    parser.add_argument("--checkpoint-out")
+    return parser
+
+
+def build_config(argv: list[str] | None = None) -> NativeRegularizedPolicyConfig:
+    args = _parser().parse_args(argv)
+    return NativeRegularizedPolicyConfig(
+        train_episodes=args.train_episodes,
+        eval_games=args.eval_games,
+        hidden_dim=args.hidden_dim,
+        batch_size=args.batch_size,
+        min_buffer_size_to_learn=args.min_buffer_size_to_learn,
+        lr=args.lr,
+        policy_step_size=args.policy_step_size,
+        regularization_strength=args.regularization_strength,
+        buffer_capacity=args.buffer_capacity,
+        initial_chips=args.initial_chips,
+        max_steps_per_hand=args.max_steps_per_hand,
+        seed=args.seed,
+        device=args.device,
+        checkpoint_path=args.checkpoint_out,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    if args.checkpoint_in and args.baseline_checkpoint:
+        metrics = evaluate_native_regularized_policy_head_to_head(
+            args.checkpoint_in,
+            args.baseline_checkpoint,
+            n_games=args.eval_games,
+            device=args.device,
+            seed=args.seed,
+        )
+    else:
+        cfg = build_config(argv)
+        metrics = run_native_regularized_policy_pilot(cfg)
+    text = json.dumps(metrics, indent=2, sort_keys=True)
+    if args.output_json:
+        path = Path(args.output_json)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

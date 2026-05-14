@@ -3220,3 +3220,15 @@
 - Summary: Added `run_regularized_matrix_game_dynamics()` and a rock-paper-scissors test. Starting from skewed row/column policies, the dynamics moves both policies near the uniform equilibrium under a legal-mask-safe update.
 - Metrics file: test/unit/test_game_theoretic_rl.py
 - Key metrics: `{"unit_tests": 9, "game": "rock_paper_scissors", "target_policy": "uniform", "promotion": false}`
+
+## 20260515T002500Z-native-regularized-policy-h2h - failed
+
+- Timestamp: 2026-05-15T00:25:00Z
+- Type: game_theoretic_rl_control
+- Gate: native-regularized-policy-2k-vs-nfsp10k-h2h
+- Hypothesis: A bounded R-NaD-style full-deck policy-dynamics pilot using legal regularized policy targets should beat the native NFSP reservoir control before any larger scale-up.
+- Failure class: strategy_quality
+- Related work: R-NaD motivates regularized policy dynamics, but DeepNash-style success depends on a meaningful policy-gradient/counterfactual signal. This pilot only used sparse sampled terminal payoff as the action advantage, so the gate tests plumbing and the weakest target, not the full method.
+- Summary: Added `poker_ai.research.native_regularized_policy` and `scripts/run_native_regularized_policy_pilot.py`. Unit tests and broad fast tests passed, and the 2,000-episode hidden-512 CUDA run produced a checkpoint. The paired 1,000-hand duplicate-swapped H2H against the 10k native NFSP reservoir checkpoint was clearly negative, so this target is falsified and should not be scaled. The next R-NaD-style attempt needs counterfactual or search-derived advantages rather than sampled terminal payoff.
+- Metrics file: autoresearch-session/native_regularized_policy_cuda_h512_2k_seed20260521.json and autoresearch-session/native_regularized_policy_2k_vs_nfsp10k_h2h_1k_seed20260522.json
+- Key metrics: `{"train_episodes": 2000, "episodes_per_second": 98.9258, "train_steps_per_second": 265.9621, "random_eval_mean_payoff": 0.019862, "h2h_mean_candidate_payoff": -0.112163, "h2h_lower95_candidate_payoff": -0.140237, "h2h_upper95_candidate_payoff": -0.084089, "promotion": false}`
