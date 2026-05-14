@@ -151,6 +151,15 @@ latency about `350 ms`. This is better than the failed learned warm-start
 checkpoint and all fixed solver-update swaps. Future learned-search candidates
 must beat this 10-iteration baseline, not just 5-iteration CFR+.
 
+Budget-frontier status: `scripts/eval_cfr_budget_frontier.py` is now the
+canonical diagnostic for CFR budget claims. It solves the teacher once per root
+and each requested budget once, so it avoids the candidate-equals-baseline
+duplication in the solver-update A/B script. On the fixed 64-root holdout,
+CFR5 measured `0.5254` L1, `0.2602` KL, `0.7656` action agreement, and
+`185.9 ms`; CFR10 measured `0.3630` L1, `0.1251` KL, `0.8125` action
+agreement, and `345.2 ms` (`1.8569x` CFR5 latency). The script emits
+`promotion=false` and is now a protected evaluation surface.
+
 Resolver backend status: forcing the current `torch-cuda` street-solver backend
 is still not an acceleration path for fixed-state solving. A fresh four-case
 CFR10 smoke passed legality but averaged `1219 ms` on `torch-cuda` versus
@@ -260,6 +269,9 @@ CPU before use in autoresearch or Slumbot play.
   Do not make it a direct policy target without a new mechanism review.
 - Uniform 10-iteration CFR+ is the strongest current cheap resolver baseline;
   use it in learned-search comparisons and latency tradeoff claims.
+- Use `scripts/eval_cfr_budget_frontier.py` for future budget comparisons
+  instead of reusing a solver-update gate with identical candidate/baseline
+  updates.
 - The existing `torch-cuda` resolver backend is slower than CPU on the latest
   CFR10 fixed-state smoke (`1219 ms` versus `743 ms` over four cases). Treat
   it as a regression benchmark, not the default compute path.

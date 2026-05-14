@@ -214,6 +214,14 @@ agreement to `0.8125`, with mean latency about `350 ms` versus `182 ms` for
 model, or update-rule candidate must beat this 10-iteration baseline on both
 decision quality and latency-adjusted value before it is worth scaling.
 
+The budget baseline now has a dedicated evaluator. Use
+`scripts/eval_cfr_budget_frontier.py` for future CFR budget claims because it
+solves the teacher once per root and each requested budget once, then reports
+quality and latency without pretending this is a promotion gate. The first
+64-root frontier confirms the current target: CFR10 reaches `0.3630` L1 and
+`0.1251` KL at `1.8569x` CFR5 latency. A learned or fused method must improve
+this decision-quality-per-compute frontier, not just beat CFR5.
+
 The current `torch-cuda` resolver backend is not the answer to the GPU-use
 concern. A fresh CFR10 fixed-state smoke over the four built-in public states
 averaged `1219 ms` with `torch-cuda` versus `743 ms` on CPU. This means the

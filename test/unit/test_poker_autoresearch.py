@@ -142,6 +142,7 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "methodology_review_required" in goal["review_policy"]["required_for"]
     assert goal["knob_policy"]["max_active_knobs"] == 5
     assert "scripts/play_slumbot.py" in goal["objective_alignment_policy"]["protected_surfaces"]
+    assert "scripts/eval_cfr_budget_frontier.py" in goal["objective_alignment_policy"]["protected_surfaces"]
     assert goal["review_policy"]["requires_mechanism_review"] is True
     assert goal["review_policy"]["requires_review_manifest"] is True
     assert goal["synthesis_policy"]["experiments_per_synthesis"] == 5

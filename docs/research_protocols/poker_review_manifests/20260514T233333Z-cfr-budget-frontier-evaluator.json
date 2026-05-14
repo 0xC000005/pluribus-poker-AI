@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1173,
+      "path": "benchmark_audit.md",
+      "sha256": "4e2cd7653cab9618080a274ea471dffc6dea9dd4f5e8583de62382d2505788c8"
+    },
+    {
+      "bytes": 452,
+      "path": "decision.json",
+      "sha256": "272320b65cd9c8733fa9256dd9c2475a6ee55a60a38f1d245156016449dfd7fe"
+    },
+    {
+      "bytes": 1156,
+      "path": "mechanism_review.md",
+      "sha256": "66c93de5b705cfff94a60067092939fe1ba09de462b650dad865444f3597e00f"
+    },
+    {
+      "bytes": 1733,
+      "path": "related_work.md",
+      "sha256": "ce6ccff07c7a7d4f8fc02265d02f8a7691a54e42f27f738f0527e1e94eb19be5"
+    },
+    {
+      "bytes": 1334,
+      "path": "review.md",
+      "sha256": "79d6fc77ef358b0e9e8706966e38066714964b981ecd1b21d8ebb6ad1c08bff8"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The evaluator is diagnostic-only, has focused tests, records a root-disjoint CFR5/CFR10 versus CFR25 frontier without duplicate baseline solves, and is now protected by objective audit.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T233333Z-cfr-budget-frontier-evaluator",
+  "review_id": "20260514T233333Z-cfr-budget-frontier-evaluator",
+  "sources": [
+    "https://papers.nips.cc/paper_files/paper/2007/file/08d98638c6fcd194a4b1e6992063e944-Paper.pdf",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-14T23:35:09Z"
+}

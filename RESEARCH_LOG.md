@@ -3449,3 +3449,26 @@
 - Summary: Ran the fixed public-state resolver benchmark with `solver_iterations=10` for both CPU and `torch-cuda`. Both backends passed legality on the four built-in fixed cases, but `torch-cuda` was slower than CPU. This supports the existing finding that the current solver recurrence is dominated by Python tree walking, small tensor operations, and transfer overhead rather than large fused GPU work.
 - Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_backend_cpu_iter10_smoke8_seed20260667.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_backend_torchcuda_iter10_smoke8_seed20260667.json
 - Key metrics: `{"n_cases": 4, "cpu_avg_solver_latency_ms": 742.94675, "torchcuda_avg_solver_latency_ms": 1219.0915, "torchcuda_to_cpu_latency_ratio": 1.6409, "promotion": false}`
+
+## 20260514T233505Z-methodology-review-for-cfr-budget-frontier-evaluator-should - passed
+
+- Timestamp: 2026-05-14T23:35:05Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T233333Z-cfr-budget-frontier-evaluator
+- Hypothesis: Methodology review for CFR budget frontier evaluator should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260514T233333Z-cfr-budget-frontier-evaluator passed.
+- Metrics file: autoresearch-session/poker_runs/20260514T233505Z-methodology-review-for-cfr-budget-frontier-evaluator-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260514T233333Z-cfr-budget-frontier-evaluator", "passed": true}`
+
+## 20260514T234000Z-cfr-budget-frontier-evaluator - passed
+
+- Timestamp: 2026-05-14T23:40:00Z
+- Type: resolver_budget_baseline
+- Gate: cfr-budget-frontier-5-10-vs-25-holdout64
+- Hypothesis: A dedicated single-solve budget frontier should give cleaner CFR5/CFR10-vs-CFR25 quality and latency evidence than reusing a solver-update A/B with identical candidate and baseline updates.
+- Failure class: none
+- Related work: CFR, DeepStack, and ReBeL support judging learned/search methods at the public decision boundary; sources and review digests are recorded in `docs/research_protocols/poker_review_manifests/20260514T233333Z-cfr-budget-frontier-evaluator.json`.
+- Summary: Added `scripts/eval_cfr_budget_frontier.py`, protected it in the objective-audit surface list, and added focused tests for summary semantics and protected-surface registration. The 64-root holdout confirms CFR10 as the current cheap-search frontier and records CFR5/CFR10 latency directly without duplicate baseline solves. This is diagnostic-only and emits `promotion=false`.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_5_10_vs25_holdout64_seed20260668.json
+- Key metrics: `{"n_evaluated": 64, "cfr5_l1": 0.52537418, "cfr5_kl": 0.2602323, "cfr5_action_agreement": 0.765625, "cfr5_latency_ms": 185.89682813, "cfr10_l1": 0.36302507, "cfr10_kl": 0.12510618, "cfr10_action_agreement": 0.8125, "cfr10_latency_ms": 345.1984375, "cfr10_to_cfr5_latency_ratio": 1.8569356, "max_illegal_mass": 0.0, "promotion": false}`
