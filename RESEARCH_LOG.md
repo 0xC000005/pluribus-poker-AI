@@ -3368,3 +3368,15 @@
 - Summary: Collected denser one-cut impact labels from the same root-disjoint successor pool using CUDA for model inference and CPU exact solving. The train slice produced `127` cut labels; the holdout slice produced `117`. Fitting the same structural predictor still failed: holdout Pearson was negative, top-quintile recall was weak, and the median abstention rule barely separated selected from rejected cuts. This falsifies "more static cut labels" as the missing mechanism. The next search/value step should collect dynamic CFR reach/regret traces or train directly on root action-drift residuals inside the search loop.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_train160_seed20260659.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_holdout160_seed20260659.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_cut_impact_predictor_dense_seed20260659.json
 - Key metrics: `{"train_cuts": 127, "holdout_cuts": 117, "train_mean_l1": 0.267095, "holdout_mean_l1": 0.463318, "holdout_pearson": -0.04411, "holdout_top_quintile_recall": 0.208333, "selected_mean_l1": 0.451385, "rejected_mean_l1": 0.490167, "promotion": false}`
+
+## 20260514T224141Z-regret-policy-warm-start-resolver-eval - failed
+
+- Timestamp: 2026-05-14T22:41:41Z
+- Type: learned_search_diagnostic
+- Gate: regret-policy-field-warm-start-holdout64
+- Hypothesis: A trained regret/policy-field checkpoint that consumes low-solver state should improve low-budget CFR+ decisions when its predicted fields are seeded into the selected public node.
+- Failure class: search_target_alignment
+- Related work: This continues the reviewed warm-start resolver gate: DeepStack/ReBeL-style learned search is useful only if the learned object improves downstream resolving, not just offline policy fit.
+- Summary: Added `scripts/eval_regret_policy_warm_start.py` and a unit test for selected-node field seeding. The 64-root holdout evaluator used CUDA for model inference and CPU CFR for low/reference/warm solves. The checkpoint moved mean L1 in the right direction and greatly reduced all-in probability gap, but it failed KL, top-action agreement, and latency gates. Do not promote or scale this checkpoint; the next target needs a more action-aligned counterfactual correction and a lower-latency inference boundary.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_solver_holdout64_seed20260663.json
+- Key metrics: `{"mean_low_l1": 0.52537416, "mean_warm_l1": 0.50283383, "mean_low_kl": 0.26023225, "mean_warm_kl": 0.26876749, "low_action_agreement": 0.765625, "warm_action_agreement": 0.703125, "low_allin_prob_gap": 0.07986568, "warm_allin_prob_gap": 0.01166927, "warm_to_low_latency_ratio": 7.66327511, "improved_l1_count": 34, "worse_l1_count": 30, "promotion": false}`

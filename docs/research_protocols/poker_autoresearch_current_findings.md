@@ -49,6 +49,16 @@ direct predictor improved neither policy L1 nor KL over the cheap low solver
 also consumed the low solver's field was better but still failed
 (`0.7166`/`0.4641`). Do not integrate this checkpoint into the resolver.
 
+Resolver-in-the-loop learner status: also failed, with one useful partial
+signal. `scripts/eval_regret_policy_warm_start.py` now evaluates trained
+regret/policy-field checkpoints by seeding the selected public node and running
+the same low-budget solver. The low-state checkpoint on the 64-root holdout
+reduced L1 from `0.5254` to `0.5028` and reduced all-in probability gap from
+`0.0799` to `0.0117`, but KL worsened (`0.2688` vs `0.2602`), top-action
+agreement fell (`0.7031` vs `0.7656`), and latency was `7.66x` vanilla
+low-budget. This is diagnostic evidence that the field interface can affect
+search, not a promotable method.
+
 Objective refinement: the next research loop should attack the root
 target/search-alignment problem, not surface metrics. Two allowed mainlines are:
 decision-focused learned-search correction targets, and pure game-theoretic RL
@@ -205,6 +215,9 @@ single-row residuals at the current scale.
   problem: enriched MLP final L1 `0.4983` beat low `0.5202` but still lost to
   uniform `0.3119`. Context alone is insufficient; the target must move closer
   to counterfactual regret/advantage updates or be evaluated inside a resolver.
+- Direct resolver evaluation for trained regret/policy warm-start checkpoints is
+  now available. The first low-state checkpoint improved mean L1 only slightly
+  and failed KL/action/latency gates, so it remains a mechanism diagnostic.
 
 ## Metric Snapshot
 

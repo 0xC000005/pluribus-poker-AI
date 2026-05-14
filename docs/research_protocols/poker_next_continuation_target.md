@@ -175,6 +175,18 @@ policy-delta target is still not the right learned object. The next step should
 target counterfactual advantages/regret fields or test predicted fields inside
 an actual resolver update.
 
+The first direct resolver-in-the-loop test of the trained regret/policy-field
+checkpoint is also non-promotable. On the same 64 root-disjoint holdout roots,
+the low-state warm-start checkpoint improved mean L1 slightly (`0.5028` vs
+`0.5254`) and reduced all-in probability gap (`0.0117` vs `0.0799`), but KL
+worsened (`0.2688` vs `0.2602`), top-action agreement fell (`0.7031` vs
+`0.7656`), and warm-start latency was `7.66x` vanilla low-budget CFR. This
+confirms that predicted fields can sometimes move the root policy in the right
+direction, but the current per-hand supervised field target is not aligned
+enough with the action decision and is too slow. The next step should not be a
+bigger MLP; it should learn a selective or counterfactual correction that is
+evaluated by action-quality improvement per unit of extra compute.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 
