@@ -3232,3 +3232,15 @@
 - Summary: Added `poker_ai.research.native_regularized_policy` and `scripts/run_native_regularized_policy_pilot.py`. Unit tests and broad fast tests passed, and the 2,000-episode hidden-512 CUDA run produced a checkpoint. The paired 1,000-hand duplicate-swapped H2H against the 10k native NFSP reservoir checkpoint was clearly negative, so this target is falsified and should not be scaled. The next R-NaD-style attempt needs counterfactual or search-derived advantages rather than sampled terminal payoff.
 - Metrics file: autoresearch-session/native_regularized_policy_cuda_h512_2k_seed20260521.json and autoresearch-session/native_regularized_policy_2k_vs_nfsp10k_h2h_1k_seed20260522.json
 - Key metrics: `{"train_episodes": 2000, "episodes_per_second": 98.9258, "train_steps_per_second": 265.9621, "random_eval_mean_payoff": 0.019862, "h2h_mean_candidate_payoff": -0.112163, "h2h_lower95_candidate_payoff": -0.140237, "h2h_upper95_candidate_payoff": -0.084089, "promotion": false}`
+
+## 20260515T004500Z-dense-cut-impact-predictor - failed
+
+- Timestamp: 2026-05-15T00:45:00Z
+- Type: search_consistency_diagnostic
+- Gate: dense-root-disjoint-cut-impact-predictor
+- Hypothesis: The earlier structural cut-impact gate may have failed because it had only `52` train and `23` holdout one-cut labels; denser root-disjoint impact labels should let static cut/root metadata predict which learned successor cuts are safe.
+- Failure class: search_target_alignment
+- Related work: Safe depth-limited/subgame solving requires continuation errors to preserve root strategy, not merely leaf-value MAE. This diagnostic tests whether static metadata is enough to predict root policy impact before moving to more complex dynamic search traces.
+- Summary: Collected denser one-cut impact labels from the same root-disjoint successor pool using CUDA for model inference and CPU exact solving. The train slice produced `127` cut labels; the holdout slice produced `117`. Fitting the same structural predictor still failed: holdout Pearson was negative, top-quintile recall was weak, and the median abstention rule barely separated selected from rejected cuts. This falsifies "more static cut labels" as the missing mechanism. The next search/value step should collect dynamic CFR reach/regret traces or train directly on root action-drift residuals inside the search loop.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_train160_seed20260659.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_gru_single_cut_impact_holdout160_seed20260659.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/search_consistency_rootdisjoint_dynamic_highbet_cut_impact_predictor_dense_seed20260659.json
+- Key metrics: `{"train_cuts": 127, "holdout_cuts": 117, "train_mean_l1": 0.267095, "holdout_mean_l1": 0.463318, "holdout_pearson": -0.04411, "holdout_top_quintile_recall": 0.208333, "selected_mean_l1": 0.451385, "rejected_mean_l1": 0.490167, "promotion": false}`

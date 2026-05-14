@@ -504,3 +504,12 @@ negative held-out correlation (`r=-0.1752`) and selected higher-drift cuts than
 it rejected. This argues against threshold hacking. The next continuation work
 should collect denser paired interventions across public roots, or optimize a
 search-consistency target that directly penalizes root action drift.
+
+The denser-intervention check now also failed. Expanding the same root-disjoint
+one-cut audit to `127` train cuts and `117` holdout cuts still left the
+structural predictor with negative holdout correlation (`r=-0.0441`) and only a
+weak abstention separation (`0.4514` selected mean L1 versus `0.4902` rejected).
+More static cut/root metadata is therefore not the root fix. The next target
+should move inside the search loop: dynamic CFR reach/regret traces,
+root-drift residual targets, or an update that learns which continuation
+errors change the root policy while search is running.

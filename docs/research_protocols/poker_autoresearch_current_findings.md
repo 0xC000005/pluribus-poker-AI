@@ -66,6 +66,13 @@ reservoir control by `-0.1122` chips/chip-normalized payoff with lower95
 dynamics needs counterfactual/search-derived advantages, not another scale run
 of sparse terminal targets.
 
+Dense cut-impact status: collecting more static one-cut labels did not rescue
+the learned successor-cut fallback gate. The expanded root-disjoint audit
+(`127` train cuts, `117` holdout cuts) still had negative holdout correlation
+between predicted and actual root action drift (`r=-0.0441`). Static metadata
+is not enough; the next search/value target needs dynamic CFR reach/regret
+state or a root-drift residual objective.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
