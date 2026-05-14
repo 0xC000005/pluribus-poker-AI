@@ -132,6 +132,14 @@ switch is too lossy. The next continuation target should predict a residual
 correction to the low solver's strategy/regret field, or learn a smooth compute
 allocation, and continue to report uniform-budget baselines.
 
+The first shallow residual did not work either. A fixed linear trace-to-final
+policy map was worse than both low and uniform traces (`0.7235` L1 vs `0.5202`
+low and `0.3119` uniform). This rules out the simplest residual shortcut. The
+next principled path is not another linear probe; it should either train a
+nonlinear public-belief trace model with root-disjoint data and uniform-budget
+baselines, or step back to a counterfactual advantage target that matches how
+CFR updates actually move the average strategy.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

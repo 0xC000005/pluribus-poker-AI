@@ -55,6 +55,20 @@
 - Metrics: selected `7/32` roots. Adaptive compute averaged `10.15625` trace iterations versus uniform `11.0`. Adaptive improved low L1 (`0.34559891` vs `0.52017486`) and top-match rate (`0.84375` vs `0.78125`), but failed against the uniform budget: uniform L1 was lower (`0.31188308`) with the same top-match rate (`0.84375`).
 - Decision: do not promote hard top-quintile uncertainty escalation. The trace signal is not yet a search policy; next work should learn a correction/residual target or a smoother budget allocation and keep comparing against uniform compute.
 
+## 20260514T222032Z-cfr-trace-policy-residual - failed
+
+- Timestamp: 2026-05-14T22:20:32Z
+- Type: diagnostic
+- Gate: trace-to-final policy residual vs low/uniform traces
+- Hypothesis: a fixed linear map from iteration-5 regret/strategy trace state to the final average strategy should beat both the low trace and the uniform iteration-10 trace on root-disjoint holdout roots.
+- Failure class: search_quality
+- Summary: Added `scripts/train_cfr_trace_policy_residual.py` as a shallow negative-control correction target. It trains on the 32-root train trace and evaluates on the 32-root holdout trace without changing gameplay code.
+- Evidence:
+  - Residual metrics: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_policy_residual_train32_holdout32_seed20260660.json`
+  - Test: `uv run pytest -q test/unit/test_cfr_trace_policy_residual.py` -> `1 passed`.
+- Metrics: predicted policy L1 was `0.72348358`, worse than low trace L1 `0.52017487` and uniform trace L1 `0.31188308`. Predicted top-match rate was `0.625`, below low `0.78125` and uniform `0.84375`.
+- Decision: abandon the shallow linear residual as a promotion path. This supports moving to a more principled nonlinear/counterfactual target only if it is evaluated against the same low and uniform baselines.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z

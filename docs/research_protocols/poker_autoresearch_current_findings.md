@@ -97,6 +97,12 @@ from `0.5202` to `0.3456`, but a uniform comparable budget at trace iteration
 there, but hard top-quintile escalation is not better than simply running more
 CFR everywhere at this scale.
 
+Trace residual status: a shallow linear correction from iteration-5 trace state
+to final policy failed as a negative control. Holdout predicted-policy L1 was
+`0.7235`, worse than low trace `0.5202` and uniform trace `0.3119`; top-match
+rate fell to `0.6250`. The trace signal is therefore not linearly reusable as a
+policy replacement on 32 roots.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -162,6 +168,9 @@ CFR everywhere at this scale.
   baseline. The next trace-derived step should use the signal as a learned
   residual/correction target or a continuous budget policy, not as a binary
   top-quintile switch.
+- A shallow linear policy residual also failed. Future trace-derived models
+  need a stronger counterfactual or nonlinear target, and must keep low and
+  uniform trace baselines in the report.
 
 ## Metric Snapshot
 
