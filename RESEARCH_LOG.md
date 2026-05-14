@@ -3184,3 +3184,15 @@
 - Summary: Extended `poker_ai.research.game_theoretic_rl` so `rnad`, `rebel`, and `student_of_games` are mainline game-theoretic candidates rather than generic RL baselines. This does not implement those algorithms; it prevents the next workflow step from collapsing back into PPO/DQN-style controls.
 - Metrics file: test/unit/test_game_theoretic_rl.py
 - Key metrics: `{"profiles_added": ["rnad", "rebel", "student_of_games"], "rnad_allowed_role": "mainline_candidate", "promotion": false}`
+
+## 20260514T235500Z-rnad-methodology-review - passed
+
+- Timestamp: 2026-05-14T23:55:00Z
+- Type: methodology_review
+- Gate: methodology-review-20260514T210513Z-r-nad-style-native-policy-dynamics
+- Hypothesis: R-NaD-style native policy dynamics should be reviewed before any trainer implementation because native NFSP failed confidence-positive H2H scaling.
+- Failure class: none
+- Related work: R-NaD/DeepNash motivates regularized policy dynamics; ReBeL and Student of Games keep the stronger poker target anchored to public-belief/search coupling. Sources: https://arxiv.org/abs/2206.15378, https://arxiv.org/abs/2007.13544, and https://arxiv.org/abs/2112.03178.
+- Summary: Completed the review bundle with independent verification, related work, mechanism review, benchmark-hacking audit, and a decision. The decision is `proceed`, but only for a bounded prototype: first validate a legal-mask-safe R-NaD-style policy-dynamics primitive, then native H2H against the NFSP reservoir control, then resolver/public-belief gates before any Slumbot spend.
+- Metrics file: autoresearch-session/poker_reviews/20260514T210513Z-r-nad-style-native-policy-dynamics
+- Key metrics: `{"decision": "proceed", "bounded": true, "requires_native_h2h_positive_lower95": true, "promotion": false}`
