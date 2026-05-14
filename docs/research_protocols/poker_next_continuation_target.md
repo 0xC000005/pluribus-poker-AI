@@ -114,6 +114,16 @@ then test whether that predictor improves low-budget resolving against the
 higher-budget teacher. Do not treat the trace script itself as a gameplay
 method.
 
+The first version of that predictor found usable signal. On a fixed 32-root
+train / 32-root holdout split, iteration `5` trace features improved holdout
+L1 prediction over the train-mean baseline (`0.2214` MAE vs `0.2802`) with
+Pearson `0.4283`; predicted-high roots had actual L1 `0.7981` versus `0.4424`
+for predicted-low roots. This is exactly the kind of mechanism-level evidence
+that was missing from static cut metadata. The next step should be a selective
+search budget gate: use early trace features to decide where to spend extra
+CFR iterations, and compare equal or explicitly reported compute budgets
+against the 25-iteration teacher on root-disjoint states.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

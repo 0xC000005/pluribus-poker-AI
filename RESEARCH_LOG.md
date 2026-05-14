@@ -25,6 +25,22 @@
 - Metrics: smoke traced `4` cases and `100` records with zero skips. Mean L1 to final strategy moved from `0.97625321` at iteration `0` to `0.02525361` at iteration `23`, with final iteration `24` at `1e-08`; top-action match rate was `0.81`.
 - Decision: keep as diagnostic infrastructure. The next promotable hypothesis must train or evaluate a trace-derived correction on root-disjoint resolver gates before any Slumbot spend.
 
+## 20260514T220158Z-cfr-trace-predictor-diagnostic - passed
+
+- Timestamp: 2026-05-14T22:01:58Z
+- Type: diagnostic
+- Gate: root-disjoint trace predictiveness
+- Hypothesis: fixed early-iteration CFR trace features should predict which public roots remain far from the 25-iteration final strategy, giving a principled target for selective low-budget search correction.
+- Failure class: search_quality
+- Summary: Collected 32 train roots and 32 holdout roots with 25-iteration trace records, then fit a fixed ridge predictor over entropy, top-action margin, regret/strategy disagreement, masses, reach, legal-action count, and street. This is not a promotion gate; it tests whether dynamic solver state has signal beyond static cut metadata.
+- Evidence:
+  - Train trace: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_root_trace_train32_seed20260660.json`
+  - Holdout trace: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_root_trace_holdout32_seed20260660.json`
+  - Predictor metrics: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_trace_predictor_train32_holdout32_seed20260660.json`
+  - Test: `uv run pytest -q test/unit/test_cfr_trace_predictor.py` -> `1 passed`.
+- Metrics: both trace splits scanned `32` cases, skipped `0`, and produced `800` records. Best iteration was `5`: holdout L1 mean `0.52017486`, ridge MAE `0.22140209` vs train-mean MAE `0.28024782`, Pearson `0.42826531`, top-quintile recall `0.28571429`, and predicted-high actual L1 `0.79806154` vs predicted-low `0.4423666`.
+- Decision: dynamic trace features have enough signal to justify one bounded next step: build a root-disjoint trace-derived uncertainty/correction gate. Do not treat this as sufficient for Slumbot spend or policy promotion.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z

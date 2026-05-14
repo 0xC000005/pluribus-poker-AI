@@ -82,6 +82,14 @@ that fell to `1e-08` at the final iteration. This is a diagnostic foundation,
 not a strength result; trace-derived learning still needs a root-disjoint
 teacher gate.
 
+Trace predictiveness status: a fixed 32-root train / 32-root holdout diagnostic
+found a modest but real early-state signal. At iteration `5`, a ridge predictor
+over trace entropy, margins, regret/strategy disagreement, masses, reach, legal
+count, and street improved holdout MAE from a train-mean constant `0.2802` to
+`0.2214` with Pearson `0.4283`. Predicted-high cases had actual L1 `0.7981`
+versus `0.4424` for the rest. This supports a trace-derived uncertainty or
+selective-correction gate, not a direct solver replacement.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -139,6 +147,10 @@ teacher gate.
   to test whether iteration-level regret/strategy state predicts where
   low-budget resolving is wrong, not to bypass resolver gates or select
   Slumbot-specific behavior.
+- A first trace predictor passed as a diagnostic at iteration `5`; the next
+  bounded step should connect this signal to a decision rule that either runs
+  more CFR iterations on uncertain roots or trains a correction target, then
+  compares against the same higher-budget teacher.
 
 ## Metric Snapshot
 
