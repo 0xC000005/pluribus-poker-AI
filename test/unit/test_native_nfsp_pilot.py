@@ -4,6 +4,7 @@ import torch
 from poker_ai.games.full_deck.state import N_ACTIONS, new_game
 from poker_ai.research.native_nfsp import (
     NativeNFSPConfig,
+    evaluate_native_nfsp_checkpoint,
     get_legal_mask,
     masked_uniform,
     run_native_nfsp_pilot,
@@ -98,6 +99,35 @@ def test_run_native_nfsp_pilot_writes_checkpoint(tmp_path):
     assert payload["num_actions"] == 9
     assert "avg_net_state_dict" in payload
     assert "q_net_state_dict" in payload
+
+
+def test_evaluate_native_nfsp_checkpoint_roundtrip(tmp_path):
+    checkpoint_path = tmp_path / "native_nfsp.pt"
+    run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=777,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+
+    metrics = evaluate_native_nfsp_checkpoint(
+        str(checkpoint_path),
+        eval_games=2,
+        device="cpu",
+        seed=778,
+    )
+
+    assert metrics["algorithm"] == "native_nfsp_mc"
+    assert metrics["source_checkpoint"] == str(checkpoint_path)
+    assert metrics["eval_games"] == 2
+    assert metrics["resolved_device"] == "cpu"
+    assert metrics["promotion"] is False
 
 
 def test_native_nfsp_cli_builds_config_from_args():

@@ -18,7 +18,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from poker_ai.research.native_nfsp import NativeNFSPConfig, run_native_nfsp_pilot  # noqa: E402
+from poker_ai.research.native_nfsp import (  # noqa: E402
+    NativeNFSPConfig,
+    evaluate_native_nfsp_checkpoint,
+    run_native_nfsp_pilot,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -36,6 +40,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=20260514)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--output-json")
+    parser.add_argument("--checkpoint-in")
     parser.add_argument("--checkpoint-out")
     return parser
 
@@ -60,10 +65,18 @@ def build_config(argv: list[str] | None = None) -> NativeNFSPConfig:
 
 
 def main(argv: list[str] | None = None) -> int:
-    cfg = build_config(argv)
-    metrics = run_native_nfsp_pilot(cfg)
-    text = json.dumps(metrics, indent=2, sort_keys=True)
     args = _parser().parse_args(argv)
+    if args.checkpoint_in:
+        metrics = evaluate_native_nfsp_checkpoint(
+            args.checkpoint_in,
+            eval_games=args.eval_games,
+            device=args.device,
+            seed=args.seed,
+        )
+    else:
+        cfg = build_config(argv)
+        metrics = run_native_nfsp_pilot(cfg)
+    text = json.dumps(metrics, indent=2, sort_keys=True)
     if args.output_json:
         path = Path(args.output_json)
         path.parent.mkdir(parents=True, exist_ok=True)

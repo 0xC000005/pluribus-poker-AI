@@ -3064,3 +3064,15 @@
 - Summary: Added `--checkpoint-out` to `scripts/run_native_nfsp_pilot.py` and checkpoint serialization for both Q and average-policy networks, feature/action counts, config, and metrics. A 2,000-episode hidden-512 CUDA pilot saved a checkpoint and completed with positive random-opponent mean payoff, but random-opponent payoff is not strategy-quality evidence.
 - Metrics file: autoresearch-session/native_nfsp_episode_mode_cuda_h512_2k_seed20260514.json and models/native_nfsp_episode_mode_h512_2k_seed20260514.pt
 - Key metrics: `{"train_episodes": 2000, "eval_games": 500, "device": "cuda", "episodes_per_second": 76.5466, "train_steps_per_second": 275.7208, "mean_eval_payoff_p0_vs_random": 0.085384, "checkpoint_saved": true, "promotion": false}`
+
+## 20260514T212500Z-native-nfsp-checkpoint-eval - passed
+
+- Timestamp: 2026-05-14T21:25:00Z
+- Type: artifact_reuse_diagnostic
+- Gate: native-nfsp-checkpoint-load-eval
+- Hypothesis: A saved native NFSP checkpoint should be loadable in a fresh process and evaluate with the same full-deck 9-action contract.
+- Failure class: none
+- Related work: Average-policy fictitious self-play only becomes comparable to the rest of the repo when the learned average policy is an artifact that can be evaluated by downstream gates, not just an in-memory training trace.
+- Summary: Added `evaluate_native_nfsp_checkpoint()` and `--checkpoint-in` to the native pilot CLI. The saved 2,000-episode CUDA checkpoint loaded and evaluated successfully against the random opponent. This verifies artifact reuse but remains non-promotional.
+- Metrics file: autoresearch-session/native_nfsp_episode_mode_cuda_h512_2k_eval_seed20260515.json
+- Key metrics: `{"source_checkpoint": "models/native_nfsp_episode_mode_h512_2k_seed20260514.pt", "eval_games": 500, "eval_games_per_second": 112.9011, "mean_eval_payoff_p0_vs_random": 0.103344, "num_actions": 9, "promotion": false}`

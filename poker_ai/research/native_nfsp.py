@@ -250,14 +250,14 @@ def _play_hand(
             probs = masked_uniform(legal_mask)
             best_response_mode = False
         else:
-            q_values = _q_values(q_net, features, device)
-            br_probs = epsilon_greedy_distribution(
-                q_values,
-                legal_mask,
-                epsilon=cfg.epsilon if training else 0.0,
-            )
             avg_probs = _network_probs(avg_net, features, legal_mask, device)
             if training:
+                q_values = _q_values(q_net, features, device)
+                br_probs = epsilon_greedy_distribution(
+                    q_values,
+                    legal_mask,
+                    epsilon=cfg.epsilon,
+                )
                 best_response_mode = episode_best_response_modes[player]
                 probs = br_probs if best_response_mode else avg_probs
             else:
@@ -391,3 +391,78 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
             path,
         )
     return metrics
+
+
+def evaluate_native_nfsp_checkpoint(
+    checkpoint_path: str,
+    *,
+    eval_games: int = 100,
+    device: str = "auto",
+    seed: int = 20260514,
+) -> dict:
+    """Evaluate a saved native NFSP average policy against a random player."""
+    device_info = resolve_device(device)
+    resolved_device = torch.device(device_info["resolved_device"])
+    payload = torch.load(checkpoint_path, map_location=resolved_device, weights_only=False)
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("checkpoint action count does not match native full-deck action contract")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("checkpoint feature count does not match native full-deck feature contract")
+
+    config_payload = payload.get("config", {})
+    hidden_dim = int(payload.get("hidden_dim", config_payload.get("hidden_dim", 64)))
+    cfg = NativeNFSPConfig(
+        train_episodes=0,
+        eval_games=int(eval_games),
+        hidden_dim=hidden_dim,
+        initial_chips=int(config_payload.get("initial_chips", 1000)),
+        max_steps_per_hand=int(config_payload.get("max_steps_per_hand", 256)),
+        seed=int(seed),
+        device=device,
+    )
+    random.seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    torch.manual_seed(cfg.seed)
+    rng = np.random.default_rng(cfg.seed)
+
+    q_net = _MLP(hidden_dim).to(resolved_device)
+    avg_net = _MLP(hidden_dim).to(resolved_device)
+    q_net.load_state_dict(payload["q_net_state_dict"])
+    avg_net.load_state_dict(payload["avg_net_state_dict"])
+    q_net.eval()
+    avg_net.eval()
+
+    eval_start = time.perf_counter()
+    eval_payoffs = []
+    eval_steps = 0
+    for _ in range(int(eval_games)):
+        _, payouts, steps = _play_hand(
+            q_net,
+            avg_net,
+            cfg,
+            rng,
+            resolved_device,
+            training=False,
+            opponent_random=True,
+        )
+        eval_payoffs.append(payouts[0])
+        eval_steps += steps
+    if resolved_device.type == "cuda":
+        torch.cuda.synchronize()
+    eval_seconds = time.perf_counter() - eval_start
+
+    return {
+        "algorithm": str(payload.get("algorithm", "native_nfsp_mc")),
+        "role": "native_game_theoretic_rl_checkpoint_eval",
+        "environment": str(payload.get("environment", "poker_ai:full_deck_hu_nlhe")),
+        "source_checkpoint": str(checkpoint_path),
+        **device_info,
+        "num_actions": N_ACTIONS,
+        "eval_games": int(eval_games),
+        "eval_steps": int(eval_steps),
+        "eval_seconds": float(eval_seconds),
+        "eval_games_per_second": float(eval_games / max(eval_seconds, 1e-9)),
+        "eval_steps_per_second": float(eval_steps / max(eval_seconds, 1e-9)),
+        "mean_eval_payoff_p0_vs_random": float(np.mean(eval_payoffs)) if eval_payoffs else 0.0,
+        "promotion": False,
+    }
