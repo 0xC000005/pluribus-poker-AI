@@ -206,6 +206,14 @@ worse than both the low average strategy and a uniform iteration-10 baseline
 (`0.4745`) but still lost to uniform. Do not train a raw one-step advantage
 imitator; use the trace as input to a smoother regret-update or budget policy.
 
+The strongest cheap baseline is now plain extra CFR, not a learned shortcut.
+Running uniform 10-iteration CFR+ against the same 25-iteration teacher on the
+64 held-out roots improved mean L1 to `0.3630`, KL to `0.1251`, and top-action
+agreement to `0.8125`, with mean latency about `350 ms` versus `182 ms` for
+5-iteration CFR+ and `859 ms` for the teacher. Any learned warm start, trace
+model, or update-rule candidate must beat this 10-iteration baseline on both
+decision quality and latency-adjusted value before it is worth scaling.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

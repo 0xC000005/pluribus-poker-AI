@@ -144,6 +144,13 @@ policy at iteration 5 was a partial signal (`0.4745` L1) but still did not beat
 uniform. This falsifies raw advantage cloning and points toward smoother
 learned regret-update or continuous budget allocation.
 
+Uniform-budget status: extra CFR is the current best cheap baseline. A
+64-root run with 10-iteration CFR+ against the same 25-iteration teacher
+reached `0.3630` L1, `0.1251` KL, and `0.8125` top-action agreement with mean
+latency about `350 ms`. This is better than the failed learned warm-start
+checkpoint and all fixed solver-update swaps. Future learned-search candidates
+must beat this 10-iteration baseline, not just 5-iteration CFR+.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -242,6 +249,8 @@ learned regret-update or continuous budget allocation.
 - Per-action counterfactual advantage tracing is available for diagnostics, but
   raw low-iteration `advantage_policy` lost badly to low and uniform baselines.
   Do not make it a direct policy target without a new mechanism review.
+- Uniform 10-iteration CFR+ is the strongest current cheap resolver baseline;
+  use it in learned-search comparisons and latency tradeoff claims.
 
 ## Metric Snapshot
 

@@ -3425,3 +3425,15 @@
 - Summary: Extended the CPU trace callback to expose per-action child counterfactual values, added derived `counterfactual_advantage` and `advantage_policy` trace fields, and added `scripts/analyze_cfr_trace_advantage_signal.py`. The held-out 32-root diagnostic falsified raw instantaneous advantage cloning: advantage policy was much worse than low average strategy and uniform iteration 10. Cumulative regret policy at iteration 5 was a partial L1 improvement over low but still lost to uniform, so the next target should use smoother learned update/budget dynamics rather than one-step advantage imitation.
 - Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_advantage_signal_holdout32_seed20260665.json
 - Key metrics: `{"mean_low_l1": 0.52017488, "mean_regret_l1": 0.47452081, "mean_advantage_l1": 0.97889782, "mean_uniform_l1": 0.3118831, "low_top_match": 0.78125, "regret_top_match": 0.65625, "advantage_top_match": 0.375, "uniform_top_match": 0.84375, "promotion": false}`
+
+## 20260514T232500Z-uniform-cfr10-budget-baseline - passed
+
+- Timestamp: 2026-05-14T23:25:00Z
+- Type: resolver_budget_baseline
+- Gate: cfr10-vs-cfr25-holdout64
+- Hypothesis: Uniformly spending 10 CFR+ iterations may be a stronger and cheaper baseline than learned warm-start or solver-update shortcuts, and future learned-search candidates should be compared against it.
+- Failure class: none
+- Related work: This is not a novel method; it is the necessary compute/quality baseline for learned-search claims. It preserves CFR+ semantics and uses the same fixed root-disjoint teacher gate.
+- Summary: Reused `eval_solver_update_gate.py` with `low_iterations=10` and `reference_iterations=25` on the 64 held-out roots. CFR10 materially improved over the prior CFR5 baseline and outperformed the failed learned warm-start, raw advantage, DCFR+, and PDCFR+ diagnostics, while staying much cheaper than the 25-iteration teacher. Treat CFR10 as the current cheap resolver baseline any learned method must beat.
+- Metrics file: autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_budget_cfr10_vs_ref25_holdout64_seed20260666.json
+- Key metrics: `{"mean_l1": 0.36302507, "mean_kl": 0.12510618, "top_action_agreement": 0.8125, "allin_prob_gap": 0.05444019, "mean_latency_ms": 349.97098438, "reference_latency_ms": 859.37704688, "promotion": false}`
