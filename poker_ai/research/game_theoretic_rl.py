@@ -196,6 +196,61 @@ def regularized_policy_update(
     return legal_softmax(logits, mask)
 
 
+def run_regularized_matrix_game_dynamics(
+    payoff_matrix: np.ndarray,
+    *,
+    n_steps: int = 100,
+    step_size: float = 0.1,
+    regularization_strength: float = 0.1,
+    initial_row_policy: np.ndarray | None = None,
+    initial_col_policy: np.ndarray | None = None,
+) -> dict:
+    """Run a tiny two-player zero-sum regularized policy-dynamics sanity check."""
+    payoff = np.asarray(payoff_matrix, dtype=np.float32)
+    if payoff.ndim != 2:
+        raise ValueError("payoff_matrix must be a 2D row-player payoff matrix")
+    row_mask = np.ones(payoff.shape[0], dtype=np.float32)
+    col_mask = np.ones(payoff.shape[1], dtype=np.float32)
+    row_reference = row_mask / float(row_mask.sum())
+    col_reference = col_mask / float(col_mask.sum())
+    row_policy = (
+        row_reference.copy()
+        if initial_row_policy is None
+        else _normalize_legal(initial_row_policy, row_mask)
+    )
+    col_policy = (
+        col_reference.copy()
+        if initial_col_policy is None
+        else _normalize_legal(initial_col_policy, col_mask)
+    )
+    for _ in range(int(n_steps)):
+        row_values = payoff @ col_policy
+        col_values = -payoff.T @ row_policy
+        row_policy = regularized_policy_update(
+            row_policy,
+            row_values,
+            row_mask,
+            reference_policy=row_reference,
+            step_size=step_size,
+            regularization_strength=regularization_strength,
+        )
+        col_policy = regularized_policy_update(
+            col_policy,
+            col_values,
+            col_mask,
+            reference_policy=col_reference,
+            step_size=step_size,
+            regularization_strength=regularization_strength,
+        )
+    game_value = float(row_policy @ payoff @ col_policy)
+    return {
+        "row_policy": row_policy.astype(np.float32),
+        "col_policy": col_policy.astype(np.float32),
+        "game_value": game_value,
+        "n_steps": int(n_steps),
+    }
+
+
 def algorithm_profile(name: str) -> AlgorithmProfile:
     """Return a normalized profile for a game-theoretic RL candidate/control."""
     key = name.strip().lower().replace("-", "_")

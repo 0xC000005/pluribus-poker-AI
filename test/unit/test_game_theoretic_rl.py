@@ -8,6 +8,7 @@ from poker_ai.research.game_theoretic_rl import (
     epsilon_greedy_distribution,
     legal_softmax,
     regularized_policy_update,
+    run_regularized_matrix_game_dynamics,
     validate_baseline_plan,
 )
 
@@ -84,6 +85,29 @@ def test_regularized_policy_update_moves_toward_reference_without_advantage():
 
     assert updated[0] > current[0]
     assert updated[1] < current[1]
+
+
+def test_regularized_matrix_game_dynamics_moves_rps_toward_uniform():
+    rps = np.array(
+        [
+            [0.0, -1.0, 1.0],
+            [1.0, 0.0, -1.0],
+            [-1.0, 1.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+
+    metrics = run_regularized_matrix_game_dynamics(
+        rps,
+        n_steps=300,
+        step_size=0.08,
+        regularization_strength=0.2,
+        initial_row_policy=np.array([0.8, 0.1, 0.1], dtype=np.float32),
+        initial_col_policy=np.array([0.1, 0.8, 0.1], dtype=np.float32),
+    )
+
+    np.testing.assert_allclose(metrics["row_policy"], np.full(3, 1 / 3), atol=0.08)
+    np.testing.assert_allclose(metrics["col_policy"], np.full(3, 1 / 3), atol=0.08)
 
 
 def test_algorithm_profile_classifies_framework_controls_separately_from_nfsp():

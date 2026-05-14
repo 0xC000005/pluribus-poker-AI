@@ -3208,3 +3208,15 @@
 - Summary: Added `regularized_policy_update()` to `poker_ai.research.game_theoretic_rl`. The primitive performs an exponentiated policy update using advantages plus a KL-style pull toward a reference policy. Unit tests verify illegal actions receive zero mass, advantaged legal actions increase, and neutral advantages move toward the reference.
 - Metrics file: test/unit/test_game_theoretic_rl.py
 - Key metrics: `{"unit_tests": 8, "primitive": "regularized_policy_update", "promotion": false}`
+
+## 20260515T001000Z-rnad-matrix-game-sanity - passed
+
+- Timestamp: 2026-05-15T00:10:00Z
+- Type: mechanism_sanity
+- Gate: rnad-rps-matrix-game
+- Hypothesis: The R-NaD-style regularized policy update should pass a tiny zero-sum game sanity check before any poker trainer integration.
+- Failure class: none
+- Related work: Regularized policy dynamics should move policies using payoff advantages while preserving full support through regularization.
+- Summary: Added `run_regularized_matrix_game_dynamics()` and a rock-paper-scissors test. Starting from skewed row/column policies, the dynamics moves both policies near the uniform equilibrium under a legal-mask-safe update.
+- Metrics file: test/unit/test_game_theoretic_rl.py
+- Key metrics: `{"unit_tests": 9, "game": "rock_paper_scissors", "target_policy": "uniform", "promotion": false}`
