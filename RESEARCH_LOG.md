@@ -3160,3 +3160,15 @@
 - Summary: Ran a 10,000-episode hidden-512 CUDA native NFSP checkpoint and compared it to the 2,000-episode reservoir checkpoint with 1,000 duplicate-swapped hands. The mean was slightly positive but lower95 remained negative. This suggests the native NFSP pilot is now operational, but the immediate bottleneck is learning signal/algorithm strength rather than checkpoint plumbing or GPU visibility.
 - Metrics file: autoresearch-session/native_nfsp_dqn_reservoir_cuda_h512_10k_seed20260517.json and autoresearch-session/native_nfsp_reservoir_10k_vs_2k_h2h_1k_ci_seed20260518.json
 - Key metrics: `{"train_episodes": 10000, "train_seconds": 231.6486, "episodes_per_second": 43.1688, "train_steps_per_second": 312.0718, "random_eval_mean_payoff": 0.201965, "h2h_mean_candidate_payoff": 0.0149, "h2h_lower95_candidate_payoff": -0.007575, "h2h_upper95_candidate_payoff": 0.037375, "promotion": false}`
+
+## 20260514T233500Z-native-nfsp-double-dqn-target - failed
+
+- Timestamp: 2026-05-14T23:35:00Z
+- Type: methodology_correction
+- Gate: native-nfsp-double-dqn-vs-reservoir-h2h
+- Hypothesis: Adding a Double-DQN target network to the native NFSP best-response learner should improve 2,000-episode native H2H versus the previous same-budget reservoir checkpoint.
+- Failure class: strategy_quality
+- Related work: RLCard's NFSP implementation wraps a DQN agent with a separate target estimator and Double-DQN action selection/evaluation. The native pilot now matches that mechanism more closely, but method alignment alone is not a strength result.
+- Summary: Added target-network sync support and ran a 2,000-episode CUDA checkpoint with one target sync. The implementation is useful infrastructure, but the first H2H against the previous 2,000-episode reservoir checkpoint was negative/inconclusive. Keep the target-network mechanism available, but do not promote it as an improvement without a stronger gate.
+- Metrics file: autoresearch-session/native_nfsp_double_dqn_cuda_h512_2k_seed20260519.json and autoresearch-session/native_nfsp_double_dqn_vs_reservoir_h2h_1k_ci_seed20260520.json
+- Key metrics: `{"q_updates": 1973, "q_target_syncs": 1, "episodes_per_second": 70.6344, "train_steps_per_second": 264.0315, "h2h_mean_candidate_payoff": -0.013106, "h2h_lower95_candidate_payoff": -0.039705, "h2h_upper95_candidate_payoff": 0.013493, "promotion": false}`

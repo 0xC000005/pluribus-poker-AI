@@ -118,6 +118,25 @@ def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():
     assert metrics["train_seconds"] >= 0.0
 
 
+def test_run_native_nfsp_pilot_reports_target_network_syncs():
+    metrics = run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=4,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=1,
+            q_target_sync_interval=1,
+            device="cpu",
+            seed=124,
+        )
+    )
+
+    assert metrics["q_updates"] > 0
+    assert metrics["q_target_sync_interval"] == 1
+    assert metrics["q_target_syncs"] == metrics["q_updates"]
+
+
 def test_run_native_nfsp_pilot_writes_checkpoint(tmp_path):
     checkpoint_path = tmp_path / "native_nfsp.pt"
 

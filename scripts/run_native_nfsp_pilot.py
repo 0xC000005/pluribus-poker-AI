@@ -36,6 +36,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--anticipatory-param", type=float, default=0.1)
     parser.add_argument("--epsilon", type=float, default=0.06)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--q-discount", type=float, default=0.99)
+    parser.add_argument("--q-target-sync-interval", type=int, default=1000)
     parser.add_argument("--initial-chips", type=int, default=1000)
     parser.add_argument("--max-steps-per-hand", type=int, default=256)
     parser.add_argument("--seed", type=int, default=20260514)
@@ -58,6 +60,8 @@ def build_config(argv: list[str] | None = None) -> NativeNFSPConfig:
         anticipatory_param=args.anticipatory_param,
         epsilon=args.epsilon,
         lr=args.lr,
+        q_discount=args.q_discount,
+        q_target_sync_interval=args.q_target_sync_interval,
         initial_chips=args.initial_chips,
         max_steps_per_hand=args.max_steps_per_hand,
         seed=args.seed,

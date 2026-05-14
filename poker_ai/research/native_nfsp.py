@@ -41,6 +41,8 @@ class NativeNFSPConfig:
     anticipatory_param: float = 0.1
     epsilon: float = 0.06
     lr: float = 1e-3
+    q_discount: float = 0.99
+    q_target_sync_interval: int = 1000
     initial_chips: int = 1000
     max_steps_per_hand: int = 256
     seed: int = 20260514
@@ -253,11 +255,13 @@ def _q_values(net: nn.Module, features: np.ndarray, device: torch.device) -> np.
 
 def _train_q(
     q_net: nn.Module,
+    q_target_net: nn.Module,
     optimizer: optim.Optimizer,
     buffer: _TransitionBuffer,
     batch_size: int,
     rng: np.random.Generator,
     device: torch.device,
+    discount: float,
 ) -> float | None:
     if len(buffer) <= 0:
         return None
@@ -269,8 +273,10 @@ def _train_q(
     next_legal_masks = torch.tensor(np.stack([b.next_legal_mask for b in batch]), device=device)
     dones = torch.tensor([bool(b.done) for b in batch], device=device, dtype=torch.bool)
     with torch.no_grad():
-        next_values = q_net(next_features).masked_fill(next_legal_masks <= 0, -1e4).max(dim=1).values
-        targets = torch.where(dones, rewards, rewards + next_values)
+        next_online_values = q_net(next_features).masked_fill(next_legal_masks <= 0, -1e4)
+        best_next_actions = next_online_values.argmax(dim=1)
+        next_target_values = q_target_net(next_features).gather(1, best_next_actions[:, None]).squeeze(1)
+        targets = torch.where(dones, rewards, rewards + float(discount) * next_target_values)
     pred = q_net(features).gather(1, actions[:, None]).squeeze(1)
     loss = ((pred - targets) ** 2).mean()
     optimizer.zero_grad(set_to_none=True)
@@ -358,6 +364,9 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     device = torch.device(device_info["resolved_device"])
 
     q_net = _MLP(cfg.hidden_dim).to(device)
+    q_target_net = _MLP(cfg.hidden_dim).to(device)
+    q_target_net.load_state_dict(q_net.state_dict())
+    q_target_net.eval()
     avg_net = _MLP(cfg.hidden_dim).to(device)
     q_opt = optim.Adam(q_net.parameters(), lr=cfg.lr)
     avg_opt = optim.Adam(avg_net.parameters(), lr=cfg.lr)
@@ -368,6 +377,8 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     total_steps = 0
     last_q_loss = None
     last_sl_loss = None
+    q_updates = 0
+    q_target_syncs = 0
     payoffs: list[float] = []
     for _ in range(int(cfg.train_episodes)):
         records, payouts, steps = _play_hand(
@@ -386,7 +397,20 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
             if best_response_mode:
                 sl_buffer.add(features, legal_mask, action_idx, rng=rng)
         if len(q_buffer) >= cfg.min_buffer_size_to_learn:
-            last_q_loss = _train_q(q_net, q_opt, q_buffer, cfg.batch_size, rng, device)
+            last_q_loss = _train_q(
+                q_net,
+                q_target_net,
+                q_opt,
+                q_buffer,
+                cfg.batch_size,
+                rng,
+                device,
+                cfg.q_discount,
+            )
+            q_updates += 1
+            if q_updates % max(int(cfg.q_target_sync_interval), 1) == 0:
+                q_target_net.load_state_dict(q_net.state_dict())
+                q_target_syncs += 1
         if len(sl_buffer) >= cfg.min_buffer_size_to_learn:
             last_sl_loss = _train_avg_policy(avg_net, avg_opt, sl_buffer, cfg.batch_size, rng, device)
     if device.type == "cuda":
@@ -431,6 +455,10 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
         "mean_eval_payoff_p0_vs_random": float(np.mean(eval_payoffs)) if eval_payoffs else 0.0,
         "q_buffer_size": len(q_buffer),
         "sl_buffer_size": len(sl_buffer),
+        "q_updates": int(q_updates),
+        "q_discount": float(cfg.q_discount),
+        "q_target_sync_interval": int(cfg.q_target_sync_interval),
+        "q_target_syncs": int(q_target_syncs),
         "last_q_loss": last_q_loss,
         "last_sl_loss": last_sl_loss,
         "promotion": False,
@@ -458,6 +486,8 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
                     "anticipatory_param": float(cfg.anticipatory_param),
                     "epsilon": float(cfg.epsilon),
                     "lr": float(cfg.lr),
+                    "q_discount": float(cfg.q_discount),
+                    "q_target_sync_interval": int(cfg.q_target_sync_interval),
                     "initial_chips": int(cfg.initial_chips),
                     "max_steps_per_hand": int(cfg.max_steps_per_hand),
                     "seed": int(cfg.seed),
