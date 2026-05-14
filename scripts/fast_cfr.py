@@ -174,7 +174,7 @@ def _validated_trace_nodes(tree, trace_node_indices):
         return np.zeros(0, dtype=np.int32)
     n_nodes = int(tree['n_nodes'])
     unique = sorted(set(raw))
-    bad = [idx for idx in unique if idx <= 0 or idx >= n_nodes]
+    bad = [idx for idx in unique if idx < 0 or idx >= n_nodes]
     if bad:
         raise ValueError(f"trace_node_indices out of range: {bad[:5]}")
     return np.asarray(unique, dtype=np.int32)
@@ -535,6 +535,8 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 villain_reach=vr_at[trace_idx],
                 hero_values=hvals[trace_idx],
                 villain_values=vvals[trace_idx],
+                regret_sum=regret_sum[trace_idx],
+                strategy_sum=strategy_sum[trace_idx],
                 valid_m=valid_m,
                 pot_start=pot_start,
                 hero_stack_start=hero_stack_start,

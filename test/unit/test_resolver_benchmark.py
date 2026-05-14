@@ -546,6 +546,8 @@ def test_street_solver_trace_node_callback_observes_without_changing_strategy():
         calls.append(kwargs)
         assert kwargs["hero_reach"].shape == (1, traced.n)
         assert kwargs["villain_values"].shape == (1, traced.n)
+        assert kwargs["regret_sum"].shape == (1, N_ACTIONS, traced.n)
+        assert kwargs["strategy_sum"].shape == (1, N_ACTIONS, traced.n)
 
     baseline.solve(n_iterations=2, backend="cpu")
     traced.solve(
@@ -559,7 +561,30 @@ def test_street_solver_trace_node_callback_observes_without_changing_strategy():
     assert len(calls) == 2
     assert calls[0]["iteration"] == 0
     assert calls[1]["iteration"] == 1
+    assert float(calls[1]["strategy_sum"].sum()) > 0.0
     assert baseline.get_strategy(hand) == traced.get_strategy(hand)
+
+
+def test_street_solver_trace_node_callback_can_trace_root():
+    solver = StreetSolver(
+        board=[0, 1, 2, 3],
+        pot=200,
+        hero_stack=20000,
+        villain_stack=20000,
+        hero_first=True,
+    )
+    calls = []
+
+    solver.solve(
+        n_iterations=1,
+        backend="cpu",
+        trace_node_indices=[0],
+        trace_node_fn=lambda **kwargs: calls.append(kwargs),
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["node_indices"].tolist() == [0]
+    assert calls[0]["strategy_sum"].shape == (1, N_ACTIONS, solver.n)
 
 
 def test_successor_cut_node_indices_only_returns_nonterminal_children():

@@ -73,6 +73,15 @@ between predicted and actual root action drift (`r=-0.0441`). Static metadata
 is not enough; the next search/value target needs dynamic CFR reach/regret
 state or a root-drift residual objective.
 
+Dynamic trace status: CFR trace observability is now available for that next
+question. The CPU resolver callback can trace the active public node, including
+root node `0`, and receives `regret_sum` plus `strategy_sum` snapshots without
+changing the tested final strategy. The first 4-case smoke emitted 100 trace
+records, zero skips, top-action match rate `0.81`, and a mean L1-to-final curve
+that fell to `1e-08` at the final iteration. This is a diagnostic foundation,
+not a strength result; trace-derived learning still needs a root-disjoint
+teacher gate.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -126,6 +135,10 @@ state or a root-drift residual objective.
 - Latest synthesis decision: gather denser root-disjoint intervention labels
   before more value-only training. The next falsifier should test whether an
   action-impact predictor can beat simple baselines on those labels.
+- Dynamic CFR trace diagnostics are available for the next falsifier. Use them
+  to test whether iteration-level regret/strategy state predicts where
+  low-budget resolving is wrong, not to bypass resolver gates or select
+  Slumbot-specific behavior.
 
 ## Metric Snapshot
 

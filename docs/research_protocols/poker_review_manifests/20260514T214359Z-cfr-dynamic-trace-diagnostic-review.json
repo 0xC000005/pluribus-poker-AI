@@ -1,0 +1,41 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1541,
+      "path": "benchmark_audit.md",
+      "sha256": "308d8bbab9640158b3bfcc8ad02f785d392bb23e62eb2cbad66c48c8538f45de"
+    },
+    {
+      "bytes": 625,
+      "path": "decision.json",
+      "sha256": "d04a5da4b135eef728374410183fc1d90f06cd4db483564fd369fd3539bc3edd"
+    },
+    {
+      "bytes": 1480,
+      "path": "mechanism_review.md",
+      "sha256": "e1ddaa7c9f9d2f736d77629d4483375811cbd81e712ae4b83b2ee2a7c91dda3f"
+    },
+    {
+      "bytes": 1599,
+      "path": "related_work.md",
+      "sha256": "6dbc9fbc1f17019e9f6551450b356738445ea4b5e58c0800a5e900beea2355bc"
+    },
+    {
+      "bytes": 2346,
+      "path": "review.md",
+      "sha256": "96ef5bec68fea511c9f6af1fcbc45969104e2a5da2a468f754a9d135c5ab29c1"
+    }
+  ],
+  "reason": "Proceed only with the diagnostic trace hook and offline trace-state script. This does not promote a gameplay method; any trace-derived learned-search mechanism still needs root-disjoint resolver evidence, objective audit, and a separate promotion decision.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T214359Z-cfr-dynamic-trace-diagnostic-review",
+  "review_id": "20260514T214359Z-cfr-dynamic-trace-diagnostic-review",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1705.02955",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_root_trace_smoke4_seed20260660.json"
+  ],
+  "written_at": "2026-05-14T21:46:32Z"
+}

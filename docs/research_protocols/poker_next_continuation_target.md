@@ -102,6 +102,18 @@ regularized Nash dynamics; it rejects using sparse terminal sampled payoff as
 the policy-update signal. The next version must use a stronger counterfactual
 or search-derived advantage target before any scale-up.
 
+The latest search-diagnostic result points to dynamic CFR traces rather than
+more static cut labels. A denser static cut-impact predictor failed root-disjoint
+correlation (`r=-0.0441`), so the resolver now exposes per-iteration
+`regret_sum` and `strategy_sum` snapshots at traced public nodes. A 4-case
+smoke showed the trace is mechanically useful: 100 records, zero skips, and
+mean L1 to the final average strategy falling to `1e-08` at the final
+iteration. The next experiment should use these traces to build a fixed,
+root-disjoint predictor of low-budget solver error or convergence uncertainty,
+then test whether that predictor improves low-budget resolving against the
+higher-budget teacher. Do not treat the trace script itself as a gameplay
+method.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

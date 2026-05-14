@@ -9,6 +9,22 @@
 - Notes: generated local state and run artifacts live under
   `autoresearch-session/` and are ignored except for the directory README.
 
+## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
+
+- Timestamp: 2026-05-14T21:43:59Z
+- Type: protected diagnostic
+- Gate: methodology-review + objective-audit + unit-smoke
+- Hypothesis: Dynamic CFR regret/strategy traces are the next principled diagnostic after static cut-impact labels failed; exposing them should preserve solver behavior and support future trace-derived learned-search falsifiers.
+- Failure class: search_quality
+- Summary: Added root-capable trace payloads for `regret_sum` and `strategy_sum`, plus `scripts/diagnose_cfr_trace_state.py` to measure per-iteration strategy convergence at active public nodes. This is observability only, not a gameplay promotion.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260514T214359Z-cfr-dynamic-trace-diagnostic-review`
+  - Smoke artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_root_trace_smoke4_seed20260660.json`
+  - Focused tests: `uv run pytest -q test/unit/test_resolver_benchmark.py test/unit/test_cfr_trace_state.py` -> `31 passed`.
+  - Objective audit with review passed for `scripts/fast_cfr.py`, `scripts/diagnose_cfr_trace_state.py`, and trace tests.
+- Metrics: smoke traced `4` cases and `100` records with zero skips. Mean L1 to final strategy moved from `0.97625321` at iteration `0` to `0.02525361` at iteration `23`, with final iteration `24` at `1e-08`; top-action match rate was `0.81`.
+- Decision: keep as diagnostic infrastructure. The next promotable hypothesis must train or evaluate a trace-derived correction on root-disjoint resolver gates before any Slumbot spend.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z
