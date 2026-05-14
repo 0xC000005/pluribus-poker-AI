@@ -103,6 +103,12 @@ to final policy failed as a negative control. Holdout predicted-policy L1 was
 rate fell to `0.6250`. The trace signal is therefore not linearly reusable as a
 policy replacement on 32 roots.
 
+Trace synthesis status: the causal model is now explicit. Trace state is useful
+as evidence of convergence difficulty, but direct policy replacement and binary
+compute switches are misaligned with how CFR updates coupled public-belief
+strategies. The next live hypothesis is a counterfactual low-to-later delta
+target, not another direct final-policy imitation target.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -171,6 +177,8 @@ policy replacement on 32 roots.
 - A shallow linear policy residual also failed. Future trace-derived models
   need a stronger counterfactual or nonlinear target, and must keep low and
   uniform trace baselines in the report.
+- Failure synthesis selects one next falsifier: predict low-to-later
+  regret/strategy deltas and evaluate against low and uniform trace baselines.
 
 ## Metric Snapshot
 

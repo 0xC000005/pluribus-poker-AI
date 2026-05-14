@@ -1,0 +1,20 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 324,
+      "path": "decision.json",
+      "sha256": "03ae9d9694173e8930ffaf46ac5f0b4acff3e1278cc1cf19d463abcbce7924ca"
+    },
+    {
+      "bytes": 1994,
+      "path": "synthesis.md",
+      "sha256": "ef40f681cd285d31b62cde3fa2552f2e495eb66216868efd76b4ffbe082b3d64"
+    }
+  ],
+  "reason": "Trace state has predictive signal, but binary budget escalation and shallow final-policy residuals failed against uniform compute. Continue only with a counterfactual or low-to-later delta target that is judged against uniform-budget baselines.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T222500Z-trace-derived-search-failures-synthesis",
+  "review_id": "20260514T222500Z-trace-derived-search-failures-synthesis",
+  "sources": [],
+  "written_at": "2026-05-14T22:07:43Z"
+}

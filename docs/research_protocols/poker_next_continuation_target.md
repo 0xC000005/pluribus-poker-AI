@@ -140,6 +140,11 @@ nonlinear public-belief trace model with root-disjoint data and uniform-budget
 baselines, or step back to a counterfactual advantage target that matches how
 CFR updates actually move the average strategy.
 
+The current synthesis chooses the counterfactual delta version as the next
+single test: predict the low-to-later regret/strategy change, not the final
+policy. This keeps the target closer to the update operator and avoids treating
+the 25-iteration strategy as a one-step imitation label.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

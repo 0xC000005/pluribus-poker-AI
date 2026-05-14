@@ -69,6 +69,18 @@
 - Metrics: predicted policy L1 was `0.72348358`, worse than low trace L1 `0.52017487` and uniform trace L1 `0.31188308`. Predicted top-match rate was `0.625`, below low `0.78125` and uniform `0.84375`.
 - Decision: abandon the shallow linear residual as a promotion path. This supports moving to a more principled nonlinear/counterfactual target only if it is evaluated against the same low and uniform baselines.
 
+## 20260514T222500Z-trace-derived-search-failures-synthesis - passed
+
+- Timestamp: 2026-05-14T22:25:00Z
+- Type: synthesis
+- Gate: causal failure synthesis
+- Summary: Compressed the trace-predictor, selective-budget, and shallow-residual outcomes into one causal model: trace state has signal, but direct proxy use fails because the target is misaligned with downstream CFR update dynamics.
+- Evidence:
+  - Synthesis: `autoresearch-session/poker_reviews/20260514T222500Z-trace-derived-search-failures-synthesis`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260514T222500Z-trace-derived-search-failures-synthesis.json`
+  - Validator: `uv run python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260514T222500Z-trace-derived-search-failures-synthesis --require-complete` -> passed.
+- Decision: gather more evidence with a counterfactual delta target. The next single test should predict low-to-later regret/strategy changes and compare against both low and uniform trace baselines on root-disjoint states.
+
 ## 20260510T161102Z-manual-dry-run-of-poker-autoresearch-cycle-mechanics - passed
 
 - Timestamp: 2026-05-10T16:11:15Z
