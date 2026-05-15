@@ -4671,3 +4671,24 @@
 - Decision: Continue with learned-baseline sampled traversal as the active
   diagnostic method, but require exhaustive-vs-sampled regret gates before
   trainer integration.
+
+## 20260515T095500Z-sampled-regret-threshold-gate - passed
+
+- Timestamp: 2026-05-15T09:55:00Z
+- Type: estimator_quality_gate
+- Gate: thresholded full-deck sampled-action estimator diagnostic
+- Hypothesis: The XL learned control-variate baseline should pass explicit
+  averaged sampled-regret quality thresholds before any trainer integration.
+- Failure class: none
+- Summary: Added gate-threshold support to
+  `scripts/eval_sampled_action_full_deck_estimator.py` and unit coverage for
+  high-bias and low-top-match failures. The XL learned baseline passed the
+  256-root holdout with `max_mean_abs_bias=3.0` and
+  `min_mean_estimate_top_match=0.95`. The result remains a diagnostic: the
+  baseline reduces estimator variance enough for averaged training targets,
+  but per-sample top-action agreement is still too noisy for direct policy use.
+- Commands: `uv run pytest -q test/unit/test_sampled_action_full_deck_estimator.py test/unit/test_sampled_action_mccfr.py`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_gate_256roots_20260515.json`
+- Key metrics: `{"sample1_abs_bias": 2.438916, "sample1_mean_top_match": 0.957031, "sample8_abs_bias": 0.944688, "sample8_mean_top_match": 0.96875, "gate_failures": [], "promotion": false}`
+- Decision: Keep the sampled-action control-variate path as a research-only
+  candidate. Next integration work must preserve this gate and still compare
+  downstream traversal/train evidence against the default exhaustive path.

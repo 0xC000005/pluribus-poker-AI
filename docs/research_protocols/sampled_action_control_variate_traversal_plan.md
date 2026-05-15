@@ -32,6 +32,9 @@ or Slumbot-specific patch.
 
 - Compare averaged sampled regret targets against exhaustive traverser regrets
   on deterministic small states.
+- Require explicit estimator-quality thresholds before trainer integration:
+  `--max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95` on a
+  root-disjoint holdout with a fixed baseline checkpoint.
 - Report mean absolute regret error, L2 error, top-action agreement of averaged
   targets, per-sample top-action agreement, and estimator standard deviation.
 - Report traversal-fidelity metrics if the prototype touches CUDA or batched

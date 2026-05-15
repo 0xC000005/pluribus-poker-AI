@@ -97,6 +97,32 @@ def _load_baseline_checkpoint(path: str | None, device: torch.device) -> tuple[V
     return model, float(checkpoint.get("initial_chips", 1) or 1)
 
 
+def _threshold_failures(
+    metrics_by_sample_count: dict[str, dict[str, float]],
+    *,
+    max_mean_abs_bias: float | None,
+    min_mean_estimate_top_action_match: float | None,
+) -> list[str]:
+    failures: list[str] = []
+    for sample_count in sorted(metrics_by_sample_count, key=lambda item: int(item)):
+        metrics = metrics_by_sample_count[sample_count]
+        if max_mean_abs_bias is not None:
+            mean_abs_bias = float(metrics["mean_abs_bias"])
+            if mean_abs_bias > float(max_mean_abs_bias):
+                failures.append(
+                    f"sample_count={sample_count} mean_abs_bias "
+                    f"{mean_abs_bias:.6f} > {float(max_mean_abs_bias):.6f}"
+                )
+        if min_mean_estimate_top_action_match is not None:
+            top_match = float(metrics["mean_estimate_top_action_match_rate"])
+            if top_match < float(min_mean_estimate_top_action_match):
+                failures.append(
+                    f"sample_count={sample_count} mean_estimate_top_action_match_rate "
+                    f"{top_match:.6f} < {float(min_mean_estimate_top_action_match):.6f}"
+                )
+    return failures
+
+
 def run_diagnostic(
     *,
     n_roots: int,
@@ -109,6 +135,8 @@ def run_diagnostic(
     baseline_mode: str,
     baseline_noise_scale: float,
     baseline_checkpoint: str | None,
+    max_mean_abs_bias: float | None,
+    min_mean_estimate_top_action_match: float | None,
     seed: int,
 ) -> dict:
     random.seed(seed)
@@ -245,7 +273,6 @@ def run_diagnostic(
             )
 
     metrics_by_sample_count = {}
-    passed = True
     for sample_count, values_by_metric in results.items():
         abs_bias = values_by_metric["sum_abs_bias"] / n_roots
         l2_bias = values_by_metric["sum_l2_bias"] / n_roots
@@ -263,12 +290,15 @@ def run_diagnostic(
                 6,
             ),
         }
-        if abs_bias > 3.0:
-            passed = False
+    gate_failures = _threshold_failures(
+        metrics_by_sample_count,
+        max_mean_abs_bias=max_mean_abs_bias,
+        min_mean_estimate_top_action_match=min_mean_estimate_top_action_match,
+    )
 
     return {
         "mode": "sampled_action_full_deck_estimator_diagnostic",
-        "passed": passed,
+        "passed": not gate_failures,
         "n_roots": int(n_roots),
         "n_repeats": int(n_repeats),
         "n_equity_samples": int(n_equity_samples),
@@ -289,6 +319,11 @@ def run_diagnostic(
             round(float(np.mean(baseline_corrs)), 6)
             if baseline_corrs else None
         ),
+        "gate_thresholds": {
+            "max_mean_abs_bias": max_mean_abs_bias,
+            "min_mean_estimate_top_action_match": min_mean_estimate_top_action_match,
+        },
+        "gate_failures": gate_failures,
         "metrics_by_sample_count": metrics_by_sample_count,
         "warning": "Restricted showdown action values; estimator math diagnostic only.",
         "promotion": False,
@@ -313,6 +348,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--baseline-checkpoint")
     parser.add_argument("--baseline-noise-scale", type=float, default=0.25)
+    parser.add_argument("--max-mean-abs-bias", type=float, default=3.0)
+    parser.add_argument("--min-mean-estimate-top-match", type=float)
     parser.add_argument("--seed", type=int, default=20260515)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
@@ -328,6 +365,8 @@ def main(argv: list[str] | None = None) -> int:
         baseline_mode="checkpoint" if args.baseline_checkpoint else args.baseline_mode,
         baseline_noise_scale=args.baseline_noise_scale,
         baseline_checkpoint=args.baseline_checkpoint,
+        max_mean_abs_bias=args.max_mean_abs_bias,
+        min_mean_estimate_top_action_match=args.min_mean_estimate_top_match,
         seed=args.seed,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)
