@@ -182,7 +182,7 @@ def _exhaustive_traverse(
     traverser: int,
     value_net: ValueNetwork,
     device: torch.device,
-    rng: np.random.Generator,
+    opponent_rng: np.random.Generator,
     depth: int,
 ) -> _TraversalResult:
     if state.is_terminal:
@@ -193,7 +193,7 @@ def _exhaustive_traverse(
             traverser=traverser,
             value_net=value_net,
             device=device,
-            rng=rng,
+            opponent_rng=opponent_rng,
             depth=depth + 1,
         )
 
@@ -206,7 +206,7 @@ def _exhaustive_traverse(
                 traverser=traverser,
                 value_net=value_net,
                 device=device,
-                rng=rng,
+                opponent_rng=opponent_rng,
                 depth=depth + 1,
             )
             action_values[ACTION_TO_INDEX[action]] = float(child.value)
@@ -219,13 +219,13 @@ def _exhaustive_traverse(
 
     probs = np.array([strategy[ACTION_TO_INDEX[action]] for action in legal_actions])
     probs = probs / float(probs.sum())
-    action = str(rng.choice(legal_actions, p=probs))
+    action = str(opponent_rng.choice(legal_actions, p=probs))
     return _exhaustive_traverse(
         state.apply_action(action),
         traverser=traverser,
         value_net=value_net,
         device=device,
-        rng=rng,
+        opponent_rng=opponent_rng,
         depth=depth + 1,
     )
 
@@ -236,7 +236,8 @@ def _sampled_traverse(
     traverser: int,
     value_net: ValueNetwork,
     device: torch.device,
-    rng: np.random.Generator,
+    opponent_rng: np.random.Generator,
+    traverser_rng: np.random.Generator,
     depth: int,
     sample_count: int,
     uniform_mix: float,
@@ -250,7 +251,8 @@ def _sampled_traverse(
             traverser=traverser,
             value_net=value_net,
             device=device,
-            rng=rng,
+            opponent_rng=opponent_rng,
+            traverser_rng=traverser_rng,
             depth=depth + 1,
             sample_count=sample_count,
             uniform_mix=uniform_mix,
@@ -268,7 +270,7 @@ def _sampled_traverse(
         q = q / float(q.sum())
         if sampling_mode == "with-replacement":
             sampled, sampled_all_legal = _sample_action_indices(
-                rng,
+                traverser_rng,
                 legal_indices,
                 q,
                 sample_count=sample_count,
@@ -276,7 +278,7 @@ def _sampled_traverse(
             inclusion_probs = None
         elif sampling_mode == "without-replacement":
             sampled = sample_pps_without_replacement(
-                rng,
+                traverser_rng,
                 q,
                 legal_mask,
                 sample_count=sample_count,
@@ -297,7 +299,8 @@ def _sampled_traverse(
                 traverser=traverser,
                 value_net=value_net,
                 device=device,
-                rng=rng,
+                opponent_rng=opponent_rng,
+                traverser_rng=traverser_rng,
                 depth=depth + 1,
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
@@ -335,13 +338,14 @@ def _sampled_traverse(
 
     probs = np.array([strategy[ACTION_TO_INDEX[action]] for action in legal_actions])
     probs = probs / float(probs.sum())
-    action = str(rng.choice(legal_actions, p=probs))
+    action = str(opponent_rng.choice(legal_actions, p=probs))
     return _sampled_traverse(
         state.apply_action(action),
         traverser=traverser,
         value_net=value_net,
         device=device,
-        rng=rng,
+        opponent_rng=opponent_rng,
+        traverser_rng=traverser_rng,
         depth=depth + 1,
         sample_count=sample_count,
         uniform_mix=uniform_mix,
@@ -365,7 +369,8 @@ def _mean_root_regret(
     regrets = []
     started = time.perf_counter()
     for repeat in range(max(1, int(n_repeats))):
-        rng = np.random.default_rng([int(seed), repeat, int(sampled)])
+        opponent_rng = np.random.default_rng([int(seed), repeat, 0])
+        traverser_rng = np.random.default_rng([int(seed), repeat, 1])
         state_copy = copy.deepcopy(state)
         if sampled:
             result = _sampled_traverse(
@@ -373,7 +378,8 @@ def _mean_root_regret(
                 traverser=traverser,
                 value_net=value_net,
                 device=device,
-                rng=rng,
+                opponent_rng=opponent_rng,
+                traverser_rng=traverser_rng,
                 depth=0,
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
@@ -385,7 +391,7 @@ def _mean_root_regret(
                 traverser=traverser,
                 value_net=value_net,
                 device=device,
-                rng=rng,
+                opponent_rng=opponent_rng,
                 depth=0,
             )
         if result.root_regret is None:
@@ -447,7 +453,7 @@ def run_probe(
         value_net=value_net,
         device=resolved_device,
         n_repeats=int(n_repeats),
-        seed=int(seed) + 20_000,
+        seed=int(seed) + 10_000,
         sampled=True,
         sample_count=sample_count,
         uniform_mix=uniform_mix,
@@ -487,5 +493,70 @@ def run_probe(
             float(exhaustive_per_run / sampled_per_run) if sampled_per_run > 0 else 0.0,
             6,
         ),
+        "promotion": False,
+    }
+
+
+def run_probe_grid(
+    *,
+    seeds: list[int],
+    initial_chips_values: list[int],
+    n_repeats: int = 64,
+    n_reference_repeats: int | None = None,
+    sample_count: int = 4,
+    hidden_dim: int = 64,
+    n_layers: int = 1,
+    uniform_mix: float = 0.25,
+    sampling_mode: str = "with-replacement",
+    device: str = "cpu",
+) -> dict[str, Any]:
+    cases: list[dict[str, Any]] = []
+    for initial_chips in initial_chips_values:
+        for seed in seeds:
+            cases.append(
+                run_probe(
+                    n_repeats=n_repeats,
+                    n_reference_repeats=n_reference_repeats,
+                    initial_chips=int(initial_chips),
+                    sample_count=sample_count,
+                    hidden_dim=hidden_dim,
+                    n_layers=n_layers,
+                    uniform_mix=uniform_mix,
+                    sampling_mode=sampling_mode,
+                    seed=int(seed),
+                    device=device,
+                )
+            )
+    if not cases:
+        raise ValueError("probe grid requires at least one case")
+    top_matches = [bool(case["top_action_match"]) for case in cases]
+    return {
+        "mode": "sampled_deep_cfr_traversal_probe_grid",
+        "warning": "Aggregate of tiny stochastic CPU probes; not a trainer or promotion gate.",
+        "n_cases": len(cases),
+        "seeds": [int(seed) for seed in seeds],
+        "initial_chips_values": [int(value) for value in initial_chips_values],
+        "sample_count": int(sample_count),
+        "sampling_mode": sampling_mode,
+        "n_repeats": int(n_repeats),
+        "n_reference_repeats": int(n_reference_repeats or n_repeats),
+        "top_action_match_rate": round(float(np.mean(top_matches)), 6),
+        "mean_abs_bias": round(
+            float(np.mean([float(case["mean_abs_bias"]) for case in cases])),
+            6,
+        ),
+        "mean_l2_bias": round(
+            float(np.mean([float(case["mean_l2_bias"]) for case in cases])),
+            6,
+        ),
+        "mean_speedup": round(
+            float(np.mean([float(case["per_run_speedup"]) for case in cases])),
+            6,
+        ),
+        "min_speedup": round(
+            float(np.min([float(case["per_run_speedup"]) for case in cases])),
+            6,
+        ),
+        "cases": cases,
         "promotion": False,
     }

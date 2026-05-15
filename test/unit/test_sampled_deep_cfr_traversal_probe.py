@@ -2,6 +2,7 @@ import numpy as np
 
 from poker_ai.research.sampled_deep_cfr_traversal_probe import (
     _sample_action_indices,
+    run_probe_grid,
     run_probe,
 )
 
@@ -83,3 +84,37 @@ def test_sampled_traversal_probe_reproducible_for_same_seed():
     assert second["exhaustive_top_action"] == first["exhaustive_top_action"]
     assert second["sampled_top_action"] == first["sampled_top_action"]
     assert second["mean_abs_bias"] == first["mean_abs_bias"]
+
+
+def test_sampled_traversal_probe_exact_budget_matches_exhaustive():
+    metrics = run_probe(
+        n_repeats=2,
+        n_reference_repeats=2,
+        initial_chips=300,
+        sample_count=9,
+        sampling_mode="without-replacement",
+        hidden_dim=16,
+        n_layers=1,
+        seed=20260530,
+    )
+
+    assert metrics["mean_abs_bias"] == 0.0
+    assert metrics["top_action_match"] is True
+
+
+def test_sampled_traversal_probe_grid_aggregates_cases():
+    metrics = run_probe_grid(
+        seeds=[20260528, 20260529],
+        initial_chips_values=[300],
+        n_repeats=2,
+        n_reference_repeats=2,
+        sample_count=4,
+        sampling_mode="without-replacement",
+        hidden_dim=16,
+        n_layers=1,
+    )
+
+    assert metrics["mode"] == "sampled_deep_cfr_traversal_probe_grid"
+    assert metrics["n_cases"] == 2
+    assert len(metrics["cases"]) == 2
+    assert 0.0 <= metrics["top_action_match_rate"] <= 1.0

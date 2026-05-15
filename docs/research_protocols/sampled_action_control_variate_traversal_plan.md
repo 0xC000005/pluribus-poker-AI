@@ -60,13 +60,16 @@ or Slumbot-specific patch.
   action ordering. The first CPU probe found sample-4 faster but top-unstable,
   while sample-8 matched top action but gave little speedup after exact
   enumeration.
+- Fixed higher sample budgets that recover action ordering by nearly enumerating
+  the tree. A four-seed sample-6 grid matched top actions but lost throughput,
+  so fixed-count sampling alone is not the target method.
 - Worse downstream restricted-action or local H2H evidence at equal compute.
 - Any change to Slumbot adapters, promotion logic, legal masks, or parser
   thresholds.
 
 ## Next Implementation Step
 
-Extend the without-replacement sample-4 traversal probe to a broader deterministic
-state set before CUDA integration. The first two tiny-state seeds preserved root
-top action with low regret bias and modest speedup; this is promising but not
-yet enough evidence for trainer changes.
+Investigate an adaptive or priority-aware without-replacement sampler before
+CUDA integration. The sampler should enumerate high-impact actions and sample
+only low-impact residual branches, preserving action ordering while still
+reducing branch factor.

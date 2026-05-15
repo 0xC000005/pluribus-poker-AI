@@ -4850,3 +4850,27 @@
   traversal candidate. Before CUDA integration, broaden the CPU probe across a
   deterministic state set and require stable top-action agreement plus positive
   throughput evidence.
+
+## 20260515T123000Z-sampled-traversal-grid-frontier - partial
+
+- Timestamp: 2026-05-15T12:30:00Z
+- Type: traversal_budget_frontier
+- Gate: four-seed tiny traversal grid with common opponent RNG streams
+- Hypothesis: A fixed without-replacement sampled traverser budget should find
+  a usable frontier where root action ordering is stable and traversal remains
+  faster than exhaustive branching.
+- Failure class: action_order_variance
+- Summary: Added a grid runner for the sampled traversal probe and fixed a
+  comparison bug: exhaustive and sampled runs now use common opponent RNG
+  streams, with a separate traverser-sampling stream. The exact-budget test
+  now matches exhaustive traversal. On the four-seed grid, sample-4 kept
+  `1.26x` mean speedup and low mean bias but matched root top action in only
+  `2/4` seeds. Sample-6 matched root top action in `4/4` seeds but lost the
+  speedup (`0.99x`). This falsifies plain fixed-count sampling as the next
+  CUDA step; it is either too noisy or too close to exhaustive enumeration.
+- Commands: `uv run pytest -q test/unit/test_sampled_deep_cfr_traversal_probe.py`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode without-replacement --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_wor_sample4_4seeds_commonrng_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 6 --sampling-mode without-replacement --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.02 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_wor_sample6_4seeds_commonrng_20260515.json`
+- Key metrics: `{"sample4_top_match_rate": 0.5, "sample4_mean_speedup": 1.263508, "sample4_mean_abs_bias": 0.045528, "sample6_top_match_rate": 1.0, "sample6_mean_speedup": 0.987946, "sample6_mean_abs_bias": 0.027014, "promotion": false}`
+- Decision: Do not integrate fixed-count sampled traversal into CUDA. The next
+  candidate should be adaptive or priority-aware: enumerate actions that can
+  change regret ordering, and sample only the residual low-impact branches with
+  inclusion correction.
