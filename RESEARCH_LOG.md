@@ -100,6 +100,29 @@
   for CUDA auto-promotion; next work should isolate live-only setup costs such
   as range pruning, tree construction, and CPU-to-GPU tensor preparation.
 
+## 20260515T011000Z-live-budget-cuda-attribution - passed
+
+- Timestamp: 2026-05-15T01:10:00Z
+- Type: diagnostic
+- Gate: fixed mixed-state CPU/CUDA attribution at live-like CFR budget
+- Hypothesis: The remaining >1s Slumbot solver calls are partly explained by
+  live Slumbot's much higher CFR iteration budget (`150/250/350`) rather than
+  a failed CUDA backend.
+- Failure class: compute_integration
+- Summary: Reran the fixed four-state mixed turn/river resolver benchmark at
+  `150` solver iterations, matching the minimum live Slumbot solver budget.
+- Evidence:
+  - CUDA artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_torch_levelsync_cuda_iter150_mixed4_livebudget_seed20260515.json`
+  - CPU artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_cpu_iter150_mixed4_livebudget_seed20260515.json`
+- Metrics: `torch-levelsync-cuda` averaged `818.5 ms` total, `612.6 ms` CFR,
+  and `205.8 ms` overhead. CPU averaged `4871.0 ms` total, `4655.2 ms` CFR,
+  and `215.8 ms` overhead. Both passed legality.
+- Decision: explicit CUDA is the right high-iteration live diagnostic backend.
+  The next research target is no longer recurrence acceleration; it is a
+  reviewed live-budget policy that preserves CFR150 decision quality with less
+  compute, or strong evidence that the current `150/250/350` heuristic is
+  necessary.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

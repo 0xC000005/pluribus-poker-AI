@@ -286,6 +286,15 @@ active-hand selection, tree construction, and CPU-to-GPU tensor preparation.
 Do not flip `auto` until same-state live-style attribution shows the full path
 beats CPU with margin.
 
+The live-budget check changes that interpretation: Slumbot uses at least
+`150` CFR iterations, not the `10`-iteration smoke budget. At `150` iterations,
+the fixed mixed-state benchmark shows a large CUDA advantage (`818.5 ms` total
+vs CPU `4871.0 ms`). The next continuation target should therefore shift from
+"make CUDA recurrence faster" to "make live resolver policy safer and cheaper":
+evaluate whether lower or adaptive iteration budgets preserve the CFR150 action
+quality on root-disjoint states, then expose a reviewed live-budget policy if it
+beats the current fixed `150/250/350` heuristic on decision quality per compute.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

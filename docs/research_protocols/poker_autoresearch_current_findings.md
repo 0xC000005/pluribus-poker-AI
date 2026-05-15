@@ -238,6 +238,16 @@ setup win, but not enough to change `auto`; live smoke still passes and still
 shows >1s solver calls on some states, so larger setup amortization remains the
 next compute target.
 
+Live-budget attribution status: the >1s Slumbot solver calls are mostly
+explained by budget mismatch, not a broken CUDA path. The fixed benchmark's
+earlier `10`-iteration runs are smoke tests; live Slumbot solving starts at
+`150` CFR iterations and can increase to `250` or `350` under pressure. On the
+same four mixed states at `150` iterations, `torch-levelsync-cuda` averaged
+`818.5 ms` total and `612.6 ms` CFR, while CPU averaged `4871.0 ms` total and
+`4655.2 ms` CFR. This makes explicit CUDA the correct diagnostic backend for
+high-iteration live solving, but `auto` should still wait for same-state
+live-style validation and confidence checks.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
