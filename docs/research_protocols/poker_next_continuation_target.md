@@ -1036,3 +1036,8 @@ allows 2-8 sampled actions to pass the full-deck estimator diagnostic, while
 one sampled action remains too noisy. The next step should be an
 exhaustive-vs-sampled traversal comparison using two sampled traverser actions
 plus a learned baseline, still outside the default CUDA trainer.
+
+The 64-root check preserves that conclusion. Two sampled traverser actions plus
+the learned baseline pass the restricted full-deck estimator diagnostic on a
+broader deterministic slice, but variance is still large enough that this must
+remain opt-in until compared against exhaustive traversal on small states.

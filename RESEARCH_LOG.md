@@ -4544,3 +4544,24 @@
   traversal with at least two sampled traverser actions. Do not attempt a
   one-sample traversal or integrate without an exhaustive-vs-sampled traversal
   comparison.
+
+## 20260515T083000Z-learned-baseline-64root-check - passed
+
+- Timestamp: 2026-05-15T08:30:00Z
+- Type: learned_control_variate_holdout_diagnostic
+- Gate: broader full-deck restricted-root estimator check
+- Hypothesis: The learned-baseline sampled-action result should survive beyond
+  the original 16 deterministic roots.
+- Failure class: none
+- Summary: Reran the full-deck sampled-action estimator diagnostic on 64
+  deterministic roots using the larger restricted value baseline checkpoint.
+  The 2, 4, and 8 sampled-action settings all passed. Baseline MAE improved to
+  `28.9` chips and action correlation to `0.870` on this slice. Sample-2 bias
+  remained below the diagnostic threshold, but estimator std was still
+  `64.1`, so this remains a variance-managed diagnostic rather than a default
+  traversal method.
+- Command: `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 64 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_large_20260515.pt --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_large_64roots_20260515.json`
+- Key metrics: `{"baseline_mae": 28.883444, "baseline_corr": 0.86966, "sample2_abs_bias": 2.423331, "sample2_std": 64.104774, "sample8_abs_bias": 1.229425, "sample8_std": 32.106285, "promotion": false}`
+- Decision: The next bounded implementation target is a non-default sampled
+  traversal probe using two sampled traverser actions plus a learned baseline,
+  with exhaustive traversal comparison on small states before CUDA integration.
