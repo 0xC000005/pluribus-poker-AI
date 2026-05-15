@@ -4565,3 +4565,24 @@
 - Decision: The next bounded implementation target is a non-default sampled
   traversal probe using two sampled traverser actions plus a learned baseline,
   with exhaustive traversal comparison on small states before CUDA integration.
+
+## 20260515T084500Z-learned-baseline-256root-check - passed
+
+- Timestamp: 2026-05-15T08:45:00Z
+- Type: learned_control_variate_holdout_diagnostic
+- Gate: broader 256-root sampled-action estimator check
+- Hypothesis: The learned-baseline sampled-action estimator should remain
+  usable on a broader deterministic full-deck slice.
+- Failure class: none
+- Summary: The first 256-root run with only 250 Monte Carlo repeats failed
+  sample-2 (`3.48` mean absolute bias), while sample-4 and sample-8 stayed
+  under threshold. Rerunning the same roots with 500 repeats passed sample-2,
+  sample-4, and sample-8. Baseline MAE was stable at `29.55` chips and action
+  correlation was `0.783`. This reinforces the conclusion that two sampled
+  actions are plausible but noisy; four to eight sampled actions are safer for
+  the first traversal probe.
+- Commands: `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 250 --n-equity-samples 128 --samples-per-estimate 2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_large_20260515.pt --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_large_256roots_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_large_20260515.pt --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_large_256roots_500rep_20260515.json`
+- Key metrics: `{"baseline_mae": 29.550903, "baseline_corr": 0.783353, "sample2_abs_bias_250rep": 3.484804, "sample2_abs_bias_500rep": 2.261498, "sample4_abs_bias_500rep": 1.551068, "sample8_abs_bias_500rep": 1.166009, "promotion": false}`
+- Decision: Treat two sampled traverser actions as a lower-bound diagnostic
+  and four sampled actions as the safer first integration target. Continue to
+  an opt-in exhaustive-vs-sampled traversal probe before CUDA/default changes.

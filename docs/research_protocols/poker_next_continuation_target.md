@@ -1041,3 +1041,8 @@ The 64-root check preserves that conclusion. Two sampled traverser actions plus
 the learned baseline pass the restricted full-deck estimator diagnostic on a
 broader deterministic slice, but variance is still large enough that this must
 remain opt-in until compared against exhaustive traversal on small states.
+
+The 256-root check keeps the same direction but clarifies risk: sample-2 can
+pass with enough repetitions, yet it is visibly noisy; sample-4 and sample-8
+are more stable. Use four sampled traverser actions as the first safer
+diagnostic integration point, with sample-2 kept as a lower-bound ablation.
