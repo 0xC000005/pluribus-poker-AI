@@ -1,0 +1,20 @@
+{
+  "review_id": "20260515T050000Z-restricted-action-value-diagnostic",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T050000Z-restricted-action-value-diagnostic",
+  "subject": "Restricted early-action value diagnostic",
+  "trigger": "new_evaluation_gate",
+  "decision": "proceed",
+  "changed_paths": [
+    "poker_ai/research/restricted_action_value.py",
+    "scripts/eval_restricted_action_values.py",
+    "poker_ai/research/autoresearch.py",
+    "test/unit/test_restricted_action_value.py",
+    "test/unit/test_poker_autoresearch.py"
+  ],
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1908.09453",
+    "https://poker.cs.ualberta.ca/publications/NIPS12.pdf"
+  ]
+}

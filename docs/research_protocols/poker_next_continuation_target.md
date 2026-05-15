@@ -489,6 +489,17 @@ small public-state abstraction, stronger offline fitted Q with balanced action
 coverage, or a restricted preflop/flop action-value evaluator that can exploit
 known passive and over-all-in controls before touching real candidates.
 
+The first replacement is a restricted showdown action-value diagnostic. It
+does not train a model and is not exploitability: it estimates current-hand
+showdown equity against a random opponent range, then scores each legal first
+action by pot odds under an "opponent calls, then checkdown" abstraction. The
+positive controls pass: premium aces prefer all-in pressure, while seven-deuce
+facing a large legal raise prefers fold. A 64-root smoke produced
+`oracle_best_mean_payoff=97.02` chips versus `call_mean_payoff=3.75`, with
+positive controls passing. Use this only as an evaluator-health and
+early-action value sanity check; candidate promotion still requires
+duplicate-swapped H2H, fixed-state resolver evidence, and Slumbot confidence.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
