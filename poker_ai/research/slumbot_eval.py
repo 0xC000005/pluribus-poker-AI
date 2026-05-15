@@ -23,6 +23,10 @@ _STREET_ITEM_RE = re.compile(
     r"(?P<street>preflop|flop|turn|river)\("
     r"total=(?P<total>\d+)\s+all-in=(?P<allin>\d+)\s+solver=(?P<solver>\d+)\)"
 )
+_FIRST_POLICY_OUTCOME_RE = re.compile(r"First policy outcome:\s+(?P<items>.+)")
+_FIRST_POLICY_OUTCOME_ITEM_RE = re.compile(
+    r"(?P<action>[A-Za-z0-9./-]+)\(n=(?P<n>\d+)\s+avg=(?P<avg>[+-]?\d+)\)"
+)
 _MAPPING_DRIFT_RE = re.compile(
     r"Mapping drift:\s+n=(?P<n>\d+)\s+mean=(?P<mean>[0-9.]+)\s+max=(?P<max>[0-9.]+)"
 )
@@ -54,6 +58,16 @@ def _parse_street_mix(text: str) -> tuple[dict[str, int], dict[str, int], dict[s
         all_in[street] = int(match.group("allin"))
         solver[street] = int(match.group("solver"))
     return decisions, all_in, solver
+
+
+def _parse_first_policy_outcomes(text: str) -> dict[str, dict[str, int]]:
+    outcomes = {}
+    for match in _FIRST_POLICY_OUTCOME_ITEM_RE.finditer(text):
+        outcomes[match.group("action")] = {
+            "n": int(match.group("n")),
+            "avg_chips": int(match.group("avg")),
+        }
+    return outcomes
 
 
 def parse_slumbot_summary(output: str) -> dict:
@@ -104,6 +118,11 @@ def parse_slumbot_summary(output: str) -> dict:
             metrics["street_decisions"] = street_decisions
             metrics["street_all_in"] = street_all_in
             metrics["street_solver"] = street_solver
+    first_policy_outcomes = _FIRST_POLICY_OUTCOME_RE.search(output)
+    if first_policy_outcomes:
+        parsed_outcomes = _parse_first_policy_outcomes(first_policy_outcomes.group("items"))
+        if parsed_outcomes:
+            metrics["first_policy_outcomes"] = parsed_outcomes
     mapping_drift = _MAPPING_DRIFT_RE.search(output)
     if mapping_drift:
         metrics.update(

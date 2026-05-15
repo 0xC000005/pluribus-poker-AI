@@ -462,6 +462,15 @@ because it reached `415` turn/river solver decisions. Lowering early all-ins is
 necessary but not sufficient; the next gate must measure early-street action
 quality/value transfer, not only distribution sanity.
 
+First-action outcome diagnostic status: live summaries now attribute final hand
+outcome to the first blueprint policy action. On a 300-hand restored-history
+attribution check, first `call/chk` dominated (`186` hands) and averaged
+`-402` chips, while rare first all-ins were positive in this noisy sample
+(`+1344` over `16` hands). Treat this as mechanism evidence, not a policy rule:
+the early blueprint appears value-miscalibrated on passive first actions, so the
+next local gate should estimate early action value or exploitability rather than
+only suppress all-ins.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

@@ -618,11 +618,24 @@ class ActionDiagnostics:
         self.street_decisions = {name: 0 for name in STREET_NAMES}
         self.street_all_in = {name: 0 for name in STREET_NAMES}
         self.street_solver = {name: 0 for name in STREET_NAMES}
+        self._current_first_policy_action = None
+        self.first_policy_outcome_counts = {name: 0 for name in ACTION_NAMES}
+        self.first_policy_outcome_sums = {name: 0.0 for name in ACTION_NAMES}
         self.mapping_drifts = []
         self.solver_latencies_ms = []
         self.solver_hand_counts = []
         self.solver_full_hand_counts = []
         self.solver_cache_hits = 0
+
+    def begin_hand(self):
+        self._current_first_policy_action = None
+
+    def end_hand(self, winnings):
+        action_name = self._current_first_policy_action
+        if action_name is None:
+            return
+        self.first_policy_outcome_counts[action_name] += 1
+        self.first_policy_outcome_sums[action_name] += float(winnings)
 
     def _street_name(self, street):
         if street is None:
@@ -657,7 +670,10 @@ class ActionDiagnostics:
     def record_policy_action(self, action_idx, incr, action_str, client_pos, parsed,
                              street=None):
         self.decision_policy += 1
-        self.action_mix[ACTION_NAMES[action_idx]] += 1
+        action_name = ACTION_NAMES[action_idx]
+        self.action_mix[action_name] += 1
+        if self._current_first_policy_action is None:
+            self._current_first_policy_action = action_name
         street_name = self._street_name(street)
         if street_name is not None:
             self.street_decisions[street_name] += 1
@@ -716,6 +732,16 @@ class ActionDiagnostics:
             mean_solver_hands / mean_solver_full_hands
             if mean_solver_full_hands > 0 else 0.0
         )
+        first_policy_outcomes = {}
+        for action_name in ACTION_NAMES:
+            count = self.first_policy_outcome_counts[action_name]
+            if count <= 0:
+                continue
+            avg_chips = self.first_policy_outcome_sums[action_name] / float(count)
+            first_policy_outcomes[action_name] = {
+                "n": int(count),
+                "avg_chips": int(round(avg_chips)),
+            }
         return {
             "decision_total": (
                 self.decision_policy + self.decision_solver + self.decision_fallback
@@ -730,6 +756,7 @@ class ActionDiagnostics:
             "street_decisions": dict(self.street_decisions),
             "street_all_in": dict(self.street_all_in),
             "street_solver": dict(self.street_solver),
+            "first_policy_outcomes": first_policy_outcomes,
             "mapping_drift_n": n_drift,
             "mapping_drift_mean": round(mean_drift, 3),
             "mapping_drift_max": round(max_drift, 3),
@@ -757,6 +784,12 @@ class ActionDiagnostics:
             f"solver={summary['street_solver'][name]})"
             for name in STREET_NAMES
         )
+        first_outcome_parts = " ".join(
+            f"{name}(n={record['n']} avg={record['avg_chips']})"
+            for name, record in summary["first_policy_outcomes"].items()
+        )
+        if not first_outcome_parts:
+            first_outcome_parts = "none"
         return [
             "  Decisions: "
             f"total={summary['decision_total']} "
@@ -768,6 +801,7 @@ class ActionDiagnostics:
             f"  Action mix: {action_parts}",
             f"  Increments: {increment_parts}",
             f"  Street mix: {street_parts}",
+            f"  First policy outcome: {first_outcome_parts}",
             "  Mapping drift: "
             f"n={summary['mapping_drift_n']} "
             f"mean={summary['mapping_drift_mean']:.3f} "
@@ -1167,6 +1201,7 @@ def main():
         if args.verbose:
             print(f"Hand {h+1:3d}:", end="")
 
+        diagnostics.begin_hand()
         token, w = play_hand(value_net, token, device, verbose=args.verbose,
                              greedy=args.greedy, no_allin=args.no_allin,
                              use_solver=not args.no_solver,
@@ -1174,6 +1209,7 @@ def main():
                              strategy_source=args.strategy_source,
                              solver_backend=args.solver_backend,
                              solver_budget_profile=args.solver_budget_profile)
+        diagnostics.end_hand(w)
         total_winnings += w
         results.append(w)
 

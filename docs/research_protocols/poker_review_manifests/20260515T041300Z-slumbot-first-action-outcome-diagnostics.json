@@ -1,0 +1,19 @@
+{
+  "review_id": "20260515T041300Z-slumbot-first-action-outcome-diagnostics",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T041300Z-slumbot-first-action-outcome-diagnostics",
+  "subject": "Slumbot first-policy-action outcome diagnostics",
+  "trigger": "protected_surface_diagnostic_change",
+  "decision": "proceed",
+  "changed_paths": [
+    "scripts/play_slumbot.py",
+    "poker_ai/research/slumbot_eval.py",
+    "test/unit/test_slumbot_diagnostics.py",
+    "test/unit/test_poker_autoresearch_slumbot.py"
+  ],
+  "sources": [
+    "https://www.deepstack.ai/home",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/1908.09453"
+  ]
+}
+

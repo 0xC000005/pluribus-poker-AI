@@ -472,6 +472,15 @@ states using duplicate-swapped rollouts or a stronger local teacher, then only
 spend Slumbot hands on candidates that pass both distribution sanity and value
 transfer.
 
+The first-action outcome diagnostic reinforces that direction. In a fresh
+300-hand restored-history attribution run, the largest first-action bucket was
+`call/chk`, and it was strongly negative (`-402` chips over `186` hands). This
+does not justify a manual "raise more" rule; it just says the current local
+self-play gate is not measuring early passive-action value against a strong
+opponent. The next implementation target should be a local approximate
+best-response or adversarial early-street evaluator that punishes weak passive
+blueprint behavior before Slumbot spend.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

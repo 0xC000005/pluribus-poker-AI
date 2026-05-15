@@ -56,6 +56,24 @@ def test_action_diagnostics_records_street_all_in_and_solver_counts():
     assert summary["street_solver"]["turn"] == 1
 
 
+def test_action_diagnostics_records_first_policy_action_outcome():
+    diagnostics = ActionDiagnostics()
+
+    diagnostics.begin_hand()
+    diagnostics.record_policy_action(
+        4, "b500", "", client_pos=1, parsed=parse_action(""), street=0
+    )
+    diagnostics.record_policy_action(
+        1, "c", "b500c/kk", client_pos=1, parsed=parse_action("b500c/kk"), street=2
+    )
+    diagnostics.end_hand(-250)
+
+    summary = diagnostics.as_summary()
+
+    assert summary["first_policy_outcomes"]["r0.75x"]["n"] == 1
+    assert summary["first_policy_outcomes"]["r0.75x"]["avg_chips"] == -250
+
+
 def test_action_diagnostics_records_fallback_and_parse_error():
     diagnostics = ActionDiagnostics()
 
