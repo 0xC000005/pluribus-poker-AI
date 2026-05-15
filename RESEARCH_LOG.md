@@ -5832,3 +5832,42 @@
   Slumbot belief-calibration blocker remains, but future fixed-state range
   diagnostics and belief-conditioned target builders must use chronological
   replay parity as a regression gate.
+
+## 20260515T121305Z-trace-opponent-action-likelihood-diagnostic - failed
+
+- Timestamp: 2026-05-15T12:13:05Z
+- Type: protected diagnostic tooling
+- Gate: TDD + revealed-hand Slumbot opponent-action likelihood
+- Hypothesis: If poor trace-conditioned Slumbot ranges come from the
+  opponent-response model rather than only terminal-card strength, then the
+  model should assign low likelihood to the actual Slumbot actions on hands
+  where Slumbot reveals its hole cards.
+- Failure class: distribution_shift
+- Summary: Added `scripts/diagnose_slumbot_trace_action_likelihood.py` and
+  `poker_ai/research/slumbot_trace_action_likelihood.py` to score each
+  observed Slumbot action under the loaded model for Slumbot's revealed hand,
+  using chronological board visibility and the same Slumbot action mapping as
+  range tracking. The diagnostic is a measurement surface only; it does not
+  alter live play or training.
+- Evidence:
+  - Trace:
+    `autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl`
+  - Artifact:
+    `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-action-likelihood.json`
+- Key metrics: `n_scored_actions=100`, `n_scored_hands=37`,
+  `n_skipped_results=13`, and overall
+  `mean_log_lift_vs_uniform=-0.2867`. Street slices: preflop `-0.5234`,
+  flop `-0.0804`, turn `-0.1026`, river `+0.0148`. Action slices: bets
+  `+0.1632`, checks `-0.0460`, calls `-0.7913`. Large absolute pots were
+  also negative at `-0.4128`.
+- Validation: `uv run pytest -q test/unit/test_slumbot_trace_action_likelihood.py`
+  -> 2 passed. Real diagnostic command:
+  `uv run python scripts/diagnose_slumbot_trace_action_likelihood.py --checkpoint models/autoresearch_gpu_20260515T111750Z/avg_strategy_candidate_final.pt --strategy-source average-policy --trace autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl --device cuda --output autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-action-likelihood.json`.
+- Decision: The range failure is not primarily a "Slumbot bets too much" story.
+  On this trace, Slumbot bets are above uniform likelihood; the model is
+  mainly surprised by calls and, to a lesser extent, checks, especially before
+  the flop. The next principled step is a learned opponent-response or
+  public-belief calibration objective that explains Slumbot continuation
+  actions without hard-coded action patches, then rerun both revealed-hand
+  range and action-likelihood diagnostics before any new Slumbot confidence
+  spend.

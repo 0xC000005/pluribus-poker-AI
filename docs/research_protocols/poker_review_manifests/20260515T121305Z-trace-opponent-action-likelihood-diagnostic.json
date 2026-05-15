@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1416,
+      "path": "benchmark_audit.md",
+      "sha256": "c734422521eeb50d26d2743f19bfa946cb58234a316d2ec2a0218c8ae13871a4"
+    },
+    {
+      "bytes": 582,
+      "path": "decision.json",
+      "sha256": "f24b616f8d31f68423e980e2542cd7592ff63c6fa4bf1af44a05e382acdcb116"
+    },
+    {
+      "bytes": 1369,
+      "path": "mechanism_review.md",
+      "sha256": "729db9e45c42b385d8bdbdba0cc187c36b13e32009ae6a69322eca49adc4fab2"
+    },
+    {
+      "bytes": 1973,
+      "path": "related_work.md",
+      "sha256": "898946772722e240443735194b72593dfc1190af5b7948ca581ab46e0c204aae"
+    },
+    {
+      "bytes": 2044,
+      "path": "review.md",
+      "sha256": "2f9eda8dbd0dee6d53ea09ac730d2c732d6c5de5126d91e314cf73997b505d63"
+    },
+    {
+      "bytes": 842,
+      "path": "team_review.md",
+      "sha256": "d6871623b6d2651c830eef0bfcdeaf262c5b5af16868019ead2b6644850b6f9b"
+    }
+  ],
+  "reason": "Proceed as a protected diagnostic. The artifact localizes the Slumbot belief failure toward opponent continuation-action likelihood, especially calls and preflop actions, without changing live play or promotion gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T121305Z-trace-opponent-action-likelihood-diagnostic",
+  "review_id": "20260515T121305Z-trace-opponent-action-likelihood-diagnostic",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://proceedings.mlr.press/v97/brown19b",
+    "https://arxiv.org/abs/1603.01121",
+    "autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-action-likelihood.json"
+  ],
+  "written_at": "2026-05-15T12:15:03Z"
+}
