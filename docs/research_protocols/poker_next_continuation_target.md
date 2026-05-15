@@ -221,10 +221,11 @@ once, then reports quality and latency without pretending this is a promotion
 gate. The first 64-root frontier confirms the current target: CFR10 reaches
 `0.3630` L1 and `0.1251` KL at about `1.94x` CFR5 latency. Solver reuse
 improved the 8-root cProfile smoke from `32.711s` to `18.787s`; CPU CFR
-strategy reuse then improved it to `16.687s` while preserving 64-root quality
-metrics and zero illegal mass. The next acceleration target is either
-turn-equity construction or a coarser batched/fused solver boundary, not more
-surface-level evaluator caching. A learned or fused method must improve this
+strategy reuse improved it to `16.687s`; exact seven-card evaluator reuse
+improved it to `13.913s`, all while preserving 64-root quality metrics and
+zero illegal mass. The next acceleration target is a coarser batched/fused CFR
+boundary or learned public-belief correction, not another surface-level
+evaluator cache. A learned or fused method must improve this
 decision-quality-per-compute frontier, not just beat CFR5.
 
 The current `torch-cuda` resolver backend is not the answer to the GPU-use

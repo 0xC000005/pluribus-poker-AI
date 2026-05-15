@@ -9,6 +9,9 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from fast_cfr import _regret_matching_strategy
+from solver import _CARD_TO_EVAL
+from solver import _EVALUATOR
+from solver import _evaluate_seven_eval_cards
 from solver import StreetSolver
 from solver import solve_street
 
@@ -35,6 +38,23 @@ def test_regret_matching_strategy_uses_positive_regrets_or_uniform_fallback():
     )
     np.testing.assert_allclose(strategy, expected, atol=1e-7)
     assert strategy.dtype == np.float32
+
+
+def test_fast_seven_card_evaluator_matches_reference_on_sampled_showdowns():
+    samples = [
+        (0, 5, 10, 15, 20, 25, 30),
+        (3, 7, 11, 19, 27, 35, 43),
+        (12, 13, 14, 28, 32, 40, 51),
+        (1, 9, 17, 21, 29, 37, 45),
+        (0, 4, 8, 12, 16, 20, 24),
+        (0, 1, 2, 3, 4, 8, 12),
+    ]
+
+    for cards in samples:
+        eval_cards = [int(_CARD_TO_EVAL[card]) for card in cards]
+        fast_rank = _evaluate_seven_eval_cards(*eval_cards)
+        reference_rank = _EVALUATOR.evaluate(eval_cards[:2], eval_cards[2:])
+        assert fast_rank == reference_rank
 
 
 def test_street_solver_accepts_torch_cpu_backend_and_returns_strategy():

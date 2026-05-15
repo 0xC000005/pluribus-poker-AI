@@ -161,8 +161,10 @@ and about `145 ms`; CFR10 measured `0.3630` L1, `0.1251` KL, `0.8125` action
 agreement, and about `280 ms` after CPU CFR strategy reuse. The script emits
 `promotion=false` and is now a protected evaluation surface. The 8-root
 cProfile smoke improved from `32.711s` before solver reuse to `18.787s` after
-solver reuse and `16.687s` after strategy reuse; remaining runtime is split
-between `fast_cfr.solve_cfr` and turn-equity construction.
+solver reuse, `16.687s` after strategy reuse, and `13.913s` after the exact
+seven-card evaluator shortcut. Budget JSON `latency_ms` is solver-only and
+does not include `StreetSolver` construction, so use cProfile for
+construction-speed claims.
 
 Resolver backend status: forcing the current `torch-cuda` street-solver backend
 is still not an acceleration path for fixed-state solving. A fresh four-case

@@ -34,6 +34,83 @@ _CARD_TO_EVAL = np.zeros(52, dtype=np.int32)
 for _ci in range(52):
     _CARD_TO_EVAL[_ci] = EvaluationCard.new(
         _RANK_CHARS[_ci // 4] + _SUIT_CHARS[_ci % 4])
+_FLUSH_LOOKUP = _EVALUATOR.table.flush_lookup
+_UNSUITED_LOOKUP = _EVALUATOR.table.unsuited_lookup
+
+
+def _evaluate_five_eval_cards(c0, c1, c2, c3, c4):
+    if c0 & c1 & c2 & c3 & c4 & 0xF000:
+        hand_or = (c0 | c1 | c2 | c3 | c4) >> 16
+        prime = EvaluationCard.prime_product_from_rankbits(hand_or)
+        return _FLUSH_LOOKUP[prime]
+    prime = (c0 & 0xFF) * (c1 & 0xFF) * (c2 & 0xFF) * (c3 & 0xFF) * (c4 & 0xFF)
+    return _UNSUITED_LOOKUP[prime]
+
+
+def _evaluate_seven_eval_cards(c0, c1, c2, c3, c4, c5, c6):
+    """Evaluate seven already-encoded cards using the repo lookup table."""
+    best = _evaluate_five_eval_cards(c0, c1, c2, c3, c4)
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c3, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c3, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c3, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c3, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c3, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c3, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c3, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c3, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c3, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c3, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c3, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c3, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c3, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c2, c3, c4, c5, c6)
+    if rank < best:
+        best = rank
+    return best
 
 
 def _min_raise_contribution(to_call, big_blind=BIG_BLIND):
@@ -127,8 +204,11 @@ class StreetSolver:
         board_eval = [int(_CARD_TO_EVAL[c]) for c in board]
         ranks = np.zeros(self.n, dtype=np.int32)
         for i, (c1, c2) in enumerate(self.hands):
-            ranks[i] = _EVALUATOR.evaluate(
-                [int(_CARD_TO_EVAL[c1]), int(_CARD_TO_EVAL[c2])], board_eval)
+            ranks[i] = _evaluate_seven_eval_cards(
+                int(_CARD_TO_EVAL[c1]),
+                int(_CARD_TO_EVAL[c2]),
+                *board_eval,
+            )
 
         ri = ranks[:, np.newaxis]
         rj = ranks[np.newaxis, :]
@@ -144,6 +224,10 @@ class StreetSolver:
         n = self.n
         board_eval = [int(_CARD_TO_EVAL[c]) for c in board_4]
         river_cards = sorted(set(range(52)) - set(board_4))
+        hand_eval = [
+            (int(_CARD_TO_EVAL[c1]), int(_CARD_TO_EVAL[c2]))
+            for c1, c2 in self.hands
+        ]
 
         win_sum = np.zeros((n, n), dtype=np.float32)
         lose_sum = np.zeros((n, n), dtype=np.float32)
@@ -168,9 +252,8 @@ class StreetSolver:
                 if river_card in (c1, c2):
                     ranks[i] = 999999
                 else:
-                    ranks[i] = _EVALUATOR.evaluate(
-                        [int(_CARD_TO_EVAL[c1]), int(_CARD_TO_EVAL[c2])],
-                        full_board)
+                    e1, e2 = hand_eval[i]
+                    ranks[i] = _evaluate_seven_eval_cards(e1, e2, *full_board)
 
             ri = ranks[:, np.newaxis]
             rj = ranks[np.newaxis, :]

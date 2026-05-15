@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 973,
+      "path": "benchmark_audit.md",
+      "sha256": "5420e030cf2730f09a51acea2005da303b448a8074c9e8a0a020d87d76216603"
+    },
+    {
+      "bytes": 450,
+      "path": "decision.json",
+      "sha256": "89a1949670182961132b27266c0e24daacf0d02abc63b530e343016160d7afd8"
+    },
+    {
+      "bytes": 1160,
+      "path": "mechanism_review.md",
+      "sha256": "a12c73ac1245b5d55618e42e09b6fcfe55bcf7c82515186b19cbf85f9307dfd5"
+    },
+    {
+      "bytes": 1238,
+      "path": "related_work.md",
+      "sha256": "69fe886356b915a257c499308f9bc699bb7610aec394a637bbdba1eaa2affe37"
+    },
+    {
+      "bytes": 1419,
+      "path": "review.md",
+      "sha256": "78ac74a9b7597218616be78cdd6fd98c2a34387a82efd438601b162b53aa0981"
+    },
+    {
+      "bytes": 411,
+      "path": "team_review.md",
+      "sha256": "de95c1cdb3e415b64e3a0ef0454f70cd95aeb627c0253ce590a18b90f031369a"
+    }
+  ],
+  "reason": "The protected solver.py evaluator shortcut preserved fixed-state CFR quality and legality while reducing end-to-end construction/profile time for turn resolver setup.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T000644Z-fast-seven-card-eval",
+  "review_id": "20260515T000644Z-fast-seven-card-eval",
+  "sources": [
+    "https://papers.nips.cc/paper_files/paper/2007/file/08d98638c6fcd194a4b1e6992063e944-Paper.pdf",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-15T00:06:44Z"
+}
