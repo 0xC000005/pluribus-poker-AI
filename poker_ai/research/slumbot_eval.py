@@ -18,6 +18,11 @@ _DECISIONS_RE = re.compile(
 )
 _ACTION_MIX_RE = re.compile(r"Action mix:\s+(?P<mix>.+)")
 _INCREMENTS_RE = re.compile(r"Increments:\s+(?P<mix>.+)")
+_STREET_MIX_RE = re.compile(r"Street mix:\s+(?P<mix>.+)")
+_STREET_ITEM_RE = re.compile(
+    r"(?P<street>preflop|flop|turn|river)\("
+    r"total=(?P<total>\d+)\s+all-in=(?P<allin>\d+)\s+solver=(?P<solver>\d+)\)"
+)
 _MAPPING_DRIFT_RE = re.compile(
     r"Mapping drift:\s+n=(?P<n>\d+)\s+mean=(?P<mean>[0-9.]+)\s+max=(?P<max>[0-9.]+)"
 )
@@ -37,6 +42,18 @@ def _parse_key_value_counts(text: str) -> dict[str, int]:
         key, value = token.rsplit("=", 1)
         counts[key] = int(value)
     return counts
+
+
+def _parse_street_mix(text: str) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+    decisions = {}
+    all_in = {}
+    solver = {}
+    for match in _STREET_ITEM_RE.finditer(text):
+        street = match.group("street")
+        decisions[street] = int(match.group("total"))
+        all_in[street] = int(match.group("allin"))
+        solver[street] = int(match.group("solver"))
+    return decisions, all_in, solver
 
 
 def parse_slumbot_summary(output: str) -> dict:
@@ -78,6 +95,15 @@ def parse_slumbot_summary(output: str) -> dict:
     increments = _INCREMENTS_RE.search(output)
     if increments:
         metrics["increment_mix"] = _parse_key_value_counts(increments.group("mix"))
+    street_mix = _STREET_MIX_RE.search(output)
+    if street_mix:
+        street_decisions, street_all_in, street_solver = _parse_street_mix(
+            street_mix.group("mix")
+        )
+        if street_decisions:
+            metrics["street_decisions"] = street_decisions
+            metrics["street_all_in"] = street_all_in
+            metrics["street_solver"] = street_solver
     mapping_drift = _MAPPING_DRIFT_RE.search(output)
     if mapping_drift:
         metrics.update(

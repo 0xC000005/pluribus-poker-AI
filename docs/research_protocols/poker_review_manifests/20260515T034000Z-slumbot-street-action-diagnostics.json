@@ -1,0 +1,19 @@
+{
+  "review_id": "20260515T034000Z-slumbot-street-action-diagnostics",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T034000Z-slumbot-street-action-diagnostics",
+  "subject": "Slumbot street action diagnostics",
+  "trigger": "protected_surface_diagnostic_change",
+  "decision": "proceed",
+  "changed_paths": [
+    "scripts/play_slumbot.py",
+    "poker_ai/research/slumbot_eval.py",
+    "test/unit/test_slumbot_diagnostics.py",
+    "test/unit/test_poker_autoresearch_slumbot.py"
+  ],
+  "sources": [
+    "https://www.deepstack.ai/home",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/2403.04344"
+  ]
+}
+

@@ -25,7 +25,9 @@ def test_action_diagnostics_records_policy_mapping_drift():
     parsed = parse_action(action_str)
     incr = action_to_slumbot(3, parsed, action_str, client_pos=1)
 
-    diagnostics.record_policy_action(3, incr, action_str, client_pos=1, parsed=parsed)
+    diagnostics.record_policy_action(
+        3, incr, action_str, client_pos=1, parsed=parsed, street=0
+    )
 
     summary = diagnostics.as_summary()
     assert summary["decision_total"] == 1
@@ -34,6 +36,24 @@ def test_action_diagnostics_records_policy_mapping_drift():
     assert summary["increment_mix"]["b"] == 1
     assert summary["mapping_drift_n"] == 1
     assert 0.0 <= summary["mapping_drift_mean"] <= 1.0
+    assert summary["street_decisions"]["preflop"] == 1
+    assert summary["street_all_in"]["preflop"] == 0
+
+
+def test_action_diagnostics_records_street_all_in_and_solver_counts():
+    diagnostics = ActionDiagnostics()
+
+    diagnostics.record_policy_action(
+        8, "b20000", "", client_pos=1, parsed=parse_action(""), street=0
+    )
+    diagnostics.record_solver_action("b300", street=2, latency_ms=125.5)
+
+    summary = diagnostics.as_summary()
+
+    assert summary["street_decisions"]["preflop"] == 1
+    assert summary["street_decisions"]["turn"] == 1
+    assert summary["street_all_in"]["preflop"] == 1
+    assert summary["street_solver"]["turn"] == 1
 
 
 def test_action_diagnostics_records_fallback_and_parse_error():

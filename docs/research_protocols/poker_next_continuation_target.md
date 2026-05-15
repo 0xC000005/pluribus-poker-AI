@@ -437,6 +437,15 @@ predicts live transfer for a mechanism reason. The next task should diagnose
 why the blueprint overbets/all-ins under live Slumbot distributions, or build a
 root-disjoint calibration/evaluation gate that catches this before API spend.
 
+The new street-level diagnostic narrows that task: on a 300-hand `iter1000`
+fast-live attribution run, all `82` all-ins came from the early blueprint path
+(`60` preflop and `22` flop), not from turn/river solving. The next continuation
+target should build a local early-street blueprint calibration gate that
+measures regret-policy action distribution against search/stronger-policy
+targets on reachable preflop/flop states. Do not patch this with a manual
+no-all-in rule; the goal is to make the learned policy/search interface assign
+reasonable probability mass before live Slumbot spend.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

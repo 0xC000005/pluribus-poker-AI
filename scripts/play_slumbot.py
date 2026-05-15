@@ -600,6 +600,7 @@ ACTION_NAMES = [
     "r0.25x", "r0.5x", "r0.75x", "r1.0x", "r1.5x", "r2.0x",
     "all-in",
 ]
+STREET_NAMES = ["preflop", "flop", "turn", "river"]
 
 
 class ActionDiagnostics:
@@ -614,11 +615,25 @@ class ActionDiagnostics:
         self.action_mix = {name: 0 for name in ACTION_NAMES}
         self.action_mix["solver"] = 0
         self.increment_mix = {"f": 0, "k": 0, "c": 0, "b": 0}
+        self.street_decisions = {name: 0 for name in STREET_NAMES}
+        self.street_all_in = {name: 0 for name in STREET_NAMES}
+        self.street_solver = {name: 0 for name in STREET_NAMES}
         self.mapping_drifts = []
         self.solver_latencies_ms = []
         self.solver_hand_counts = []
         self.solver_full_hand_counts = []
         self.solver_cache_hits = 0
+
+    def _street_name(self, street):
+        if street is None:
+            return None
+        try:
+            idx = int(street)
+        except (TypeError, ValueError):
+            return None
+        if 0 <= idx < len(STREET_NAMES):
+            return STREET_NAMES[idx]
+        return None
 
     def _record_increment(self, incr):
         if not incr:
@@ -639,16 +654,26 @@ class ActionDiagnostics:
         drift = max(0.0, min(1.0, 1.0 - intended_weight))
         self.mapping_drifts.append(drift)
 
-    def record_policy_action(self, action_idx, incr, action_str, client_pos, parsed):
+    def record_policy_action(self, action_idx, incr, action_str, client_pos, parsed,
+                             street=None):
         self.decision_policy += 1
         self.action_mix[ACTION_NAMES[action_idx]] += 1
+        street_name = self._street_name(street)
+        if street_name is not None:
+            self.street_decisions[street_name] += 1
+            if action_idx == 8:
+                self.street_all_in[street_name] += 1
         self._record_increment(incr)
         self._record_mapping_drift(action_idx, incr, action_str, client_pos, parsed)
 
     def record_solver_action(self, incr, *, latency_ms=None, n_hands=None,
-                             full_n_hands=None, cached=False):
+                             full_n_hands=None, cached=False, street=None):
         self.decision_solver += 1
         self.action_mix["solver"] += 1
+        street_name = self._street_name(street)
+        if street_name is not None:
+            self.street_decisions[street_name] += 1
+            self.street_solver[street_name] += 1
         self._record_increment(incr)
         if cached:
             self.solver_cache_hits += 1
@@ -702,6 +727,9 @@ class ActionDiagnostics:
             "api_errors": self.api_errors,
             "action_mix": dict(self.action_mix),
             "increment_mix": dict(self.increment_mix),
+            "street_decisions": dict(self.street_decisions),
+            "street_all_in": dict(self.street_all_in),
+            "street_solver": dict(self.street_solver),
             "mapping_drift_n": n_drift,
             "mapping_drift_mean": round(mean_drift, 3),
             "mapping_drift_max": round(max_drift, 3),
@@ -723,6 +751,12 @@ class ActionDiagnostics:
         increment_parts = " ".join(
             f"{name}={summary['increment_mix'][name]}" for name in ["f", "k", "c", "b"]
         )
+        street_parts = " ".join(
+            f"{name}(total={summary['street_decisions'][name]} "
+            f"all-in={summary['street_all_in'][name]} "
+            f"solver={summary['street_solver'][name]})"
+            for name in STREET_NAMES
+        )
         return [
             "  Decisions: "
             f"total={summary['decision_total']} "
@@ -733,6 +767,7 @@ class ActionDiagnostics:
             f"api_errors={summary['api_errors']}",
             f"  Action mix: {action_parts}",
             f"  Increments: {increment_parts}",
+            f"  Street mix: {street_parts}",
             "  Mapping drift: "
             f"n={summary['mapping_drift_n']} "
             f"mean={summary['mapping_drift_mean']:.3f} "
@@ -789,7 +824,9 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
 
     incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
     if diagnostics is not None:
-        diagnostics.record_policy_action(action_idx, incr, action_str, client_pos, parsed)
+        diagnostics.record_policy_action(
+            action_idx, incr, action_str, client_pos, parsed, street=parsed.get("st")
+        )
     if verbose:
         print(f" [{ACTION_NAMES[action_idx]}→{incr}]", end="", flush=True)
     return incr
@@ -842,7 +879,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     if incr_cached is not None:
         incr = incr_cached
         if diagnostics is not None:
-            diagnostics.record_solver_action(incr, cached=True)
+            diagnostics.record_solver_action(incr, cached=True, street=st)
         if verbose:
             label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
             print(f" [{label}:CACHED>{incr}]", end="", flush=True)
@@ -897,6 +934,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
             latency_ms=solve_latency_ms,
             n_hands=solver.n,
             full_n_hands=solver.full_n,
+            street=st,
         )
     return incr
 

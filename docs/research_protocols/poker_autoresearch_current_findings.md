@@ -426,6 +426,15 @@ strengthens the calibration diagnosis: local self-play/H2H signals can prefer a
 policy that transfers worse to Slumbot because its betting distribution is
 miscalibrated.
 
+Street-level Slumbot diagnostic status: live summaries now report per-street
+total decisions, all-in decisions, and solver decisions. The first 300-hand
+`iter1000` fast-live attribution run was still noisy for chips
+(`-351 +/- 458`), but it localized the all-in problem: `60/308` preflop
+decisions and `22/56` flop decisions were all-in, while turn and river solver
+decisions had `0` all-ins (`20` turn solves, `8` river solves). The current
+failure is therefore early-street blueprint/action calibration before the
+resolver gets involved, not a live CUDA budget issue.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
