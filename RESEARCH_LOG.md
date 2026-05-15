@@ -6096,3 +6096,55 @@
   evaluate on trace-held-out revealed-hand range likelihood and fixed-state
   resolver outcomes before spending Slumbot confidence hands. Do not replace
   the range tracker with empirical priors or hand-coded call/check boosts.
+
+## 20260515T130100Z-methodology-review-for-opponent-response-range-a-b - failed
+
+- Timestamp: 2026-05-15T13:01:00Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T130058Z-opponent-response-range-a-b-diagnostic
+- Hypothesis: Methodology review for Opponent-response range A/B diagnostic should verify the claim and include related work before the next research action.
+- Failure class: eval_invalid
+- Summary: Gate methodology-review-20260515T130058Z-opponent-response-range-a-b-diagnostic failed.
+- Metrics file: autoresearch-session/poker_runs/20260515T130100Z-methodology-review-for-opponent-response-range-a-b/metrics.json
+- Key metrics: `{"gate": "methodology-review-20260515T130058Z-opponent-response-range-a-b-diagnostic", "passed": false}`
+
+## 20260515T130500Z-opponent-response-range-ab - diagnostic-pass
+
+- Timestamp: 2026-05-15T13:05:00Z
+- Type: offline protected evaluation diagnostic
+- Gate: Hand-held-out learned opponent-response Bayesian range-update A/B
+- Hypothesis: A learned Slumbot opponent-response likelihood can improve
+  trace-heldout revealed-hand range likelihood when used only for
+  opponent-action Bayesian range updates.
+- Summary: Added `poker_ai/research/slumbot_opponent_response_range_ab.py`,
+  `scripts/eval_slumbot_opponent_response_range_ab.py`, and focused tests. The
+  evaluator trains the response likelihood on action-likelihood records, splits
+  by `hand_index`, replays only held-out Slumbot hands, and compares the current
+  self-play range tracker against response-model range updates. It is offline
+  only and does not modify live `RangeTracker` or `play_slumbot.py`.
+- Evidence:
+  - Metrics:
+    `autoresearch-session/slumbot_trace_cases/20260515T125000Z-avg-strategy-noallin-fullhist-500h-opponent-response-range-ab.json`
+  - Methodology review:
+    `autoresearch-session/poker_reviews/20260515T130058Z-opponent-response-range-a-b-diagnostic`
+- Key metrics: 881 action records from 346 revealed hands, 606 train records,
+  275 held-out records, and 104 held-out hands. Baseline range mean log-lift
+  was `-0.6275`; learned response range mean log-lift was `-0.3226`; delta was
+  `+0.3048`. Turn improved from `-1.2279` to `-0.6205`; river improved from
+  `-1.6794` to `-0.2565`. Response ranges still remained negative versus
+  uniform overall, and some record-level updates were overconfident.
+- Validation: `uv run pytest -q test/unit/test_slumbot_opponent_response_range_ab.py test/unit/test_slumbot_opponent_response_probe.py test/unit/test_slumbot_trace_range_truth.py test/unit/test_slumbot_trace_action_likelihood.py`
+  -> 11 passed. `python -m py_compile
+  poker_ai/research/slumbot_opponent_response_range_ab.py
+  scripts/eval_slumbot_opponent_response_range_ab.py` -> passed.
+  `uv run python scripts/poker_methodology_review.py --review-dir
+  autoresearch-session/poker_reviews/20260515T130058Z-opponent-response-range-a-b-diagnostic
+  --require-complete` -> passed. `uv run python scripts/poker_autoresearch.py
+  objective-audit --changed-path poker_ai/research/slumbot_opponent_response_range_ab.py
+  --changed-path scripts/eval_slumbot_opponent_response_range_ab.py
+  --changed-path test/unit/test_slumbot_opponent_response_range_ab.py
+  --review-dir autoresearch-session/poker_reviews/20260515T130058Z-opponent-response-range-a-b-diagnostic`
+  -> passed.
+- Decision: Proceed only as an offline diagnostic. The next falsifier must use
+  disjoint Slumbot traces or sessions, then fixed-state resolver A/B, before
+  any live range-tracker integration or Slumbot confidence spend.
