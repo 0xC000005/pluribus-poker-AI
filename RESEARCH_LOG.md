@@ -6052,3 +6052,47 @@
   enough; the next research step should address data sufficiency or model the
   opponent response as a calibrated population distribution, not a high-capacity
   per-trace classifier.
+
+## 20260515T125000Z-slumbot-500h-opponent-response-probe - diagnostic-pass
+
+- Timestamp: 2026-05-15T12:50:00Z
+- Type: Slumbot trace data-sufficiency diagnostic
+- Gate: Full-history 500-hand Slumbot trace action likelihood, empirical
+  response baseline, revealed-hand range likelihood, and hand-held-out learned
+  opponent-response probe.
+- Hypothesis: The 200-hand probe failure may be data-limited. With more
+  full-history Slumbot hands, a compact learned opponent-response likelihood
+  should beat the current self-play likelihood and uniform on hand-held-out
+  actions before any live range-update integration is considered.
+- Evidence:
+  - Trace:
+    `autoresearch-session/slumbot_traces/slumbot-candidate-trace-20260515T125000Z-avg-strategy-noallin-fullhist-500h.jsonl`
+  - Action likelihood:
+    `autoresearch-session/slumbot_trace_cases/20260515T125000Z-avg-strategy-noallin-fullhist-500h-action-likelihood.json`
+  - Empirical baseline:
+    `autoresearch-session/slumbot_trace_cases/20260515T125000Z-avg-strategy-noallin-fullhist-500h-opponent-response-baseline.json`
+  - True-range likelihood:
+    `autoresearch-session/slumbot_trace_cases/20260515T125000Z-avg-strategy-noallin-fullhist-500h-true-range.json`
+  - Learned probe:
+    `autoresearch-session/slumbot_trace_cases/20260515T125000Z-avg-strategy-noallin-fullhist-500h-opponent-response-probe.json`
+- Key metrics: Slumbot run finished 500 hands with zero parse/API errors,
+  zero fallbacks, 999 decisions, and 203 CUDA solver decisions. Live result was
+  `-568 +/- 474` chips/hand, so this checkpoint is not promotable. Action
+  likelihood scored 881 opponent actions from 346 revealed hands with mean
+  log-lift `-0.2961`; bets were `+0.0996`, calls `-0.8956`, checks `+0.0494`.
+  The empirical leave-one-hand-out baseline remained much stronger: global LOO
+  `+0.8739`, street LOO `+0.9877`, versus model `-0.2961`. True-range
+  likelihood scored 472 revealed states with mean log-lift `-0.4509`; turn was
+  `-1.0572`, river `-1.8507`, and large absolute pots `-1.0966`.
+- Probe result: The 2x128 CUDA probe trained on a hand-held-out split now
+  passed the diagnostic likelihood bar. Held-out current-model log-lift was
+  `-0.3255`; raw probe log-lift was `+0.2771`; calibrated probe log-lift was
+  `+0.2237` with temperature `0.9565`. The calibrated probe beat the current
+  model by `+0.5491` log-lift and beat uniform on held-out actions.
+- Decision: This validates the learned opponent-response likelihood direction
+  as a candidate mechanism, not a live patch. The next principled step is a
+  protected range-update A/B: fit the response model on training traces, use it
+  only as an opponent-action likelihood inside Bayesian range updates, then
+  evaluate on trace-held-out revealed-hand range likelihood and fixed-state
+  resolver outcomes before spending Slumbot confidence hands. Do not replace
+  the range tracker with empirical priors or hand-coded call/check boosts.
