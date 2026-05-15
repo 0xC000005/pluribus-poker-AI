@@ -5706,3 +5706,44 @@
   public-belief/range calibration from action histories, preferably by learning
   belief-state or opponent-response features that search can condition on,
   rather than adding more action-size heuristics.
+
+## 20260515T114423Z-methodology-review-for-trace-grounded-average-policy-resolver - passed
+
+- Timestamp: 2026-05-15T11:44:23Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T114104Z-trace-grounded-average-policy-resolver-diagnostics
+- Hypothesis: Methodology review for Trace-grounded average-policy resolver diagnostics should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T114104Z-trace-grounded-average-policy-resolver-diagnostics passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T114423Z-methodology-review-for-trace-grounded-average-policy-resolver/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T114104Z-trace-grounded-average-policy-resolver-diagnostics", "passed": true}`
+
+## 20260515T114428Z-failure-synthesis-for-average-policy-and-trace-grounded - failed
+
+- Timestamp: 2026-05-15T11:44:28Z
+- Type: synthesis
+- Gate: failure-synthesis-20260515T114418Z-average-policy-and-trace-grounded-range-transfer-synthesis
+- Hypothesis: Failure synthesis for Average-policy and trace-grounded range-transfer synthesis should identify the causal model and one next falsifier before further expansion.
+- Failure class: eval_invalid
+- Summary: Gate failure-synthesis-20260515T114418Z-average-policy-and-trace-grounded-range-transfer-synthesis failed.
+- Metrics file: autoresearch-session/poker_runs/20260515T114428Z-failure-synthesis-for-average-policy-and-trace-grounded/metrics.json
+- Key metrics: `{"decision": "pending", "gate": "failure-synthesis-20260515T114418Z-average-policy-and-trace-grounded-range-transfer-synthesis", "passed": false}`
+
+## 20260515T114530Z-average-policy-trace-range-synthesis - passed
+
+- Timestamp: 2026-05-15T11:45:30Z
+- Type: synthesis
+- Gate: failure-synthesis-20260515T114418Z-average-policy-and-trace-grounded-range-transfer-synthesis
+- Hypothesis: Synthesis should update the causal model and choose one next
+  falsifier before more training or action-policy tuning.
+- Failure class: none
+- Summary: Completed the overdue synthesis. Current causal model: GPU compute
+  and average-policy deployment are not the main blockers; live Slumbot losses
+  concentrate in large-pot states where range/belief updates remain too
+  diffuse after Slumbot action histories. Retired hypotheses include pure GPU
+  acceleration, regret-snapshot deployment as the sole issue, and all-in caps.
+- Metrics file: `autoresearch-session/poker_runs/20260515T114530Z-average-policy-trace-range-synthesis-complete/metrics.json`
+- Decision: Proceed to a trace-derived opponent-range calibration falsifier:
+  score the revealed Slumbot terminal hand under the model's opponent range on
+  completed trace hands and compare against uniform/weak baselines. Pause new
+  policy/search tuning if this likelihood/rank test fails.
