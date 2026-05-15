@@ -601,6 +601,31 @@
   local gate supports strength, and do not use the 50-hand chip result as
   evidence of beating Slumbot.
 
+## 20260515T034500Z-slumbot-1000hand-profile-check - failed
+
+- Timestamp: 2026-05-15T03:45:00Z
+- Type: live Slumbot confidence diagnostic
+- Gate: two 1,000-hand online smokes with explicit `torch-levelsync-cuda`
+- Hypothesis: If the main live weakness is the fast-live budget profile, the
+  default live profile should recover Slumbot results relative to fast-live.
+- Failure class: strategy_quality
+- Summary: Ran 1,000 hands with `fast-live`, then 1,000 hands with default
+  `live`, using the same checkpoint, greedy action selection, and explicit
+  CUDA level-sync solver. Both runs were operationally clean but negative.
+- Evidence:
+  - Fast-live command: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 1000 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 7200`
+  - Live command: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 1000 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile live --timeout-seconds 7200`
+- Metrics: fast-live had `0` API errors, `0` parse errors, `74` solver
+  decisions, mean solver latency `818.4 ms`, elapsed `0.405 s/hand`, and
+  `-143 +/- 202` chips/hand. Default live had `0` API errors, `0` parse errors,
+  `87` solver decisions, mean solver latency `1179.0 ms`, elapsed
+  `0.449 s/hand`, and `-264 +/- 233` chips/hand.
+- Decision: the current checkpoint is not Slumbot-competitive under either
+  budget profile. Do not spend more effort on budget selectors as the mainline.
+  The next research target should improve blueprint/model strategy quality and
+  search calibration, while keeping the faster CUDA profile available for
+  future confidence runs.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

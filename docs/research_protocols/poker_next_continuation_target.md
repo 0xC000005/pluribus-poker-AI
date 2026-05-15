@@ -420,6 +420,14 @@ check, not another latency smoke: use larger Slumbot confidence hands only when
 API time is acceptable, or prefer local duplicate-swapped gates where variance
 is controlled.
 
+The 1,000-hand follow-up says speed is not enough. Fast-live and live were both
+operationally clean, but both were negative against Slumbot, with fast-live
+`-143 +/- 202` chips/hand and live `-264 +/- 233`. Since the slower live profile
+did not rescue the result, the next continuation target should return to
+strategy quality: train or evaluate a stronger blueprint/search-calibration
+candidate, then reuse the faster CUDA profile for confidence checks only after
+local gates show a real improvement.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

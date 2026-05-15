@@ -409,6 +409,14 @@ zero API and parse errors with five solver decisions. Fast-live mean solver
 latency was `858.0 ms` versus live `1436.9 ms`, but the chip outcomes are
 non-duplicate 50-hand noise and must not be treated as strength evidence.
 
+Slumbot confidence status: the current checkpoint is not yet competitive. A
+1,000-hand fast-live run was operationally clean but negative
+(`-143 +/- 202` chips/hand), and a 1,000-hand default-live run was also clean
+and worse (`-264 +/- 233`). Fast-live remained materially faster
+(`818.4 ms` mean solver latency versus `1179.0 ms`). This shifts the bottleneck
+back to blueprint/model quality and policy/search calibration, not the live
+budget profile.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
