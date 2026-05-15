@@ -10,12 +10,14 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from poker_ai.games.full_deck.state import ACTION_TO_INDEX, N_ACTIONS, new_game  # noqa: E402
+from poker_ai.deep_cfr.networks import ValueNetwork  # noqa: E402
+from poker_ai.games.full_deck.state import ACTION_TO_INDEX, N_ACTIONS, N_FEATURES, new_game  # noqa: E402
 from poker_ai.research.restricted_action_value import (  # noqa: E402
     _set_private_cards_for_control,
     sample_seeded_hole_cards,
@@ -72,7 +74,27 @@ def _baseline_for_root(
         scale = float(np.std(action_values[legal])) * max(0.0, float(noise_scale))
         baseline[legal] += rng.normal(0.0, scale, size=int(legal.sum())).astype(np.float32)
         return baseline
+    if mode == "checkpoint":
+        return None
     raise ValueError(f"unknown baseline mode: {mode}")
+
+
+def _load_baseline_checkpoint(path: str | None, device: torch.device) -> tuple[ValueNetwork | None, float]:
+    if not path:
+        return None, 1.0
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    hidden_dim = int(checkpoint.get("hidden_dim", 128))
+    n_layers = int(checkpoint.get("n_layers", 2))
+    model = ValueNetwork(
+        N_FEATURES,
+        hidden_dim=hidden_dim,
+        output_dim=N_ACTIONS,
+        n_layers=n_layers,
+        use_betting_history=bool(checkpoint.get("uses_betting_history", True)),
+    ).to(device)
+    model.load_state_dict(checkpoint["value_net"])
+    model.eval()
+    return model, float(checkpoint.get("initial_chips", 1) or 1)
 
 
 def run_diagnostic(
@@ -86,12 +108,18 @@ def run_diagnostic(
     uniform_mix: float,
     baseline_mode: str,
     baseline_noise_scale: float,
+    baseline_checkpoint: str | None,
     seed: int,
 ) -> dict:
     random.seed(seed)
     np.random.seed(seed)
     rng = np.random.default_rng(seed)
     uniform_mix = float(np.clip(uniform_mix, 0.0, 1.0))
+    torch_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    baseline_model, baseline_scale = _load_baseline_checkpoint(
+        baseline_checkpoint,
+        torch_device,
+    )
     results = {
         sample_count: {
             "sum_abs_bias": 0.0,
@@ -102,6 +130,8 @@ def run_diagnostic(
     }
 
     legal_action_counts: list[int] = []
+    baseline_abs_errors: list[float] = []
+    baseline_corrs: list[float] = []
     for root_idx in range(max(1, int(n_roots))):
         state = new_game(2, initial_chips=int(initial_chips))
         _set_private_cards_for_control(
@@ -138,6 +168,41 @@ def run_diagnostic(
             baseline_mode,
             baseline_noise_scale,
         )
+        if baseline_model is not None:
+            with torch.no_grad():
+                features = torch.from_numpy(state.to_feature_vector()).to(
+                    torch_device,
+                    dtype=torch.float32,
+                ).unsqueeze(0)
+                baseline_values = (
+                    baseline_model(features)
+                    .squeeze(0)
+                    .detach()
+                    .cpu()
+                    .numpy()
+                    .astype(np.float32)
+                    * float(baseline_scale)
+                )
+            baseline_values = np.where(legal_mask > 0.0, baseline_values, 0.0)
+        if baseline_values is not None:
+            legal_indices_for_baseline = np.flatnonzero(legal_mask > 0.0)
+            baseline_abs_errors.append(
+                float(
+                    np.mean(
+                        np.abs(
+                            baseline_values[legal_indices_for_baseline]
+                            - action_values[legal_indices_for_baseline]
+                        )
+                    )
+                )
+            )
+            if legal_indices_for_baseline.size >= 2:
+                baseline_slice = baseline_values[legal_indices_for_baseline]
+                action_slice = action_values[legal_indices_for_baseline]
+                if float(np.std(baseline_slice)) > 0.0 and float(np.std(action_slice)) > 0.0:
+                    corr = np.corrcoef(baseline_slice, action_slice)[0, 1]
+                    if np.isfinite(corr):
+                        baseline_corrs.append(float(corr))
 
         legal_indices = np.flatnonzero(legal_mask > 0.0)
         for sample_count in samples_per_estimate:
@@ -194,8 +259,17 @@ def run_diagnostic(
         "uniform_mix": uniform_mix,
         "baseline_mode": baseline_mode,
         "baseline_noise_scale": float(baseline_noise_scale),
+        "baseline_checkpoint": str(baseline_checkpoint or ""),
         "seed": int(seed),
         "mean_legal_actions": round(float(np.mean(legal_action_counts)), 6),
+        "baseline_mean_abs_error": (
+            round(float(np.mean(baseline_abs_errors)), 6)
+            if baseline_abs_errors else None
+        ),
+        "baseline_mean_action_corr": (
+            round(float(np.mean(baseline_corrs)), 6)
+            if baseline_corrs else None
+        ),
         "metrics_by_sample_count": metrics_by_sample_count,
         "warning": "Restricted showdown action values; estimator math diagnostic only.",
         "promotion": False,
@@ -218,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=("zero", "legal-mean", "oracle", "noisy-oracle"),
         default="zero",
     )
+    parser.add_argument("--baseline-checkpoint")
     parser.add_argument("--baseline-noise-scale", type=float, default=0.25)
     parser.add_argument("--seed", type=int, default=20260515)
     parser.add_argument("--output-json")
@@ -231,8 +306,9 @@ def main(argv: list[str] | None = None) -> int:
         samples_per_estimate=args.samples_per_estimate,
         strategy_mode=args.strategy_mode,
         uniform_mix=args.uniform_mix,
-        baseline_mode=args.baseline_mode,
+        baseline_mode="checkpoint" if args.baseline_checkpoint else args.baseline_mode,
         baseline_noise_scale=args.baseline_noise_scale,
+        baseline_checkpoint=args.baseline_checkpoint,
         seed=args.seed,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)

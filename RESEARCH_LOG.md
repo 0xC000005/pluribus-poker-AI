@@ -4519,3 +4519,28 @@
   The next method should learn or reuse a baseline/control-variate estimate of
   action values and test whether 2-8 sampled traverser actions can match
   exhaustive regret with acceptable variance.
+
+## 20260515T081500Z-learned-baseline-sampled-action-gate - partial
+
+- Timestamp: 2026-05-15T08:15:00Z
+- Type: learned_control_variate_diagnostic
+- Gate: restricted value probe checkpoint plus full-deck sampled-action
+  estimator diagnostics
+- Hypothesis: A learned restricted action-value baseline can reduce
+  sampled-action estimator variance enough to make small sampled traverser
+  subsets plausible.
+- Failure class: residual_estimator_variance
+- Summary: Extended `train_restricted_value_probe.py` to save diagnostic
+  baseline checkpoints and extended the full-deck sampled-action estimator to
+  load them. A small `512/128` root baseline improved variance only about as
+  much as the hidden legal-mean baseline. A larger `2048/512`, 4-layer 512-wide
+  baseline improved holdout action correlation to `0.864` and reduced the
+  full-deck estimator baseline MAE to `34.3` chips. With that learned baseline,
+  sampled-action estimates passed for `2,4,8` samples, but one sampled action
+  still failed marginally (`3.03` mean absolute bias).
+- Commands: `uv run pytest -q test/unit/test_restricted_value_probe.py test/unit/test_sampled_action_mccfr.py test/unit/test_gpu_cache_budget.py`; `uv run python scripts/train_restricted_value_probe.py --train-roots 512 --holdout-roots 128 --n-equity-samples 256 --hidden-dim 256 --n-layers 2 --epochs 120 --batch-size 256 --device cuda --seed 20260521 --output-checkpoint autoresearch-session/restricted_value_baseline_20260515.pt`; `uv run python scripts/train_restricted_value_probe.py --train-roots 2048 --holdout-roots 512 --n-equity-samples 256 --hidden-dim 512 --n-layers 4 --epochs 180 --batch-size 512 --device cuda --seed 20260522 --output-checkpoint autoresearch-session/restricted_value_baseline_large_20260515.pt`; learned-baseline estimator checks for `1,2,4,8` and `2,4,8`.
+- Key metrics: `{"tests_passed": 24, "large_baseline_holdout_corr": 0.86394, "large_baseline_holdout_top_match": 0.878906, "large_baseline_full_deck_mae": 34.334566, "sample1_abs_bias": 3.027053, "sample2_abs_bias": 2.027691, "sample8_abs_bias": 0.969221, "promotion": false}`
+- Decision: The viable diagnostic path is now learned-baseline sampled
+  traversal with at least two sampled traverser actions. Do not attempt a
+  one-sample traversal or integrate without an exhaustive-vs-sampled traversal
+  comparison.

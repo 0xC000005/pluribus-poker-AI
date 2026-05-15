@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.restricted_value_probe import (
@@ -43,3 +44,28 @@ def test_train_restricted_value_probe_smoke_learns_signal():
     assert metrics["train_loss_final"] < metrics["train_loss_initial"]
     assert 0.0 <= metrics["holdout_top_action_match"] <= 1.0
     assert -1.0 <= metrics["holdout_mean_action_corr"] <= 1.0
+
+
+def test_train_restricted_value_probe_can_save_checkpoint(tmp_path):
+    checkpoint = tmp_path / "probe.pt"
+
+    metrics = train_restricted_value_probe(
+        RestrictedValueProbeConfig(
+            train_roots=8,
+            holdout_roots=4,
+            n_equity_samples=16,
+            hidden_dim=16,
+            n_layers=1,
+            epochs=1,
+            batch_size=4,
+            device="cpu",
+            seed=20260517,
+            output_checkpoint=str(checkpoint),
+        )
+    )
+
+    saved = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert metrics["checkpoint"] == str(checkpoint)
+    assert saved["hidden_dim"] == 16
+    assert saved["n_layers"] == 1
+    assert "value_net" in saved

@@ -44,6 +44,7 @@ class RestrictedValueProbeConfig:
     lr: float = 1e-3
     seed: int = 20260517
     device: str = "auto"
+    output_checkpoint: str | None = None
 
 
 def build_restricted_value_dataset(
@@ -182,6 +183,29 @@ def train_restricted_value_probe(cfg: RestrictedValueProbeConfig) -> dict[str, A
     train_loss_final = _full_loss(model, train, device)
     holdout_loss = _full_loss(model, holdout, device)
     holdout_metrics = _evaluate_probe(model, holdout, device)
+    checkpoint_path = str(cfg.output_checkpoint) if cfg.output_checkpoint else ""
+    if checkpoint_path:
+        torch.save(
+            {
+                "value_net": model.state_dict(),
+                "hidden_dim": int(cfg.hidden_dim),
+                "n_layers": int(cfg.n_layers),
+                "input_dim": N_FEATURES,
+                "output_dim": N_ACTIONS,
+                "initial_chips": int(cfg.initial_chips),
+                "uses_betting_history": True,
+                "metadata": {
+                    "algorithm": "restricted_value_probe",
+                    "warning": "Diagnostic action-value baseline checkpoint; not a poker policy.",
+                    "train_roots": int(cfg.train_roots),
+                    "holdout_roots": int(cfg.holdout_roots),
+                    "n_equity_samples": int(cfg.n_equity_samples),
+                    "seed": int(cfg.seed),
+                },
+            },
+            checkpoint_path,
+        )
+
     return {
         "algorithm": "restricted_value_probe",
         "role": "architecture_capacity_diagnostic_not_strategy",
@@ -200,5 +224,6 @@ def train_restricted_value_probe(cfg: RestrictedValueProbeConfig) -> dict[str, A
         "holdout_loss": float(holdout_loss),
         "holdout_top_action_match": holdout_metrics["top_action_match"],
         "holdout_mean_action_corr": holdout_metrics["mean_action_corr"],
+        "checkpoint": checkpoint_path,
         "promotion": False,
     }

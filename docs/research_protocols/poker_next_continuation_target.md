@@ -1029,3 +1029,10 @@ action-value baselines preserve unbiasedness, and even crude baselines reduce
 the full-deck estimator variance sharply. The next research objective is now
 more specific: learn a baseline/control-variate action-value head that lets a
 small sampled traverser-action set approximate exhaustive traversal regret.
+
+The first learned baseline confirms the direction but does not fully solve the
+problem. A larger restricted value baseline beats the crude mean baseline and
+allows 2-8 sampled actions to pass the full-deck estimator diagnostic, while
+one sampled action remains too noisy. The next step should be an
+exhaustive-vs-sampled traversal comparison using two sampled traverser actions
+plus a learned baseline, still outside the default CUDA trainer.

@@ -34,6 +34,7 @@ def build_config(argv: list[str] | None = None) -> RestrictedValueProbeConfig:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=20260517)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--output-checkpoint")
     args = parser.parse_args(argv)
     return RestrictedValueProbeConfig(
         train_roots=args.train_roots,
@@ -47,6 +48,7 @@ def build_config(argv: list[str] | None = None) -> RestrictedValueProbeConfig:
         lr=args.lr,
         seed=args.seed,
         device=args.device,
+        output_checkpoint=args.output_checkpoint,
     )
 
 
