@@ -5,6 +5,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     GPUDeepCFRTrainer,
     _GPU_CACHE_COMPACT_SAMPLE_BYTES,
     _MultiBufferView,
+    _build_iteration_profile,
     _gpu_cache_budget_allows,
     _gpu_cache_nbytes,
     _nn_forward_chunk_size,
@@ -123,6 +124,43 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
     assert summary["traversal_mean_pool_demand_ratio"] == 0.85
     assert summary["traversal_max_pool_demand_ratio"] == 1.2
     assert summary["traversal_max_slots_per_traversal"] == 120.0
+
+
+def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
+    profile = _build_iteration_profile(
+        iteration=3,
+        n_players=2,
+        n_traversals=100,
+        traversal_stats=[
+            {
+                "requested_slots": 900,
+                "pool_max_slots": 1_000,
+                "n_traversals": 100,
+                "regret_samples": 600,
+                "policy_samples": 40,
+            },
+            {
+                "requested_slots": 800,
+                "pool_max_slots": 1_000,
+                "n_traversals": 100,
+                "regret_samples": 500,
+                "policy_samples": 30,
+            },
+        ],
+        traverse_seconds=2.0,
+        train_seconds=4.0,
+        train_batch_size=128,
+        train_steps=10,
+    )
+
+    assert profile["iteration"] == 3
+    assert profile["requested_traversals"] == 200
+    assert profile["regret_samples"] == 1100
+    assert profile["policy_samples"] == 70
+    assert profile["traversals_per_second"] == 100.0
+    assert profile["regret_samples_per_second"] == 550.0
+    assert profile["train_sample_budget"] == 1280
+    assert profile["train_samples_per_second"] == 320.0
 
 
 def test_release_workspace_for_training_drops_traversal_workspace():

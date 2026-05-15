@@ -4998,3 +4998,26 @@
   path. The next principled acceleration should preserve updating-player action
   enumeration and seek speed from batching, GPU kernels, caching, or
   external/chance-sampling variance reduction.
+
+## 20260515T155000Z-gpu-throughput-profile-surface - passed
+
+- Timestamp: 2026-05-15T15:50:00Z
+- Type: compute_instrumentation
+- Gate: warmup-excluded GPU Deep CFR benchmark plus pool-fidelity comparison
+- Hypothesis: GPU training optimization needs a structured profile artifact
+  that separates CUDA/Numba warmup from steady-state throughput and reports
+  traversal-pool overflow, otherwise pool-size changes can look like speedups
+  while silently changing sample fidelity.
+- Failure class: none
+- Summary: Added structured per-iteration GPU trainer profiles and
+  `scripts/benchmark_gpu_deep_cfr.py`. The benchmark excludes warmup from
+  aggregate throughput, records train/traverse seconds, regret samples/sec,
+  train samples/sec, and traversal-pool fidelity. A small A/B confirmed the
+  old conclusion: increasing slots per traversal to `1000` is slower and still
+  overflows. Increasing pool max to `2M` with `1000` slots also stayed slower.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 1 --n-measure 1 --n-traversals 2000 --hidden-dim 256 --n-layers 2 --n-training-steps 200 --batch-size 2048 --traversal-slots-per-traversal 500 --output-json autoresearch-session/gpu_deep_cfr_benchmark_2k_200steps_slots500_20260515.json`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 1 --n-measure 1 --n-traversals 2000 --hidden-dim 256 --n-layers 2 --n-training-steps 200 --batch-size 2048 --traversal-slots-per-traversal 1000 --output-json autoresearch-session/gpu_deep_cfr_benchmark_2k_200steps_slots1000_20260515.json`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 1 --n-measure 1 --n-traversals 2000 --hidden-dim 256 --n-layers 2 --n-training-steps 200 --batch-size 2048 --traversal-pool-max-slots 2000000 --traversal-slots-per-traversal 1000 --output-json autoresearch-session/gpu_deep_cfr_benchmark_2k_200steps_pool2m_slots1000_20260515.json`
+- Key metrics: `{"slots500_mean_iteration_seconds": 1.883042, "slots500_mean_traverse_seconds": 1.446475, "slots500_mean_traversals_per_second": 2765.343656, "slots500_overflow_fraction": 1.0, "slots1000_mean_iteration_seconds": 4.036447, "slots1000_mean_traversals_per_second": 1110.056236, "pool2m_slots1000_mean_iteration_seconds": 4.062063, "pool2m_slots1000_mean_traversals_per_second": 1105.199554, "promotion": false}`
+- Decision: Keep the fast default for now and do not hide overflow by changing
+  slot knobs. The next compute improvement should be adaptive pool allocation,
+  compaction, or kernel-level wavefront efficiency, measured with this
+  warmup-excluded benchmark.

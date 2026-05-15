@@ -14,6 +14,7 @@
 - CLI help: `poker_ai --help`
 - Fast Deep CFR (CLI): `poker_ai train-fast-deep-cfr --help`
 - GPU Deep CFR (script): `python scripts/run_gpu_deep_cfr.py --n-iterations 50 --n-traversals 400 --save-path ./models`
+- GPU throughput benchmark: `python scripts/benchmark_gpu_deep_cfr.py --n-warmup 1 --n-measure 3 --n-traversals 2000 --output-json autoresearch-session/gpu_benchmark.json`
 - Slumbot training: `python scripts/train_slumbot_2p.py --n-iterations 1000 --n-traversals 10000 --hidden-dim 512 --n-layers 4`
 - Slumbot play/eval: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --solver-backend auto`
 - Opt-in fast live solver profile: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 50 --greedy --no-allin --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live`

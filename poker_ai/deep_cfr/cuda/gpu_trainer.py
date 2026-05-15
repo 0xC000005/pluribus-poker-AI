@@ -176,6 +176,49 @@ def _summarize_traversal_pool_stats(
     }
 
 
+def _build_iteration_profile(
+    *,
+    iteration: int,
+    n_players: int,
+    n_traversals: int,
+    traversal_stats: list[dict[str, float | int]],
+    traverse_seconds: float,
+    train_seconds: float,
+    train_batch_size: int,
+    train_steps: int,
+) -> dict[str, float | int]:
+    requested_traversals = int(n_players) * int(n_traversals)
+    regret_samples = sum(int(record.get("regret_samples", 0)) for record in traversal_stats)
+    policy_samples = sum(int(record.get("policy_samples", 0)) for record in traversal_stats)
+    train_sample_budget = int(train_batch_size) * int(train_steps)
+    iteration_seconds = float(traverse_seconds) + float(train_seconds)
+    return {
+        "iteration": int(iteration),
+        "requested_traversals": requested_traversals,
+        "regret_samples": regret_samples,
+        "policy_samples": policy_samples,
+        "traverse_seconds": round(float(traverse_seconds), 6),
+        "train_seconds": round(float(train_seconds), 6),
+        "iteration_seconds": round(iteration_seconds, 6),
+        "traversals_per_second": round(
+            requested_traversals / max(float(traverse_seconds), 1e-9),
+            6,
+        ),
+        "regret_samples_per_second": round(
+            regret_samples / max(float(traverse_seconds), 1e-9),
+            6,
+        ),
+        "train_batch_size": int(train_batch_size),
+        "train_steps": int(train_steps),
+        "train_sample_budget": train_sample_budget,
+        "train_samples_per_second": round(
+            train_sample_budget / max(float(train_seconds), 1e-9),
+            6,
+        ) if train_sample_budget > 0 else 0.0,
+        **_summarize_traversal_pool_stats(traversal_stats),
+    }
+
+
 def _gpu_cache_nbytes(
     n_samples: int,
     *,
@@ -1073,6 +1116,8 @@ class GPUDeepCFRTrainer:
         self._schedule_logged = False
         self.last_traversal_pool_stats: List[dict[str, float | int]] = []
         self.traversal_pool_stats_history: List[dict[str, float | int]] = []
+        self.last_profile: dict[str, float | int] = {}
+        self.profile_history: list[dict[str, float | int]] = []
 
     def run_iteration(self):
         """Run one CFR iteration with GPU traversal."""
@@ -1133,6 +1178,8 @@ class GPUDeepCFRTrainer:
 
         # Combine buffers and retrain.
         combined = self._combine_buffers()
+        effective_train_batch = 0
+        effective_train_steps = 0
         if len(combined) > 0:
             train_batch = self.batch_size
             train_steps = self.n_training_steps
@@ -1158,6 +1205,8 @@ class GPUDeepCFRTrainer:
                     self._schedule_logged = True
             if hasattr(combined, "set_expected_sample_budget"):
                 combined.set_expected_sample_budget(train_batch * train_steps)
+            effective_train_batch = int(train_batch)
+            effective_train_steps = int(train_steps)
             try:
                 self.value_net = train_value_network(
                     buffer=combined,
@@ -1188,7 +1237,19 @@ class GPUDeepCFRTrainer:
                 if hasattr(combined, "release_gpu_cache"):
                     combined.release_gpu_cache()
         t2 = _time.perf_counter()
+        self.last_profile = _build_iteration_profile(
+            iteration=self.iteration,
+            n_players=self.n_players,
+            n_traversals=self.n_traversals,
+            traversal_stats=self.last_traversal_pool_stats,
+            traverse_seconds=t1 - t0,
+            train_seconds=t2 - t1,
+            train_batch_size=effective_train_batch,
+            train_steps=effective_train_steps,
+        )
+        self.profile_history.append(self.last_profile)
         print(f"  [profile] traverse={t1-t0:.1f}s  train={t2-t1:.1f}s")
+        return self.last_profile
 
     def traversal_pool_summary(self) -> dict[str, float | int]:
         return _summarize_traversal_pool_stats(self.traversal_pool_stats_history)
