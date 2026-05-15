@@ -463,6 +463,29 @@
   mechanism should be single-solve trace control or a larger learned sequence
   model over solver dynamics, not another target/feature/ridge variant.
 
+## 20260515T025500Z-current-trace-budget-rerun - failed
+
+- Timestamp: 2026-05-15T02:55:00Z
+- Type: diagnostic rerun
+- Gate: existing trace selective-budget gate on matched current-schema traces
+- Hypothesis: The earlier trace selective-budget failure might improve on the
+  matched `128..159` / `192..223` traces used by the boundary predictor.
+- Failure class: search_quality
+- Summary: Reran `scripts/eval_cfr_trace_budget_gate.py` in both split
+  directions using low trace iteration `5`, uniform iteration `10`, reference
+  iteration `24`, and selection fraction `0.2`.
+- Evidence:
+  - Forward: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_trace_budget_gate_train128_holdout192_seed20260515.json`
+  - Reverse: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_trace_budget_gate_train192_holdout128_seed20260515.json`
+- Metrics: forward adaptive mean L1 was `0.3866` versus uniform `0.3288`,
+  with both top-match rates at `0.84375`. Reverse adaptive mean L1 was
+  `0.3849` versus uniform `0.3119`, with adaptive top-match `0.78125` versus
+  uniform `0.84375`. Both adaptive runs used about `10.16` mean trace
+  iterations versus uniform `11`.
+- Decision: the current trace selector is still not good enough. Future
+  single-solve work must beat uniform iteration 10 and should model the full
+  solver sequence or stopping policy, not just top predicted iteration-5 error.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

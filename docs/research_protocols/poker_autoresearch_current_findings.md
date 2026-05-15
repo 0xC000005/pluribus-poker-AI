@@ -364,6 +364,14 @@ scalar selector family. The next target should change mechanism class:
 single-solve trace control, learned stopping/continuation, or a sequence model
 over solver dynamics.
 
+Current trace-budget rerun status: the existing selective trace-budget gate
+also fails on the fresh matched traces. Adaptive selection at mean `10.16`
+iterations loses to uniform iteration `10` in both directions (`0.3866` vs
+`0.3288` L1 and `0.3849` vs `0.3119` L1). This preserves the previous
+conclusion: low-iteration trace state has signal, but the top-predicted-error
+selector is not the mechanism. Any single-solve continuation policy must beat
+uniform iteration 10 on the same trace artifacts.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

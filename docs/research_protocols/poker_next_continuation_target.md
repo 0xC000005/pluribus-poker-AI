@@ -376,6 +376,12 @@ selectors. Use a mechanism that observes the solver's own sequence while it is
 already running: a learned early-stopping or continuation policy based on trace
 convergence, or a sequence model that predicts the future policy trajectory.
 
+The existing top-predicted-error trace budget gate remains a negative control:
+it improves over low iteration 5, but loses to uniform iteration 10 on both
+matched split directions. Therefore the next target should not be another
+top-k escalation rule. It should ask whether the whole trace sequence can
+predict a stopping/continuation decision that beats a fixed uniform budget.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
