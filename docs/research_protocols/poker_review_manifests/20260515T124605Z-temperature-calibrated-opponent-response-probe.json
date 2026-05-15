@@ -1,0 +1,45 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 870,
+      "path": "benchmark_audit.md",
+      "sha256": "67c3cb72cb76e1415314fefef74b5b8339eda67f297de51346e928c5dc331ad4"
+    },
+    {
+      "bytes": 518,
+      "path": "decision.json",
+      "sha256": "5300d7eb9c1268ba5faa332467960b28303da96560cbef93c6421e20b1bef558"
+    },
+    {
+      "bytes": 897,
+      "path": "mechanism_review.md",
+      "sha256": "b28c6bc550f7af959e987a1f09adeea661957b789cc48e3f9381c5bbd9108ea0"
+    },
+    {
+      "bytes": 1242,
+      "path": "related_work.md",
+      "sha256": "392d792d830322623e34860d9a56ec6773e69d1e25b0ed5deb3dba27a9b773de"
+    },
+    {
+      "bytes": 1250,
+      "path": "review.md",
+      "sha256": "b1642107842b0f0c66acc9798a4b45ed8d24cfcee96d8be2277b6229fcb78f1a"
+    },
+    {
+      "bytes": 565,
+      "path": "team_review.md",
+      "sha256": "4e8a5ebc68b4ebe9c0a7ca091209fd130ea3f0bc8fb10434b6878739a8447d02"
+    }
+  ],
+  "reason": "Proceed as diagnostic reporting only. Train-fit scalar calibration improved held-out likelihood slightly but still failed to beat uniform, so range-update integration remains blocked.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T124605Z-temperature-calibrated-opponent-response-probe",
+  "review_id": "20260515T124605Z-temperature-calibrated-opponent-response-probe",
+  "sources": [
+    "https://arxiv.org/abs/1706.04599",
+    "https://arxiv.org/abs/1603.03491",
+    "https://arxiv.org/abs/2007.13544",
+    "autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-probe.json"
+  ],
+  "written_at": "2026-05-15T12:47:29Z"
+}

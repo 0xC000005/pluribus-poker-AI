@@ -173,18 +173,51 @@ def _masked_cross_entropy(
     return -(targets * torch.log_softmax(masked_logits, dim=1)).sum(dim=1).mean()
 
 
-def _predict_probs(
+def _predict_logits(
     model: nn.Module,
     x: np.ndarray,
-    legal_masks: np.ndarray,
     device: torch.device,
 ) -> np.ndarray:
     model.eval()
     with torch.no_grad():
-        logits = model(torch.from_numpy(x).to(device))
-        legal = torch.from_numpy(legal_masks).to(device)
-        logits = logits.masked_fill(legal <= 0, -1e4)
-        return torch.softmax(logits, dim=1).cpu().numpy().astype(np.float32)
+        return model(torch.from_numpy(x).to(device)).cpu().numpy().astype(np.float32)
+
+
+def _probs_from_logits(
+    logits: np.ndarray,
+    legal_masks: np.ndarray,
+    *,
+    temperature: float = 1.0,
+) -> np.ndarray:
+    logits_t = torch.from_numpy(logits.astype(np.float32))
+    legal_t = torch.from_numpy(legal_masks.astype(np.float32))
+    temp = max(float(temperature), 1e-3)
+    logits_t = (logits_t / temp).masked_fill(legal_t <= 0, -1e4)
+    return torch.softmax(logits_t, dim=1).numpy().astype(np.float32)
+
+
+def _fit_temperature(
+    logits: np.ndarray,
+    legal_masks: np.ndarray,
+    target_probs: np.ndarray,
+    train_mask: np.ndarray,
+    *,
+    device: torch.device,
+    steps: int = 100,
+) -> float:
+    logits_t = torch.from_numpy(logits[train_mask].astype(np.float32)).to(device)
+    legal_t = torch.from_numpy(legal_masks[train_mask].astype(np.float32)).to(device)
+    target_t = torch.from_numpy(target_probs[train_mask].astype(np.float32)).to(device)
+    log_temperature = torch.zeros((), dtype=torch.float32, device=device, requires_grad=True)
+    optimizer = optim.Adam([log_temperature], lr=0.05)
+    for _ in range(max(1, int(steps))):
+        optimizer.zero_grad(set_to_none=True)
+        temperature = torch.exp(log_temperature).clamp(min=1e-3, max=100.0)
+        loss = _masked_cross_entropy(logits_t / temperature, legal_t, target_t)
+        loss.backward()
+        optimizer.step()
+    with torch.no_grad():
+        return float(torch.exp(log_temperature).clamp(min=1e-3, max=100.0).cpu())
 
 
 def _split_by_hand(
@@ -279,9 +312,32 @@ def train_opponent_response_probe(
             loss.backward()
             optimizer.step()
 
-    probs = _predict_probs(model, x_all, dataset.legal_masks, resolved_device)
+    logits = _predict_logits(model, x_all, resolved_device)
+    probs = _probs_from_logits(logits, dataset.legal_masks)
+    temperature = _fit_temperature(
+        logits,
+        dataset.legal_masks,
+        dataset.target_probs,
+        train_mask,
+        device=resolved_device,
+    )
+    calibrated_probs = _probs_from_logits(
+        logits,
+        dataset.legal_masks,
+        temperature=temperature,
+    )
     train_metrics = _metrics(probs=probs, dataset=dataset, mask=train_mask)
     holdout_metrics = _metrics(probs=probs, dataset=dataset, mask=holdout_mask)
+    calibrated_train_metrics = _metrics(
+        probs=calibrated_probs,
+        dataset=dataset,
+        mask=train_mask,
+    )
+    calibrated_holdout_metrics = _metrics(
+        probs=calibrated_probs,
+        dataset=dataset,
+        mask=holdout_mask,
+    )
     return {
         "mode": "slumbot_opponent_response_probe",
         "source": str(action_likelihood_json),
@@ -294,10 +350,19 @@ def train_opponent_response_probe(
         "epochs": int(epochs),
         "batch_size": int(batch_size),
         "seed": int(seed),
+        "temperature": temperature,
         "train": train_metrics,
         "holdout": holdout_metrics,
+        "calibrated_train": calibrated_train_metrics,
+        "calibrated_holdout": calibrated_holdout_metrics,
         "probe_beats_model_on_holdout": bool(
             holdout_metrics["probe_minus_model_log_lift"] > 0.0
+        ),
+        "calibrated_probe_beats_model_on_holdout": bool(
+            calibrated_holdout_metrics["probe_minus_model_log_lift"] > 0.0
+        ),
+        "calibrated_probe_beats_uniform_on_holdout": bool(
+            calibrated_holdout_metrics["probe_mean_log_lift_vs_uniform"] > 0.0
         ),
         "passed": True,
     }

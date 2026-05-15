@@ -73,7 +73,10 @@ def test_train_opponent_response_probe_reports_heldout_metrics(tmp_path):
     assert metrics["mode"] == "slumbot_opponent_response_probe"
     assert metrics["train"]["n"] > 0
     assert metrics["holdout"]["n"] > 0
+    assert metrics["temperature"] > 0.0
+    assert "calibrated_holdout" in metrics
     assert "probe_mean_log_lift_vs_uniform" in metrics["holdout"]
+    assert "probe_mean_log_lift_vs_uniform" in metrics["calibrated_holdout"]
     assert "model_mean_log_lift_vs_uniform" in metrics["holdout"]
 
 

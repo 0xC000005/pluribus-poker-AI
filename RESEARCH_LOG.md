@@ -6022,3 +6022,33 @@
   The next attempt should either add more full-history trace data or use a
   calibrated probabilistic objective/population model whose held-out likelihood
   beats uniform before touching the live range tracker.
+
+## 20260515T124605Z-temperature-calibrated-opponent-response-probe - failed
+
+- Timestamp: 2026-05-15T12:46:05Z
+- Type: diagnostic calibration probe
+- Gate: Train-split temperature calibration for opponent-response likelihood
+- Hypothesis: The held-out opponent-response probe might fail uniform because
+  of overconfident logits rather than missing signal; a single scalar
+  temperature fit on the training split should improve held-out log-likelihood
+  without adding Slumbot-specific action rules.
+- Failure class: calibration
+- Summary: Added train-split temperature calibration to
+  `poker_ai/research/slumbot_opponent_response_probe.py`. The calibration is
+  learned from the probe's training split by minimizing masked cross-entropy,
+  then evaluated on the same held-out hand split as the raw probe.
+- Evidence:
+  - Artifact:
+    `autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-probe.json`
+- Key metrics: fitted temperature was `1.0205`. Held-out raw probe log-lift
+  was `-0.0732`; calibrated log-lift improved to `-0.0356`, and calibrated
+  probe-minus-model log-lift improved to `+0.3252`. However, calibrated
+  held-out log-lift remained below uniform, so the integration bar is still
+  failed.
+- Validation: `uv run pytest -q test/unit/test_slumbot_opponent_response_probe.py`
+  -> 3 passed. Real diagnostic command:
+  `uv run python scripts/train_slumbot_opponent_response_probe.py --action-likelihood autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-action-likelihood.json --output autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-probe.json --hidden-dim 128 --n-layers 2 --epochs 300 --batch-size 64 --device cuda --seed 20260515`.
+- Decision: Do not integrate the probe. Simple scalar calibration is not
+  enough; the next research step should address data sufficiency or model the
+  opponent response as a calibrated population distribution, not a high-capacity
+  per-trace classifier.
