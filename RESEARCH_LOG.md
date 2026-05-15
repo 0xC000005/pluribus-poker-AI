@@ -4800,3 +4800,27 @@
   with this restricted baseline. The next prototype should start at four
   sampled traverser actions and measure whether the reduced branch factor
   actually improves traversal throughput without failing regret quality gates.
+
+## 20260515T111500Z-sampled-traversal-cpu-probe - partial
+
+- Timestamp: 2026-05-15T11:15:00Z
+- Type: traversal_level_estimator_probe
+- Gate: research-only CPU sampled-vs-exhaustive Deep CFR traversal probe
+- Hypothesis: Four sampled traverser actions per infoset should reduce tiny
+  traversal time while preserving averaged root regrets closely enough to
+  justify a CUDA prototype.
+- Failure class: action_order_variance
+- Summary: Added a research-only sampled traversal probe and CLI, plus
+  determinism coverage. The probe found and fixed a reproducibility issue:
+  default deck suit order came from a Python `set`, so separate processes could
+  disagree under the same seed. After sorting deck suits and avoiding duplicate
+  oversampling when the budget covers all legal actions, sample-4 showed about
+  `1.26x` per-run speedup with low mean regret bias but missed the exhaustive
+  top action on the tiny state. Sample-8 matched top action but mostly
+  enumerated legal actions and gave only about `1.02x` speedup.
+- Commands: `uv run pytest -q test/unit/test_deck_determinism.py test/unit/test_sampled_deep_cfr_traversal_probe.py test/unit/test_sampled_action_full_deck_estimator.py test/unit/test_sampled_action_mccfr.py`; `uv run python scripts/eval_sampled_deep_cfr_traversal_probe.py --n-repeats 256 --n-reference-repeats 128 --initial-chips 300 --sample-count 4 --hidden-dim 64 --n-layers 1 --seed 20260525 --output-json autoresearch-session/sampled_deep_cfr_traversal_probe_sample4_seed20260525_256rep_margin.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_probe.py --n-repeats 256 --n-reference-repeats 128 --initial-chips 300 --sample-count 8 --hidden-dim 64 --n-layers 1 --seed 20260525 --output-json autoresearch-session/sampled_deep_cfr_traversal_probe_sample8_seed20260525_256rep_margin.json`
+- Key metrics: `{"sample4_speedup": 1.256881, "sample4_mean_abs_bias": 0.033186, "sample4_top_match": false, "sample4_sampled_top_margin": 0.000111, "sample8_speedup": 1.017421, "sample8_mean_abs_bias": 0.039708, "sample8_top_match": true, "promotion": false}`
+- Decision: Do not move the with-replacement sample-4 probe into CUDA yet.
+  The next principled variant is without-replacement sampled traverser actions
+  or another inclusion-probability estimator that reduces duplicate work while
+  preserving root action ordering.

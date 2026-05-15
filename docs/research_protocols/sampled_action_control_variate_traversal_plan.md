@@ -53,13 +53,17 @@ or Slumbot-specific patch.
 - Lower pool demand achieved by dropping uncorrected actions.
 - Averaged sampled-regret top-action agreement below the current restricted
   root diagnostic range (`~96%`) on comparable states.
+- Traversal-level sample budget that improves throughput only by breaking root
+  action ordering. The first CPU probe found sample-4 faster but top-unstable,
+  while sample-8 matched top action but gave little speedup after exact
+  enumeration.
 - Worse downstream restricted-action or local H2H evidence at equal compute.
 - Any change to Slumbot adapters, promotion logic, legal masks, or parser
   thresholds.
 
 ## Next Implementation Step
 
-Create a research-only CPU probe that runs exhaustive and sampled traverser
-regret collection on a tiny deterministic state set. Use the XL restricted
-value baseline as the first control variate, then replace it with search-derived
-action-value labels if the restricted baseline fails the exhaustive comparison.
+Investigate without-replacement sampled traverser actions or inclusion-probable
+sampling before CUDA integration. With-replacement sample-4 is fast but
+top-unstable; sample-8 mostly enumerates and therefore does not buy enough
+throughput.
