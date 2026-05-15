@@ -68,6 +68,7 @@ def test_sampled_traversal_probe_supports_priority_without_replacement_mode():
         sample_count=4,
         sampling_mode="priority-without-replacement",
         priority_forced_count=2,
+        priority_source="advantage",
         hidden_dim=16,
         n_layers=1,
         seed=20260531,
@@ -75,6 +76,7 @@ def test_sampled_traversal_probe_supports_priority_without_replacement_mode():
 
     assert metrics["sampling_mode"] == "priority-without-replacement"
     assert metrics["priority_forced_count"] == 2
+    assert metrics["priority_source"] == "advantage"
     assert metrics["promotion"] is False
 
 

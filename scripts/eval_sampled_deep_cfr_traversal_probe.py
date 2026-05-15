@@ -29,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
         default="with-replacement",
     )
     parser.add_argument("--priority-forced-count", type=int, default=0)
+    parser.add_argument(
+        "--priority-source",
+        choices=("strategy", "advantage", "abs-advantage"),
+        default="strategy",
+    )
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--n-layers", type=int, default=1)
     parser.add_argument("--uniform-mix", type=float, default=0.25)
@@ -44,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
         sample_count=args.sample_count,
         sampling_mode=args.sampling_mode,
         priority_forced_count=args.priority_forced_count,
+        priority_source=args.priority_source,
         hidden_dim=args.hidden_dim,
         n_layers=args.n_layers,
         uniform_mix=args.uniform_mix,

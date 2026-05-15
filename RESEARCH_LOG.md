@@ -4896,3 +4896,26 @@
 - Decision: Do not use strategy-probability priority as the CUDA criterion.
   Next test should prioritize by predicted action value or advantage magnitude,
   or adaptively expand nodes whose estimated regret margin is uncertain.
+
+## 20260515T134500Z-advantage-priority-sampling-check - failed
+
+- Timestamp: 2026-05-15T13:45:00Z
+- Type: priority_sampler_check
+- Gate: advantage-priority and absolute-advantage-priority traversal grids
+- Hypothesis: Predicted advantage or absolute predicted advantage should be a
+  better forced-action priority signal than strategy probability for sampled
+  traversal.
+- Failure class: priority_signal_invalid
+- Summary: Added `priority_source` support to the traversal probe and grid
+  runner. Raw advantage priority still matched top action in only `2/4` seeds,
+  and absolute-advantage priority matched `0/4`. Both preserved speedup, but
+  speedup without action-order preservation is not useful for Deep CFR trainer
+  integration. The current regret network signal is not a reliable priority
+  oracle for branch expansion on these tiny traversal states.
+- Commands: `uv run pytest -q test/unit/test_sampled_deep_cfr_traversal_probe.py`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --priority-source advantage --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_adv_f2_sample4_4seeds_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --priority-source abs-advantage --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_absadv_f2_sample4_4seeds_20260515.json`
+- Key metrics: `{"advantage_priority_top_match_rate": 0.5, "advantage_priority_mean_speedup": 1.300123, "abs_advantage_priority_top_match_rate": 0.0, "abs_advantage_priority_mean_speedup": 1.274495, "promotion": false}`
+- Decision: Stop trying local priority heuristics from the current regret
+  network. The next candidate should learn branch action values directly or
+  train an uncertainty-aware priority model against exhaustive traversal
+  targets, then use sampled traversal only where the priority model is
+  confident.

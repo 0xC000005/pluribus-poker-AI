@@ -69,7 +69,7 @@ or Slumbot-specific patch.
 
 ## Next Implementation Step
 
-Investigate a value- or advantage-priority adaptive sampler before CUDA
-integration. Strategy-probability priority did not fix the four-seed traversal
-grid; the sampler must protect low-probability actions that can still change
-regret ordering.
+Investigate a true action-value priority model before CUDA integration.
+Strategy, raw-advantage, and absolute-advantage priority did not fix the
+four-seed traversal grid; the sampler must be guided by a value signal trained
+for branch impact, not by the current regret network alone.

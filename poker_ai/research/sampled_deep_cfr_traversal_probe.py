@@ -43,7 +43,7 @@ def _strategy(
     value_net: ValueNetwork,
     state: PokerState,
     device: torch.device,
-) -> tuple[np.ndarray, np.ndarray, list[str]]:
+) -> tuple[np.ndarray, np.ndarray, list[str], np.ndarray]:
     features = state.to_feature_vector()
     legal_mask = get_legal_mask(state)
     legal_actions = [str(action) for action in state.legal_actions if action is not None]
@@ -55,7 +55,22 @@ def _strategy(
             .cpu()
             .numpy()
         )
-    return regret_match(pred, legal_mask), legal_mask, legal_actions
+    return regret_match(pred, legal_mask), legal_mask, legal_actions, pred
+
+
+def _priority_scores(
+    strategy: np.ndarray,
+    advantages: np.ndarray,
+    *,
+    priority_source: str,
+) -> np.ndarray:
+    if priority_source == "strategy":
+        return strategy
+    if priority_source == "advantage":
+        return advantages
+    if priority_source == "abs-advantage":
+        return np.abs(advantages)
+    raise ValueError(f"unknown priority source: {priority_source}")
 
 
 def _initial_chips(state: PokerState) -> float:
@@ -198,7 +213,7 @@ def _exhaustive_traverse(
             depth=depth + 1,
         )
 
-    strategy, legal_mask, legal_actions = _strategy(value_net, state, device)
+    strategy, legal_mask, legal_actions, _advantages = _strategy(value_net, state, device)
     if int(state.player_i) == int(traverser):
         action_values = np.zeros(N_ACTIONS, dtype=np.float32)
         for action in legal_actions:
@@ -244,6 +259,7 @@ def _sampled_traverse(
     uniform_mix: float,
     sampling_mode: str,
     priority_forced_count: int,
+    priority_source: str,
 ) -> _TraversalResult:
     if state.is_terminal:
         return _TraversalResult(value=float(state.payout[traverser]))
@@ -260,9 +276,10 @@ def _sampled_traverse(
             uniform_mix=uniform_mix,
             sampling_mode=sampling_mode,
             priority_forced_count=priority_forced_count,
+            priority_source=priority_source,
         )
 
-    strategy, legal_mask, legal_actions = _strategy(value_net, state, device)
+    strategy, legal_mask, legal_actions, advantages = _strategy(value_net, state, device)
     legal_indices = np.array(
         [ACTION_TO_INDEX[action] for action in legal_actions],
         dtype=np.int64,
@@ -299,7 +316,11 @@ def _sampled_traverse(
                 legal_mask,
                 sample_count=sample_count,
                 forced_count=priority_forced_count,
-                priority_scores=strategy,
+                priority_scores=_priority_scores(
+                    strategy,
+                    advantages,
+                    priority_source=priority_source,
+                ),
             )
             sampled_all_legal = int(sampled.size) >= int(legal_indices.size)
         else:
@@ -319,6 +340,7 @@ def _sampled_traverse(
                 uniform_mix=uniform_mix,
                 sampling_mode=sampling_mode,
                 priority_forced_count=priority_forced_count,
+                priority_source=priority_source,
             )
             sampled_values[idx] = float(child.value)
         if sampled_all_legal:
@@ -365,6 +387,7 @@ def _sampled_traverse(
         uniform_mix=uniform_mix,
         sampling_mode=sampling_mode,
         priority_forced_count=priority_forced_count,
+        priority_source=priority_source,
     )
 
 
@@ -381,6 +404,7 @@ def _mean_root_regret(
     uniform_mix: float,
     sampling_mode: str,
     priority_forced_count: int,
+    priority_source: str,
 ) -> tuple[np.ndarray, float]:
     regrets = []
     started = time.perf_counter()
@@ -401,6 +425,7 @@ def _mean_root_regret(
                 uniform_mix=uniform_mix,
                 sampling_mode=sampling_mode,
                 priority_forced_count=priority_forced_count,
+                priority_source=priority_source,
             )
         else:
             result = _exhaustive_traverse(
@@ -436,6 +461,7 @@ def run_probe(
     uniform_mix: float = 0.25,
     sampling_mode: str = "with-replacement",
     priority_forced_count: int = 0,
+    priority_source: str = "strategy",
     seed: int = 20260525,
     device: str = "cpu",
 ) -> dict[str, Any]:
@@ -465,6 +491,7 @@ def run_probe(
         uniform_mix=uniform_mix,
         sampling_mode=sampling_mode,
         priority_forced_count=priority_forced_count,
+        priority_source=priority_source,
     )
     sampled_mean, sampled_seconds = _mean_root_regret(
         state,
@@ -478,6 +505,7 @@ def run_probe(
         uniform_mix=uniform_mix,
         sampling_mode=sampling_mode,
         priority_forced_count=priority_forced_count,
+        priority_source=priority_source,
     )
     legal_mask = get_legal_mask(state) > 0.0
     bias = sampled_mean - exhaustive_mean
@@ -495,6 +523,7 @@ def run_probe(
         "sample_count": int(sample_count),
         "sampling_mode": sampling_mode,
         "priority_forced_count": int(priority_forced_count),
+        "priority_source": priority_source,
         "uniform_mix": float(uniform_mix),
         "hidden_dim": int(hidden_dim),
         "n_layers": int(n_layers),
@@ -530,6 +559,7 @@ def run_probe_grid(
     uniform_mix: float = 0.25,
     sampling_mode: str = "with-replacement",
     priority_forced_count: int = 0,
+    priority_source: str = "strategy",
     device: str = "cpu",
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
@@ -546,6 +576,7 @@ def run_probe_grid(
                     uniform_mix=uniform_mix,
                     sampling_mode=sampling_mode,
                     priority_forced_count=priority_forced_count,
+                    priority_source=priority_source,
                     seed=int(seed),
                     device=device,
                 )
@@ -562,6 +593,7 @@ def run_probe_grid(
         "sample_count": int(sample_count),
         "sampling_mode": sampling_mode,
         "priority_forced_count": int(priority_forced_count),
+        "priority_source": priority_source,
         "n_repeats": int(n_repeats),
         "n_reference_repeats": int(n_reference_repeats or n_repeats),
         "top_action_match_rate": round(float(np.mean(top_matches)), 6),
