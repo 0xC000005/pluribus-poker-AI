@@ -5106,3 +5106,25 @@
   autoresearch training. The remaining optimization target is compaction or
   active-frontier-only kernels, because allocated/live ratio remains about
   `8x` even after demotions are eliminated.
+
+## 20260515T080006Z-neural-warm-started-low-budget-resolving-should-be - failed
+
+- Timestamp: 2026-05-15T08:02:50Z
+- Type: warm_start_resolver_gate
+- Gate: warm-start-resolver-20260515T080001Z-search-consistency-allroots-allhand-policy-train128-iter5-seed20260643
+- Hypothesis: Neural warm-started low-budget resolving should be closer than
+  vanilla low-budget resolving to the higher-budget teacher on root-disjoint
+  public states.
+- Failure class: search_quality
+- Summary: The root-disjoint audit passed and illegal mass stayed zero, but
+  the learned warm start regressed the low-budget resolver against the
+  25-iteration teacher. Warm-start L1/KL were worse than vanilla low-budget
+  search, action agreement dropped, and latency exceeded the gate by a large
+  margin.
+- Metrics file: autoresearch-session/poker_runs/20260515T080006Z-neural-warm-started-low-budget-resolving-should-be/metrics.json
+- Key metrics: `{"passed": false, "root_disjoint_passed": true, "n_evaluated": 64, "mean_low_l1_to_reference": 0.52537418, "mean_warm_l1_to_reference": 0.60548425, "mean_low_kl_to_reference": 0.2602323, "mean_warm_kl_to_reference": 0.32932253, "low_action_agreement": 0.765625, "warm_action_agreement": 0.625, "mean_low_latency_ms": 155.0563125, "mean_warm_latency_ms": 917.25178125, "warm_to_low_latency_ratio": 5.91560425, "max_illegal_mass": 0.0, "promotion": false}`
+- Decision: Do not unblock more GPU Deep CFR scaling from this result. The
+  next autoresearch step is an oracle/formulation diagnostic: if oracle
+  regret/policy warm-start labels cannot help the same root-disjoint holdout,
+  the warm-start injection objective is wrong; if oracle labels help, the
+  network target quality or calibration is the blocker.
