@@ -236,6 +236,26 @@ batch/fuse the CFR recurrence so the GPU receives coarse work, or move the
 learned-search boundary to a compact public-belief correction that reduces
 solver calls. Any such change must clear the CPU CFR10 baseline above.
 
+The first matrix/fused CFR footprint diagnostic makes the compute target more
+concrete. On the 64-root turn holdout used by the budget frontier, public-state
+trees are graph-small but hand-state-heavy: up to `1,257` nodes with `1,128`
+private hands, `93.4 MiB` mean solver state per root, and `5.98 GiB` if all 64
+roots are held concurrently. The transition graphs are tiny. Therefore, the
+next GPU step should be a level-synchronous batched/chunked CFR recurrence over
+node-by-hand tensors, not another per-operation torch port or adjacency-only
+matrix experiment. Keep CPU CFR10 as the quality/latency baseline.
+
+Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
+CFR as dense/sparse matrix and vector operations and reports speedups that grow
+with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
+principled option: maintain ranges and opponent counterfactual values, then use
+neural values inside continual re-solving rather than replacing search outright
+(`https://arxiv.org/abs/1701.01724`). DDCFR is relevant future work because it
+learns dynamic discounting instead of hand-tuning fixed CFR update weights
+(`https://openreview.net/forum?id=6PbvbLyqT6`), but prior local DCFR/PDCFR
+negative controls mean learned discounting should not be added until the fused
+or learned-search boundary is clear.
+
 Legacy note: the original leaf-only value objective is retained below as
 historical context and negative evidence.
 

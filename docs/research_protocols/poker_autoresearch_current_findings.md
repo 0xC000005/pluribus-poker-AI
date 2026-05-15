@@ -175,6 +175,18 @@ backend saturate the GPU. Future GPU work should mean a batched/fused solver
 kernel or a coarser learned-search boundary, and it must be benchmarked against
 CPU before use in autoresearch or Slumbot play.
 
+Matrix/fused CFR footprint status: `scripts/analyze_cfr_matrix_footprint.py`
+now measures whether the public-state resolver is big enough to justify a
+coarser GPU boundary. On the same 64-root turn holdout used by the budget
+frontier, all roots evaluated successfully. Trees ranged from `9` to `1,257`
+nodes with fixed `1,128` private hands; mean solver state was `93.4 MiB` per
+root, max `138.4 MiB`, and a full concurrent 64-root batch would require about
+`5.98 GiB` for regret/strategy/reach/value/payoff state. The level-transition
+graphs themselves are tiny, so a useful GPU rewrite should batch/chunk public
+states and fuse the hand-by-node reach/value/regret recurrence. This matches
+the 2024 GPU-CFR paper's matrix-operator framing while explaining why the
+current Python-driven `torch-cuda` backend is slower.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -281,6 +293,10 @@ CPU before use in autoresearch or Slumbot play.
 - The existing `torch-cuda` resolver backend is slower than CPU on the latest
   CFR10 fixed-state smoke (`1219 ms` versus `743 ms` over four cases). Treat
   it as a regression benchmark, not the default compute path.
+- A new matrix/fused CFR footprint diagnostic shows the 64-root turn holdout is
+  plausible for chunked GPU batching (`93.4 MiB` mean solver state per root,
+  `5.98 GiB` for all 64 roots concurrently), but the useful boundary is the
+  hand-by-node CFR recurrence, not the tiny adjacency matrices.
 
 ## Metric Snapshot
 
