@@ -5128,3 +5128,52 @@
   regret/policy warm-start labels cannot help the same root-disjoint holdout,
   the warm-start injection objective is wrong; if oracle labels help, the
   network target quality or calibration is the blocker.
+
+## 20260515T081107Z-gpu-deep-cfr-training-should-produce-frontier-fix - failed
+
+- Timestamp: 2026-05-15T08:27:26Z
+- Type: compute_fidelity_experiment
+- Gate: train-gpu-deep-cfr-20260515T081102Z-frontier-fix-gpu-4x512
+- Hypothesis: The frontier refork fix and 2000-slot traversal chunks should
+  scale from the smoke benchmark to 4k-traversal, 4x512 GPU Deep CFR training
+  without pool exhaustion while producing machine-readable throughput metrics.
+- Failure class: compute_efficiency
+- Summary: CUDA training ran and produced periodic/final checkpoints, but the
+  gate failed on traversal fidelity and throughput. The earlier 2k smoke result
+  did not generalize to 4k traversal training: fixed 500-traversal chunks under
+  the 1M-slot pool still overflowed on high-variance turn/river expansion.
+  Exhaustion was not a preflop artifact; most demotions were river, then turn.
+- Metrics file: autoresearch-session/poker_runs/20260515T081107Z-gpu-deep-cfr-training-should-produce-frontier-fix/metrics.json
+- Key metrics: `{"passed": false, "device": "cuda", "elapsed_seconds": 977.528, "avg_iter_seconds": 19.55, "iters_per_hour": 184.14, "traversals_per_second": 204.598, "traversal_chunks": 800, "overflow_chunks": 373, "overflow_fraction": 0.46625, "pool_exhausted_per_traversal": 208.081465, "mean_pool_demand_ratio": 1.138747, "max_pool_demand_ratio": 3.313926, "mean_slots_per_traversal": 2277.494898, "max_slots_per_traversal": 6627.852, "pool_exhausted_nodes": 83232586, "stage_counts": {"preflop": 0, "flop": 108348, "turn": 16294028, "river": 66830210}, "first_depth": 8, "peak_depth": 10, "last_depth": 18, "checkpoints_written": 3}`
+- Decision: Do not auto-compare or promote
+  `frontier_fix_gpu_4x512_final.pt`. The next compute target is traversal
+  allocation/chunking that reacts to observed slot demand, then active-frontier
+  compaction if throughput remains below gate. Avoid simply raising the global
+  pool cap unless a benchmark shows it is faster and still fidelity-clean.
+
+## 20260515T083949Z-gpu-traversal-chunk-fidelity-diagnostics - partial
+
+- Timestamp: 2026-05-15T08:39:49Z
+- Type: compute_fidelity_fix
+- Gate: unit tests plus CUDA smoke/diagnostic training
+- Hypothesis: The failed 4k traversal run is caused by fixed chunk sizing, not
+  value-net training alone. Adaptive chunk shrinkage or a conservative
+  slots-per-traversal default should eliminate pool-exhaustion demotions
+  without changing the poker action set or external-sampling semantics.
+- Failure class: compute_efficiency
+- Summary: Added observed-demand adaptive traversal chunk shrinkage, persisted
+  the learned chunk cap across trainer iterations, and exposed adaptive batch
+  min/max/shrink counts in traversal summaries. A 4k traversal CUDA smoke
+  passed with zero overflow. A 10-iteration 4x512 adaptive diagnostic reduced
+  overflow sharply but still failed strict fidelity/speed thresholds. A matched
+  7000-slot diagnostic eliminated pool exhaustion entirely and improved
+  throughput, but still missed the 500 traversals/sec gate when startup/compile
+  overhead was included.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py test/unit/test_poker_autoresearch.py::test_enqueue_gpu_training_creates_candidate_gate test/unit/test_gpu_optimizations.py::TestTraversalFrontierKernel::test_active_frontier_counter_skips_expanded_traverser_nodes`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 4000 --n-training-steps 2 --hidden-dim 64 --n-layers 1 --batch-size 128 --buffer-capacity 10000 --save-dir autoresearch-session/gpu_train_adaptive_chunk_smoke_20260515b --prefix adaptive_chunk_smoke --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 10 --n-traversals 4000 --n-training-steps 100 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 500000 --save-dir autoresearch-session/gpu_train_adaptive_chunk_diagnostic_20260515 --prefix adaptive_chunk_diag --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0 --min-traversals-per-second 500`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 10 --n-traversals 4000 --n-training-steps 100 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 500000 --traversal-slots-per-traversal 7000 --save-dir autoresearch-session/gpu_train_slots7000_diagnostic_20260515 --prefix slots7000_diag --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0 --min-traversals-per-second 500`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 4000 --n-training-steps 2 --hidden-dim 64 --n-layers 1 --batch-size 128 --buffer-capacity 10000 --save-dir autoresearch-session/gpu_train_default_slots7000_smoke_20260515 --prefix default_slots7000_smoke --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`
+- Key metrics: `{"unit_tests": "23 passed", "smoke": {"passed": true, "traversals_per_second": 693.142, "overflow_fraction": 0.0, "pool_exhausted_per_traversal": 0.0}, "adaptive_4x512_10iter": {"passed": false, "traversals_per_second": 362.913, "overflow_fraction": 0.011628, "pool_exhausted_per_traversal": 3.554275, "adaptive_batch_min": 144, "adaptive_batch_shrinks": 5}, "slots7000_4x512_10iter": {"passed": false, "traversals_per_second": 473.46, "overflow_fraction": 0.0, "pool_exhausted_per_traversal": 0.0, "adaptive_batch_min": 142, "max_pool_demand_ratio": 0.996492}, "default_slots7000_smoke": {"passed": true, "traversals_per_second": 562.772, "overflow_fraction": 0.0, "pool_exhausted_per_traversal": 0.0, "traversal_slots_per_traversal": 7000}}`
+- Decision: Promote the unattended GPU training default to
+  `--traversal-slots-per-traversal 7000` for fidelity-clean candidate
+  generation. This is a compute-scheduling default, not a strategy rule. The
+  next principled optimization is active-frontier compaction/slot reuse, because
+  7000 slots fixes correctness but still leaves allocated/live ratios around
+  `7x` and does not fully satisfy the throughput gate.

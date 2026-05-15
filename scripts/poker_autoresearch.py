@@ -283,7 +283,7 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--n-layers", type=int, default=4)
     train.add_argument("--batch-size", type=int, default=4096)
     train.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
-    train.add_argument("--traversal-slots-per-traversal", type=int, default=2000)
+    train.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
     train.add_argument("--policy-slots-per-traversal", type=int, default=64)
     train.add_argument("--max-pool-exhausted-per-traversal", type=float)
     train.add_argument("--max-overflow-chunk-fraction", type=float)

@@ -1020,6 +1020,8 @@ def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
     assert "--max-overflow-chunk-fraction" in command
     assert "--min-traversals-per-second" in command
     assert "100.0" in command
+    slots_arg = command.index("--traversal-slots-per-traversal")
+    assert command[slots_arg + 1] == "7000"
     assert "678" == str(gate["timeout_seconds"])
 
 

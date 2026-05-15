@@ -5,6 +5,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     GPUDeepCFRTrainer,
     _GPU_CACHE_COMPACT_SAMPLE_BYTES,
     _MultiBufferView,
+    _adapt_traversal_batch_size,
     _build_iteration_profile,
     _gpu_cache_budget_allows,
     _gpu_cache_nbytes,
@@ -68,8 +69,8 @@ def test_traversal_batch_size_keeps_fixed_pool_with_more_slots_per_traversal():
     ) == 400
 
 
-def test_traversal_batch_size_default_uses_fidelity_safe_five_hundred_chunk():
-    assert _traversal_batch_size(n_traversals=2_000) == 500
+def test_traversal_batch_size_default_uses_conservative_fidelity_chunk():
+    assert _traversal_batch_size(n_traversals=2_000) == 142
 
 
 def test_traversal_batch_size_caps_to_requested_traversals():
@@ -86,6 +87,34 @@ def test_traversal_workspace_pool_uses_fixed_cap_for_small_chunks():
         pool_max_slots=1_000_000,
         slots_per_traversal=2_000,
     ) == 1_000_000
+
+
+def test_adaptive_traversal_batch_shrinks_on_observed_pool_demand():
+    next_batch = _adapt_traversal_batch_size(
+        current_batch=500,
+        pool_max_slots=1_000_000,
+        stats={
+            "requested_slots": 3_313_926,
+            "n_traversals": 500,
+            "pool_exhausted_nodes": 100,
+        },
+    )
+
+    assert 1 <= next_batch <= 137
+
+
+def test_adaptive_traversal_batch_keeps_safe_chunk():
+    next_batch = _adapt_traversal_batch_size(
+        current_batch=500,
+        pool_max_slots=1_000_000,
+        stats={
+            "requested_slots": 900_000,
+            "n_traversals": 500,
+            "pool_exhausted_nodes": 0,
+        },
+    )
+
+    assert next_batch == 500
 
 
 def test_nn_forward_chunk_size_reduces_when_cuda_memory_is_tight():

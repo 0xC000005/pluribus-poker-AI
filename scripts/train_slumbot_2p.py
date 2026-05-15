@@ -38,7 +38,7 @@ def build_parser():
     parser.add_argument('--n-layers', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=4096)
     parser.add_argument('--average-strategy-weight', type=float, default=0.0)
-    parser.add_argument('--traversal-slots-per-traversal', type=int, default=2000)
+    parser.add_argument('--traversal-slots-per-traversal', type=int, default=7000)
     parser.add_argument('--policy-slots-per-traversal', type=int, default=64)
     parser.add_argument('--save-dir', type=str, default='models')
     parser.add_argument('--prefix', type=str, default='slumbot_2p')

@@ -66,7 +66,7 @@ _GPU_CACHE_COMPACT_SAMPLE_BYTES = 2
 _GPU_CACHE_ITERATION_BYTES = 4
 _GPU_CACHE_SAFETY_FRACTION = 0.75
 _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS = 1_000_000
-_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 2_000
+_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 7_000
 _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL = 64
 _DEFAULT_NN_FORWARD_CHUNK = 500_000
 _MIN_NN_FORWARD_CHUNK = 8_192
@@ -102,6 +102,30 @@ def _traversal_pool_slots(
     pool_max_slots = max(1, int(pool_max_slots))
     min_slots = max(1, int(max_traversals)) * max(1, int(slots_per_traversal))
     return max(pool_max_slots, min_slots)
+
+
+def _adapt_traversal_batch_size(
+    *,
+    current_batch: int,
+    pool_max_slots: int,
+    stats: dict[str, float | int],
+    safety_margin: float = 1.1,
+) -> int:
+    """Shrink future traversal chunks when observed pool demand exceeds budget."""
+    current_batch = max(1, int(current_batch))
+    pool_max_slots = max(1, int(pool_max_slots))
+    n_traversals = max(1, int(stats.get("n_traversals", current_batch)))
+    requested_slots = max(0.0, float(stats.get("requested_slots", 0.0)))
+    pool_exhausted_nodes = int(stats.get("pool_exhausted_nodes", 0))
+    if requested_slots <= pool_max_slots and pool_exhausted_nodes <= 0:
+        return current_batch
+
+    if requested_slots <= 0.0:
+        return max(1, current_batch // 2)
+
+    observed_slots_per_traversal = max(1.0, requested_slots / n_traversals)
+    safe_batch = int(pool_max_slots / (observed_slots_per_traversal * safety_margin))
+    return max(1, min(current_batch, safe_batch))
 
 
 def _nn_forward_chunk_size(
@@ -149,6 +173,9 @@ def _summarize_traversal_pool_stats(
             "traversal_chunks": 0,
             "traversal_overflow_chunks": 0,
             "traversal_overflow_chunk_fraction": 0.0,
+            "traversal_adaptive_batch_min": 0,
+            "traversal_adaptive_batch_max": 0,
+            "traversal_adaptive_batch_shrinks": 0,
             "traversal_mean_pool_demand_ratio": 0.0,
             "traversal_max_pool_demand_ratio": 0.0,
             "traversal_mean_slots_per_traversal": 0.0,
@@ -230,11 +257,31 @@ def _summarize_traversal_pool_stats(
         peak_depth = -1
         peak_depth_nodes = 0
     overflow_chunks = sum(1 for ratio in demand_ratios if ratio > 1.0)
+    adaptive_batch_before = [
+        int(record.get("adaptive_traversal_batch_before", record["n_traversals"]))
+        for record in records
+    ]
+    adaptive_batch_after = [
+        int(
+            record.get(
+                "adaptive_traversal_batch_after",
+                record.get("adaptive_traversal_batch_before", record["n_traversals"]),
+            )
+        )
+        for record in records
+    ]
+    adaptive_batch_shrinks = sum(
+        1 for before, after in zip(adaptive_batch_before, adaptive_batch_after)
+        if after < before
+    )
 
     return {
         "traversal_chunks": chunks,
         "traversal_overflow_chunks": overflow_chunks,
         "traversal_overflow_chunk_fraction": round(overflow_chunks / chunks, 6),
+        "traversal_adaptive_batch_min": min(adaptive_batch_after),
+        "traversal_adaptive_batch_max": max(adaptive_batch_before),
+        "traversal_adaptive_batch_shrinks": adaptive_batch_shrinks,
         "traversal_mean_pool_demand_ratio": round(sum(demand_ratios) / chunks, 6),
         "traversal_max_pool_demand_ratio": round(max(demand_ratios), 6),
         "traversal_mean_slots_per_traversal": round(
@@ -1265,6 +1312,7 @@ class GPUDeepCFRTrainer:
         self.traversal_pool_stats_history: List[dict[str, float | int]] = []
         self.last_profile: dict[str, float | int] = {}
         self.profile_history: list[dict[str, float | int]] = []
+        self._adaptive_traversal_batch_size: int | None = None
 
     def run_iteration(self):
         """Run one CFR iteration with GPU traversal."""
@@ -1299,10 +1347,14 @@ class GPUDeepCFRTrainer:
 
         t0 = _time.perf_counter()
         self.last_traversal_pool_stats = []
+        active_trav_batch = min(
+            trav_batch,
+            int(self._adaptive_traversal_batch_size or trav_batch),
+        )
         for player_i in range(self.n_players):
             remaining = self.n_traversals
             while remaining > 0:
-                chunk = min(remaining, trav_batch)
+                chunk = min(remaining, active_trav_batch)
                 stats = gpu_traverse_for_player(
                     traverser=player_i,
                     n_traversals=chunk,
@@ -1317,6 +1369,15 @@ class GPUDeepCFRTrainer:
                         self.strategy_buffer if self.average_strategy_weight > 0 else None
                     ),
                 )
+                stats["adaptive_traversal_batch_before"] = int(chunk)
+                next_trav_batch = _adapt_traversal_batch_size(
+                    current_batch=active_trav_batch,
+                    pool_max_slots=self.traversal_pool_max_slots,
+                    stats=stats,
+                )
+                stats["adaptive_traversal_batch_after"] = int(next_trav_batch)
+                active_trav_batch = next_trav_batch
+                self._adaptive_traversal_batch_size = active_trav_batch
                 self.last_traversal_pool_stats.append(stats)
                 self.traversal_pool_stats_history.append(stats)
                 remaining -= chunk
@@ -1448,6 +1509,7 @@ class GPUDeepCFRTrainer:
                 "average_strategy_weight": self.average_strategy_weight,
                 "uses_betting_history": self.use_betting_history,
                 "has_average_policy_net": bool(self.has_average_policy_net),
+                "adaptive_traversal_batch_size": self._adaptive_traversal_batch_size,
                 "buffer_sizes": [len(b) for b in self.buffers],
                 **(
                     {"average_policy_net": self.average_policy_net.state_dict()}
@@ -1488,4 +1550,7 @@ class GPUDeepCFRTrainer:
             trainer.average_policy_net.load_state_dict(checkpoint["average_policy_net"])
             trainer.has_average_policy_net = True
         trainer.iteration = checkpoint["iteration"]
+        trainer._adaptive_traversal_batch_size = checkpoint.get(
+            "adaptive_traversal_batch_size"
+        )
         return trainer

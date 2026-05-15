@@ -94,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--initial-chips", type=int, default=10000)
     parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
-    parser.add_argument("--traversal-slots-per-traversal", type=int, default=2000)
+    parser.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
     parser.add_argument("--policy-slots-per-traversal", type=int, default=64)
     parser.add_argument("--min-mean-traversals-per-second", type=float)
     parser.add_argument("--max-pool-exhausted-per-traversal", type=float)

@@ -1548,7 +1548,7 @@ def enqueue_gpu_training(
     n_layers: int = 4,
     batch_size: int = 4096,
     traversal_pool_max_slots: int = 1_000_000,
-    traversal_slots_per_traversal: int = 500,
+    traversal_slots_per_traversal: int = 7000,
     policy_slots_per_traversal: int = 64,
     max_pool_exhausted_per_traversal: float | None = None,
     max_overflow_chunk_fraction: float | None = None,

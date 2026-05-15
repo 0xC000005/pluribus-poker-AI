@@ -32,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--n-layers", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
-    parser.add_argument("--traversal-slots-per-traversal", type=int, default=2000)
+    parser.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
     parser.add_argument("--max-pool-exhausted-per-traversal", type=float)
     parser.add_argument("--max-overflow-chunk-fraction", type=float)
     parser.add_argument("--min-traversals-per-second", type=float)

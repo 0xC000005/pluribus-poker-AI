@@ -47,7 +47,7 @@ def main():
     ap.add_argument("--average-strategy-weight", type=float, default=0.0)
     ap.add_argument("--average-strategy-memory-capacity", type=int, default=0)
     ap.add_argument("--average-strategy-batch-size", type=int, default=0)
-    ap.add_argument("--traversal-slots-per-traversal", type=int, default=2000)
+    ap.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
     ap.add_argument("--policy-slots-per-traversal", type=int, default=64)
     ap.add_argument("--save-path", type=str, default="./models")
     ap.add_argument("--save-every", type=int, default=10)
