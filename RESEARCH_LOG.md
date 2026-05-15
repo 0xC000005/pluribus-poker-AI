@@ -4457,14 +4457,15 @@
 - Failure class: none
 - Summary: Added `poker_ai/research/sampled_action_mccfr.py` and
   `scripts/eval_sampled_action_mccfr_estimator.py`. The unit tests prove the
-  single-draw expectation equals exact immediate regret for a small infoset and
-  reject zero-probability legal actions. A 16-case synthetic diagnostic showed
-  mean absolute bias below `0.05` even with one sampled action, while estimator
-  standard deviation decreased monotonically as sampled actions increased.
-  This validates the local estimator math only; it is not yet a poker traversal
-  method.
-- Commands: `uv run pytest -q test/unit/test_sampled_action_mccfr.py`; `uv run python scripts/eval_sampled_action_mccfr_estimator.py --n-cases 16 --n-repeats 2000 --samples-per-estimate 1,2,4,8 --output-json autoresearch-session/sampled_action_mccfr_estimator_20260515.json`
-- Key metrics: `{"tests_passed": 3, "sample1_mean_abs_bias": 0.045057, "sample1_std": 2.69499, "sample8_mean_abs_bias": 0.016197, "sample8_std": 0.948583, "promotion": false}`
+  single-draw expectation equals exact immediate regret for a small infoset,
+  reject zero-probability legal actions, and verify a toy external-sampling
+  traversal where opponent responses are sampled. A 16-case synthetic
+  diagnostic showed mean absolute bias below `0.05` even with one sampled
+  action, while estimator standard deviation decreased monotonically as sampled
+  actions increased. This validates estimator math only; it is not yet a
+  full-deck poker traversal method.
+- Commands: `uv run pytest -q test/unit/test_sampled_action_mccfr.py`; `uv run pytest -q test/unit/test_sampled_action_mccfr.py test/unit/test_gpu_cache_budget.py`; `uv run python scripts/eval_sampled_action_mccfr_estimator.py --n-cases 16 --n-repeats 2000 --samples-per-estimate 1,2,4,8 --output-json autoresearch-session/sampled_action_mccfr_estimator_toy_20260515.json`
+- Key metrics: `{"tests_passed": 20, "infoset_sample1_abs_bias": 0.047548, "infoset_sample8_std": 0.979417, "toy_sample1_abs_bias": 0.047851, "toy_sample8_abs_bias": 0.016944, "toy_sample8_std": 1.023138, "promotion": false}`
 - Decision: Continue to an exhaustive-vs-sampled traversal gate. Do not wire
   the estimator into CUDA Deep CFR until it matches full traversal regret on a
-  small reproducible setting and reports variance/fidelity tradeoffs.
+  small full-deck-relevant setting and reports variance/fidelity tradeoffs.

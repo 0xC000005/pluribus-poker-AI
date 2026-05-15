@@ -17,6 +17,7 @@ if str(REPO_ROOT) not in sys.path:
 from poker_ai.research.sampled_action_mccfr import (  # noqa: E402
     full_regret,
     sampled_action_regret_estimate,
+    sampled_toy_traversal_regret_estimate,
 )
 
 
@@ -38,7 +39,15 @@ def run_diagnostic(
 ) -> dict:
     rng = np.random.default_rng(seed)
     uniform_mix = float(np.clip(uniform_mix, 0.0, 1.0))
-    results = {
+    infoset_results = {
+        sample_count: {
+            "sum_abs_bias": 0.0,
+            "sum_l2_bias": 0.0,
+            "sum_estimator_std": 0.0,
+        }
+        for sample_count in samples_per_estimate
+    }
+    toy_results = {
         sample_count: {
             "sum_abs_bias": 0.0,
             "sum_l2_bias": 0.0,
@@ -75,19 +84,70 @@ def run_diagnostic(
                 )
             mean_estimate = estimates.mean(axis=0).astype(np.float64)
             bias = mean_estimate - target
-            results[sample_count]["sum_abs_bias"] += float(np.mean(np.abs(bias)))
-            results[sample_count]["sum_l2_bias"] += float(np.sqrt(np.mean(bias ** 2)))
-            results[sample_count]["sum_estimator_std"] += float(
+            infoset_results[sample_count]["sum_abs_bias"] += float(np.mean(np.abs(bias)))
+            infoset_results[sample_count]["sum_l2_bias"] += float(np.sqrt(np.mean(bias ** 2)))
+            infoset_results[sample_count]["sum_estimator_std"] += float(
                 np.mean(estimates.std(axis=0))
             )
 
-    metrics_by_sample_count = {}
+        opponent_strategy = rng.dirichlet(np.ones(2)).astype(np.float32)
+        payoff_matrix = rng.normal(
+            loc=0.0,
+            scale=1.0,
+            size=(n_actions, opponent_strategy.shape[0]),
+        ).astype(np.float32)
+        target = full_regret(payoff_matrix @ opponent_strategy, strategy, legal_mask)
+        for sample_count in samples_per_estimate:
+            estimates = np.empty((n_repeats, n_actions), dtype=np.float32)
+            for repeat_idx in range(n_repeats):
+                actions = rng.choice(
+                    n_actions,
+                    size=sample_count,
+                    replace=True,
+                    p=sample_probs,
+                )
+                opp_actions = rng.choice(
+                    opponent_strategy.shape[0],
+                    size=sample_count,
+                    replace=True,
+                    p=opponent_strategy,
+                )
+                estimates[repeat_idx] = sampled_toy_traversal_regret_estimate(
+                    payoff_matrix,
+                    strategy,
+                    legal_mask,
+                    opponent_strategy,
+                    sampled_actions=actions,
+                    sampled_opponent_actions=opp_actions,
+                    sample_probs=sample_probs,
+                )
+            mean_estimate = estimates.mean(axis=0).astype(np.float64)
+            bias = mean_estimate - target
+            toy_results[sample_count]["sum_abs_bias"] += float(np.mean(np.abs(bias)))
+            toy_results[sample_count]["sum_l2_bias"] += float(np.sqrt(np.mean(bias ** 2)))
+            toy_results[sample_count]["sum_estimator_std"] += float(
+                np.mean(estimates.std(axis=0))
+            )
+
+    infoset_metrics_by_sample_count = {}
+    toy_metrics_by_sample_count = {}
     passed = True
-    for sample_count, values_by_metric in results.items():
+    for sample_count, values_by_metric in infoset_results.items():
         abs_bias = values_by_metric["sum_abs_bias"] / n_cases
         l2_bias = values_by_metric["sum_l2_bias"] / n_cases
         estimator_std = values_by_metric["sum_estimator_std"] / n_cases
-        metrics_by_sample_count[str(sample_count)] = {
+        infoset_metrics_by_sample_count[str(sample_count)] = {
+            "mean_abs_bias": round(abs_bias, 6),
+            "mean_l2_bias": round(l2_bias, 6),
+            "mean_estimator_std": round(estimator_std, 6),
+        }
+        if abs_bias > 0.08:
+            passed = False
+    for sample_count, values_by_metric in toy_results.items():
+        abs_bias = values_by_metric["sum_abs_bias"] / n_cases
+        l2_bias = values_by_metric["sum_l2_bias"] / n_cases
+        estimator_std = values_by_metric["sum_estimator_std"] / n_cases
+        toy_metrics_by_sample_count[str(sample_count)] = {
             "mean_abs_bias": round(abs_bias, 6),
             "mean_l2_bias": round(l2_bias, 6),
             "mean_estimator_std": round(estimator_std, 6),
@@ -104,7 +164,8 @@ def run_diagnostic(
         "samples_per_estimate": samples_per_estimate,
         "uniform_mix": uniform_mix,
         "seed": int(seed),
-        "metrics_by_sample_count": metrics_by_sample_count,
+        "infoset_metrics_by_sample_count": infoset_metrics_by_sample_count,
+        "toy_traversal_metrics_by_sample_count": toy_metrics_by_sample_count,
         "promotion": False,
     }
 

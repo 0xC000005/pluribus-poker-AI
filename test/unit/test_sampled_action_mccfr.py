@@ -3,6 +3,7 @@ import numpy as np
 from poker_ai.research.sampled_action_mccfr import (
     full_regret,
     sampled_action_regret_estimate,
+    sampled_toy_traversal_regret_estimate,
 )
 
 
@@ -53,3 +54,34 @@ def test_sampled_action_regret_estimator_rejects_zero_sampling_probability():
         assert "positive sampling probability" in str(exc)
     else:
         raise AssertionError("expected zero-probability sampled action to fail")
+
+
+def test_sampled_toy_traversal_estimator_matches_exhaustive_expectation():
+    payoff_matrix = np.array(
+        [
+            [2.0, -1.0],
+            [0.5, 1.0],
+            [-2.0, 3.0],
+        ],
+        dtype=np.float32,
+    )
+    strategy = np.array([0.2, 0.5, 0.3], dtype=np.float32)
+    opponent_strategy = np.array([0.7, 0.3], dtype=np.float32)
+    legal_mask = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+    sample_probs = np.array([0.25, 0.25, 0.5], dtype=np.float32)
+    action_values = payoff_matrix @ opponent_strategy
+
+    expected = np.zeros(3, dtype=np.float32)
+    for action, action_prob in enumerate(sample_probs):
+        for opp_action, opp_prob in enumerate(opponent_strategy):
+            expected += action_prob * opp_prob * sampled_toy_traversal_regret_estimate(
+                payoff_matrix,
+                strategy,
+                legal_mask,
+                opponent_strategy,
+                sampled_actions=np.array([action], dtype=np.int64),
+                sampled_opponent_actions=np.array([opp_action], dtype=np.int64),
+                sample_probs=sample_probs,
+            )
+
+    assert np.allclose(expected, full_regret(action_values, strategy, legal_mask))

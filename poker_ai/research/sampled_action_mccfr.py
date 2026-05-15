@@ -88,3 +88,72 @@ def sampled_action_regret_estimate(
     regret = estimated_values - estimated_state_value
     regret[~legal_bool] = 0.0
     return regret.astype(np.float32)
+
+
+def sampled_toy_traversal_regret_estimate(
+    payoff_matrix: np.ndarray,
+    strategy: np.ndarray,
+    legal_mask: np.ndarray,
+    opponent_strategy: np.ndarray,
+    *,
+    sampled_actions: np.ndarray,
+    sampled_opponent_actions: np.ndarray,
+    sample_probs: np.ndarray,
+) -> np.ndarray:
+    """Toy one-step traversal estimate with sampled traverser and opponent actions.
+
+    The matrix rows are traverser actions and columns are opponent responses.
+    Opponent actions are assumed to be sampled from ``opponent_strategy``. This
+    mirrors external-sampling's sampled opponent branch while testing the
+    inverse-probability correction for sampled traverser actions.
+    """
+    matrix = np.asarray(payoff_matrix, dtype=np.float64)
+    if matrix.ndim != 2:
+        raise ValueError("payoff_matrix must be two-dimensional")
+    values, sigma, _, legal_bool = _legal_arrays(
+        matrix @ np.asarray(opponent_strategy, dtype=np.float64),
+        strategy,
+        legal_mask,
+    )
+    del values
+
+    opp_sigma = np.asarray(opponent_strategy, dtype=np.float64)
+    if opp_sigma.ndim != 1 or opp_sigma.shape[0] != matrix.shape[1]:
+        raise ValueError("opponent_strategy must match payoff_matrix columns")
+    if np.any(opp_sigma < 0.0) or float(opp_sigma.sum()) <= 0.0:
+        raise ValueError("opponent_strategy must have positive probability mass")
+    opp_sigma = opp_sigma / float(opp_sigma.sum())
+
+    q = np.asarray(sample_probs, dtype=np.float64)
+    if q.shape[0] != matrix.shape[0]:
+        raise ValueError("sample_probs must match payoff_matrix rows")
+    if np.any(q[legal_bool] <= 0.0):
+        raise ValueError("every legal action needs positive sampling probability")
+    q = np.where(legal_bool, q, 0.0)
+    q = q / float(q.sum())
+
+    actions = np.asarray(sampled_actions, dtype=np.int64).reshape(-1)
+    opp_actions = np.asarray(sampled_opponent_actions, dtype=np.int64).reshape(-1)
+    if actions.size == 0 or actions.size != opp_actions.size:
+        raise ValueError("sampled action arrays must be non-empty and equal length")
+
+    estimated_values = np.zeros(matrix.shape[0], dtype=np.float64)
+    estimated_state_value = 0.0
+    sample_count = float(actions.size)
+    for action, opp_action in zip(actions, opp_actions):
+        if action < 0 or action >= matrix.shape[0] or not legal_bool[action]:
+            raise ValueError("sampled action must be legal")
+        if (
+            opp_action < 0
+            or opp_action >= matrix.shape[1]
+            or opp_sigma[opp_action] <= 0.0
+        ):
+            raise ValueError("sampled opponent action must have positive probability")
+        weight = 1.0 / (sample_count * q[action])
+        payoff = matrix[action, opp_action]
+        estimated_values[action] += payoff * weight
+        estimated_state_value += sigma[action] * payoff * weight
+
+    regret = estimated_values - estimated_state_value
+    regret[~legal_bool] = 0.0
+    return regret.astype(np.float32)
