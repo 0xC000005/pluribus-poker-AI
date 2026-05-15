@@ -297,7 +297,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reference-iterations", type=int, default=25)
     parser.add_argument(
         "--solver-backend",
-        choices=("cpu", "cpu-levelsync", "auto", "torch-cuda", "torch-cpu"),
+        choices=(
+            "cpu",
+            "cpu-levelsync",
+            "auto",
+            "torch-cuda",
+            "torch-cpu",
+            "torch-levelsync-cuda",
+            "torch-levelsync-cpu",
+        ),
         default="cpu",
     )
     parser.add_argument(

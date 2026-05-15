@@ -253,6 +253,17 @@ level-synchronous rewrite as a CPU optimization. The remaining principled
 compute path is either a real fused/chunked GPU recurrence or a learned
 public-belief correction that reduces solver work while beating uniform CFR10.
 
+The Torch version of that same level-synchronous recurrence now provides the
+first real GPU resolver win. On the 64-root turn holdout,
+`torch-levelsync-cuda` preserved budget-frontier quality and cut CFR5/CFR10
+solver latency to `39.7/55.4 ms`, while CPU was previously `144.8/280.4 ms`.
+CPU CFR25 versus Torch CUDA CFR25 parity over the same roots had perfect
+top-action agreement and small strategy drift (`0.0281` mean L1). The next
+single continuation target should therefore be **validation before promotion**:
+run mixed turn/river parity and a no-strategy-change Slumbot latency smoke with
+`torch-levelsync-cuda`, then decide whether `auto` can safely prefer it on CUDA
+for supported no-callback CFR+ solves.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

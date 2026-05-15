@@ -195,6 +195,19 @@ versus the current CPU solver's `120/243 ms`, with matching decision metrics
 and zero illegal mass. Keep it diagnostic-only. Its value is as a tested
 stepping stone for a future fused/GPU recurrence, not as a default backend.
 
+Torch level-synchronous CUDA status: the same level-wise recurrence in Torch is
+the first genuinely useful GPU resolver backend. On the 64-root turn holdout,
+`torch-levelsync-cuda` passed with zero illegal mass and CFR5/CFR10 mean solver
+latency `39.7/55.4 ms`, versus the latest CPU frontier's `144.8/280.4 ms`.
+Quality stayed aligned with the CPU frontier (`0.5255/0.3652` L1 vs
+`0.5254/0.3630`). A separate CPU CFR25 versus Torch CUDA CFR25 parity check on
+the same 64 roots had `1.0` top-action agreement, mean L1 `0.0281`, mean KL
+`0.0040`, and latency `108 ms` versus CPU `698 ms`. The fixed four-state
+resolver CLI smoke also passed at solver-iteration `10` with average solver
+latency `330 ms`, compared with the earlier Python-driven `torch-cuda` smoke
+of `1219 ms` and CPU `743 ms`. Keep this backend explicit until mixed
+turn/river parity and live Slumbot latency are checked.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -308,6 +321,9 @@ stepping stone for a future fused/GPU recurrence, not as a default backend.
 - The first level-synchronous NumPy recurrence is mechanically valid but slower
   than CPU on the 8-root smoke. Treat `cpu-levelsync` as a GPU-boundary
   prototype, not an optimization or promotion path.
+- The Torch CUDA version of the same boundary is a real compute improvement on
+  fixed turn states and should become the next latency-validation target, but
+  it is still explicit-only and not a default/live backend.
 
 ## Metric Snapshot
 

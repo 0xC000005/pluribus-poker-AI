@@ -20,6 +20,7 @@ from fast_cfr import (
     prune_hands,
     solve_cfr,
     solve_cfr_levelsync,
+    solve_cfr_levelsync_torch,
     solve_cfr_torch,
 )
 
@@ -136,6 +137,14 @@ def resolve_solver_backend(backend='auto', device=None):
         return 'torch', 'cuda'
     if backend == 'torch-cpu':
         return 'torch', 'cpu'
+    if backend == 'torch-levelsync-cuda':
+        if not torch.cuda.is_available():
+            raise RuntimeError("torch-levelsync-cuda solver backend requested but CUDA is unavailable.")
+        return 'torch-levelsync', 'cuda'
+    if backend == 'torch-levelsync-cpu':
+        return 'torch-levelsync', 'cpu'
+    if backend == 'torch-levelsync':
+        return backend, device
     if backend in ('cpu', 'torch'):
         return backend, device
     raise ValueError(f"Unknown solver backend: {backend}")
@@ -391,6 +400,23 @@ class StreetSolver:
                 'initial_regret_sum': initial_regret_sum,
                 'initial_strategy_sum': initial_strategy_sum,
                 'solver_update': solver_update,
+            }
+        elif backend == 'torch-levelsync':
+            if (
+                showdown_leaf_fn is not None
+                or cut_node_fn is not None
+                or trace_node_fn is not None
+            ):
+                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+            if cut_node_indices is not None or trace_node_indices is not None:
+                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+            if solver_update != 'cfr_plus':
+                raise ValueError("torch-levelsync currently supports solver_update='cfr_plus' only")
+            solver_fn = solve_cfr_levelsync_torch
+            kwargs = {
+                'device': device or 'cuda',
+                'initial_regret_sum': initial_regret_sum,
+                'initial_strategy_sum': initial_strategy_sum,
             }
         else:
             raise ValueError(f"Unknown solver backend: {backend}")

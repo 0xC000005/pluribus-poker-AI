@@ -3533,3 +3533,16 @@
 - Review manifest: docs/research_protocols/poker_review_manifests/20260515T003000Z-levelsync-cfr-prototype.json
 - Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_levelsync_smoke8_cached_seed20260675.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_cpu_smoke8_seed20260674.json
 - Key metrics: `{"levelsync_cfr5_latency_ms": 158.223125, "cpu_cfr5_latency_ms": 120.20875, "levelsync_cfr10_latency_ms": 293.549375, "cpu_cfr10_latency_ms": 242.863625, "levelsync_cfr10_l1": 0.38470745, "cpu_cfr10_l1": 0.38470743, "max_illegal_mass": 0.0, "promotion": false}`
+
+## 20260515T004212Z-torch-levelsync-cuda-cfr - passed
+
+- Timestamp: 2026-05-15T00:42:12Z
+- Type: solver_throughput_diagnostic
+- Gate: torch-levelsync-cuda-cfr-budget-frontier-holdout64
+- Hypothesis: Porting the level-synchronous CFR+ recurrence to Torch CUDA should give the GPU coarse node-by-hand operations, unlike the older Python-driven `torch-cuda` backend, while preserving CPU CFR+ decisions closely enough for fixed-state solving.
+- Failure class: none
+- Related work: GPU-CFR motivates coarse matrix/vector CFR operations (`https://arxiv.org/abs/2408.14778`). DeepStack and Pluribus motivate preserving search/re-solving as the runtime correction mechanism rather than replacing it with policy patches (`https://arxiv.org/abs/1701.01724`, `https://www.science.org/doi/10.1126/science.aay2400`).
+- Summary: Added `solve_cfr_levelsync_torch` and explicit `torch-levelsync-cuda` / `torch-levelsync-cpu` backends. The 64-root budget frontier passed with zero illegal mass and CFR5/CFR10 latency `39.7/55.4 ms`, much faster than the latest CPU frontier (`144.8/280.4 ms`) while preserving quality (`0.5255/0.3652` L1 vs CPU `0.5254/0.3630`). A separate CPU CFR25 vs Torch CUDA CFR25 parity check on all 64 roots had `1.0` action agreement, mean L1 `0.0281`, mean KL `0.0040`, and latency `108 ms` vs CPU `698 ms`. A fixed four-state resolver CLI smoke passed at solver-iteration `10` with average solver latency `330 ms`, much better than the old Python-driven `torch-cuda` smoke (`1219 ms`). Keep this backend explicit until mixed turn/river and Slumbot latency smokes pass.
+- Review manifest: docs/research_protocols/poker_review_manifests/20260515T004500Z-torch-levelsync-cuda-cfr.json
+- Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_torch_levelsync_cuda_holdout64_seed20260676.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr25_cpu_vs_torch_levelsync_cuda_holdout64_seed20260676.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_torch_levelsync_cuda_iter10_smoke4_seed20260676.json
+- Key metrics: `{"cfr5_latency_ms": 39.71634375, "cfr10_latency_ms": 55.4038125, "cfr5_l1": 0.52546177, "cfr10_l1": 0.36524483, "cpu_vs_cuda_cfr25_action_agreement": 1.0, "cpu_vs_cuda_cfr25_mean_l1": 0.02805684, "cpu_vs_cuda_cfr25_mean_kl": 0.00402004, "cpu_cfr25_latency_ms": 698.021, "cuda_cfr25_latency_ms": 108.483, "max_illegal_mass": 0.0, "promotion": false}`

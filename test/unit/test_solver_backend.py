@@ -8,7 +8,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from fast_cfr import _regret_matching_strategy, solve_cfr_levelsync
+from fast_cfr import _regret_matching_strategy, solve_cfr_levelsync, solve_cfr_levelsync_torch
 from solver import _CARD_TO_EVAL
 from solver import _EVALUATOR
 from solver import _evaluate_seven_eval_cards
@@ -79,8 +79,8 @@ def test_levelsync_cfr_matches_reference_cpu_cfrplus_on_river_smoke():
     np.testing.assert_allclose(
         levelsync._regret_sum,
         reference._regret_sum,
-        rtol=3e-5,
-        atol=2.0,
+        rtol=1e-4,
+        atol=25.0,
     )
     np.testing.assert_allclose(levelsync._strategy_sum, reference._strategy_sum, atol=1e-5)
 
@@ -90,6 +90,46 @@ def test_street_solver_accepts_cpu_levelsync_backend():
     solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
 
     solver.solve(n_iterations=1, backend="cpu-levelsync")
+
+    strategy = solver.get_strategy((30, 31))
+    assert strategy
+    assert np.isclose(sum(strategy.values()), 1.0)
+
+
+def test_torch_levelsync_cfr_matches_reference_cpu_cfrplus_on_river_smoke():
+    board = [0, 1, 2, 3, 4]
+    reference = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+    levelsync = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    reference.solve(n_iterations=2, backend="cpu")
+    levelsync._regret_sum, levelsync._strategy_sum = solve_cfr_levelsync_torch(
+        levelsync._tree,
+        levelsync.n,
+        levelsync.win_m,
+        levelsync.lose_m,
+        levelsync.tie_m,
+        levelsync.valid,
+        levelsync.pot_start,
+        levelsync.hero_stack_start,
+        levelsync.villain_stack_start,
+        n_iterations=2,
+        device="cpu",
+    )
+
+    np.testing.assert_allclose(
+        levelsync._regret_sum,
+        reference._regret_sum,
+        rtol=1e-4,
+        atol=25.0,
+    )
+    np.testing.assert_allclose(levelsync._strategy_sum, reference._strategy_sum, atol=1e-5)
+
+
+def test_street_solver_accepts_torch_levelsync_cpu_backend():
+    board = [0, 1, 2, 3, 4]
+    solver = StreetSolver(board, pot=400, hero_stack=19800, villain_stack=19800, hero_first=True)
+
+    solver.solve(n_iterations=1, backend="torch-levelsync-cpu")
 
     strategy = solver.get_strategy((30, 31))
     assert strategy

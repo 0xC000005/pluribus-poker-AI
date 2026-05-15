@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 936,
+      "path": "benchmark_audit.md",
+      "sha256": "9dd2f19822e8c66432e14058b519fe035680912a868cbb5ed15577742b647bb9"
+    },
+    {
+      "bytes": 459,
+      "path": "decision.json",
+      "sha256": "5eb126d0c2f34ffb12e54f08ace38e98a81605b44869a6318d13ff66e08f02e3"
+    },
+    {
+      "bytes": 953,
+      "path": "mechanism_review.md",
+      "sha256": "df5ab32e68c6ac702b9624d62a854a002d28064c8d6f14045683302d374757b4"
+    },
+    {
+      "bytes": 1301,
+      "path": "related_work.md",
+      "sha256": "350b0a0b583f94219ebaf66c611b43c726f2b0f889780804bde66fdb611ab7da"
+    },
+    {
+      "bytes": 1498,
+      "path": "review.md",
+      "sha256": "a527c800ef2d72e3d4018ae6b2cec66d5059ee772af308bd64bfcdef938429bc"
+    },
+    {
+      "bytes": 374,
+      "path": "team_review.md",
+      "sha256": "941a55635a5fba878479d7ebca5f47175e615726034937b1650b701b1cc61350"
+    }
+  ],
+  "reason": "Proceed as an explicit diagnostic backend. Torch level-sync CUDA gives a large fixed-state speedup and passes CPU-vs-CUDA CFR25 parity on the 64-root holdout, but default/live use needs mixed turn-river and Slumbot latency validation.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T004500Z-torch-levelsync-cuda-cfr",
+  "review_id": "20260515T004500Z-torch-levelsync-cuda-cfr",
+  "sources": [
+    "https://arxiv.org/abs/2408.14778",
+    "https://arxiv.org/abs/1701.01724",
+    "https://www.science.org/doi/10.1126/science.aay2400"
+  ],
+  "written_at": "2026-05-15T00:42:12Z"
+}
