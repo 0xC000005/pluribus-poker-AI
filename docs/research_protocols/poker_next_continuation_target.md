@@ -369,6 +369,13 @@ predict whether extra iterations improve the same root against CFR500, or learn
 a single-solve early-stopping/continuation policy from trace convergence that
 does not require running two budget profiles.
 
+The direct-decision scalar target has also failed under the same gate. Predicting
+`live_l1 - CFR350_l1` did not beat a mean baseline for either feature rows or
+trace rows. The next continuation target should stop using shallow scalar
+selectors. Use a mechanism that observes the solver's own sequence while it is
+already running: a learned early-stopping or continuation policy based on trace
+convergence, or a sequence model that predicts the future policy trajectory.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

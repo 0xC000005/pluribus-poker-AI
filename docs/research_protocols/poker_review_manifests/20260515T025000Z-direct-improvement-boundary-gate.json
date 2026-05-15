@@ -1,0 +1,45 @@
+{
+  "decision": "abandon",
+  "files": [
+    {
+      "bytes": 505,
+      "path": "benchmark_audit.md",
+      "sha256": "e0da7244ca1495b185199729375200ad4e39ba7c09cfb9e58c7de690f0067548"
+    },
+    {
+      "bytes": 401,
+      "path": "decision.json",
+      "sha256": "01d90ea1e929113384a40a14477025a06846a8fbe2bb5990a602d99752751bc1"
+    },
+    {
+      "bytes": 1378,
+      "path": "mechanism_review.md",
+      "sha256": "2967cceb80c979cf4048434ed60d2f0afde09ead3a133480d8bc5a8979367da1"
+    },
+    {
+      "bytes": 774,
+      "path": "related_work.md",
+      "sha256": "d4128ead6c8a5f551fd0211c82b662b231fb4712f34e37cfabb4a0e810db88b1"
+    },
+    {
+      "bytes": 1371,
+      "path": "review.md",
+      "sha256": "4476fda6bc238d096bf808c44aded54c635b279117ac6e1f8ac3e7162e37e8b2"
+    },
+    {
+      "bytes": 508,
+      "path": "team_review.md",
+      "sha256": "301559c36e8b6d0eb119bb6e81e798c2064d80a2ed59b6f2944edd883218cda1"
+    }
+  ],
+  "reason": "Direct L1-improvement prediction failed the target-MAE baseline in all four feature and trace split runs.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T025000Z-direct-improvement-boundary-gate",
+  "review_id": "20260515T025000Z-direct-improvement-boundary-gate",
+  "sources": [
+    "https://arxiv.org/abs/2106.05022",
+    "https://proceedings.mlr.press/v70/bolukbasi17a.html",
+    "https://dmorrill10.github.io/assets/publications/17science.pdf",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-15T02:41:53Z"
+}

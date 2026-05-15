@@ -355,6 +355,15 @@ oracle top-k recall. This is stronger evidence that profile-L1 is useful as an
 offline oracle label but not the next learnable target. Move to direct
 downstream budget-improvement labels or a single-solve early-stopping rule.
 
+Direct-improvement selector status: changing the scalar target did not fix the
+problem. The same protected gate now supports `--target l1-improvement`, but
+all four feature/trace split runs failed target MAE versus a mean baseline.
+Feature rows failed at `0.1778 > 0.0730` and `0.2836 > 0.0754`; trace rows
+failed at `0.1241 > 0.0905` and `0.1039 > 0.0875`. This retires the shallow
+scalar selector family. The next target should change mechanism class:
+single-solve trace control, learned stopping/continuation, or a sequence model
+over solver dynamics.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

@@ -93,9 +93,25 @@ def _rows(
                 "escalation_l1": float(escalation["l1_to_reference"]),
                 "escalation_kl": float(escalation["kl_to_reference"]),
                 "escalation_latency_ms": float(escalation["latency_ms"]),
+                "l1_improvement": (
+                    float(live_budget["l1_to_reference"])
+                    - float(escalation["l1_to_reference"])
+                ),
+                "kl_improvement": (
+                    float(live_budget["kl_to_reference"])
+                    - float(escalation["kl_to_reference"])
+                ),
             }
         )
     return rows
+
+
+def _target_key(target_name: str) -> str:
+    if target_name == "profile-l1":
+        return "profile_l1"
+    if target_name == "l1-improvement":
+        return "l1_improvement"
+    raise ValueError(f"unsupported target_name: {target_name}")
 
 
 def _standardize(train_x: np.ndarray, holdout_x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -162,6 +178,7 @@ def evaluate_boundary_predictor(
     escalation_budget: int = 350,
     reference_profile: str = "live",
     candidate_profile: str = "fast-live",
+    target_name: str = "profile-l1",
 ) -> dict[str, Any]:
     rows = _rows(
         frontier_metrics,
@@ -187,27 +204,28 @@ def evaluate_boundary_predictor(
 
     train_x = np.stack([row["features"] for row in train_rows], axis=0)
     holdout_x = np.stack([row["features"] for row in holdout_rows], axis=0)
-    train_y = np.asarray([row["profile_l1"] for row in train_rows], dtype=np.float64)
-    holdout_y = np.asarray([row["profile_l1"] for row in holdout_rows], dtype=np.float64)
+    target_key = _target_key(target_name)
+    train_y = np.asarray([row[target_key] for row in train_rows], dtype=np.float64)
+    holdout_y = np.asarray([row[target_key] for row in holdout_rows], dtype=np.float64)
     train_x_std, holdout_x_std = _standardize(train_x, holdout_x)
     weights = _fit_ridge(train_x_std, train_y)
     train_pred = _predict_ridge(weights, train_x_std)
     holdout_pred = _predict_ridge(weights, holdout_x_std)
 
     for row, score in zip(train_rows, train_pred, strict=True):
-        row["predicted_profile_l1"] = float(score)
+        row["predicted_target"] = float(score)
     for row, score in zip(holdout_rows, holdout_pred, strict=True):
-        row["predicted_profile_l1"] = float(score)
+        row["predicted_target"] = float(score)
 
-    predicted_threshold = _select_threshold(train_rows, "predicted_profile_l1", int(select_train_top_k))
-    oracle_threshold = _select_threshold(train_rows, "profile_l1", int(select_train_top_k))
+    predicted_threshold = _select_threshold(train_rows, "predicted_target", int(select_train_top_k))
+    oracle_threshold = _select_threshold(train_rows, target_key, int(select_train_top_k))
     selected = [
         row for row in holdout_rows
-        if row["predicted_profile_l1"] >= predicted_threshold
+        if row["predicted_target"] >= predicted_threshold
     ]
     oracle_selected = [
         row for row in holdout_rows
-        if row["profile_l1"] >= oracle_threshold
+        if row[target_key] >= oracle_threshold
     ]
     selected_labels = {row["label"] for row in selected}
     oracle_selected_labels = {row["label"] for row in oracle_selected}
@@ -237,6 +255,7 @@ def evaluate_boundary_predictor(
         "mode": "solver_budget_boundary_predictor",
         "reference_profile": reference_profile,
         "candidate_profile": candidate_profile,
+        "target_name": target_name,
         "escalation_budget": int(escalation_budget),
         "train_start_index": int(train_start_index),
         "train_limit": int(train_limit),
@@ -248,7 +267,10 @@ def evaluate_boundary_predictor(
         "n_train": int(len(train_rows)),
         "n_holdout": int(len(holdout_rows)),
         "predicted_threshold": round(float(predicted_threshold), 8),
-        "oracle_threshold_profile_l1": round(float(oracle_threshold), 8),
+        "oracle_threshold_target": round(float(oracle_threshold), 8),
+        "oracle_threshold_profile_l1": (
+            round(float(oracle_threshold), 8) if target_name == "profile-l1" else None
+        ),
         "holdout_selected": int(len(selected)),
         "oracle_holdout_selected": int(len(oracle_selected)),
         "selected_labels": sorted(selected_labels),
@@ -261,9 +283,16 @@ def evaluate_boundary_predictor(
             float(len(overlap) / max(len(selected_labels), 1)),
             8,
         ),
-        "holdout_profile_l1_mae": holdout_mae,
-        "holdout_profile_l1_mean_baseline_mae": baseline_mae,
-        "holdout_profile_l1_pearson": _pearson(holdout_pred, holdout_y),
+        "target_mae": holdout_mae,
+        "target_mean_baseline_mae": baseline_mae,
+        "target_pearson": _pearson(holdout_pred, holdout_y),
+        "holdout_profile_l1_mae": holdout_mae if target_name == "profile-l1" else None,
+        "holdout_profile_l1_mean_baseline_mae": (
+            baseline_mae if target_name == "profile-l1" else None
+        ),
+        "holdout_profile_l1_pearson": (
+            _pearson(holdout_pred, holdout_y) if target_name == "profile-l1" else None
+        ),
         "live_mean_l1": live_l1,
         "predicted_selective_mean_l1": predicted_l1,
         "oracle_selective_mean_l1": _mean(
@@ -360,6 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cfv-cache")
     parser.add_argument("--trace-json", action="append", default=[])
     parser.add_argument("--trace-iteration", type=int, default=5)
+    parser.add_argument("--target", choices=("profile-l1", "l1-improvement"), default="profile-l1")
     parser.add_argument("--train-start-index", type=int, default=128)
     parser.add_argument("--train-limit", type=int, default=64)
     parser.add_argument("--holdout-start-index", type=int, default=192)
@@ -390,6 +420,7 @@ def main(argv: list[str] | None = None) -> int:
         holdout_limit=args.holdout_limit,
         select_train_top_k=args.select_train_top_k,
         escalation_budget=args.escalation_budget,
+        target_name=args.target,
     )
     metrics["feature_source"] = feature_source
     output = Path(args.output)

@@ -434,6 +434,35 @@
   should target direct downstream budget improvement or single-solve early
   stopping rather than trying to infer the two-profile oracle.
 
+## 20260515T025000Z-direct-improvement-boundary-gate - failed
+
+- Timestamp: 2026-05-15T02:50:00Z
+- Type: protected evaluation diagnostic
+- Gate: TDD + methodology-review + related-work check + four root-disjoint
+  target-prediction runs
+- Hypothesis: Predicting direct L1 improvement from CFR350 escalation should be
+  more aligned than predicting profile-L1, because it targets the downstream
+  teacher metric.
+- Failure class: search_quality
+- Summary: Extended `scripts/eval_solver_budget_boundary_predictor.py` with a
+  predeclared `--target l1-improvement` mode while keeping `profile-l1` as the
+  default. Evaluated both saved feature rows on 64/64 splits and trace
+  iteration-5 rows on 32/32 splits.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T025000Z-direct-improvement-boundary-gate`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T025000Z-direct-improvement-boundary-gate.json`
+  - Feature A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_l1_improvement_features_train128_holdout192_seed20260515.json`
+  - Feature B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_l1_improvement_features_train192_holdout128_seed20260515.json`
+  - Trace A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_l1_improvement_trace_iter5_train128_holdout192_seed20260515.json`
+  - Trace B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_l1_improvement_trace_iter5_train192_holdout128_seed20260515.json`
+- Metrics: all four runs failed target predictiveness. Feature splits had
+  target MAE `0.1778 > 0.0730` and `0.2836 > 0.0754`. Trace splits had target
+  MAE `0.1241 > 0.0905` and `0.1039 > 0.0875`. Selected roots sometimes
+  improved L1/KL, but not from a reliable target model.
+- Decision: abandon the shallow scalar selector family for now. The next
+  mechanism should be single-solve trace control or a larger learned sequence
+  model over solver dynamics, not another target/feature/ridge variant.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

@@ -102,6 +102,71 @@ def test_boundary_predictor_uses_cheap_features_for_holdout_selection():
     assert metrics["predicted_latency_ratio_to_live"] == 1.5
 
 
+def test_boundary_predictor_can_target_direct_l1_improvement():
+    frontier_metrics = {
+        "records": [
+            {
+                "label": f"root-{idx:04d}-street2",
+                "passed": True,
+                "budgets": {
+                    "150": {"l1_to_reference": live_l1, "kl_to_reference": live_kl, "latency_ms": 100.0},
+                    "350": {"l1_to_reference": high_l1, "kl_to_reference": high_kl, "latency_ms": 200.0},
+                },
+            }
+            for idx, live_l1, live_kl, high_l1, high_kl in [
+                (0, 0.4, 0.2, 0.1, 0.05),
+                (1, 0.3, 0.1, 0.2, 0.08),
+                (2, 0.5, 0.3, 0.15, 0.06),
+                (3, 0.2, 0.09, 0.18, 0.07),
+            ]
+        ]
+    }
+    profile_metrics = {
+        "records": [
+            {
+                "label": f"root-{idx:04d}-street2",
+                "passed": True,
+                "profiles": {
+                    "live": {"iterations": 150, "strategy": [0.5, 0.5]},
+                    "fast-live": {"iterations": 100, "strategy": [0.5, 0.5]},
+                },
+            }
+            for idx in range(4)
+        ]
+    }
+    feature_labels = np.asarray([f"root-{idx:04d}-street2" for idx in range(4)])
+    features = np.asarray(
+        [
+            [1.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
+
+    metrics = predictor.evaluate_boundary_predictor(
+        frontier_metrics,
+        profile_metrics,
+        features,
+        feature_labels,
+        train_start_index=0,
+        train_limit=2,
+        holdout_start_index=2,
+        holdout_limit=2,
+        select_train_top_k=1,
+        escalation_budget=350,
+        target_name="l1-improvement",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["target_name"] == "l1-improvement"
+    assert metrics["selected_labels"] == ["root-0002-street2"]
+    assert metrics["oracle_selected_labels"] == ["root-0002-street2"]
+    assert metrics["target_mae"] < metrics["target_mean_baseline_mae"]
+    assert metrics["predicted_l1_improvement"] == 0.175
+
+
 def test_trace_feature_loader_uses_requested_iteration_and_context():
     payload = {
         "records": [
