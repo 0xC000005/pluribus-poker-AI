@@ -5036,8 +5036,8 @@
   per-iteration profiles, benchmark JSON, and AGENTS guidance. The smoke run
   confirmed that the default small benchmark can fill the pool and demote many
   traverser nodes, making this a real fidelity metric for future compute work.
-- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 0 --n-measure 1 --n-traversals 100 --hidden-dim 64 --n-layers 1 --n-training-steps 5 --batch-size 128 --output-json autoresearch-session/gpu_deep_cfr_benchmark_pool_exhaustion_smoke_20260515.json`
-- Key metrics: `{"smoke_traversal_pool_exhausted_nodes": 23344, "smoke_traversal_pool_exhausted_per_traversal": 116.72, "smoke_traversal_overflow_chunk_fraction": 1.0, "promotion": false}`
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 0 --n-measure 1 --n-traversals 100 --hidden-dim 64 --n-layers 1 --n-training-steps 5 --batch-size 128 --output-json autoresearch-session/gpu_deep_cfr_benchmark_pool_exhaustion_smoke_20260515.json`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 0 --n-measure 1 --n-traversals 100 --hidden-dim 64 --n-layers 1 --n-training-steps 5 --batch-size 128 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0 --output-json autoresearch-session/gpu_deep_cfr_benchmark_gate_failure_smoke_20260515.json`
+- Key metrics: `{"smoke_traversal_pool_exhausted_nodes": 23344, "smoke_traversal_pool_exhausted_per_traversal": 116.72, "smoke_traversal_overflow_chunk_fraction": 1.0, "gate_failure_smoke_passed": false, "gate_failure_smoke_pool_exhausted_per_traversal": 337.46, "promotion": false}`
 - Decision: Future GPU acceleration work must reduce `pool_exhausted_nodes` at
   acceptable throughput or explicitly justify any demotions as a separate
   stochastic estimator. Do not treat raw iters/hour as sufficient.

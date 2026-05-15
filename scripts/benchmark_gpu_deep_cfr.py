@@ -14,7 +14,10 @@ import warnings
 
 import torch
 
+SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -30,6 +33,49 @@ def _mean(profiles: list[dict], key: str) -> float:
     if not profiles:
         return 0.0
     return float(statistics.fmean(float(profile[key]) for profile in profiles))
+
+
+def _max(profiles: list[dict], key: str) -> float:
+    if not profiles:
+        return 0.0
+    return max(float(profile[key]) for profile in profiles)
+
+
+def evaluate_benchmark_gate_failures(
+    result: dict,
+    *,
+    min_mean_traversals_per_second: float | None = None,
+    max_pool_exhausted_per_traversal: float | None = None,
+    max_overflow_chunk_fraction: float | None = None,
+) -> list[str]:
+    failures: list[str] = []
+    if (
+        min_mean_traversals_per_second is not None
+        and result["mean_traversals_per_second"] < min_mean_traversals_per_second
+    ):
+        failures.append(
+            f"mean_traversals_per_second {result['mean_traversals_per_second']:.6f} "
+            f"< {min_mean_traversals_per_second:.6f}"
+        )
+    if (
+        max_pool_exhausted_per_traversal is not None
+        and result["max_pool_exhausted_per_traversal"]
+        > max_pool_exhausted_per_traversal
+    ):
+        failures.append(
+            "max_pool_exhausted_per_traversal "
+            f"{result['max_pool_exhausted_per_traversal']:.6f} "
+            f"> {max_pool_exhausted_per_traversal:.6f}"
+        )
+    if (
+        max_overflow_chunk_fraction is not None
+        and result["max_overflow_chunk_fraction"] > max_overflow_chunk_fraction
+    ):
+        failures.append(
+            f"max_overflow_chunk_fraction {result['max_overflow_chunk_fraction']:.6f} "
+            f"> {max_overflow_chunk_fraction:.6f}"
+        )
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,6 +96,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     parser.add_argument("--traversal-slots-per-traversal", type=int, default=500)
     parser.add_argument("--policy-slots-per-traversal", type=int, default=64)
+    parser.add_argument("--min-mean-traversals-per-second", type=float)
+    parser.add_argument("--max-pool-exhausted-per-traversal", type=float)
+    parser.add_argument("--max-overflow-chunk-fraction", type=float)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -118,15 +167,36 @@ def main(argv: list[str] | None = None) -> int:
             _mean(measured_profiles, "train_samples_per_second"),
             6,
         ),
+        "max_pool_exhausted_per_traversal": round(
+            _max(measured_profiles, "traversal_pool_exhausted_per_traversal"),
+            6,
+        ),
+        "max_overflow_chunk_fraction": round(
+            _max(measured_profiles, "traversal_overflow_chunk_fraction"),
+            6,
+        ),
         "warmup_profiles": warmup_profiles,
         "profiles": measured_profiles,
         "promotion": False,
     }
+    failures = evaluate_benchmark_gate_failures(
+        result,
+        min_mean_traversals_per_second=args.min_mean_traversals_per_second,
+        max_pool_exhausted_per_traversal=args.max_pool_exhausted_per_traversal,
+        max_overflow_chunk_fraction=args.max_overflow_chunk_fraction,
+    )
+    result["gate_thresholds"] = {
+        "min_mean_traversals_per_second": args.min_mean_traversals_per_second,
+        "max_pool_exhausted_per_traversal": args.max_pool_exhausted_per_traversal,
+        "max_overflow_chunk_fraction": args.max_overflow_chunk_fraction,
+    }
+    result["gate_failures"] = failures
+    result["passed"] = not failures
     text = json.dumps(result, indent=2, sort_keys=True)
     if args.output_json:
         Path(args.output_json).write_text(text + "\n", encoding="utf-8")
     print(text)
-    return 0
+    return 0 if result["passed"] else 1
 
 
 if __name__ == "__main__":

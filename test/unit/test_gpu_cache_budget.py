@@ -13,6 +13,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     _traversal_batch_size,
 )
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
+from scripts.benchmark_gpu_deep_cfr import evaluate_benchmark_gate_failures
 
 
 def test_gpu_cache_nbytes_matches_replay_tensor_shapes():
@@ -168,6 +169,22 @@ def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
     assert profile["train_sample_budget"] == 1280
     assert profile["train_samples_per_second"] == 320.0
     assert profile["traversal_pool_exhausted_nodes"] == 5
+
+
+def test_gpu_benchmark_gate_fails_on_pool_exhaustion():
+    failures = evaluate_benchmark_gate_failures(
+        {
+            "mean_traversals_per_second": 2500.0,
+            "max_pool_exhausted_per_traversal": 10.0,
+            "max_overflow_chunk_fraction": 1.0,
+        },
+        min_mean_traversals_per_second=2000.0,
+        max_pool_exhausted_per_traversal=0.0,
+        max_overflow_chunk_fraction=0.0,
+    )
+
+    assert any("max_pool_exhausted_per_traversal" in failure for failure in failures)
+    assert any("max_overflow_chunk_fraction" in failure for failure in failures)
 
 
 def test_release_workspace_for_training_drops_traversal_workspace():
