@@ -118,6 +118,44 @@ def test_sampled_traversal_probe_supports_priority_model_checkpoint(tmp_path):
     assert metrics["promotion"] is False
 
 
+def test_sampled_traversal_probe_supports_oracle_action_value_priority():
+    metrics = run_probe(
+        n_repeats=2,
+        n_reference_repeats=2,
+        initial_chips=300,
+        sample_count=4,
+        sampling_mode="priority-without-replacement",
+        priority_forced_count=2,
+        priority_source="oracle-action-value",
+        hidden_dim=16,
+        n_layers=1,
+        seed=20260533,
+    )
+
+    assert metrics["priority_source"] == "oracle-action-value"
+    assert metrics["promotion"] is False
+
+
+def test_sampled_traversal_probe_can_use_oracle_priority_as_baseline():
+    metrics = run_probe(
+        n_repeats=2,
+        n_reference_repeats=2,
+        initial_chips=300,
+        sample_count=4,
+        sampling_mode="priority-without-replacement",
+        priority_forced_count=2,
+        priority_source="oracle-action-value",
+        use_priority_baseline=True,
+        hidden_dim=16,
+        n_layers=1,
+        seed=20260534,
+    )
+
+    assert metrics["priority_source"] == "oracle-action-value"
+    assert metrics["use_priority_baseline"] is True
+    assert metrics["promotion"] is False
+
+
 def test_sampled_traversal_probe_reproducible_for_same_seed():
     first = run_probe(
         n_repeats=2,

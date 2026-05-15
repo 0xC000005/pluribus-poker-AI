@@ -93,10 +93,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--priority-forced-count", type=int, default=0)
     parser.add_argument(
         "--priority-source",
-        choices=("strategy", "advantage", "abs-advantage", "priority-model"),
+        choices=(
+            "strategy",
+            "advantage",
+            "abs-advantage",
+            "priority-model",
+            "oracle-action-value",
+        ),
         default="strategy",
     )
     parser.add_argument("--priority-checkpoint")
+    parser.add_argument("--use-priority-baseline", action="store_true")
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--n-layers", type=int, default=1)
     parser.add_argument("--uniform-mix", type=float, default=0.25)
@@ -122,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         priority_forced_count=args.priority_forced_count,
         priority_source=args.priority_source,
         priority_checkpoint=args.priority_checkpoint,
+        use_priority_baseline=args.use_priority_baseline,
         device=args.device,
     )
     failures = evaluate_gate_failures(

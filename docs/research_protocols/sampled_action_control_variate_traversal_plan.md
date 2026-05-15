@@ -63,6 +63,10 @@ or Slumbot-specific patch.
 - Aggregate grid metrics that hide one unstable public state. Learned
   priority-model sampling reached the aggregate sample-4 thresholds, but the
   stricter gate exposed a seed-specific top-action flip and high per-case bias.
+- Perfect branch-value priority as a selection signal. The oracle-action-value
+  diagnostic is intentionally too expensive for training, but it still failed
+  the four-seed sample-4 gate. That means the current estimator and stochastic
+  rollout coupling are the bottleneck, not just model capacity.
 - Fixed higher sample budgets that recover action ordering by nearly enumerating
   the tree. A four-seed sample-6 grid matched top actions but lost throughput,
   so fixed-count sampling alone is not the target method.
@@ -72,9 +76,8 @@ or Slumbot-specific patch.
 
 ## Next Implementation Step
 
-Train a true traversal branch-impact priority model before CUDA integration.
-The restricted showdown-value proxy was the first priority signal to pass
-aggregate thresholds, but it failed the stricter per-case gate. The next model
-should learn from exhaustive traversal branch values or uncertainty/margin
-labels, then use sampled traversal only when the priority model can preserve
-root action ordering on every held-out probe state.
+Do not train a standalone priority model yet. First redesign the sampled
+traversal estimator so exhaustive and sampled branches share a cleaner
+opponent/chance randomization contract, or move to a recognized MCCFR sampling
+scheme with a validated baseline target. The current sample-4 priority family
+is too unstable even under oracle branch-value diagnostics.

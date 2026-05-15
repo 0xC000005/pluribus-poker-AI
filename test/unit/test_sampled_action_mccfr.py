@@ -115,6 +115,27 @@ def test_priority_sample_without_replacement_forces_top_priority_actions():
     assert np.isclose(inclusion.sum(), 3.0)
 
 
+def test_priority_sample_without_replacement_rejects_forcing_entire_partial_sample():
+    rng = np.random.default_rng(11)
+    legal_mask = np.ones(5, dtype=np.float32)
+    sample_probs = np.ones(5, dtype=np.float32) / 5.0
+    priority = np.arange(5, dtype=np.float32)
+
+    try:
+        priority_sample_without_replacement(
+            rng,
+            sample_probs,
+            legal_mask,
+            sample_count=4,
+            forced_count=4,
+            priority_scores=priority,
+        )
+    except ValueError as exc:
+        assert "leave at least one residual" in str(exc)
+    else:
+        raise AssertionError("expected invalid fully forced partial sample to fail")
+
+
 def test_without_replacement_regret_estimator_is_unbiased_by_enumeration():
     values = np.array([3.0, -1.0, 0.5], dtype=np.float32)
     strategy = np.array([0.25, 0.5, 0.25], dtype=np.float32)

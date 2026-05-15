@@ -212,6 +212,11 @@ def priority_sample_without_replacement(
         raise ValueError("at least one legal action is required")
     k = min(max(1, int(sample_count)), int(legal_indices.size))
     n_forced = min(max(0, int(forced_count)), k)
+    if n_forced >= k and k < int(legal_indices.size):
+        raise ValueError(
+            "forced_count must leave at least one residual sampled action "
+            "unless sample_count enumerates every legal action"
+        )
     ordered = sorted(
         (int(action) for action in legal_indices),
         key=lambda action: (-float(priority[action]), action),

@@ -4943,3 +4943,30 @@
   Keep the stricter per-case gate. The next principled step is to build a
   branch-impact priority target from exhaustive traversal values, rather than
   reusing the restricted showdown-value baseline as a proxy.
+
+## 20260515T151500Z-oracle-priority-baseline-falsifier - failed
+
+- Timestamp: 2026-05-15T15:15:00Z
+- Type: estimator_falsification_check
+- Gate: oracle branch-priority and priority-baseline sample-4 traversal grids
+- Hypothesis: If sample-4 instability is mainly a priority-model quality
+  problem, then exact branch-action-value priority and control-variate
+  baselines should preserve top-action ordering on the four-seed traversal
+  grid, even if the oracle path is too slow for training.
+- Failure class: estimator_variance
+- Summary: Added an `oracle-action-value` diagnostic priority source and
+  `--use-priority-baseline` control-variate option to the research-only sampled
+  traversal probe. Also added a guard that rejects fully forced partial samples,
+  because unsampled legal actions would have zero inclusion probability. The
+  learned restricted-value baseline still failed seed `20260527`. The oracle
+  forced-3 variant fixed `20260527` without the baseline, but failed
+  `20260526` and `20260528` on the full four-seed grid. The oracle-baseline
+  upper bound also failed `20260527` and `20260528`. This falsifies the idea
+  that a better priority model alone is enough for sample-4 CUDA integration.
+- Commands: `uv run pytest -q test/unit/test_sampled_deep_cfr_traversal_probe.py test/unit/test_sampled_action_mccfr.py`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --priority-source priority-model --priority-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --use-priority-baseline --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --require-all-top-match --max-case-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_model_baseline_xxl_f2_sample4_4seeds_strict_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260527 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 3 --priority-source oracle-action-value --hidden-dim 64 --n-layers 1 --min-top-match-rate 1.0 --max-mean-abs-bias 0.08 --require-all-top-match --max-case-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_oracle_action_value_f3_sample4_seed20260527_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 3 --priority-source oracle-action-value --hidden-dim 64 --n-layers 1 --min-top-match-rate 1.0 --max-mean-abs-bias 0.08 --require-all-top-match --max-case-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_oracle_action_value_f3_sample4_4seeds_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 3 --priority-source oracle-action-value --use-priority-baseline --hidden-dim 64 --n-layers 1 --min-top-match-rate 1.0 --max-mean-abs-bias 0.08 --require-all-top-match --max-case-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_oracle_action_value_baseline_f3_sample4_4seeds_20260515.json`
+- Key metrics: `{"learned_priority_baseline_top_match_rate": 0.75, "learned_priority_baseline_failed_seed": 20260527, "oracle_f3_single_seed20260527_passed": true, "oracle_f3_grid_top_match_rate": 0.5, "oracle_f3_grid_failed_seeds": [20260526, 20260528], "oracle_baseline_f3_grid_top_match_rate": 0.5, "oracle_baseline_f3_failed_seeds": [20260527, 20260528], "promotion": false}`
+- Decision: Do not train or CUDA-integrate the current priority-sample-4
+  family. The next estimator work should address the sampling scheme itself:
+  align exhaustive and sampled opponent/chance randomization or switch to a
+  standard MCCFR sampling contract with a validated baseline, then rerun the
+  same strict per-case gate.

@@ -76,6 +76,10 @@ def _priority_scores(
         if priority_values is None:
             raise ValueError("priority-model source requires priority_values")
         return priority_values
+    if priority_source == "oracle-action-value":
+        if priority_values is None:
+            raise ValueError("oracle-action-value source requires priority_values")
+        return priority_values
     raise ValueError(f"unknown priority source: {priority_source}")
 
 
@@ -240,17 +244,15 @@ def _exhaustive_traverse(
 
     strategy, legal_mask, legal_actions, _advantages = _strategy(value_net, state, device)
     if int(state.player_i) == int(traverser):
-        action_values = np.zeros(N_ACTIONS, dtype=np.float32)
-        for action in legal_actions:
-            child = _exhaustive_traverse(
-                state.apply_action(action),
-                traverser=traverser,
-                value_net=value_net,
-                device=device,
-                opponent_rng=opponent_rng,
-                depth=depth + 1,
-            )
-            action_values[ACTION_TO_INDEX[action]] = float(child.value)
+        action_values = _exhaustive_traverser_action_values(
+            state,
+            traverser=traverser,
+            value_net=value_net,
+            device=device,
+            opponent_rng=opponent_rng,
+            depth=depth,
+            legal_actions=legal_actions,
+        )
         state_value = float(np.dot(strategy, action_values))
         regret = (action_values - state_value) * legal_mask / _initial_chips(state)
         return _TraversalResult(
@@ -271,6 +273,32 @@ def _exhaustive_traverse(
     )
 
 
+def _exhaustive_traverser_action_values(
+    state: PokerState,
+    *,
+    traverser: int,
+    value_net: ValueNetwork,
+    device: torch.device,
+    opponent_rng: np.random.Generator,
+    depth: int,
+    legal_actions: list[str] | None = None,
+) -> np.ndarray:
+    if legal_actions is None:
+        legal_actions = [str(action) for action in state.legal_actions if action is not None]
+    action_values = np.zeros(N_ACTIONS, dtype=np.float32)
+    for action in legal_actions:
+        child = _exhaustive_traverse(
+            state.apply_action(action),
+            traverser=traverser,
+            value_net=value_net,
+            device=device,
+            opponent_rng=opponent_rng,
+            depth=depth + 1,
+        )
+        action_values[ACTION_TO_INDEX[action]] = float(child.value)
+    return action_values
+
+
 def _sampled_traverse(
     state: PokerState,
     *,
@@ -287,6 +315,7 @@ def _sampled_traverse(
     priority_source: str,
     priority_model: ValueNetwork | None,
     priority_scale: float,
+    use_priority_baseline: bool,
 ) -> _TraversalResult:
     if state.is_terminal:
         return _TraversalResult(value=float(state.payout[traverser]))
@@ -306,6 +335,7 @@ def _sampled_traverse(
             priority_source=priority_source,
             priority_model=priority_model,
             priority_scale=priority_scale,
+            use_priority_baseline=use_priority_baseline,
         )
 
     strategy, legal_mask, legal_actions, advantages = _strategy(value_net, state, device)
@@ -356,6 +386,16 @@ def _sampled_traverse(
                         .numpy()
                         * float(priority_scale)
                     )
+            elif priority_source == "oracle-action-value":
+                priority_values = _exhaustive_traverser_action_values(
+                    state,
+                    traverser=traverser,
+                    value_net=value_net,
+                    device=device,
+                    opponent_rng=copy.deepcopy(opponent_rng),
+                    depth=depth,
+                    legal_actions=legal_actions,
+                )
             sampled, inclusion_probs = priority_sample_without_replacement(
                 traverser_rng,
                 q,
@@ -372,6 +412,14 @@ def _sampled_traverse(
             sampled_all_legal = int(sampled.size) >= int(legal_indices.size)
         else:
             raise ValueError(f"unknown sampling mode: {sampling_mode}")
+        if use_priority_baseline and sampling_mode != "priority-without-replacement":
+            raise ValueError("priority baseline requires priority-without-replacement mode")
+        if use_priority_baseline and priority_source not in {
+            "priority-model",
+            "oracle-action-value",
+        }:
+            raise ValueError("priority baseline requires priority-model or oracle-action-value")
+        baseline_values = priority_values if use_priority_baseline else None
         sampled_values = np.zeros(sampled.shape[0], dtype=np.float32)
         for idx, action_idx in enumerate(sampled):
             action = INDEX_TO_ACTION[int(action_idx)]
@@ -390,6 +438,7 @@ def _sampled_traverse(
                 priority_source=priority_source,
                 priority_model=priority_model,
                 priority_scale=priority_scale,
+                use_priority_baseline=use_priority_baseline,
             )
             sampled_values[idx] = float(child.value)
         if sampled_all_legal:
@@ -414,6 +463,7 @@ def _sampled_traverse(
                     sampled_actions=sampled,
                     sampled_values=sampled_values,
                     inclusion_probs=inclusion_probs,
+                    baseline_values=baseline_values,
                 )
         regret = regret / _initial_chips(state)
         return _TraversalResult(
@@ -439,6 +489,7 @@ def _sampled_traverse(
         priority_source=priority_source,
         priority_model=priority_model,
         priority_scale=priority_scale,
+        use_priority_baseline=use_priority_baseline,
     )
 
 
@@ -458,6 +509,7 @@ def _mean_root_regret(
     priority_source: str,
     priority_model: ValueNetwork | None,
     priority_scale: float,
+    use_priority_baseline: bool,
 ) -> tuple[np.ndarray, float]:
     regrets = []
     started = time.perf_counter()
@@ -481,6 +533,7 @@ def _mean_root_regret(
                 priority_source=priority_source,
                 priority_model=priority_model,
                 priority_scale=priority_scale,
+                use_priority_baseline=use_priority_baseline,
             )
         else:
             result = _exhaustive_traverse(
@@ -518,6 +571,7 @@ def run_probe(
     priority_forced_count: int = 0,
     priority_source: str = "strategy",
     priority_checkpoint: str | None = None,
+    use_priority_baseline: bool = False,
     seed: int = 20260525,
     device: str = "cpu",
 ) -> dict[str, Any]:
@@ -551,6 +605,7 @@ def run_probe(
         priority_source=priority_source,
         priority_model=priority_model,
         priority_scale=priority_scale,
+        use_priority_baseline=use_priority_baseline,
     )
     sampled_mean, sampled_seconds = _mean_root_regret(
         state,
@@ -567,6 +622,7 @@ def run_probe(
         priority_source=priority_source,
         priority_model=priority_model,
         priority_scale=priority_scale,
+        use_priority_baseline=use_priority_baseline,
     )
     legal_mask = get_legal_mask(state) > 0.0
     bias = sampled_mean - exhaustive_mean
@@ -586,6 +642,7 @@ def run_probe(
         "priority_forced_count": int(priority_forced_count),
         "priority_source": priority_source,
         "priority_checkpoint": str(Path(priority_checkpoint)) if priority_checkpoint else "",
+        "use_priority_baseline": bool(use_priority_baseline),
         "seed": int(seed),
         "uniform_mix": float(uniform_mix),
         "hidden_dim": int(hidden_dim),
@@ -624,6 +681,7 @@ def run_probe_grid(
     priority_forced_count: int = 0,
     priority_source: str = "strategy",
     priority_checkpoint: str | None = None,
+    use_priority_baseline: bool = False,
     device: str = "cpu",
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
@@ -642,6 +700,7 @@ def run_probe_grid(
                     priority_forced_count=priority_forced_count,
                     priority_source=priority_source,
                     priority_checkpoint=priority_checkpoint,
+                    use_priority_baseline=use_priority_baseline,
                     seed=int(seed),
                     device=device,
                 )
@@ -660,6 +719,7 @@ def run_probe_grid(
         "priority_forced_count": int(priority_forced_count),
         "priority_source": priority_source,
         "priority_checkpoint": str(Path(priority_checkpoint)) if priority_checkpoint else "",
+        "use_priority_baseline": bool(use_priority_baseline),
         "n_repeats": int(n_repeats),
         "n_reference_repeats": int(n_reference_repeats or n_repeats),
         "top_action_match_rate": round(float(np.mean(top_matches)), 6),
