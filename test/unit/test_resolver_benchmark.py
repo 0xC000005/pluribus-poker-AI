@@ -12,6 +12,7 @@ from poker_ai.deep_cfr.networks import ValueNetwork
 from poker_ai.research.belief_probe import N_HANDS, _HAND_TO_INDEX
 from poker_ai.research.resolver_benchmark import (
     ResolverBenchmarkCase,
+    SolverDecision,
     run_resolver_benchmark,
 )
 
@@ -161,6 +162,16 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     )
     assert probability_gate["policy_head_behavior_gate"]["mode"] == "solver_prob_gap"
     assert probability_gate["policy_head_behavior_passed"] is True
+
+
+def test_solver_decision_preserves_legacy_positional_node_terminal():
+    strategy = np.zeros(N_ACTIONS, dtype=np.float64)
+
+    decision = SolverDecision(1, "c", strategy, 12.5, True)
+
+    assert decision.node_terminal is True
+    assert decision.cfr_latency_ms == 0.0
+    assert decision.overhead_latency_ms == 0.0
 
 
 def test_street_solver_omits_under_minimum_raise_buckets():

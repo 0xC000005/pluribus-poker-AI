@@ -66,9 +66,9 @@ class SolverDecision:
     increment: str
     strategy: np.ndarray
     latency_ms: float
-    cfr_latency_ms: float
-    overhead_latency_ms: float
     node_terminal: bool
+    cfr_latency_ms: float = 0.0
+    overhead_latency_ms: float = 0.0
 
 
 def default_benchmark_cases() -> list[ResolverBenchmarkCase]:
@@ -251,9 +251,9 @@ def _solver_decision(
         increment,
         strategy_vec,
         latency_ms,
+        node_terminal,
         cfr_latency_ms,
         overhead_latency_ms,
-        node_terminal,
     )
 
 

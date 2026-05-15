@@ -248,6 +248,15 @@ same four mixed states at `150` iterations, `torch-levelsync-cuda` averaged
 high-iteration live solving, but `auto` should still wait for same-state
 live-style validation and confidence checks.
 
+Live-budget frontier status: lower CUDA budgets may preserve most of the
+CFR150 decision while cutting latency. On the 64-root held-out public-state
+set, using CFR150 as teacher, CFR75 reached `0.2107` L1, `0.0518` KL, and
+`93.75%` top-action agreement at `273 ms`; CFR100 reached `0.1247` L1,
+`0.0192` KL, and `98.44%` agreement at `354 ms`; CFR125 reached `0.0574` L1,
+`0.0042` KL, and `98.44%` agreement at `439 ms`. Mean CFR150 teacher latency
+was about `525 ms` on the same holdout. This supports a reviewed, opt-in
+live-budget policy around CFR100 before spending Slumbot confidence hands.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

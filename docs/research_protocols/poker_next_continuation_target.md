@@ -295,6 +295,15 @@ evaluate whether lower or adaptive iteration budgets preserve the CFR150 action
 quality on root-disjoint states, then expose a reviewed live-budget policy if it
 beats the current fixed `150/250/350` heuristic on decision quality per compute.
 
+The root-disjoint budget frontier now points to CFR100 as the first candidate
+budget policy. CFR100 preserved `98.44%` of CFR150 top actions with `0.1247`
+mean L1 and cut mean solver time to `354 ms` from the CFR150 teacher's roughly
+`525 ms`; CFR75 is faster but less aligned, and CFR125 is more faithful but
+smaller compute savings. The next implementation should be an opt-in
+`fast-live` budget profile or equivalent single reviewed policy, not a sweep of
+many Slumbot knobs. Defaults should stay unchanged until a same-state resolver
+gate and Slumbot smoke both pass.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

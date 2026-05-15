@@ -123,6 +123,31 @@
   compute, or strong evidence that the current `150/250/350` heuristic is
   necessary.
 
+## 20260515T011530Z-cuda-cfr150-budget-frontier - passed
+
+- Timestamp: 2026-05-15T01:15:30Z
+- Type: diagnostic
+- Gate: root-disjoint fixed-state budget frontier against CFR150 teacher
+- Hypothesis: A lower CUDA CFR budget may preserve live-like CFR150 decisions
+  with materially lower latency, giving a principled alternative to the current
+  fixed `150/250/350` Slumbot heuristic.
+- Failure class: compute_integration
+- Summary: Ran `scripts/eval_cfr_budget_frontier.py` on the 64-root held-out
+  public-state set with `torch-levelsync-cuda`, using CFR150 as teacher and
+  testing CFR10/25/50/75/100/125.
+- Evidence:
+  - Frontier artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_torch_levelsync_cuda_ref150_holdout64_seed20260515.json`
+  - High-budget artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_torch_levelsync_cuda_ref150_highbudgets_holdout64_seed20260515.json`
+- Metrics: CFR75 reached `0.2107` L1, `0.0518` KL, `93.75%` action agreement,
+  and `273 ms` mean solver latency. CFR100 reached `0.1247` L1, `0.0192` KL,
+  `98.44%` agreement, and `354 ms`. CFR125 reached `0.0574` L1, `0.0042` KL,
+  `98.44%` agreement, and `439 ms`. Mean CFR150 teacher latency was about
+  `525 ms`; illegal mass stayed `0`.
+- Decision: CFR100 is the first plausible opt-in live-budget candidate. Do not
+  expose a broad iteration sweep; implement one reviewed `fast-live` style
+  policy and keep defaults unchanged until same-state gates and Slumbot smoke
+  pass.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z
