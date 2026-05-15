@@ -1,0 +1,43 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1222,
+      "path": "benchmark_audit.md",
+      "sha256": "8ae7a6a43699f07d1dc811554a36ea5e2d7fa716398da40299295e3378dd00be"
+    },
+    {
+      "bytes": 405,
+      "path": "decision.json",
+      "sha256": "df6c222026e9bcd445af77f9989f9c5cfd2dace1c26563de7d5119f7c9c1fcd7"
+    },
+    {
+      "bytes": 973,
+      "path": "mechanism_review.md",
+      "sha256": "408c9a6ad74b435831749b7275f2fc821be6975d8d915ff7de6d3a8bf01144a9"
+    },
+    {
+      "bytes": 1383,
+      "path": "related_work.md",
+      "sha256": "9ac0a9d327e70239722f136533fdf1d8dc3f010ded572ff9e49139d3003543e1"
+    },
+    {
+      "bytes": 1761,
+      "path": "review.md",
+      "sha256": "6e9546b907ab5b1448fb7cd2ca17a6f97f4e36a2412a60684c2201828e271b96"
+    },
+    {
+      "bytes": 650,
+      "path": "team_review.md",
+      "sha256": "ae9f353082957859115dcd516566535748fcb0e9c6392630ac50fa6ce6e52a43"
+    }
+  ],
+  "reason": "The incremental evaluator is equivalent to the full seven-card evaluator on sampled tests, preserves solver legality, and reduces turn setup overhead without changing strategy rules.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T010338Z-incremental-turn-equity-evaluator",
+  "review_id": "20260515T010338Z-incremental-turn-equity-evaluator",
+  "sources": [
+    "https://suffe.cool/poker/evaluator.html",
+    "https://pokerkit.readthedocs.io/en/0.6/evaluation.html"
+  ],
+  "written_at": "2026-05-15T01:05:09Z"
+}

@@ -227,6 +227,17 @@ turn equity/payoff matrices, tree construction, navigation/bookkeeping, and
 range plumbing. The next compute work should target setup amortization or
 fused construction, not another recurrence rewrite.
 
+Incremental turn-evaluator status: a semantics-preserving setup optimization
+now precomputes each hand's six-card base rank on the turn and evaluates only
+the 15 five-card subsets that include each candidate river card. Unit tests
+verify equality with the full 21-subset seven-card evaluator. On the fixed
+mixed four-state CFR10 attribution benchmark, `torch-levelsync-cuda` improved
+from `329.2/94.0/235.2 ms` total/CFR/overhead to `298.4/93.2/205.2 ms`; CPU
+improved from `568.4/325.4/243.1 ms` to `541.6/326.1/215.5 ms`. This is a real
+setup win, but not enough to change `auto`; live smoke still passes and still
+shows >1s solver calls on some states, so larger setup amortization remains the
+next compute target.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

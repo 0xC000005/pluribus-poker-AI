@@ -115,6 +115,89 @@ def _evaluate_seven_eval_cards(c0, c1, c2, c3, c4, c5, c6):
     return best
 
 
+def _evaluate_six_eval_cards(c0, c1, c2, c3, c4, c5):
+    """Evaluate six already-encoded cards using all five-card subsets."""
+    best = _evaluate_five_eval_cards(c0, c1, c2, c3, c4)
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c3, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c3, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c3, c4, c5)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c3, c4, c5)
+    if rank < best:
+        best = rank
+    return best
+
+
+def _evaluate_seven_eval_cards_with_six_base(c0, c1, c2, c3, c4, c5, c6, base_rank):
+    """Evaluate seven cards when the best rank for the first six is known."""
+    best = base_rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c3, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c2, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c3, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c3, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c1, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c3, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c3, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c2, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c0, c3, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c3, c4, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c3, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c2, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c1, c3, c4, c5, c6)
+    if rank < best:
+        best = rank
+    rank = _evaluate_five_eval_cards(c2, c3, c4, c5, c6)
+    if rank < best:
+        best = rank
+    return best
+
+
+def _rank_outcome_matrices(ranks, valid):
+    """Return hero win/lose/tie matrices from lower-is-better hand ranks."""
+    ri = ranks[:, np.newaxis]
+    rj = ranks[np.newaxis, :]
+    valid_f = valid.astype(np.float32, copy=False)
+    win_m = np.multiply(rj > ri, valid_f, dtype=np.float32)
+    lose_m = np.multiply(rj < ri, valid_f, dtype=np.float32)
+    tie_m = np.multiply(rj == ri, valid_f, dtype=np.float32)
+    return win_m, lose_m, tie_m
+
+
 def _min_raise_contribution(to_call, big_blind=BIG_BLIND):
     """Minimum chips the actor must add for a legal raise bucket."""
     if to_call <= 0:
@@ -222,14 +305,10 @@ class StreetSolver:
                 *board_eval,
             )
 
-        ri = ranks[:, np.newaxis]
-        rj = ranks[np.newaxis, :]
-        result = np.sign(rj - ri).astype(np.float32)
-
-        self.win_m = (result > 0) * self.valid
-        self.lose_m = (result < 0) * self.valid
-        self.tie_m = np.maximum(
-            (result == 0) * self.valid - np.eye(self.n, dtype=np.float32), 0)
+        self.win_m, self.lose_m, self.tie_m = _rank_outcome_matrices(
+            ranks,
+            self.valid,
+        )
 
     def _compute_equity_matrices(self, board_4):
         """Turn equity: win/lose/tie averaged over all river runouts."""
@@ -237,7 +316,15 @@ class StreetSolver:
         board_eval = [int(_CARD_TO_EVAL[c]) for c in board_4]
         river_cards = sorted(set(range(52)) - set(board_4))
         hand_eval = [
-            (int(_CARD_TO_EVAL[c1]), int(_CARD_TO_EVAL[c2]))
+            (
+                int(_CARD_TO_EVAL[c1]),
+                int(_CARD_TO_EVAL[c2]),
+                _evaluate_six_eval_cards(
+                    int(_CARD_TO_EVAL[c1]),
+                    int(_CARD_TO_EVAL[c2]),
+                    *board_eval,
+                ),
+            )
             for c1, c2 in self.hands
         ]
 
@@ -264,20 +351,17 @@ class StreetSolver:
                 if river_card in (c1, c2):
                     ranks[i] = 999999
                 else:
-                    e1, e2 = hand_eval[i]
-                    ranks[i] = _evaluate_seven_eval_cards(e1, e2, *full_board)
-
-            ri = ranks[:, np.newaxis]
-            rj = ranks[np.newaxis, :]
-            result = np.sign(rj - ri).astype(np.float32)
+                    e1, e2, base_rank = hand_eval[i]
+                    ranks[i] = _evaluate_seven_eval_cards_with_six_base(
+                        e1, e2, *full_board, base_rank,
+                    )
 
             rc_mask = hand_contains[river_card]
             river_valid = self.valid * rc_mask[:, np.newaxis] * rc_mask[np.newaxis, :]
 
-            win_sum += (result > 0) * river_valid
-            lose_sum += (result < 0) * river_valid
-            tie_rv = (result == 0) * river_valid
-            np.fill_diagonal(tie_rv, 0)
+            win_rv, lose_rv, tie_rv = _rank_outcome_matrices(ranks, river_valid)
+            win_sum += win_rv
+            lose_sum += lose_rv
             tie_sum += tie_rv
             count += river_valid
 

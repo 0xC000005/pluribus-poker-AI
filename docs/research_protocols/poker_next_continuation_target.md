@@ -277,6 +277,15 @@ attribution benchmark and the live smoke. A valid optimization must reduce
 `avg_solver_overhead_latency_ms` without changing legality, root actions, or
 solver strategy beyond normal numeric tolerance.
 
+The first setup optimization is complete but only partially solves the
+problem. Incremental turn evaluation reduced fixed-state CUDA overhead to
+`205.2 ms` and total latency to `298.4 ms`, but a post-change 3-hand Slumbot
+smoke still had a `1338 ms` reported solver call. The next continuation target
+should instrument or reduce the remaining live-only cost around range pruning,
+active-hand selection, tree construction, and CPU-to-GPU tensor preparation.
+Do not flip `auto` until same-state live-style attribution shows the full path
+beats CPU with margin.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

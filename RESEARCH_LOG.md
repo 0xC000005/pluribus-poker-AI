@@ -66,6 +66,40 @@
   target is setup overhead, especially turn equity/payoff matrix and tree
   construction, not another recurrence-only CUDA port.
 
+## 20260515T010338Z-incremental-turn-equity-evaluator - passed
+
+- Timestamp: 2026-05-15T01:03:38Z
+- Type: protected solver performance change
+- Gate: TDD + methodology-review + related-work check + objective-audit +
+  solver/regression tests + live smoke
+- Hypothesis: Precomputing six-card base ranks during turn equity construction
+  should avoid redundant five-card subset evaluations and reduce setup
+  overhead without changing solver semantics.
+- Failure class: compute_integration
+- Related work: Cactus Kev-style prime-product lookup evaluators support fast
+  five-card rank lookup; this change reuses that local evaluator while avoiding
+  redundant best-five-of-seven subset work. Sources:
+  https://suffe.cool/poker/evaluator.html and
+  https://pokerkit.readthedocs.io/en/0.6/evaluation.html.
+- Summary: Added `_evaluate_six_eval_cards` and
+  `_evaluate_seven_eval_cards_with_six_base`, then used the incremental path
+  inside turn equity matrix construction. Also added direct tests that compare
+  the incremental evaluator against the existing full seven-card evaluator.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T010338Z-incremental-turn-equity-evaluator`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T010338Z-incremental-turn-equity-evaluator.json`
+  - CPU artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_cpu_iter10_mixed4_incremental_eval_seed20260515.json`
+  - CUDA artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_torch_levelsync_cuda_iter10_mixed4_incremental_eval_seed20260515.json`
+  - Tests: `uv run pytest -q test/unit/test_solver_backend.py test/unit/test_resolver_benchmark.py test/unit/test_cfr_budget_frontier.py test/unit/test_solver_update_gate.py` -> `52 passed`.
+  - Live smoke: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 3 --greedy --no-allin --solver-backend torch-levelsync-cuda --timeout-seconds 600` -> passed.
+- Metrics: fixed mixed four-state CFR10 `torch-levelsync-cuda` improved from
+  `329.2 ms` total, `94.0 ms` CFR, `235.2 ms` overhead to `298.4 ms` total,
+  `93.2 ms` CFR, `205.2 ms` overhead. CPU improved from `568.4/325.4/243.1 ms`
+  to `541.6/326.1/215.5 ms`.
+- Decision: keep the optimization. It is a real setup win but not sufficient
+  for CUDA auto-promotion; next work should isolate live-only setup costs such
+  as range pruning, tree construction, and CPU-to-GPU tensor preparation.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

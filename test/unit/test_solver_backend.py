@@ -11,7 +11,10 @@ if str(SCRIPTS_DIR) not in sys.path:
 from fast_cfr import _regret_matching_strategy, solve_cfr_levelsync, solve_cfr_levelsync_torch
 from solver import _CARD_TO_EVAL
 from solver import _EVALUATOR
+from solver import _evaluate_seven_eval_cards_with_six_base
+from solver import _evaluate_six_eval_cards
 from solver import _evaluate_seven_eval_cards
+from solver import _rank_outcome_matrices
 from solver import StreetSolver
 from solver import solve_street
 
@@ -55,6 +58,47 @@ def test_fast_seven_card_evaluator_matches_reference_on_sampled_showdowns():
         fast_rank = _evaluate_seven_eval_cards(*eval_cards)
         reference_rank = _EVALUATOR.evaluate(eval_cards[:2], eval_cards[2:])
         assert fast_rank == reference_rank
+
+
+def test_incremental_seven_card_evaluator_matches_full_evaluator():
+    samples = [
+        (0, 5, 10, 15, 20, 25, 30),
+        (3, 7, 11, 19, 27, 35, 43),
+        (12, 13, 14, 28, 32, 40, 51),
+        (1, 9, 17, 21, 29, 37, 45),
+    ]
+
+    for cards in samples:
+        eval_cards = [int(_CARD_TO_EVAL[card]) for card in cards]
+        base_rank = _evaluate_six_eval_cards(*eval_cards[:6])
+        incremental_rank = _evaluate_seven_eval_cards_with_six_base(
+            *eval_cards,
+            base_rank,
+        )
+        full_rank = _evaluate_seven_eval_cards(*eval_cards)
+        assert incremental_rank == full_rank
+
+
+def test_rank_outcome_matrices_preserve_win_loss_tie_semantics():
+    ranks = np.array([1, 3, 3], dtype=np.int32)
+    valid = np.array(
+        [
+            [0.0, 1.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+
+    win_m, lose_m, tie_m = _rank_outcome_matrices(ranks, valid)
+
+    assert win_m.dtype == np.float32
+    assert lose_m.dtype == np.float32
+    assert tie_m.dtype == np.float32
+    assert win_m[0, 1] == 1.0
+    assert lose_m[1, 0] == 1.0
+    assert tie_m[1, 2] == 1.0
+    assert tie_m[1, 1] == 0.0
 
 
 def test_levelsync_cfr_matches_reference_cpu_cfrplus_on_river_smoke():
