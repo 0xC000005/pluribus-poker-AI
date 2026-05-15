@@ -4652,3 +4652,22 @@
 - Key metrics: `{"tests_passed": 24, "sample1_mean_top_match": 0.957031, "sample2_mean_top_match": 0.960938, "sample4_mean_top_match": 0.96875, "sample8_mean_top_match": 0.96875, "promotion": false}`
 - Decision: The next opt-in traversal prototype should evaluate averaged
   sampled regret targets, not single sampled decisions.
+
+## 20260515T094000Z-vrmccfr-related-work-alignment - passed
+
+- Timestamp: 2026-05-15T09:40:00Z
+- Type: related_work_alignment
+- Gate: primary-source check for learned-baseline sampled-action direction
+- Hypothesis: The learned control-variate sampled-action direction should map
+  to existing MCCFR variance-reduction theory rather than being a local trick.
+- Failure class: none
+- Summary: Added VR-MCCFR and low-/zero-variance baseline sources to the
+  sampled-action traversal integration plan. These papers support baselines as
+  control variates for MCCFR and predictive baselines as a variance-reduction
+  target. This strengthens the current direction: learned/search-derived
+  action-value baselines are the principled object, while slot sweeps and
+  uncorrected action dropping are not.
+- Sources: https://arxiv.org/abs/1809.03057 and https://arxiv.org/abs/1907.09633
+- Decision: Continue with learned-baseline sampled traversal as the active
+  diagnostic method, but require exhaustive-vs-sampled regret gates before
+  trainer integration.

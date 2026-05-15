@@ -19,6 +19,15 @@ or Slumbot-specific patch.
 - Write stochastic regret samples to replay; do not use sampled estimates as
   direct one-shot action decisions.
 
+## Related Work Anchor
+
+- VR-MCCFR formalizes baselines/control variates for MCCFR variance reduction:
+  https://arxiv.org/abs/1809.03057
+- Low-/zero-variance baseline work supports predictive baselines as an
+  estimator-quality target: https://arxiv.org/abs/1907.09633
+- This project should treat the restricted value baseline as a local proxy for
+  those predictive baselines, not as a final poker value model.
+
 ## Required Comparisons
 
 - Compare averaged sampled regret targets against exhaustive traverser regrets
