@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1247,
+      "path": "benchmark_audit.md",
+      "sha256": "e222586197a767bf787389dec92c052f7750a235d08cb019f090857d7ce30e70"
+    },
+    {
+      "bytes": 562,
+      "path": "decision.json",
+      "sha256": "8d42a8e486ccc549a8d7a8dcffdd97ee82d993227c2bdc8018ff9360901ca330"
+    },
+    {
+      "bytes": 1126,
+      "path": "mechanism_review.md",
+      "sha256": "8fc4b259cd579e9520bb92ff13ebeafa42729a8ad552aa358e73ba4eaf799a8e"
+    },
+    {
+      "bytes": 1654,
+      "path": "related_work.md",
+      "sha256": "603a3c8d99251f077f7348f5600590a3b2f4b00caf86da599b474022865a6efa"
+    },
+    {
+      "bytes": 1580,
+      "path": "review.md",
+      "sha256": "d2c378cbfba9d1b60ed70dcfc93201217b80b95e7917d1a065c02df278e15622"
+    },
+    {
+      "bytes": 606,
+      "path": "team_review.md",
+      "sha256": "3ee158cc5187b0fe7da51763b59807647f279927f862196e798705ce44b990ff"
+    }
+  ],
+  "reason": "Proceed as diagnostic infrastructure only. The probe improves held-out log-lift over the current model but fails to beat uniform, so it is not ready for range-update integration.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T124210Z-heldout-opponent-response-probe",
+  "review_id": "20260515T124210Z-heldout-opponent-response-probe",
+  "sources": [
+    "https://arxiv.org/abs/1603.03491",
+    "https://arxiv.org/abs/1207.1411",
+    "https://arxiv.org/abs/2007.13544",
+    "https://proceedings.mlr.press/v97/brown19b",
+    "autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-probe.json"
+  ],
+  "written_at": "2026-05-15T12:43:40Z"
+}

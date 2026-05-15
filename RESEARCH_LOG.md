@@ -5984,3 +5984,41 @@
   principled method should learn an opponent-response/public-belief update from
   full-history traces and validate on trace-held-out action likelihood plus
   revealed-hand range likelihood before any live Slumbot confidence spend.
+
+## 20260515T124210Z-heldout-opponent-response-probe - failed
+
+- Timestamp: 2026-05-15T12:42:10Z
+- Type: diagnostic model probe
+- Gate: Hand-held-out opponent-response action likelihood
+- Hypothesis: A learned hand-conditioned opponent-response likelihood trained
+  from full-history revealed Slumbot trace actions should beat the current
+  self-play action likelihood on held-out hands. To justify range-update
+  integration, it should also beat uniform in held-out mean log-lift.
+- Failure class: calibration
+- Summary: Added `scripts/train_slumbot_opponent_response_probe.py` and
+  `poker_ai/research/slumbot_opponent_response_probe.py`. The probe builds the
+  same 126-feature representation used by the range tracker for the revealed
+  Slumbot hand at each observed action, trains a small masked action-likelihood
+  MLP on a hand-held-out split, and compares held-out likelihood against the
+  current model and uniform. This is a diagnostic only; it is not connected to
+  live range updates.
+- Evidence:
+  - Input:
+    `autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-action-likelihood.json`
+  - Output:
+    `autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-probe.json`
+- Key metrics: 336 records from 141 hands, 70/30 hand split, 2x128 probe,
+  300 epochs on CUDA. Train log-lift was `+1.8912`, showing the probe can fit
+  the trace. Held-out model log-lift was `-0.3608`; held-out probe log-lift
+  improved to `-0.0732`, so the probe beat the current model by `+0.2876` but
+  still failed to beat uniform. Held-out cross-entropy was `5.0077`, indicating
+  overconfident/calibration failures on some held-out actions.
+- Validation: `uv run pytest -q test/unit/test_slumbot_opponent_response_probe.py`
+  -> 3 passed. Real diagnostic command:
+  `uv run python scripts/train_slumbot_opponent_response_probe.py --action-likelihood autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-action-likelihood.json --output autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-probe.json --hidden-dim 128 --n-layers 2 --epochs 300 --batch-size 64 --device cuda --seed 20260515`.
+- Decision: Do not integrate this probe into range updates. The learned
+  likelihood direction is partially validated because it improves over the
+  self-play model, but it is not calibrated enough for Bayesian range updates.
+  The next attempt should either add more full-history trace data or use a
+  calibrated probabilistic objective/population model whose held-out likelihood
+  beats uniform before touching the live range tracker.
