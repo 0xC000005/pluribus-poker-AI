@@ -267,6 +267,7 @@ def fork_kernel(
     child_values,         # (max_pool, 9) float32
     n_children_done,      # (max_pool,) int32
     next_free,            # (1,) int32 — atomic counter
+    pool_exhausted_count, # (1,) int32 — traverser nodes demoted by pool exhaustion
     max_pool,             # int32
     actions_out,          # (max_pool,) int8
     rng_states,
@@ -291,6 +292,7 @@ def fork_kernel(
     start = cuda.atomic.add(next_free, 0, n_legal)
     if start >= max_pool or start + n_legal > max_pool:
         # Pool exhausted — demote to opponent, sample action.
+        cuda.atomic.add(pool_exhausted_count, 0, int32(1))
         is_traverser_flag[gid] = int8(0)
         u = xoroshiro128p_uniform_float32(rng_states, gid)
         cumsum_f = float32(0.0)

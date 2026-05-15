@@ -109,12 +109,14 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
             "pool_max_slots": 1_000,
             "n_traversals": 10,
             "regret_samples": 800,
+            "pool_exhausted_nodes": 4,
         },
         {
             "requested_slots": 500,
             "pool_max_slots": 1_000,
             "n_traversals": 5,
             "regret_samples": 300,
+            "pool_exhausted_nodes": 1,
         },
     ])
 
@@ -124,6 +126,8 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
     assert summary["traversal_mean_pool_demand_ratio"] == 0.85
     assert summary["traversal_max_pool_demand_ratio"] == 1.2
     assert summary["traversal_max_slots_per_traversal"] == 120.0
+    assert summary["traversal_pool_exhausted_nodes"] == 5
+    assert summary["traversal_pool_exhausted_per_traversal"] == 0.333333
 
 
 def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
@@ -138,6 +142,7 @@ def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
                 "n_traversals": 100,
                 "regret_samples": 600,
                 "policy_samples": 40,
+                "pool_exhausted_nodes": 2,
             },
             {
                 "requested_slots": 800,
@@ -145,6 +150,7 @@ def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
                 "n_traversals": 100,
                 "regret_samples": 500,
                 "policy_samples": 30,
+                "pool_exhausted_nodes": 3,
             },
         ],
         traverse_seconds=2.0,
@@ -161,6 +167,7 @@ def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
     assert profile["regret_samples_per_second"] == 550.0
     assert profile["train_sample_budget"] == 1280
     assert profile["train_samples_per_second"] == 320.0
+    assert profile["traversal_pool_exhausted_nodes"] == 5
 
 
 def test_release_workspace_for_training_drops_traversal_workspace():

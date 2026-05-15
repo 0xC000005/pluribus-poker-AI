@@ -143,6 +143,8 @@ def _summarize_traversal_pool_stats(
             "traversal_mean_slots_per_traversal": 0.0,
             "traversal_max_slots_per_traversal": 0.0,
             "traversal_regret_sample_fill_ratio": 0.0,
+            "traversal_pool_exhausted_nodes": 0,
+            "traversal_pool_exhausted_per_traversal": 0.0,
         }
 
     chunks = len(records)
@@ -156,6 +158,10 @@ def _summarize_traversal_pool_stats(
     ]
     total_capacity = sum(max(1, int(record["pool_max_slots"])) for record in records)
     total_regret_samples = sum(int(record.get("regret_samples", 0)) for record in records)
+    total_traversals = sum(max(1, int(record.get("n_traversals", 0))) for record in records)
+    total_pool_exhausted = sum(
+        int(record.get("pool_exhausted_nodes", 0)) for record in records
+    )
     overflow_chunks = sum(1 for ratio in demand_ratios if ratio > 1.0)
 
     return {
@@ -171,6 +177,11 @@ def _summarize_traversal_pool_stats(
         "traversal_max_slots_per_traversal": round(max(slots_per_traversal), 6),
         "traversal_regret_sample_fill_ratio": round(
             total_regret_samples / max(1, total_capacity),
+            6,
+        ),
+        "traversal_pool_exhausted_nodes": total_pool_exhausted,
+        "traversal_pool_exhausted_per_traversal": round(
+            total_pool_exhausted / max(1, total_traversals),
             6,
         ),
     }
@@ -539,6 +550,7 @@ class _GPUTraverseWorkspace:
 
         self.d_next_free = cuda.device_array(1, dtype=np.int32)
         self.d_n_collected = cuda.device_array(1, dtype=np.int32)
+        self.d_pool_exhausted = cuda.device_array(1, dtype=np.int32)
         self.d_active_count = cuda.device_array(1, dtype=np.int32)
 
         # Collected samples.
@@ -596,6 +608,7 @@ class _GPUTraverseWorkspace:
 
         self.d_next_free.copy_to_device(np.array([n_traversals], dtype=np.int32))
         self.d_n_collected.copy_to_device(np.array([0], dtype=np.int32))
+        self.d_pool_exhausted.copy_to_device(np.array([0], dtype=np.int32))
         self.d_n_policy_collected.copy_to_device(np.array([0], dtype=np.int32))
 
 
@@ -806,6 +819,7 @@ def gpu_traverse_for_player(
     d_propagated = workspace.d_propagated
     d_next_free = workspace.d_next_free
     d_n_collected = workspace.d_n_collected
+    d_pool_exhausted = workspace.d_pool_exhausted
     d_collected_features = workspace.d_collected_features
     d_collected_regrets = workspace.d_collected_regrets
     d_policy_features = workspace.d_policy_features
@@ -916,7 +930,7 @@ def gpu_traverse_for_player(
             d_parent_idx, d_parent_action,
             d_is_traverser_node, d_traverser_features, d_slot_strategy,
             d_n_children_expected, d_child_values, d_n_children_done,
-            d_next_free, max_pool,
+            d_next_free, d_pool_exhausted, max_pool,
             d_actions_gpu, rng_states, n_active,
         )
         cuda.synchronize()
@@ -1006,6 +1020,7 @@ def gpu_traverse_for_player(
             )
 
     final_next_free = int(d_next_free.copy_to_host()[0])
+    pool_exhausted_nodes = int(d_pool_exhausted.copy_to_host()[0])
     n_policy_seen = 0
     if n_traversals >= 1000:
         print(f"    [pool] used {final_next_free}/{max_pool} slots "
@@ -1024,6 +1039,7 @@ def gpu_traverse_for_player(
         "pool_max_slots": max_pool,
         "n_traversals": n_traversals,
         "regret_samples": n_collected,
+        "pool_exhausted_nodes": pool_exhausted_nodes,
         "policy_samples": min(n_policy_seen, workspace.policy_capacity),
         "policy_capacity": workspace.policy_capacity,
     }

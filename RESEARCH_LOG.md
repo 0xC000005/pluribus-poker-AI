@@ -5021,3 +5021,23 @@
   slot knobs. The next compute improvement should be adaptive pool allocation,
   compaction, or kernel-level wavefront efficiency, measured with this
   warmup-excluded benchmark.
+
+## 20260515T160500Z-pool-exhaustion-demotion-counter - passed
+
+- Timestamp: 2026-05-15T16:05:00Z
+- Type: compute_fidelity_instrumentation
+- Gate: TDD plus CUDA benchmark smoke
+- Hypothesis: Traversal-pool overflow should be measured as actual traverser
+  node demotions, not only as requested-slot overshoot, because demotions
+  change the regret collection contract.
+- Failure class: none
+- Summary: Added a GPU `pool_exhausted_nodes` counter in `fork_kernel`, reset
+  it with the traversal workspace, surfaced it in per-player stats,
+  per-iteration profiles, benchmark JSON, and AGENTS guidance. The smoke run
+  confirmed that the default small benchmark can fill the pool and demote many
+  traverser nodes, making this a real fidelity metric for future compute work.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 0 --n-measure 1 --n-traversals 100 --hidden-dim 64 --n-layers 1 --n-training-steps 5 --batch-size 128 --output-json autoresearch-session/gpu_deep_cfr_benchmark_pool_exhaustion_smoke_20260515.json`
+- Key metrics: `{"smoke_traversal_pool_exhausted_nodes": 23344, "smoke_traversal_pool_exhausted_per_traversal": 116.72, "smoke_traversal_overflow_chunk_fraction": 1.0, "promotion": false}`
+- Decision: Future GPU acceleration work must reduce `pool_exhausted_nodes` at
+  acceptable throughput or explicitly justify any demotions as a separate
+  stochastic estimator. Do not treat raw iters/hour as sufficient.
