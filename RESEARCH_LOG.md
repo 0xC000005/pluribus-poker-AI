@@ -4824,3 +4824,29 @@
   The next principled variant is without-replacement sampled traverser actions
   or another inclusion-probability estimator that reduces duplicate work while
   preserving root action ordering.
+
+## 20260515T114500Z-without-replacement-sampled-traversal - passed
+
+- Timestamp: 2026-05-15T11:45:00Z
+- Type: traversal_level_estimator_probe
+- Gate: PPS without-replacement sampled-action estimator and tiny traversal
+  check
+- Hypothesis: Sampling traverser actions without replacement should avoid
+  duplicate child evaluations, lower estimator variance, and preserve root
+  action ordering better than the with-replacement sample-4 probe.
+- Failure class: none
+- Summary: Added exact inclusion-probability computation for the 9-action
+  abstraction, a PPS without-replacement sampler, a Horvitz-Thompson sampled
+  regret estimator, and a `--sampling-mode without-replacement` path for root
+  and traversal diagnostics. The hard root estimator gate passed at sample-4
+  with lower standard deviation than the with-replacement baseline. The tiny
+  traversal probe preserved root top action on two seeds while retaining modest
+  per-run speedups. This is still a research-only CPU diagnostic, but it is a
+  cleaner candidate for CUDA traversal than with-replacement sample-4.
+- Sources: MCCFR sampling framework https://proceedings.neurips.cc/paper/2009/file/00411460f7c92d2124a67ea0f4cb5f85-Paper.pdf; VR-MCCFR baselines https://ojs.aaai.org/index.php/AAAI/article/view/4048; without-replacement estimators https://arxiv.org/abs/2002.06043 and https://arxiv.org/abs/2002.09067
+- Commands: `uv run pytest -q test/unit/test_sampled_deep_cfr_traversal_probe.py test/unit/test_sampled_action_mccfr.py test/unit/test_sampled_action_full_deck_estimator.py`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 4 --sampling-mode without-replacement --baseline-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260516 --output-json autoresearch-session/sampled_action_full_deck_estimator_xxl_without_replacement_sample4_seed20260516.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_probe.py --n-repeats 256 --n-reference-repeats 128 --initial-chips 300 --sample-count 4 --sampling-mode without-replacement --hidden-dim 64 --n-layers 1 --seed 20260525 --output-json autoresearch-session/sampled_deep_cfr_traversal_probe_sample4_wor_seed20260525_256rep.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_probe.py --n-repeats 256 --n-reference-repeats 128 --initial-chips 300 --sample-count 4 --sampling-mode without-replacement --hidden-dim 64 --n-layers 1 --seed 20260526 --output-json autoresearch-session/sampled_deep_cfr_traversal_probe_sample4_wor_seed20260526_256rep.json`
+- Key metrics: `{"root_sample4_abs_bias": 0.817455, "root_sample4_mean_top_match": 0.964844, "root_sample4_std": 23.794477, "traversal_seed20260525_speedup": 1.267624, "traversal_seed20260525_top_match": true, "traversal_seed20260526_speedup": 1.132436, "traversal_seed20260526_top_match": true, "promotion": false}`
+- Decision: Continue with without-replacement sample-4 as the active sampled
+  traversal candidate. Before CUDA integration, broaden the CPU probe across a
+  deterministic state set and require stable top-action agreement plus positive
+  throughput evidence.

@@ -28,6 +28,9 @@ or Slumbot-specific patch.
   https://arxiv.org/abs/1809.03057
 - Low-/zero-variance baseline work supports predictive baselines as an
   estimator-quality target: https://arxiv.org/abs/1907.09633
+- Without-replacement estimators avoid duplicate samples and can reduce
+  variance in discrete sampling: https://arxiv.org/abs/2002.06043 and
+  https://arxiv.org/abs/2002.09067
 - This project should treat the restricted value baseline as a local proxy for
   those predictive baselines, not as a final poker value model.
 
@@ -63,7 +66,7 @@ or Slumbot-specific patch.
 
 ## Next Implementation Step
 
-Investigate without-replacement sampled traverser actions or inclusion-probable
-sampling before CUDA integration. With-replacement sample-4 is fast but
-top-unstable; sample-8 mostly enumerates and therefore does not buy enough
-throughput.
+Extend the without-replacement sample-4 traversal probe to a broader deterministic
+state set before CUDA integration. The first two tiny-state seeds preserved root
+top action with low regret bias and modest speedup; this is promising but not
+yet enough evidence for trainer changes.

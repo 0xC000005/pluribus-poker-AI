@@ -26,6 +26,10 @@ from poker_ai.games.full_deck.state import (
     PokerState,
     new_game,
 )
+from poker_ai.research.sampled_action_mccfr import (
+    pps_without_replacement_inclusion_probs,
+    sample_pps_without_replacement,
+)
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,50 @@ def _sampled_value_and_regret(
             raise ValueError("sampled action must be legal")
         residual = float(value) - float(baseline[action])
         weight = 1.0 / (denom * float(q[action]))
+        estimated_values[action] += residual * weight
+        estimated_state_value += float(sigma[action]) * residual * weight
+
+    regret = estimated_values - estimated_state_value
+    regret[~legal] = 0.0
+    return estimated_state_value, regret.astype(np.float32)
+
+
+def _sampled_value_and_regret_without_replacement(
+    *,
+    strategy: np.ndarray,
+    legal_mask: np.ndarray,
+    sampled_actions: np.ndarray,
+    sampled_values: np.ndarray,
+    inclusion_probs: np.ndarray,
+    baseline_values: np.ndarray | None = None,
+) -> tuple[float, np.ndarray]:
+    legal = legal_mask > 0.0
+    sigma = np.asarray(strategy, dtype=np.float64)
+    sigma = np.where(legal, sigma, 0.0)
+    sigma = sigma / float(sigma.sum())
+    inclusion = np.asarray(inclusion_probs, dtype=np.float64)
+    if np.any(inclusion[legal] <= 0.0):
+        raise ValueError("every legal action needs positive inclusion probability")
+    if baseline_values is None:
+        baseline = np.zeros(N_ACTIONS, dtype=np.float64)
+    else:
+        baseline = np.asarray(baseline_values, dtype=np.float64)
+        if baseline.shape != legal_mask.shape:
+            raise ValueError("baseline_values must match legal_mask")
+        baseline = np.where(legal, baseline, 0.0)
+
+    estimated_values = baseline.copy()
+    estimated_state_value = float(np.dot(sigma, baseline))
+    seen: set[int] = set()
+    for action, value in zip(sampled_actions, sampled_values):
+        action = int(action)
+        if action in seen:
+            raise ValueError("without-replacement sampled actions must be unique")
+        seen.add(action)
+        if action < 0 or action >= N_ACTIONS or not legal[action]:
+            raise ValueError("sampled action must be legal")
+        residual = float(value) - float(baseline[action])
+        weight = 1.0 / float(inclusion[action])
         estimated_values[action] += residual * weight
         estimated_state_value += float(sigma[action]) * residual * weight
 
@@ -192,6 +240,7 @@ def _sampled_traverse(
     depth: int,
     sample_count: int,
     uniform_mix: float,
+    sampling_mode: str,
 ) -> _TraversalResult:
     if state.is_terminal:
         return _TraversalResult(value=float(state.payout[traverser]))
@@ -205,6 +254,7 @@ def _sampled_traverse(
             depth=depth + 1,
             sample_count=sample_count,
             uniform_mix=uniform_mix,
+            sampling_mode=sampling_mode,
         )
 
     strategy, legal_mask, legal_actions = _strategy(value_net, state, device)
@@ -216,12 +266,29 @@ def _sampled_traverse(
         uniform = legal_mask / max(1.0, float(legal_mask.sum()))
         q = ((1.0 - uniform_mix) * strategy + uniform_mix * uniform).astype(np.float64)
         q = q / float(q.sum())
-        sampled, sampled_all_legal = _sample_action_indices(
-            rng,
-            legal_indices,
-            q,
-            sample_count=sample_count,
-        )
+        if sampling_mode == "with-replacement":
+            sampled, sampled_all_legal = _sample_action_indices(
+                rng,
+                legal_indices,
+                q,
+                sample_count=sample_count,
+            )
+            inclusion_probs = None
+        elif sampling_mode == "without-replacement":
+            sampled = sample_pps_without_replacement(
+                rng,
+                q,
+                legal_mask,
+                sample_count=sample_count,
+            )
+            sampled_all_legal = int(sampled.size) >= int(legal_indices.size)
+            inclusion_probs = pps_without_replacement_inclusion_probs(
+                q,
+                legal_mask,
+                sample_count=sample_count,
+            )
+        else:
+            raise ValueError(f"unknown sampling mode: {sampling_mode}")
         sampled_values = np.zeros(sampled.shape[0], dtype=np.float32)
         for idx, action_idx in enumerate(sampled):
             action = INDEX_TO_ACTION[int(action_idx)]
@@ -234,6 +301,7 @@ def _sampled_traverse(
                 depth=depth + 1,
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
+                sampling_mode=sampling_mode,
             )
             sampled_values[idx] = float(child.value)
         if sampled_all_legal:
@@ -243,13 +311,22 @@ def _sampled_traverse(
             state_value = float(np.dot(strategy, action_values))
             regret = (action_values - state_value) * legal_mask
         else:
-            state_value, regret = _sampled_value_and_regret(
-                strategy=strategy,
-                legal_mask=legal_mask,
-                sampled_actions=sampled,
-                sampled_values=sampled_values,
-                sample_probs=q,
-            )
+            if sampling_mode == "with-replacement":
+                state_value, regret = _sampled_value_and_regret(
+                    strategy=strategy,
+                    legal_mask=legal_mask,
+                    sampled_actions=sampled,
+                    sampled_values=sampled_values,
+                    sample_probs=q,
+                )
+            else:
+                state_value, regret = _sampled_value_and_regret_without_replacement(
+                    strategy=strategy,
+                    legal_mask=legal_mask,
+                    sampled_actions=sampled,
+                    sampled_values=sampled_values,
+                    inclusion_probs=inclusion_probs,
+                )
         regret = regret / _initial_chips(state)
         return _TraversalResult(
             value=state_value,
@@ -268,6 +345,7 @@ def _sampled_traverse(
         depth=depth + 1,
         sample_count=sample_count,
         uniform_mix=uniform_mix,
+        sampling_mode=sampling_mode,
     )
 
 
@@ -282,6 +360,7 @@ def _mean_root_regret(
     sampled: bool,
     sample_count: int,
     uniform_mix: float,
+    sampling_mode: str,
 ) -> tuple[np.ndarray, float]:
     regrets = []
     started = time.perf_counter()
@@ -298,6 +377,7 @@ def _mean_root_regret(
                 depth=0,
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
+                sampling_mode=sampling_mode,
             )
         else:
             result = _exhaustive_traverse(
@@ -331,6 +411,7 @@ def run_probe(
     hidden_dim: int = 64,
     n_layers: int = 1,
     uniform_mix: float = 0.25,
+    sampling_mode: str = "with-replacement",
     seed: int = 20260525,
     device: str = "cpu",
 ) -> dict[str, Any]:
@@ -358,6 +439,7 @@ def run_probe(
         sampled=False,
         sample_count=sample_count,
         uniform_mix=uniform_mix,
+        sampling_mode=sampling_mode,
     )
     sampled_mean, sampled_seconds = _mean_root_regret(
         state,
@@ -369,6 +451,7 @@ def run_probe(
         sampled=True,
         sample_count=sample_count,
         uniform_mix=uniform_mix,
+        sampling_mode=sampling_mode,
     )
     legal_mask = get_legal_mask(state) > 0.0
     bias = sampled_mean - exhaustive_mean
@@ -384,6 +467,7 @@ def run_probe(
         "n_repeats": int(n_repeats),
         "n_reference_repeats": int(reference_repeats),
         "sample_count": int(sample_count),
+        "sampling_mode": sampling_mode,
         "uniform_mix": float(uniform_mix),
         "hidden_dim": int(hidden_dim),
         "n_layers": int(n_layers),

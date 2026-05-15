@@ -33,6 +33,7 @@ def test_sampled_traversal_probe_emits_tiny_full_deck_metrics():
     )
 
     assert metrics["mode"] == "sampled_deep_cfr_traversal_probe"
+    assert metrics["sampling_mode"] == "with-replacement"
     assert metrics["sample_count"] == 4
     assert metrics["n_repeats"] == 4
     assert metrics["promotion"] is False
@@ -41,6 +42,22 @@ def test_sampled_traversal_probe_emits_tiny_full_deck_metrics():
     assert metrics["sampled_top_margin"] >= 0.0
     assert metrics["sampled_seconds"] >= 0.0
     assert metrics["exhaustive_seconds"] >= 0.0
+
+
+def test_sampled_traversal_probe_supports_without_replacement_mode():
+    metrics = run_probe(
+        n_repeats=4,
+        initial_chips=300,
+        sample_count=4,
+        sampling_mode="without-replacement",
+        hidden_dim=16,
+        n_layers=1,
+        seed=20260527,
+    )
+
+    assert metrics["sampling_mode"] == "without-replacement"
+    assert metrics["sample_count"] == 4
+    assert metrics["promotion"] is False
 
 
 def test_sampled_traversal_probe_reproducible_for_same_seed():

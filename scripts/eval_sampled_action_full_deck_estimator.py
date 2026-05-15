@@ -25,7 +25,10 @@ from poker_ai.research.restricted_action_value import (  # noqa: E402
 )
 from poker_ai.research.sampled_action_mccfr import (  # noqa: E402
     full_regret,
+    pps_without_replacement_inclusion_probs,
+    sample_pps_without_replacement,
     sampled_action_regret_estimate,
+    sampled_action_regret_estimate_without_replacement,
 )
 
 
@@ -137,6 +140,7 @@ def run_diagnostic(
     baseline_checkpoint: str | None,
     max_mean_abs_bias: float | None,
     min_mean_estimate_top_action_match: float | None,
+    sampling_mode: str,
     seed: int,
 ) -> dict:
     random.seed(seed)
@@ -237,21 +241,46 @@ def run_diagnostic(
         legal_indices = np.flatnonzero(legal_mask > 0.0)
         for sample_count in samples_per_estimate:
             estimates = np.empty((n_repeats, N_ACTIONS), dtype=np.float32)
-            for repeat_idx in range(n_repeats):
-                actions = rng.choice(
-                    legal_indices,
-                    size=sample_count,
-                    replace=True,
-                    p=sample_probs[legal_indices],
-                )
-                estimates[repeat_idx] = sampled_action_regret_estimate(
-                    action_values,
-                    strategy,
+            inclusion_probs = None
+            if sampling_mode == "without-replacement":
+                inclusion_probs = pps_without_replacement_inclusion_probs(
+                    sample_probs,
                     legal_mask,
-                    sampled_actions=actions,
-                    sample_probs=sample_probs,
-                    baseline_values=baseline_values,
+                    sample_count=sample_count,
                 )
+            for repeat_idx in range(n_repeats):
+                if sampling_mode == "with-replacement":
+                    actions = rng.choice(
+                        legal_indices,
+                        size=sample_count,
+                        replace=True,
+                        p=sample_probs[legal_indices],
+                    )
+                    estimates[repeat_idx] = sampled_action_regret_estimate(
+                        action_values,
+                        strategy,
+                        legal_mask,
+                        sampled_actions=actions,
+                        sample_probs=sample_probs,
+                        baseline_values=baseline_values,
+                    )
+                elif sampling_mode == "without-replacement":
+                    actions = sample_pps_without_replacement(
+                        rng,
+                        sample_probs,
+                        legal_mask,
+                        sample_count=sample_count,
+                    )
+                    estimates[repeat_idx] = sampled_action_regret_estimate_without_replacement(
+                        action_values,
+                        strategy,
+                        legal_mask,
+                        sampled_actions=actions,
+                        inclusion_probs=inclusion_probs,
+                        baseline_values=baseline_values,
+                    )
+                else:
+                    raise ValueError(f"unknown sampling mode: {sampling_mode}")
             mean_estimate = estimates.mean(axis=0).astype(np.float64)
             legal_bias = mean_estimate[legal_indices] - target[legal_indices]
             legal_estimates = estimates[:, legal_indices]
@@ -305,6 +334,7 @@ def run_diagnostic(
         "initial_chips": int(initial_chips),
         "samples_per_estimate": samples_per_estimate,
         "strategy_mode": strategy_mode,
+        "sampling_mode": sampling_mode,
         "uniform_mix": uniform_mix,
         "baseline_mode": baseline_mode,
         "baseline_noise_scale": float(baseline_noise_scale),
@@ -340,6 +370,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--initial-chips", type=int, default=1000)
     parser.add_argument("--samples-per-estimate", type=_parse_samples, default="1,2,4,8")
     parser.add_argument("--strategy-mode", choices=("uniform", "dirichlet"), default="dirichlet")
+    parser.add_argument(
+        "--sampling-mode",
+        choices=("with-replacement", "without-replacement"),
+        default="with-replacement",
+    )
     parser.add_argument("--uniform-mix", type=float, default=0.25)
     parser.add_argument(
         "--baseline-mode",
@@ -367,6 +402,7 @@ def main(argv: list[str] | None = None) -> int:
         baseline_checkpoint=args.baseline_checkpoint,
         max_mean_abs_bias=args.max_mean_abs_bias,
         min_mean_estimate_top_action_match=args.min_mean_estimate_top_match,
+        sampling_mode=args.sampling_mode,
         seed=args.seed,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)
