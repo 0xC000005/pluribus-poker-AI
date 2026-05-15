@@ -251,7 +251,11 @@ def test_selective_escalation_uses_train_threshold_on_holdout_only():
                 "passed": True,
                 "profiles": {
                     "live": {"iterations": 150, "strategy": [0.8, 0.2, 0, 0, 0, 0, 0, 0, 0]},
-                    "fast-live": {"iterations": 100, "strategy": [0.4, 0.6, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {
+                        "iterations": 100,
+                        "latency_ms": 50.0,
+                        "strategy": [0.4, 0.6, 0, 0, 0, 0, 0, 0, 0],
+                    },
                 },
             },
             {
@@ -259,7 +263,11 @@ def test_selective_escalation_uses_train_threshold_on_holdout_only():
                 "passed": True,
                 "profiles": {
                     "live": {"iterations": 150, "strategy": [0.55, 0.45, 0, 0, 0, 0, 0, 0, 0]},
-                    "fast-live": {"iterations": 100, "strategy": [0.5, 0.5, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {
+                        "iterations": 100,
+                        "latency_ms": 50.0,
+                        "strategy": [0.5, 0.5, 0, 0, 0, 0, 0, 0, 0],
+                    },
                 },
             },
             {
@@ -267,7 +275,11 @@ def test_selective_escalation_uses_train_threshold_on_holdout_only():
                 "passed": True,
                 "profiles": {
                     "live": {"iterations": 150, "strategy": [0.9, 0.1, 0, 0, 0, 0, 0, 0, 0]},
-                    "fast-live": {"iterations": 100, "strategy": [0.45, 0.55, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {
+                        "iterations": 100,
+                        "latency_ms": 50.0,
+                        "strategy": [0.45, 0.55, 0, 0, 0, 0, 0, 0, 0],
+                    },
                 },
             },
             {
@@ -275,7 +287,11 @@ def test_selective_escalation_uses_train_threshold_on_holdout_only():
                 "passed": True,
                 "profiles": {
                     "live": {"iterations": 150, "strategy": [0.6, 0.4, 0, 0, 0, 0, 0, 0, 0]},
-                    "fast-live": {"iterations": 100, "strategy": [0.58, 0.42, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {
+                        "iterations": 100,
+                        "latency_ms": 50.0,
+                        "strategy": [0.58, 0.42, 0, 0, 0, 0, 0, 0, 0],
+                    },
                 },
             },
         ]
@@ -300,3 +316,5 @@ def test_selective_escalation_uses_train_threshold_on_holdout_only():
     assert metrics["selective_mean_l1"] == 0.175
     assert metrics["uniform_escalation_mean_l1"] == 0.165
     assert metrics["selective_mean_latency_ms"] == 150.0
+    assert metrics["online_decision_mean_latency_ms"] == 250.0
+    assert metrics["online_decision_latency_ratio_to_live"] == 2.5

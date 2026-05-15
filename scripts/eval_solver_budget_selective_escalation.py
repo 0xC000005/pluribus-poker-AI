@@ -58,6 +58,7 @@ def _rows(
             continue
         live_iterations = str(int(record["profiles"][reference_profile]["iterations"]))
         frontier_record = frontier[label]
+        candidate_profile_data = record["profiles"][candidate_profile]
         live_budget = frontier_record["budgets"][live_iterations]
         escalation = frontier_record["budgets"][str(int(escalation_budget))]
         rows.append(
@@ -68,6 +69,7 @@ def _rows(
                 "live_l1": float(live_budget["l1_to_reference"]),
                 "live_kl": float(live_budget["kl_to_reference"]),
                 "live_latency_ms": float(live_budget["latency_ms"]),
+                "candidate_profile_latency_ms": float(candidate_profile_data.get("latency_ms", 0.0)),
                 "escalation_l1": float(escalation["l1_to_reference"]),
                 "escalation_kl": float(escalation["kl_to_reference"]),
                 "escalation_latency_ms": float(escalation["latency_ms"]),
@@ -132,12 +134,19 @@ def evaluate_selective_escalation(
         row["escalation_latency_ms"] if row["profile_l1"] >= threshold else row["live_latency_ms"]
         for row in holdout_rows
     ]
+    online_decision_latency = [
+        row["candidate_profile_latency_ms"]
+        + row["live_latency_ms"]
+        + (row["escalation_latency_ms"] if row["profile_l1"] >= threshold else 0.0)
+        for row in holdout_rows
+    ]
     live_l1 = _mean([row["live_l1"] for row in holdout_rows])
     selective_mean_l1 = _mean(selective_l1)
     live_kl = _mean([row["live_kl"] for row in holdout_rows])
     selective_mean_kl = _mean(selective_kl)
     live_latency = _mean([row["live_latency_ms"] for row in holdout_rows])
     selective_mean_latency = _mean(selective_latency)
+    online_decision_mean_latency = _mean(online_decision_latency)
     return {
         "mode": "solver_budget_selective_escalation",
         "reference_profile": reference_profile,
@@ -161,6 +170,11 @@ def evaluate_selective_escalation(
         "uniform_escalation_mean_kl": _mean([row["escalation_kl"] for row in holdout_rows]),
         "live_mean_latency_ms": live_latency,
         "selective_mean_latency_ms": selective_mean_latency,
+        "online_decision_mean_latency_ms": online_decision_mean_latency,
+        "online_decision_latency_ratio_to_live": round(
+            float(online_decision_mean_latency / max(live_latency, 1e-9)),
+            8,
+        ) if holdout_rows else 0.0,
         "uniform_escalation_mean_latency_ms": _mean(
             [row["escalation_latency_ms"] for row in holdout_rows]
         ),

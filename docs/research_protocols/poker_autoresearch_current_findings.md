@@ -327,6 +327,16 @@ profile-L1 threshold on roots `128..191` and evaluating on `192..255` selected
 diagnostic-only, but it is now the strongest local evidence for selective
 compute allocation.
 
+Online-cost status: the same selective-escalation gate now reports the naive
+cost to compute profile-L1 online. This falsifies direct deployment of the
+signal: split `128..191` -> `192..255` would require `1571 ms` mean online
+decision latency (`1.7670x` live), and the reverse split would require
+`1671 ms` (`1.8251x` live), because it runs both `fast-live` and `live` before
+any CFR350 escalation. Treat profile-L1 as a teacher label or oracle boundary
+signal. The next method must predict or approximate that boundary from cheap
+public features, blueprint/search entropy or margin, or early trace state
+before it can enter fixed-state integration or live Slumbot play.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

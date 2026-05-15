@@ -343,12 +343,15 @@ where computationally feasible, and test whether profile-L1 selective
 escalation still improves L1/KL per millisecond against `live`. If it does not
 hold, return to trace-derived uncertainty rather than tuning the top-k.
 
-The 128-root scale-up passed, so the next target can move from artifact-only
-diagnostics to integration design. The most conservative path is still not to
-change Slumbot play directly; first add a resolver-benchmark mode or adapter
-that can run `live` plus profile-L1 selective escalation on fixed states and
-report the same CFR500-teacher deltas. Only after that should a short live
-Slumbot smoke exercise the selected-budget path.
+The 128-root scale-up passed only as an offline oracle. After adding naive
+online decision latency, direct profile-L1 deployment fails the compute premise:
+it would cost about `1.57-1.67 s` per solve (`1.77-1.83x` live) because it must
+run both `fast-live` and `live` before deciding whether to escalate to CFR350.
+The next target should therefore learn a cheap boundary predictor from already
+available state or early-trace signals, using profile-L1 as a teacher label.
+Success means preserving most of the selective L1/KL gain without the extra
+profile solve; failure means return to uniform CUDA budgets or a different
+search-boundary objective.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow

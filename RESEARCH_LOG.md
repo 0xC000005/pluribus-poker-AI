@@ -340,8 +340,37 @@
   `0.1304`/`0.0476` at `1.0394x` latency. Reverse split selected 8/64 roots
   and improved `0.1496`/`0.0551` to `0.1205`/`0.0427` at `1.0501x` latency.
 - Decision: selective escalation remains diagnostic-only but has now survived a
-  larger split. The next step is fixed-state integration or adapter design,
-  not direct Slumbot default changes.
+  larger split. The next step is to account for online decision cost before any
+  fixed-state integration or adapter design; the profile-L1 signal is only
+  deployable if it can be predicted or approximated cheaply.
+
+## 20260515T022400Z-selective-escalation-online-cost-check - failed
+
+- Timestamp: 2026-05-15T02:24:00Z
+- Type: protected evaluation diagnostic
+- Gate: unit regression + regenerated 128-root selective-escalation artifacts
+- Hypothesis: The profile-L1 selective-escalation gate should remain attractive
+  after accounting for the online cost of computing the profile-drift signal.
+- Failure class: compute_integration
+- Summary: Extended `scripts/eval_solver_budget_selective_escalation.py` to
+  report naive online decision latency: candidate-profile solve plus live solve,
+  plus CFR350 escalation when selected. Regenerated both 64/64 split artifacts.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T015509Z-profile-drift-selective-escalation-gate`
+  - Split A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_escalation_profile_l1_train128_holdout192_seed20260515.json`
+  - Split B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_escalation_profile_l1_train192_holdout128_seed20260515.json`
+  - Tests: `uv run pytest -q test/unit/test_cfr_budget_frontier.py test/unit/test_poker_autoresearch.py` -> `54 passed`.
+- Metrics: the offline selective metrics stayed positive, but naive online
+  decision latency failed the compute premise. Split A improved L1/KL from
+  `0.1611`/`0.0674` to `0.1304`/`0.0476` at reported selective latency
+  `924 ms`, but online decision latency was `1571 ms` (`1.7670x` live). Split B
+  improved `0.1496`/`0.0551` to `0.1205`/`0.0427` at `962 ms`, but online
+  decision latency was `1671 ms` (`1.8251x` live).
+- Decision: profile-L1 is a strong teacher-aligned boundary label, not a
+  deployable live decision rule if computed by running both profiles online.
+  The next target should learn or derive a cheap boundary proxy from public
+  state features, blueprint/search entropy, margins, or early trace signals,
+  then rerun the same root-disjoint gate.
 
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
