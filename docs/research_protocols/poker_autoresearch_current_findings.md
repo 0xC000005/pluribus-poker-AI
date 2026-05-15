@@ -453,6 +453,15 @@ turn/river solving. The failure is therefore not just greedy argmax or one bad
 all-in action; the early-street blueprint distribution itself needs better
 training/calibration.
 
+Restored-history candidate live status: `restored_history_200x2k_4x512_final`
+passed older duplicate-swapped H2H and now passes the early-street all-in
+screen (`5.997%` preflop, `1.742%` flop top-action all-in locally), but it did
+not transfer into a Slumbot win. The 1,000-hand fast-live check was clean but
+negative (`-172 +/- 225` chips/hand) and much slower (`0.851` seconds/hand)
+because it reached `415` turn/river solver decisions. Lowering early all-ins is
+necessary but not sufficient; the next gate must measure early-street action
+quality/value transfer, not only distribution sanity.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

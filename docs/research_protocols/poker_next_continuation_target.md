@@ -463,6 +463,15 @@ next step should not be a deployment flag change. It should change the learning
 objective or self-play/evaluation signal so the early blueprint learns a less
 degenerate betting distribution under the existing 9-action contract.
 
+The restored-history 200x2k candidate closes the all-in gap but still fails live
+confidence (`-172 +/- 225` over 1,000 hands) and pays a latency cost from many
+more solver entries. This falsifies a too-simple early all-in story. The next
+research unit should evaluate early-street value/action quality directly:
+compare candidate and incumbent decisions on sampled reachable preflop/flop
+states using duplicate-swapped rollouts or a stronger local teacher, then only
+spend Slumbot hands on candidates that pass both distribution sanity and value
+transfer.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
