@@ -1,12 +1,16 @@
 import random
 
 import numpy as np
+import torch
 
+from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.games.full_deck.state import new_game
 from poker_ai.poker.card import Card
 from poker_ai.research.restricted_action_value import (
     RestrictedActionValueConfig,
     evaluate_restricted_action_values,
+    sample_seeded_hole_cards,
     score_legal_actions_by_showdown_equity,
 )
 
@@ -77,6 +81,16 @@ def test_restricted_action_value_positive_controls_pass():
     assert metrics["oracle_best_mean_payoff"] >= metrics["call_mean_payoff"]
 
 
+def test_seeded_root_hole_cards_are_deterministic_and_unique():
+    first = sample_seeded_hole_cards(seed=20260516, root_idx=3)
+    second = sample_seeded_hole_cards(seed=20260516, root_idx=3)
+    other = sample_seeded_hole_cards(seed=20260516, root_idx=4)
+
+    assert first == second
+    assert len(set(first)) == 2
+    assert first != other
+
+
 def test_restricted_action_value_cli_builds_config():
     from scripts.eval_restricted_action_values import build_config
 
@@ -99,3 +113,41 @@ def test_restricted_action_value_cli_builds_config():
     assert cfg.initial_chips == 2000
     assert cfg.seed == 123
     assert cfg.include_positive_controls is False
+
+
+def test_restricted_action_value_scores_checkpoint_oracle_gap(tmp_path):
+    checkpoint = tmp_path / "allin.pt"
+    net = ValueNetwork(N_FEATURES, hidden_dim=16, output_dim=N_ACTIONS, n_layers=1)
+    with torch.no_grad():
+        for param in net.parameters():
+            param.zero_()
+        net.adv_head.bias[8] = 1.0
+    torch.save(
+        {
+            "value_net": net.state_dict(),
+            "hidden_dim": 16,
+            "n_layers": 1,
+            "n_players": 2,
+            "initial_chips": 1000,
+            "iteration": 1,
+        },
+        checkpoint,
+    )
+
+    metrics = evaluate_restricted_action_values(
+        RestrictedActionValueConfig(
+            n_roots=8,
+            n_equity_samples=128,
+            initial_chips=1000,
+            seed=20260516,
+            include_positive_controls=False,
+            checkpoint=str(checkpoint),
+            strategy_source="regret",
+            device="cpu",
+        )
+    )
+
+    assert metrics["checkpoint"] == str(checkpoint)
+    assert metrics["checkpoint_action_counts"]["all_in"] == 8
+    assert 0.0 <= metrics["checkpoint_oracle_match_rate"] <= 1.0
+    assert metrics["checkpoint_mean_oracle_gap"] >= 0.0

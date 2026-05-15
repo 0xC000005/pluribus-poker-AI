@@ -28,6 +28,13 @@ def build_config(argv: list[str] | None = None) -> RestrictedActionValueConfig:
     parser.add_argument("--initial-chips", type=int, default=1000)
     parser.add_argument("--br-player", type=int, choices=(0,), default=0)
     parser.add_argument("--seed", type=int, default=20260515)
+    parser.add_argument("--checkpoint")
+    parser.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        default="regret",
+    )
+    parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--no-positive-controls",
         action="store_true",
@@ -41,6 +48,9 @@ def build_config(argv: list[str] | None = None) -> RestrictedActionValueConfig:
         br_player=args.br_player,
         seed=args.seed,
         include_positive_controls=not args.no_positive_controls,
+        checkpoint=args.checkpoint,
+        strategy_source=args.strategy_source,
+        device=args.device,
     )
 
 

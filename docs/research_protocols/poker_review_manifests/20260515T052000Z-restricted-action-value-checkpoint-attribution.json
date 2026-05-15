@@ -1,0 +1,18 @@
+{
+  "review_id": "20260515T052000Z-restricted-action-value-checkpoint-attribution",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T052000Z-restricted-action-value-checkpoint-attribution",
+  "subject": "Restricted action-value checkpoint attribution",
+  "trigger": "protected_evaluator_extension",
+  "decision": "proceed",
+  "changed_paths": [
+    "poker_ai/research/restricted_action_value.py",
+    "scripts/eval_restricted_action_values.py",
+    "test/unit/test_restricted_action_value.py"
+  ],
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1908.09453",
+    "https://poker.cs.ualberta.ca/publications/NIPS12.pdf"
+  ]
+}

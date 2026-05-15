@@ -499,6 +499,14 @@ facing a large legal raise prefers fold. A 64-root smoke produced
 positive controls passing. Use this only as an evaluator-health and
 early-action value sanity check; candidate promotion still requires
 duplicate-swapped H2H, fixed-state resolver evidence, and Slumbot confidence.
+Checkpoint attribution on the same seeded 128-root preflop distribution shows
+why the next method must improve early action quality rather than only reduce
+all-in frequency: `iter1000` selected all-in on `105/128` roots and had
+`checkpoint_mean_selected_payoff=-17.36` with an `89.12` chip oracle gap, while
+the restored-history checkpoint selected call on `93/128` roots and was also
+negative (`-21.18`, oracle gap `92.94`). This is not promotion evidence; it is
+a local falsifier showing both over-pressure and passive variants miss a
+simple hand-conditioned value signal.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow

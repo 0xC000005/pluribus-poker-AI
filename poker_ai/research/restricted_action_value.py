@@ -16,10 +16,23 @@ import time
 from typing import Any
 
 import numpy as np
+import torch
 
-from poker_ai.games.full_deck.state import RAISE_FRACTIONS, PokerState, new_game
+from poker_ai.games.full_deck.state import (
+    ACTION_TO_INDEX,
+    INDEX_TO_ACTION,
+    RAISE_FRACTIONS,
+    PokerState,
+    new_game,
+)
 from poker_ai.poker.card import Card, get_all_suits
 from poker_ai.poker.evaluation.evaluator import Evaluator
+from poker_ai.research.evaluation import (
+    _strategies_from_network,
+    assert_strategy_source_supported,
+    load_value_network_checkpoint,
+)
+from poker_ai.research.native_nfsp import get_legal_mask, resolve_device
 
 
 @dataclass(frozen=True)
@@ -30,6 +43,9 @@ class RestrictedActionValueConfig:
     br_player: int = 0
     seed: int = 20260515
     include_positive_controls: bool = True
+    checkpoint: str | None = None
+    strategy_source: str = "regret"
+    device: str = "auto"
 
 
 def _full_deck() -> list[Card]:
@@ -38,6 +54,15 @@ def _full_deck() -> list[Card]:
         for suit in sorted(get_all_suits())
         for rank in range(2, 15)
     ]
+
+
+def sample_seeded_hole_cards(*, seed: int, root_idx: int) -> tuple[Card, Card]:
+    """Return deterministic hero hole cards for comparable root samples."""
+    deck = _full_deck()
+    seed_sequence = np.random.SeedSequence([int(seed), int(root_idx)])
+    rng = np.random.default_rng(seed_sequence)
+    indices = rng.choice(len(deck), size=2, replace=False)
+    return deck[int(indices[0])], deck[int(indices[1])]
 
 
 def _known_cards(state: PokerState, player_i: int) -> list[Card]:
@@ -236,19 +261,60 @@ def _positive_controls(
     }
 
 
+def _checkpoint_strategy(
+    loaded: Any,
+    state: PokerState,
+    device: torch.device,
+    *,
+    strategy_source: str,
+) -> np.ndarray:
+    features = state.to_feature_vector().reshape(1, -1)
+    legal_mask = get_legal_mask(state)
+    return np.asarray(
+        _strategies_from_network(
+            loaded.value_net,
+            features,
+            [legal_mask],
+            device,
+            strategy_source=strategy_source,
+            checkpoint_metadata=loaded.metadata,
+        )[0],
+        dtype=np.float64,
+    )
+
+
 def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[str, Any]:
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
+    loaded_checkpoint = None
+    torch_device = None
+    device_info: dict[str, Any] = {}
+    if cfg.checkpoint:
+        device_info = resolve_device(cfg.device)
+        torch_device = torch.device(device_info["resolved_device"])
+        loaded_checkpoint = load_value_network_checkpoint(cfg.checkpoint, torch_device)
+        assert_strategy_source_supported(loaded_checkpoint, cfg.strategy_source)
+
     started = time.perf_counter()
     action_values_by_name: dict[str, list[float]] = defaultdict(list)
     best_action_counts: Counter[str] = Counter()
     oracle_values: list[float] = []
     call_values: list[float] = []
+    checkpoint_action_counts: Counter[str] = Counter()
+    checkpoint_selected_values: list[float] = []
+    checkpoint_policy_values: list[float] = []
+    checkpoint_oracle_gaps: list[float] = []
+    checkpoint_matches: list[bool] = []
 
     for root_idx in range(max(int(cfg.n_roots), 1)):
         state = new_game(2, initial_chips=int(cfg.initial_chips))
         if int(cfg.br_player) != int(state.player_i):
             raise ValueError("restricted evaluator currently expects br_player to act at root")
+        _set_private_cards_for_control(
+            state,
+            int(cfg.br_player),
+            list(sample_seeded_hole_cards(seed=int(cfg.seed), root_idx=root_idx)),
+        )
         values = score_legal_actions_by_showdown_equity(
             state,
             player_i=int(cfg.br_player),
@@ -261,6 +327,24 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
         oracle_values.append(float(values["best_action_value"]))
         if "call" in values["action_values"]:
             call_values.append(float(values["action_values"]["call"]))
+        if loaded_checkpoint is not None and torch_device is not None:
+            strategy = _checkpoint_strategy(
+                loaded_checkpoint,
+                state,
+                torch_device,
+                strategy_source=cfg.strategy_source,
+            )
+            selected_idx = int(np.argmax(strategy))
+            selected_action = INDEX_TO_ACTION[selected_idx]
+            selected_value = float(values["action_values"][selected_action])
+            policy_value = 0.0
+            for action, payoff in values["action_values"].items():
+                policy_value += float(strategy[ACTION_TO_INDEX[action]]) * float(payoff)
+            checkpoint_action_counts[selected_action] += 1
+            checkpoint_selected_values.append(selected_value)
+            checkpoint_policy_values.append(float(policy_value))
+            checkpoint_oracle_gaps.append(float(values["best_action_value"] - selected_value))
+            checkpoint_matches.append(selected_action == values["best_action"])
 
     elapsed = time.perf_counter() - started
     per_action_mean = {
@@ -277,7 +361,7 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
         if controls
         else None
     )
-    return {
+    metrics = {
         "algorithm": "restricted_showdown_action_value",
         "role": "positive_control_first_early_action_value_diagnostic",
         "environment": "poker_ai:full_deck_hu_nlhe",
@@ -291,6 +375,7 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
         "initial_chips": int(cfg.initial_chips),
         "br_player": int(cfg.br_player),
         "seed": int(cfg.seed),
+        "root_sampling": "deterministic_seeded_hero_holes",
         "seconds": float(elapsed),
         "roots_per_second": float(max(int(cfg.n_roots), 1) / max(elapsed, 1e-9)),
         "per_action_mean_payoff": per_action_mean,
@@ -301,3 +386,32 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
         "positive_controls_passed": controls_passed,
         "promotion": False,
     }
+    if loaded_checkpoint is not None:
+        metrics.update(
+            {
+                **device_info,
+                "checkpoint": str(cfg.checkpoint),
+                "checkpoint_iteration": loaded_checkpoint.metadata.get("checkpoint_iteration"),
+                "strategy_source": str(cfg.strategy_source),
+                "checkpoint_action_counts": dict(checkpoint_action_counts),
+                "checkpoint_mean_selected_payoff": (
+                    float(np.mean(checkpoint_selected_values))
+                    if checkpoint_selected_values
+                    else 0.0
+                ),
+                "checkpoint_mean_policy_payoff": (
+                    float(np.mean(checkpoint_policy_values))
+                    if checkpoint_policy_values
+                    else 0.0
+                ),
+                "checkpoint_mean_oracle_gap": (
+                    float(np.mean(checkpoint_oracle_gaps))
+                    if checkpoint_oracle_gaps
+                    else 0.0
+                ),
+                "checkpoint_oracle_match_rate": (
+                    float(np.mean(checkpoint_matches)) if checkpoint_matches else 0.0
+                ),
+            }
+        )
+    return metrics
