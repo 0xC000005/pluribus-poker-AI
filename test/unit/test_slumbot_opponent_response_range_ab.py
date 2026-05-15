@@ -123,6 +123,7 @@ def test_evaluate_opponent_response_range_ab_scores_holdout_hands(tmp_path):
 
     assert metrics["mode"] == "slumbot_opponent_response_range_ab"
     assert metrics["n_holdout_hands"] == 3
+    assert metrics["n_calibration_records"] == 3
     assert metrics["baseline"]["n"] == metrics["response"]["n"] == 3
     assert "mean_log_lift_vs_uniform" in metrics["baseline"]
     assert "mean_log_lift_vs_uniform" in metrics["response"]

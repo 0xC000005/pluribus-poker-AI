@@ -106,7 +106,7 @@ def _train_response_model(
         logits,
         dataset.legal_masks,
         dataset.target_probs,
-        train_mask,
+        holdout_mask,
         device=device,
     )
     holdout_hands = set(int(x) for x in dataset.hand_indices[holdout_mask])
@@ -120,6 +120,7 @@ def _train_response_model(
             "n_records": int(dataset.features.shape[0]),
             "n_hands": int(len(set(int(x) for x in dataset.hand_indices))),
             "n_train_records": int(train_mask.sum()),
+            "n_calibration_records": int(holdout_mask.sum()),
             "n_holdout_records": int(holdout_mask.sum()),
             "n_holdout_hands": int(len(holdout_hands)),
         },

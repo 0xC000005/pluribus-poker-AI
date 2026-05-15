@@ -6192,3 +6192,46 @@
   hyperparameter tuning; it is to redesign the learned belief update toward a
   calibrated multi-session population model or public-belief sequence model,
   then require session-heldout range likelihood before resolver/live gates.
+
+## 20260515T132000Z-cross-trace-calibrated-response-range - diagnostic-pass
+
+- Timestamp: 2026-05-15T13:20:00Z
+- Type: mechanism isolation and calibrated range-update diagnostic
+- Gate: Cross-trace action likelihood plus disjoint-session range likelihood
+  with temperature fitted on source-heldout action records.
+- Hypothesis: The failed session-heldout range A/B may be caused by
+  overconfident action logits compounded by Bayesian range multiplication, not
+  by absence of cross-session opponent-action signal.
+- Summary: Added
+  `poker_ai/research/slumbot_opponent_response_cross_trace.py` and
+  `scripts/eval_slumbot_opponent_response_cross_trace.py`. Updated the range
+  A/B to fit temperature on source-heldout calibration records instead of the
+  training records. This keeps the learned response model offline and does not
+  modify live `RangeTracker` or `play_slumbot.py`.
+- Evidence:
+  - Cross-trace action probe:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-cross-trace-action-probe-trained125000.json`
+  - Calibrated session-heldout range A/B:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-sessionheldout-trained125000-opponent-response-range-ab-calibrated.json`
+  - Methodology review:
+    `autoresearch-session/poker_reviews/20260515T131815Z-cross-trace-calibrated-opponent-response-range-update`
+- Key metrics: Raw cross-trace action logits failed to beat the current model
+  (`probe_minus_model_log_lift=-0.0183`) and had external log-lift `-0.3105`.
+  Source-heldout temperature was `3.9670`; calibrated external action log-lift
+  became `+1.1111`, beating the current model by `+1.4033`. With the same
+  calibration in range replay, disjoint-session true-range log-lift improved
+  from baseline `-0.4683` to response `-0.1860`, delta `+0.2823` over 475
+  scored hands. Turn improved from `-1.3842` to `-0.3749`; river improved from
+  `-1.4910` to `-0.5251`; flop improved from `-0.3386` to `-0.1864`; preflop
+  slightly degraded from `+0.0085` to `-0.0499`.
+- Validation: `uv run pytest -q
+  test/unit/test_slumbot_opponent_response_cross_trace.py` -> 2 passed.
+  `uv run pytest -q test/unit/test_slumbot_opponent_response_range_ab.py` ->
+  3 passed after the calibration split change. Methodology review and objective
+  audit both passed.
+- Decision: This is the strongest evidence so far that a calibrated learned
+  opponent-response likelihood can improve public-belief/range quality across
+  Slumbot sessions. Do not integrate live yet: the response range is still
+  negative versus uniform overall and has not passed fixed-state resolver A/B.
+  The next required gate is resolver-level evaluation using calibrated response
+  ranges on disjoint trace states.
