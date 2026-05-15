@@ -34,8 +34,8 @@ from play_slumbot import (  # noqa: E402
     build_features,
     card_str_to_index,
     get_legal_mask_from_parsed,
+    network_strategy,
     parse_action,
-    regret_match,
 )
 from range_tracker import map_slumbot_action_to_idx  # noqa: E402
 from solver import StreetSolver, _parse_nav, solver_action_to_slumbot  # noqa: E402
@@ -163,26 +163,16 @@ def _policy_decision(
     if not allow_allin:
         legal_mask = legal_mask.copy()
         legal_mask[8] = 0.0
-    feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
-    with torch.no_grad():
-        if strategy_source == "policy_head":
-            adv_t, logits_t = value_net.forward_with_policy(feat_t)
-            advantages = adv_t.cpu().numpy()[0].astype(np.float64)
-            logits = logits_t.cpu().numpy()[0].astype(np.float64)
-        elif strategy_source == "regret":
-            advantages = value_net(feat_t).cpu().numpy()[0].astype(np.float64)
-            logits = None
-        else:
-            raise ValueError(f"Unknown strategy_source: {strategy_source}")
-
-    if strategy_source == "policy_head":
-        masked_logits = np.where(legal_mask > 0, logits, -1e9)
-        shifted = masked_logits - np.max(masked_logits)
-        probs = np.exp(shifted) * legal_mask
-        total = probs.sum()
-        strategy = probs / total if total > 0 else legal_mask / legal_mask.sum()
-    else:
-        strategy = regret_match(advantages, legal_mask).astype(np.float64)
+    source = "policy-head" if strategy_source == "policy_head" else strategy_source
+    advantages, strategy = network_strategy(
+        value_net,
+        features,
+        legal_mask,
+        device,
+        strategy_source=source,
+    )
+    advantages = np.asarray(advantages, dtype=np.float64)
+    strategy = np.asarray(strategy, dtype=np.float64)
     action = int(np.argmax(strategy))
     increment = action_to_slumbot(action, parsed, case.action_str, case.client_pos)
     return PolicyDecision(action, increment, strategy, advantages, legal_mask)
@@ -283,6 +273,7 @@ def _case_metrics(
     *,
     solver_iterations: int,
     solver_backend: str,
+    strategy_source: str,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     validation_errors = _validate_case(case, parsed)
@@ -300,13 +291,20 @@ def _case_metrics(
             "solver_increment_legal": False,
         }
 
-    policy = _policy_decision(value_net, device, case, parsed)
+    policy = _policy_decision(
+        value_net,
+        device,
+        case,
+        parsed,
+        strategy_source=strategy_source,
+    )
     policy_no_allin = _policy_decision(
         value_net,
         device,
         case,
         parsed,
         allow_allin=False,
+        strategy_source=strategy_source,
     )
     policy_head = _policy_decision(
         value_net,
@@ -409,6 +407,7 @@ def run_resolver_benchmark(
     cases: Iterable[ResolverBenchmarkCase] | None = None,
     solver_iterations: int = 25,
     solver_backend: str = "auto",
+    strategy_source: str = "regret",
     checkpoint_metadata: dict[str, Any] | None = None,
     enforce_policy_head_behavior_gate: bool = False,
     max_policy_head_allin_rate: float = 0.05,
@@ -425,6 +424,7 @@ def run_resolver_benchmark(
             case,
             solver_iterations=solver_iterations,
             solver_backend=solver_backend,
+            strategy_source=strategy_source,
         )
         for case in selected_cases
     ]
@@ -507,6 +507,7 @@ def run_resolver_benchmark(
         "n_solver_cases": len(solver_results),
         "solver_iterations": int(solver_iterations),
         "solver_backend": solver_backend,
+        "strategy_source": strategy_source,
         "checkpoint": metadata.get("checkpoint"),
         "checkpoint_iteration": metadata.get("checkpoint_iteration", metadata.get("iteration")),
         "hidden_dim": metadata.get("hidden_dim"),

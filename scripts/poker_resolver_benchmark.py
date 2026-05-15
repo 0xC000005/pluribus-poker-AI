@@ -15,7 +15,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from poker_ai.research.evaluation import load_value_network_checkpoint  # noqa: E402
+from poker_ai.research.evaluation import (  # noqa: E402
+    assert_strategy_source_supported,
+    load_value_network_checkpoint,
+)
 from poker_ai.research.resolver_benchmark import (  # noqa: E402
     default_benchmark_cases,
     load_cases_json,
@@ -50,6 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
     )
     parser.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        default="regret",
+        help="Learned blueprint source to compare against the resolver.",
+    )
+    parser.add_argument(
         "--cases-json",
         help="Optional JSON list or {'cases': [...]} of fixed resolver benchmark cases.",
     )
@@ -76,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
 
     device = _device(args.device)
     loaded = load_value_network_checkpoint(args.checkpoint, device)
+    assert_strategy_source_supported(loaded, args.strategy_source)
     cases = load_cases_json(args.cases_json) if args.cases_json else default_benchmark_cases()
     if args.max_cases is not None:
         cases = cases[: args.max_cases]
@@ -86,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         cases=cases,
         solver_iterations=args.solver_iterations,
         solver_backend=args.solver_backend,
+        strategy_source=args.strategy_source,
         checkpoint_metadata=loaded.metadata,
         enforce_policy_head_behavior_gate=args.enforce_policy_head_behavior_gate,
         max_policy_head_allin_rate=args.max_policy_head_allin_rate,

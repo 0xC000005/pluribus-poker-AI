@@ -5670,3 +5670,39 @@
   principled step is not a hard all-in cap; it is a root-disjoint diagnostic
   that compares policy-selected large-pot actions against search/value targets
   under public states resembling the Slumbot trace failures.
+
+## 20260515T114000Z-trace-grounded-resolver-diagnostic - passed
+
+- Timestamp: 2026-05-15T11:40:00Z
+- Type: protected diagnostic tooling
+- Gate: TDD + trace-derived fixed-state resolver/range diagnostics
+- Hypothesis: If live Slumbot failures are large-pot calibration failures,
+  fixed-state diagnostics should be able to replay turn/river public states
+  from Slumbot traces and compare the deployed average-policy strategy with
+  CFR/search and range-tracker beliefs.
+- Failure class: search_quality
+- Summary: Added a Slumbot trace-to-resolver-case bridge and extended the
+  fixed-state resolver benchmark to measure the same deployed source used live,
+  including `average-policy`. Extracted 23 valid turn/river states from the
+  50-hand no-allin average-policy trace and evaluated them with CFR25
+  `torch-levelsync-cuda`.
+- Evidence:
+  - Cases: `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-turn-river.cases.json`
+  - Resolver artifact: `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-resolver-benchmark.json`
+  - Range artifact: `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-range-diagnostic.json`
+- Key metrics: resolver benchmark completed `23/23` cases with illegal count
+  `0`, mean average-policy-vs-solver L1 `0.9268`, solver all-in rate `0.5217`,
+  average-policy all-in rate `0.3913`, and noallin-changed rate `0.3913`.
+  Range diagnostics completed `23/23` cases with mean villain range normalized
+  entropy `0.9180` and villain top-1 mass `0.0067`.
+- Validation: `uv run pytest -q test/unit/test_slumbot_trace_cases.py
+  test/unit/test_resolver_benchmark.py::test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics
+  test/unit/test_resolver_benchmark.py::test_resolver_benchmark_can_measure_average_policy_source
+  test/unit/test_slumbot_trace_analysis.py` -> 6 passed.
+- Decision: The failure is not explained by a simple all-in cap. On these
+  trace-derived states, the fixed-state solver often wants even more all-in
+  than the deployed policy, while the range tracker remains highly diffuse
+  after large-pot Slumbot lines. The next mainline hypothesis should target
+  public-belief/range calibration from action histories, preferably by learning
+  belief-state or opponent-response features that search can condition on,
+  rather than adding more action-size heuristics.

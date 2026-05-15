@@ -8,7 +8,7 @@ import pytest
 import torch
 
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
-from poker_ai.deep_cfr.networks import ValueNetwork
+from poker_ai.deep_cfr.networks import PolicyNetwork, ValueNetwork
 from poker_ai.research.belief_probe import N_HANDS, _HAND_TO_INDEX
 from poker_ai.research.resolver_benchmark import (
     ResolverBenchmarkCase,
@@ -162,6 +162,38 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     )
     assert probability_gate["policy_head_behavior_gate"]["mode"] == "solver_prob_gap"
     assert probability_gate["policy_head_behavior_passed"] is True
+
+
+def test_resolver_benchmark_can_measure_average_policy_source():
+    torch.manual_seed(0)
+    value_net = ValueNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    average_policy_net = PolicyNetwork(N_FEATURES, 16, N_ACTIONS, n_layers=1)
+    with torch.no_grad():
+        for param in average_policy_net.parameters():
+            param.zero_()
+        average_policy_net.net[-1].bias[1] = 5.0
+    value_net.average_policy_net = average_policy_net
+    case = ResolverBenchmarkCase(
+        label="river-check",
+        hole_cards=("Ac", "Kd"),
+        board=("2c", "7d", "Jh", "4s", "9c"),
+        action_str="ck/kk/kk/",
+        client_pos=0,
+    )
+
+    metrics = run_resolver_benchmark(
+        value_net,
+        torch.device("cpu"),
+        cases=[case],
+        solver_iterations=1,
+        strategy_source="average-policy",
+        checkpoint_metadata={"has_average_policy_net": True},
+    )
+
+    assert metrics["strategy_source"] == "average-policy"
+    result = metrics["cases"][0]
+    assert result["blueprint_action"] == 1
+    assert result["blueprint_strategy"][1] > 0.9
 
 
 def test_solver_decision_preserves_legacy_positional_node_terminal():
