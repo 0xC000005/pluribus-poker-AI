@@ -1053,3 +1053,9 @@ points toward a clean learned control-variate sampled traversal method. The
 next gate is no longer "can sampling be unbiased"; it is whether a learned
 baseline sampled traversal matches exhaustive traversal decisions on small
 states before touching CUDA/default training.
+
+The top-action diagnostic adds a caution: sampled estimates are useful as
+stochastic regret targets, not as one-shot decisions. Even with the XL baseline,
+individual sampled estimates match the exhaustive top-regret action only about
+`0.70` at eight samples. The next probe should therefore compare averaged
+sampled regret targets to exhaustive regret targets over repeated samples.

@@ -4611,3 +4611,25 @@
   traversal, still opt-in. The first integration should use one and two sampled
   actions as ablations and must compare against exhaustive traversal on a
   small state set before any GPU/default training change.
+
+## 20260515T091500Z-sampled-action-topmatch-diagnostic - partial
+
+- Timestamp: 2026-05-15T09:15:00Z
+- Type: decision_variance_diagnostic
+- Gate: top-regret-action agreement for sampled estimates
+- Hypothesis: A sampled-action estimate that passes bias/std checks should
+  preserve the top regret action often enough to be a plausible traversal
+  update target.
+- Failure class: action_order_variance
+- Summary: Added `mean_top_action_match_rate` to the full-deck sampled-action
+  estimator diagnostic and reran the XL learned-baseline 256-root check. Bias
+  and std still pass, but individual sampled estimates preserve the exhaustive
+  top-regret action only `0.61` for one or two sampled actions, `0.64` for four,
+  and `0.70` for eight. This does not invalidate sampled regrets, because the
+  estimator is averaged over many traversal samples, but it warns against
+  interpreting one-sample action decisions as reliable.
+- Commands: `uv run pytest -q test/unit/test_restricted_value_probe.py test/unit/test_sampled_action_mccfr.py test/unit/test_gpu_cache_budget.py`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_256roots_topmatch_20260515.json`
+- Key metrics: `{"tests_passed": 24, "sample1_top_match": 0.607703, "sample2_top_match": 0.609383, "sample4_top_match": 0.640805, "sample8_top_match": 0.702008, "sample8_abs_bias": 0.944688, "promotion": false}`
+- Decision: Keep sampled-action updates as a stochastic training estimator, not
+  a direct action-selection policy. The traversal probe should compare averaged
+  regret targets over repeated samples against exhaustive targets.
