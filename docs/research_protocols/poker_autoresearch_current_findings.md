@@ -337,6 +337,16 @@ signal. The next method must predict or approximate that boundary from cheap
 public features, blueprint/search entropy or margin, or early trace state
 before it can enter fixed-state integration or live Slumbot play.
 
+Cheap-boundary predictor status: the first deployable proxy failed. A fixed
+ridge predictor over saved 126-d feature rows was tested on both 64/64 split
+directions. Although selected escalations happened to improve downstream L1/KL,
+the predictor did not learn the profile-L1 boundary label: holdout MAE was
+worse than a train-mean baseline in both directions (`0.2325 > 0.1036` and
+`0.2716 > 0.1069`). This retires feature-only linear boundary prediction. The
+next version needs a stronger cheap signal with a causal link to CFR difficulty:
+early trace state, blueprint policy entropy or margin, public-belief range
+shape, or a small uncertainty head trained directly against boundary labels.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

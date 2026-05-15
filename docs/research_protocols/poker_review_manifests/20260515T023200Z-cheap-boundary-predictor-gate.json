@@ -1,0 +1,45 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 974,
+      "path": "benchmark_audit.md",
+      "sha256": "7f0de2415301b55c077ec431a24e7c40459062bd950b2eb0e8a2c4f0265dc39c"
+    },
+    {
+      "bytes": 485,
+      "path": "decision.json",
+      "sha256": "18d9a5ca18bff04e40b828681b281611dc4a9704a6180ef2c0d13489931be7ba"
+    },
+    {
+      "bytes": 2057,
+      "path": "mechanism_review.md",
+      "sha256": "223a84295a84919bfaa73247d31134b95471f16265425542a5265f98dca62a82"
+    },
+    {
+      "bytes": 1897,
+      "path": "related_work.md",
+      "sha256": "0eddc3e862cac0c20c098cde36cd68d0101a9d2b07f90ee3eb0caf5ba0470732"
+    },
+    {
+      "bytes": 1944,
+      "path": "review.md",
+      "sha256": "f038a3647c30101f1175a0929ac7c73c575c18193d81f0796d2840855f7e8a5a"
+    },
+    {
+      "bytes": 818,
+      "path": "team_review.md",
+      "sha256": "efc3b34c76e5bbb0c8cf17a6fa34031fa102c15bc75e36b9148faed6c2e7ced9"
+    }
+  ],
+  "reason": "The evaluator is valid diagnostic infrastructure, but the first cheap ridge boundary predictor failed to beat a mean baseline on profile-L1 prediction in both split directions.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T023200Z-cheap-boundary-predictor-gate",
+  "review_id": "20260515T023200Z-cheap-boundary-predictor-gate",
+  "sources": [
+    "https://arxiv.org/abs/2106.05022",
+    "https://proceedings.mlr.press/v70/bolukbasi17a.html",
+    "https://dmorrill10.github.io/assets/publications/17science.pdf",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-15T02:31:02Z"
+}

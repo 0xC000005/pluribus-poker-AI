@@ -372,6 +372,38 @@
   state features, blueprint/search entropy, margins, or early trace signals,
   then rerun the same root-disjoint gate.
 
+## 20260515T023200Z-cheap-boundary-predictor-gate - failed
+
+- Timestamp: 2026-05-15T02:32:00Z
+- Type: protected evaluation diagnostic
+- Gate: TDD + methodology-review + related-work check + two 64/64
+  root-disjoint split runs
+- Hypothesis: A cheap feature-only ridge predictor can learn the expensive
+  profile-L1 boundary label well enough to select CFR350 escalations without
+  running both `fast-live` and `live` online.
+- Failure class: search_quality
+- Summary: Added `scripts/eval_solver_budget_boundary_predictor.py`, a
+  diagnostic that trains a fixed ridge predictor from saved feature rows to
+  profile-L1 labels, derives the selection threshold on train roots, and
+  evaluates holdout-only selective CFR350 escalation. The script is registered
+  as a protected evaluation surface and reports `promotion=false`.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T023200Z-cheap-boundary-predictor-gate`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T023200Z-cheap-boundary-predictor-gate.json`
+  - Split A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_profile_l1_train128_holdout192_seed20260515.json`
+  - Split B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_profile_l1_train192_holdout128_seed20260515.json`
+  - Unit test: `uv run pytest -q test/unit/test_solver_budget_boundary_predictor.py` -> `1 passed`.
+- Metrics: both real split runs failed the boundary-label criterion. Split A
+  had holdout profile-L1 MAE `0.2325` versus mean-baseline `0.1036`, Pearson
+  `0.1962`, and zero oracle top-k recall. Split B had MAE `0.2716` versus
+  baseline `0.1069`, Pearson `0.2447`, top-k recall `0.75`, and precision
+  `0.2857`. Both happened to improve downstream L1/KL, but the stricter gate
+  correctly rejects them because the learned boundary label is weak.
+- Decision: keep the evaluator as falsification infrastructure, but reject the
+  feature-only ridge selector. The next target should use a richer predeclared
+  cheap signal with a causal link to search difficulty, such as early CFR trace
+  state, blueprint policy entropy/margins, or public-belief range shape.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

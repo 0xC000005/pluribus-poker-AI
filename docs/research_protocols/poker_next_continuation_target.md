@@ -353,6 +353,14 @@ Success means preserving most of the selective L1/KL gain without the extra
 profile solve; failure means return to uniform CUDA budgets or a different
 search-boundary objective.
 
+The first cheap predictor is now a negative control. A feature-only ridge gate
+failed to beat a mean baseline on profile-L1 prediction in both root-disjoint
+split directions, even though downstream selective escalation improved by
+chance. Do not tune ridge alpha or feature subsets. The next continuation
+target should use richer predeclared uncertainty evidence, preferably an early
+CFR trace or blueprint-policy entropy/margin signal, and must still beat the
+same mean-baseline and downstream L1/KL gates before any integration work.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
