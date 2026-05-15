@@ -284,6 +284,8 @@ def fork_kernel(
         return
     if is_traverser_flag[gid] != int8(1):
         return
+    if is_traverser_node[gid] == int8(1) and n_children_expected[gid] > int32(0):
+        return
 
     n_legal = int32(0)
     for a in range(N_ACTIONS):
@@ -498,3 +500,22 @@ def count_nonterminal_kernel(
         return
     if stages[gid] < int8(4):
         cuda.atomic.add(out_count, 0, int32(1))
+
+
+@cuda.jit
+def count_active_frontier_kernel(
+    stages,              # (N,) int8
+    is_traverser_node,   # (N,) int8
+    n_children_expected, # (N,) int32
+    out_count,           # (1,) int32
+    n_slots,             # int32
+):
+    """Count non-terminal slots that can still advance in the wavefront."""
+    gid = cuda.grid(1)
+    if gid >= n_slots:
+        return
+    if stages[gid] >= int8(4):
+        return
+    if is_traverser_node[gid] == int8(1) and n_children_expected[gid] > int32(0):
+        return
+    cuda.atomic.add(out_count, 0, int32(1))

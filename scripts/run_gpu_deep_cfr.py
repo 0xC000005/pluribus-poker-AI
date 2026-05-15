@@ -47,6 +47,7 @@ def main():
     ap.add_argument("--average-strategy-weight", type=float, default=0.0)
     ap.add_argument("--average-strategy-memory-capacity", type=int, default=0)
     ap.add_argument("--average-strategy-batch-size", type=int, default=0)
+    ap.add_argument("--traversal-slots-per-traversal", type=int, default=2000)
     ap.add_argument("--policy-slots-per-traversal", type=int, default=64)
     ap.add_argument("--save-path", type=str, default="./models")
     ap.add_argument("--save-every", type=int, default=10)
@@ -90,6 +91,7 @@ def main():
         policy_target_buffer=search_target_buffer,
         policy_target_weight=args.search_target_weight,
         policy_target_batch_size=args.search_target_batch_size or None,
+        traversal_slots_per_traversal=args.traversal_slots_per_traversal,
         policy_slots_per_traversal=args.policy_slots_per_traversal,
         average_strategy_memory_capacity=args.average_strategy_memory_capacity or None,
         average_strategy_weight=args.average_strategy_weight,

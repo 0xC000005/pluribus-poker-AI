@@ -507,3 +507,31 @@ class TestGPUTrainerIntegration:
                 assert np.all(np.isfinite(features)), "NaN/Inf in buffer features"
                 advantages = buf.advantages[:buf.size]
                 assert np.all(np.isfinite(advantages)), "NaN/Inf in buffer advantages"
+
+
+class TestTraversalFrontierKernel:
+    """Traversal-frontier bookkeeping tests."""
+
+    def test_active_frontier_counter_skips_expanded_traverser_nodes(self):
+        from poker_ai.deep_cfr.cuda.action_kernels import count_active_frontier_kernel
+
+        stages = np.array([0, 0, 4, 1], dtype=np.int8)
+        is_traverser_node = np.array([1, 0, 0, 1], dtype=np.int8)
+        n_children_expected = np.array([2, 0, 0, 0], dtype=np.int32)
+        out_count = np.array([0], dtype=np.int32)
+
+        d_stages = cuda.to_device(stages)
+        d_is_traverser_node = cuda.to_device(is_traverser_node)
+        d_n_children_expected = cuda.to_device(n_children_expected)
+        d_out_count = cuda.to_device(out_count)
+
+        count_active_frontier_kernel[1, 16](
+            d_stages,
+            d_is_traverser_node,
+            d_n_children_expected,
+            d_out_count,
+            stages.shape[0],
+        )
+        cuda.synchronize()
+
+        assert int(d_out_count.copy_to_host()[0]) == 2

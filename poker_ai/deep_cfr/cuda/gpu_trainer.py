@@ -56,7 +56,7 @@ from poker_ai.deep_cfr.cuda.action_kernels import (
     propagate_kernel,
     collect_policy_targets_kernel,
     reset_traversal_state_kernel,
-    count_nonterminal_kernel,
+    count_active_frontier_kernel,
 )
 
 logger = logging.getLogger("poker_ai.deep_cfr.cuda.gpu_trainer")
@@ -66,7 +66,7 @@ _GPU_CACHE_COMPACT_SAMPLE_BYTES = 2
 _GPU_CACHE_ITERATION_BYTES = 4
 _GPU_CACHE_SAFETY_FRACTION = 0.75
 _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS = 1_000_000
-_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 500
+_DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 2_000
 _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL = 64
 _DEFAULT_NN_FORWARD_CHUNK = 500_000
 _MIN_NN_FORWARD_CHUNK = 8_192
@@ -84,13 +84,24 @@ def _traversal_batch_size(
     """Choose traversal chunk size from a fixed slot budget.
 
     Increasing ``slots_per_traversal`` reduces pool exhaustion by shrinking
-    traversal chunks under the same workspace cap. The default preserves the
-    faster historical 2,000-traversal chunks.
+    traversal chunks under the same workspace cap.
     """
     n_traversals = max(1, int(n_traversals))
     pool_max_slots = max(1, int(pool_max_slots))
     slots_per_traversal = max(1, int(slots_per_traversal))
     return max(1, min(n_traversals, pool_max_slots // slots_per_traversal))
+
+
+def _traversal_pool_slots(
+    *,
+    max_traversals: int,
+    pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
+    slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
+) -> int:
+    """Choose the reusable traversal pool size for a traversal chunk."""
+    pool_max_slots = max(1, int(pool_max_slots))
+    min_slots = max(1, int(max_traversals)) * max(1, int(slots_per_traversal))
+    return max(pool_max_slots, min_slots)
 
 
 def _nn_forward_chunk_size(
@@ -145,6 +156,11 @@ def _summarize_traversal_pool_stats(
             "traversal_regret_sample_fill_ratio": 0.0,
             "traversal_pool_exhausted_nodes": 0,
             "traversal_pool_exhausted_per_traversal": 0.0,
+            "traversal_max_nonterminal_slots": 0,
+            "traversal_mean_max_nonterminal_slots_per_traversal": 0.0,
+            "traversal_max_nonterminal_slots_per_traversal": 0.0,
+            "traversal_mean_allocated_to_live_ratio": 0.0,
+            "traversal_max_allocated_to_live_ratio": 0.0,
             "traversal_pool_exhausted_stage_preflop": 0,
             "traversal_pool_exhausted_stage_flop": 0,
             "traversal_pool_exhausted_stage_turn": 0,
@@ -163,6 +179,18 @@ def _summarize_traversal_pool_stats(
     slots_per_traversal = [
         float(record["requested_slots"]) / max(1.0, float(record["n_traversals"]))
         for record in records
+    ]
+    max_nonterminal_slots = [
+        max(1, int(record.get("max_nonterminal_slots", record["requested_slots"])))
+        for record in records
+    ]
+    max_nonterminal_per_traversal = [
+        float(live_slots) / max(1.0, float(record["n_traversals"]))
+        for live_slots, record in zip(max_nonterminal_slots, records)
+    ]
+    allocated_to_live_ratios = [
+        float(record["requested_slots"]) / float(live_slots)
+        for live_slots, record in zip(max_nonterminal_slots, records)
     ]
     total_capacity = sum(max(1, int(record["pool_max_slots"])) for record in records)
     total_regret_samples = sum(int(record.get("regret_samples", 0)) for record in records)
@@ -221,6 +249,23 @@ def _summarize_traversal_pool_stats(
         "traversal_pool_exhausted_nodes": total_pool_exhausted,
         "traversal_pool_exhausted_per_traversal": round(
             total_pool_exhausted / max(1, total_traversals),
+            6,
+        ),
+        "traversal_max_nonterminal_slots": max(max_nonterminal_slots),
+        "traversal_mean_max_nonterminal_slots_per_traversal": round(
+            sum(max_nonterminal_per_traversal) / chunks,
+            6,
+        ),
+        "traversal_max_nonterminal_slots_per_traversal": round(
+            max(max_nonterminal_per_traversal),
+            6,
+        ),
+        "traversal_mean_allocated_to_live_ratio": round(
+            sum(allocated_to_live_ratios) / chunks,
+            6,
+        ),
+        "traversal_max_allocated_to_live_ratio": round(
+            max(allocated_to_live_ratios),
             6,
         ),
         "traversal_pool_exhausted_stage_preflop": stage_totals[0],
@@ -540,12 +585,18 @@ class _GPUTraverseWorkspace:
         max_traversals: int,
         n_players: int,
         initial_chips: int,
+        pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
         slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
         policy_slots_per_traversal: int = _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL,
     ):
         self.max_traversals = max_traversals
+        self.pool_max_slots = max(1, int(pool_max_slots))
         self.slots_per_traversal = max(1, int(slots_per_traversal))
-        self.max_pool = max_traversals * self.slots_per_traversal
+        self.max_pool = _traversal_pool_slots(
+            max_traversals=max_traversals,
+            pool_max_slots=self.pool_max_slots,
+            slots_per_traversal=self.slots_per_traversal,
+        )
         self.policy_slots_per_traversal = max(1, int(policy_slots_per_traversal))
         self.policy_capacity = min(
             self.max_pool,
@@ -891,8 +942,13 @@ def gpu_traverse_for_player(
     d_card_lookup = workspace.d_card_lookup
 
     n_active = n_traversals
+    max_nonterminal_slots = int(n_traversals)
+    max_nonterminal_depth = 0
+    last_frontier_slots = int(n_traversals)
+    depths_executed = 0
 
     for depth in range(100):
+        depths_executed = depth + 1
         # 1. GPU: extract features + legal masks.
         get_features_kernel[blocks_pool, threads](
             batch.chips, batch.bets, batch.active,
@@ -1022,12 +1078,20 @@ def gpu_traverse_for_player(
             d_preflop, d_postflop,
             d_raise_fractions,
         )
-        # 11. Count non-terminal slots with a single scalar copy.
+        # 11. Count slots that can still advance with a single scalar copy.
         d_active_count.copy_to_device(zero_i32)
-        count_nonterminal_kernel[blocks_active, threads](
-            batch.stage, d_active_count, n_active
+        count_active_frontier_kernel[blocks_active, threads](
+            batch.stage,
+            d_is_traverser_node,
+            d_n_children_expected,
+            d_active_count,
+            n_active,
         )
         active_count = int(d_active_count.copy_to_host()[0])
+        last_frontier_slots = active_count
+        if active_count > max_nonterminal_slots:
+            max_nonterminal_slots = active_count
+            max_nonterminal_depth = depth
         if active_count == 0:
             break
 
@@ -1101,6 +1165,10 @@ def gpu_traverse_for_player(
         "n_traversals": n_traversals,
         "regret_samples": n_collected,
         "pool_exhausted_nodes": pool_exhausted_nodes,
+        "depths_executed": depths_executed,
+        "max_nonterminal_slots": max_nonterminal_slots,
+        "max_nonterminal_depth": max_nonterminal_depth,
+        "last_frontier_slots": last_frontier_slots,
         "pool_exhausted_by_depth": pool_exhausted_by_depth,
         "pool_exhausted_by_stage": pool_exhausted_by_stage,
         "policy_samples": min(n_policy_seen, workspace.policy_capacity),
@@ -1216,6 +1284,7 @@ class GPUDeepCFRTrainer:
             or self._workspace.max_traversals < trav_batch
             or self._workspace.n_players != self.n_players
             or self._workspace.initial_chips != self.initial_chips
+            or self._workspace.pool_max_slots != self.traversal_pool_max_slots
             or self._workspace.slots_per_traversal != self.traversal_slots_per_traversal
             or self._workspace.policy_slots_per_traversal != self.policy_slots_per_traversal
         ):
@@ -1223,6 +1292,7 @@ class GPUDeepCFRTrainer:
                 max_traversals=trav_batch,
                 n_players=self.n_players,
                 initial_chips=self.initial_chips,
+                pool_max_slots=self.traversal_pool_max_slots,
                 slots_per_traversal=self.traversal_slots_per_traversal,
                 policy_slots_per_traversal=self.policy_slots_per_traversal,
             )

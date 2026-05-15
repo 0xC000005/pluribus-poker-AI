@@ -38,6 +38,7 @@ def build_parser():
     parser.add_argument('--n-layers', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=4096)
     parser.add_argument('--average-strategy-weight', type=float, default=0.0)
+    parser.add_argument('--traversal-slots-per-traversal', type=int, default=2000)
     parser.add_argument('--policy-slots-per-traversal', type=int, default=64)
     parser.add_argument('--save-dir', type=str, default='models')
     parser.add_argument('--prefix', type=str, default='slumbot_2p')
@@ -60,6 +61,7 @@ def main():
         trainer.n_traversals = args.n_traversals
         trainer.n_training_steps = args.n_training_steps
         trainer.average_strategy_weight = args.average_strategy_weight
+        trainer.traversal_slots_per_traversal = args.traversal_slots_per_traversal
         trainer.policy_slots_per_traversal = args.policy_slots_per_traversal
         print(f"Resumed from iteration {trainer.iteration}")
     else:
@@ -75,6 +77,7 @@ def main():
             lr=0.001,
             device=device,
             average_strategy_weight=args.average_strategy_weight,
+            traversal_slots_per_traversal=args.traversal_slots_per_traversal,
             policy_slots_per_traversal=args.policy_slots_per_traversal,
         )
 

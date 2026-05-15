@@ -5083,3 +5083,26 @@
   a single-street rule issue. The next compute experiment should target active
   slot reuse/compaction or a principled external-sampling estimator, not a
   street-specific cap.
+
+## 20260515T173000Z-gpu-frontier-expanded-node-fix - passed
+
+- Timestamp: 2026-05-15T17:30:00Z
+- Type: compute_fidelity_fix
+- Gate: TDD, CUDA frontier kernel test, and warmup-excluded benchmark A/B
+- Hypothesis: Pool exhaustion is partly caused by expanded traverser nodes
+  staying in the active wavefront and being forked again. Skipping already
+  expanded traverser nodes and counting only advanceable frontier slots should
+  preserve external-sampling semantics while reducing pool pressure.
+- Failure class: none
+- Summary: Added an active-frontier counter that ignores expanded traverser
+  parents, guarded `fork_kernel` against reforking those parents, surfaced
+  allocated/live slot ratios, and promoted the GPU traversal default to
+  `--traversal-slots-per-traversal 2000`. This is not sampled-action pruning:
+  updating-player legal actions are still enumerated; the fix removes repeated
+  expansion of stale internal nodes.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py::test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure test/unit/test_gpu_optimizations.py::TestTraversalFrontierKernel::test_active_frontier_counter_skips_expanded_traverser_nodes`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 1 --n-measure 1 --n-traversals 2000 --hidden-dim 256 --n-layers 2 --n-training-steps 200 --batch-size 2048 --traversal-slots-per-traversal 500 --output-json autoresearch-session/gpu_deep_cfr_benchmark_frontier_fix_2k_20260515.json`; `uv run python scripts/benchmark_gpu_deep_cfr.py --n-warmup 1 --n-measure 1 --n-traversals 2000 --hidden-dim 256 --n-layers 2 --n-training-steps 200 --batch-size 2048 --traversal-slots-per-traversal 2000 --output-json autoresearch-session/gpu_deep_cfr_benchmark_frontier_fix_slots2000_20260515.json`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 100 --n-training-steps 2 --hidden-dim 64 --n-layers 1 --batch-size 128 --buffer-capacity 10000 --save-dir autoresearch-session/gpu_train_frontier_fix_gate_smoke_fixedpool_20260515 --prefix frontier_fix_gate_smoke_fixedpool --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`
+- Key metrics: `{"pre_fix_default_traversals_per_second": 2350.401816, "pre_fix_pool_exhausted_per_traversal": 219.66275, "post_fix_slots500_traversals_per_second": 4077.677231, "post_fix_slots500_pool_exhausted_per_traversal": 125.282, "post_fix_slots2000_traversals_per_second": 5128.708629, "post_fix_slots2000_pool_exhausted_per_traversal": 0.0, "post_fix_slots2000_overflow_fraction": 0.0, "post_fix_slots2000_max_allocated_to_live_ratio": 8.574042, "fixedpool_train_smoke_passed": true, "fixedpool_train_smoke_pool_exhausted_per_traversal": 0.0, "promotion": false}`
+- Decision: Use 2000 traversal slots as the corrected GPU default for
+  autoresearch training. The remaining optimization target is compaction or
+  active-frontier-only kernels, because allocated/live ratio remains about
+  `8x` even after demotions are eliminated.

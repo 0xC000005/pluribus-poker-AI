@@ -11,6 +11,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     _nn_forward_chunk_size,
     _summarize_traversal_pool_stats,
     _traversal_batch_size,
+    _traversal_pool_slots,
 )
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from scripts.benchmark_gpu_deep_cfr import evaluate_benchmark_gate_failures
@@ -67,8 +68,8 @@ def test_traversal_batch_size_keeps_fixed_pool_with_more_slots_per_traversal():
     ) == 400
 
 
-def test_traversal_batch_size_default_preserves_fast_two_thousand_traversal_chunk():
-    assert _traversal_batch_size(n_traversals=2_000) == 2_000
+def test_traversal_batch_size_default_uses_fidelity_safe_five_hundred_chunk():
+    assert _traversal_batch_size(n_traversals=2_000) == 500
 
 
 def test_traversal_batch_size_caps_to_requested_traversals():
@@ -77,6 +78,14 @@ def test_traversal_batch_size_caps_to_requested_traversals():
         pool_max_slots=1_000_000,
         slots_per_traversal=2_500,
     ) == 200
+
+
+def test_traversal_workspace_pool_uses_fixed_cap_for_small_chunks():
+    assert _traversal_pool_slots(
+        max_traversals=100,
+        pool_max_slots=1_000_000,
+        slots_per_traversal=2_000,
+    ) == 1_000_000
 
 
 def test_nn_forward_chunk_size_reduces_when_cuda_memory_is_tight():
@@ -111,6 +120,7 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
             "n_traversals": 10,
             "regret_samples": 800,
             "pool_exhausted_nodes": 4,
+            "max_nonterminal_slots": 200,
             "pool_exhausted_by_stage": [1, 2, 1, 0],
             "pool_exhausted_by_depth": [0, 1, 0, 3],
         },
@@ -120,6 +130,7 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
             "n_traversals": 5,
             "regret_samples": 300,
             "pool_exhausted_nodes": 1,
+            "max_nonterminal_slots": 250,
             "pool_exhausted_by_stage": [0, 0, 0, 1],
             "pool_exhausted_by_depth": [0, 0, 1, 0],
         },
@@ -141,6 +152,11 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
     assert summary["traversal_pool_exhausted_peak_depth"] == 3
     assert summary["traversal_pool_exhausted_peak_depth_nodes"] == 3
     assert summary["traversal_pool_exhausted_last_depth"] == 3
+    assert summary["traversal_max_nonterminal_slots"] == 250
+    assert summary["traversal_mean_max_nonterminal_slots_per_traversal"] == 35.0
+    assert summary["traversal_max_nonterminal_slots_per_traversal"] == 50.0
+    assert summary["traversal_mean_allocated_to_live_ratio"] == 4.0
+    assert summary["traversal_max_allocated_to_live_ratio"] == 6.0
 
 
 def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
