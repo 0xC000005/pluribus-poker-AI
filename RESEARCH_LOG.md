@@ -4396,3 +4396,33 @@
 - Decision: Use these JSON fields in future training gates. A candidate with
   high H2H variance and high traversal-overflow fraction should be treated as
   under-fidelity evidence, not as a clean network result.
+
+## 20260515T071500Z-corrected-pool-telemetry-ab - failed
+
+- Timestamp: 2026-05-15T07:15:00Z
+- Type: traversal_fidelity_ab_diagnostic
+- Gate: telemetry-enabled default-vs-1000 slot comparison
+- Hypothesis: Increasing per-traversal slots may create a good enough
+  corrected-semantics training point without changing the algorithm.
+- Failure class: traversal_fidelity_and_throughput_tradeoff
+- Related work: Deep CFR uses external-sampling MCCFR and explores all actions
+  at traverser infosets; MCCFR is unbiased because sampled regrets are
+  corrected by the sampling scheme. Sources:
+  https://proceedings.mlr.press/v97/brown19b/brown19b.pdf,
+  https://papers.neurips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games,
+  and
+  https://papers.neurips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.
+- Summary: Reran 3-iteration corrected-semantics CUDA probes with the new JSON
+  telemetry. The fast default was badly under-fidelity: every chunk overflowed,
+  mean pool demand was `3.98x`, and max demand was `8.38x`, although throughput
+  was `367` traversals/sec. Raising slots to 1000 reduced mean demand to
+  `1.76x` and max to `2.73x`, but every chunk still overflowed and throughput
+  fell to `230` traversals/sec. The CUDA fork kernel currently demotes
+  traverser nodes to sampled actions on pool exhaustion; that is a practical
+  fallback, not a principled MCCFR sampling scheme.
+- Commands: `uv run python scripts/poker_autoresearch_train.py --n-iterations 3 --n-traversals 4000 --n-training-steps 20 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 2000000 --save-dir autoresearch-session/corrected_allin_pool_telemetry_default_20260515 --prefix corrected_pool_default_3x4k --save-every 0 --eval-games 0`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 3 --n-traversals 4000 --n-training-steps 20 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 2000000 --traversal-slots-per-traversal 1000 --save-dir autoresearch-session/corrected_allin_pool_telemetry_1000_20260515 --prefix corrected_pool1000_3x4k --save-every 0 --eval-games 0`
+- Key metrics: `{"default_traversals_per_second": 367.371, "default_overflow_fraction": 1.0, "default_mean_pool_demand_ratio": 3.980049, "default_max_pool_demand_ratio": 8.375957, "slot1000_traversals_per_second": 229.765, "slot1000_overflow_fraction": 1.0, "slot1000_mean_pool_demand_ratio": 1.758695, "slot1000_max_pool_demand_ratio": 2.727944, "promotion": false}`
+- Decision: Do not solve corrected traversal by more slot sweeps. The next
+  principled direction is an algorithmic one: either stream full external
+  sampling without fixed-pool demotion, or implement a published sampled-action
+  MCCFR variant with proper importance weighting/variance controls.

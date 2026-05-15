@@ -993,3 +993,13 @@ their checkpoint evidence is interpreted. The next real research step can now
 be framed cleanly: reduce traversal overflow by a principled state-aware
 allocation or sampling design, then compare against the same fast default on
 both throughput and downstream decision quality.
+
+The first telemetry A/B rejects slot scaling as that design. Default traversal
+is faster but severely truncated (`3.98x` mean pool demand, `8.38x` max);
+1000-slot traversal reduces demand but still overflows every chunk and loses
+substantial throughput. Since Deep CFR's external-sampling contract explores
+all traverser actions, the current pool-exhaustion demotion is not an
+algorithmically clean substitute. The next target should be a source-backed
+MCCFR sampling redesign: streaming external-sampling traversal, outcome
+sampling, average-strategy/action-subset sampling, or another estimator with
+explicit correction and variance accounting.
