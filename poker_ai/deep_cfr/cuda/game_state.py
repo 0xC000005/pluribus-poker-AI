@@ -203,7 +203,11 @@ def init_games_kernel(
     stage[i] = int8(PREFLOP)
     n_raises[i] = int8(0)
     n_actions[i] = int16(0)
-    n_players_started_round[i] = int8(n_players)
+    n_started = int8(0)
+    for p in range(n_players):
+        if active[i, p] == int8(1) and chips[i, p] > 0:
+            n_started += 1
+    n_players_started_round[i] = n_started
     is_done[i] = int8(0)
 
     # --- History: zero ---
@@ -216,7 +220,7 @@ def init_games_kernel(
     player_i_index[i] = int8(0)
     for idx in range(n_players):
         p = preflop_order[idx]
-        if active[i, p] == int8(1):
+        if active[i, p] == int8(1) and chips[i, p] > 0:
             player_i_index[i] = int8(idx)
             break
 

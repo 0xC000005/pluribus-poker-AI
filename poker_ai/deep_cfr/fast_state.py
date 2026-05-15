@@ -156,8 +156,8 @@ class FastPokerState:
 
         self.pot_total = sb + bb
 
-        # Preflop: count active players and skip to first active.
-        self.n_players_started_round = int(self.active.sum())
+        # Preflop: count players who can still respond and skip to first.
+        self.n_players_started_round = self._n_players_with_moves()
         self._skip_to_first_active()
 
     # ------------------------------------------------------------------
@@ -211,7 +211,7 @@ class FastPokerState:
         """Return (9,) float32 mask for 9-action space."""
         mask = np.zeros(N_ACTIONS, dtype=np.float32)
         pi = self.current_player_i
-        if self.active[pi]:
+        if self.active[pi] and self.chips[pi] > 0:
             mask[0] = 1.0  # fold
             mask[1] = 1.0  # call
             if self.n_raises < 3:
@@ -232,7 +232,7 @@ class FastPokerState:
     def legal_actions(self) -> list:
         """List of legal action ints (0-8) or [None] for inactive."""
         pi = self.current_player_i
-        if self.active[pi]:
+        if self.active[pi] and self.chips[pi] > 0:
             mask = self.get_legal_mask()
             return [a for a in range(N_ACTIONS) if mask[a] > 0]
         return [None]
@@ -318,46 +318,63 @@ class FastPokerState:
             self._player_i_index = (self._player_i_index + 1) % self.n_players
             pi = self.current_player_i
 
+            if self._n_active_players() == 1:
+                self.stage = self.TERMINAL
+                break
+
             # Check if this round of betting is finished.
             betting_done = self._is_betting_finished()
+            if betting_done and self._n_players_with_moves() <= 1:
+                self._deal_remaining_to_showdown()
+                break
+
             if betting_done and self.n_actions >= self.n_players_started_round:
                 self._increment_stage()
+                if self.stage >= self.SHOWDOWN:
+                    break
+                if self._n_players_with_moves() <= 1:
+                    self._deal_remaining_to_showdown()
+                    break
                 self._reset_round()
 
             pi = self.current_player_i  # may have changed after reset
 
-            if not self.active[pi]:
+            if not self.active[pi] or self.chips[pi] <= 0:
                 self._skip_counter += 1
                 continue
 
-            # Active player found — check for terminal conditions.
-            n_with_moves = sum(
-                1 for i in range(self.n_players)
-                if self.active[i] and self.chips[i] > 0
-            )
-            if n_with_moves <= 1:
-                self.stage = self.TERMINAL
-                # Deal flop if no community cards yet.
-                n_dealt = int((self.community >= 0).sum())
-                if n_dealt == 0:
-                    self._deal_community(3)
             if self.stage >= self.SHOWDOWN:
-                self._compute_winners()
+                break
             break
+        if self.stage >= self.SHOWDOWN:
+            self._compute_winners()
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _is_betting_finished(self) -> bool:
-        """True when all active non-all-in players have equal bets."""
-        bets_list = []
+        """True when active players are folded, all-in, or matched."""
+        active_bets = []
         for i in range(self.n_players):
-            if self.active[i] and self.chips[i] > 0:
-                bets_list.append(int(self.bets[i]))
-        if len(bets_list) == 0:
+            if self.active[i]:
+                active_bets.append(int(self.bets[i]))
+        if len(active_bets) <= 1:
             return True
-        return all(b == bets_list[0] for b in bets_list)
+        biggest = max(active_bets)
+        for i in range(self.n_players):
+            if self.active[i] and self.chips[i] > 0 and int(self.bets[i]) < biggest:
+                return False
+        return True
+
+    def _n_active_players(self) -> int:
+        return int(self.active.sum())
+
+    def _n_players_with_moves(self) -> int:
+        return sum(
+            1 for i in range(self.n_players)
+            if self.active[i] and self.chips[i] > 0
+        )
 
     def _increment_stage(self):
         if self.stage == self.PREFLOP:
@@ -377,17 +394,24 @@ class FastPokerState:
         self.n_actions = 0
         self.n_raises = 0
         self._player_i_index = 0
-        self.n_players_started_round = int(self.active.sum())
+        self.n_players_started_round = self._n_players_with_moves()
+        if self.n_players_started_round == 0:
+            return
         self._skip_to_first_active()
 
     def _skip_to_first_active(self):
-        """Advance _player_i_index to the first active player."""
+        """Advance _player_i_index to the first player with a legal move."""
         for _ in range(self.n_players):
             pi = self.current_player_i
-            if self.active[pi]:
+            if self.active[pi] and self.chips[pi] > 0:
                 return
             self._skip_counter += 1
             self._player_i_index += 1
+
+    def _deal_remaining_to_showdown(self):
+        """Deal all undealt board cards once no further betting is possible."""
+        while self.stage < self.SHOWDOWN:
+            self._increment_stage()
 
     def _deal_community(self, n: int):
         """Deal n cards from the deck to the community."""

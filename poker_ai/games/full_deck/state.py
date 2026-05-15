@@ -176,7 +176,10 @@ class PokerState:
         new_state = copy.deepcopy(self)
         new_state._first_move_of_current_round = False
         if action_str is None:
-            assert not new_state.current_player.is_active
+            assert (
+                not new_state.current_player.is_active
+                or new_state.current_player.is_all_in
+            )
         elif action_str == "call":
             new_state.current_player.call(players=new_state.players)
         elif action_str == "fold":
@@ -215,23 +218,27 @@ class PokerState:
         # Advance to next player / next stage.
         while True:
             new_state._move_to_next_player()
+            if new_state._settle_if_no_further_betting():
+                break
             finished_betting = not new_state._poker_engine.more_betting_needed
             if finished_betting and new_state.all_players_have_actioned:
                 new_state._increment_stage()
-                new_state._reset_betting_round_state()
-                new_state._first_move_of_current_round = True
-            if not new_state.current_player.is_active:
-                new_state._skip_counter += 1
-            elif new_state.current_player.is_active:
-                if new_state._poker_engine.n_players_with_moves == 1:
-                    new_state._betting_stage = "terminal"
-                    if not new_state._table.community_cards:
-                        new_state._poker_engine.table.dealer.deal_flop(
-                            new_state._table
-                        )
                 if new_state._betting_stage in {"terminal", "show_down"}:
                     new_state._poker_engine.compute_winners()
-                break
+                    break
+                if new_state._settle_if_no_further_betting():
+                    break
+                new_state._reset_betting_round_state()
+                new_state._first_move_of_current_round = True
+            if (
+                not new_state.current_player.is_active
+                or new_state.current_player.is_all_in
+            ):
+                new_state._skip_counter += 1
+                continue
+            if new_state._betting_stage in {"terminal", "show_down"}:
+                new_state._poker_engine.compute_winners()
+            break
         for player in new_state.players:
             player.is_turn = False
         new_state.current_player.is_turn = True
@@ -349,7 +356,7 @@ class PokerState:
 
     @property
     def legal_actions(self) -> List[Optional[str]]:
-        if self.current_player.is_active:
+        if self.current_player.is_active and not self.current_player.is_all_in:
             actions: List[Optional[str]] = ["fold", "call"]
             if self._n_raises < 3:
                 biggest_bet = max(p.n_bet_chips for p in self.players)
@@ -390,10 +397,17 @@ class PokerState:
         self._n_actions = 0
         self._n_raises = 0
         self._player_i_index = 0
-        self._n_players_started_round = self._poker_engine.n_active_players
-        while not self.current_player.is_active:
+        self._n_players_started_round = self._poker_engine.n_players_with_moves
+        if self._n_players_started_round == 0:
+            return
+        while (
+            not self.current_player.is_active
+            or self.current_player.is_all_in
+        ):
             self._skip_counter += 1
             self._player_i_index += 1
+            if self._player_i_index >= len(self.players):
+                self._player_i_index = 0
 
     def _increment_stage(self):
         if self._betting_stage == "pre_flop":
@@ -411,3 +425,25 @@ class PokerState:
             pass
         else:
             raise ValueError(f"Unknown betting_stage: {self._betting_stage}")
+
+    def _deal_remaining_to_showdown(self):
+        while self._betting_stage not in {"show_down", "terminal"}:
+            self._increment_stage()
+
+    def _settle_if_no_further_betting(self) -> bool:
+        if self._poker_engine.n_active_players == 1:
+            self._betting_stage = "terminal"
+            self._poker_engine.compute_winners()
+            return True
+
+        no_unmatched_bet = not self._poker_engine.more_betting_needed
+        if (
+            no_unmatched_bet
+            and self._poker_engine.n_active_players > 1
+            and self._poker_engine.n_players_with_moves <= 1
+        ):
+            self._deal_remaining_to_showdown()
+            self._poker_engine.compute_winners()
+            return True
+
+        return False

@@ -951,3 +951,17 @@ More static cut/root metadata is therefore not the root fix. The next target
 should move inside the search loop: dynamic CFR reach/regret traces,
 root-drift residual targets, or an update that learns which continuation
 errors change the root policy while search is running.
+
+## 2026-05-15 Update: All-In Semantics Repair
+
+Full-deck all-in response semantics are now corrected across CPU, fast, and
+CUDA states. An unmatched all-in must leave active non-all-in opponents to
+call, fold, or raise; only matched/no-further-betting all-in states should deal
+to showdown. This is not a new strategy method, but it changes the traversal
+distribution that future learning sees.
+
+Treat older checkpoint evidence as potentially stale because prior traversal
+could skip opponent response states after an all-in. The next principled step
+after this repair is to retrain or run a controlled short corrected-semantics
+baseline before drawing more conclusions from Slumbot or restricted
+early-action diagnostics.

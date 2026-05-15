@@ -1,5 +1,6 @@
 import os
 
+import scripts.cuda_env as cuda_env
 from scripts.cuda_env import configure_numba_cuda_env
 
 
@@ -33,3 +34,26 @@ def test_configure_numba_cuda_env_preserves_existing_overrides(tmp_path, monkeyp
 
     assert os.environ["CUDA_HOME"] == "/custom/cuda"
     assert os.environ["NUMBA_FORCE_CUDA_CC"] == "7.5"
+
+
+def test_configure_numba_cuda_env_detects_pip_cu13_layout(tmp_path, monkeypatch):
+    py_version = (
+        f"python{cuda_env.sys.version_info.major}."
+        f"{cuda_env.sys.version_info.minor}"
+    )
+    cuda_home = tmp_path / "lib" / py_version / "site-packages" / "nvidia" / "cu13"
+    (cuda_home / "lib").mkdir(parents=True)
+    (cuda_home / "lib" / "libnvvm.so.4").write_text("", encoding="utf-8")
+    (cuda_home / "nvvm" / "libdevice").mkdir(parents=True)
+    (cuda_home / "nvvm" / "libdevice" / "libdevice.10.bc").write_text(
+        "",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cuda_env.sys, "prefix", str(tmp_path))
+    monkeypatch.delenv("CUDA_HOME", raising=False)
+    monkeypatch.delenv("NUMBA_FORCE_CUDA_CC", raising=False)
+
+    result = configure_numba_cuda_env(compute_capability=(8, 6))
+
+    assert result["cuda_home"] == str(cuda_home)
+    assert os.environ["CUDA_HOME"] == str(cuda_home)

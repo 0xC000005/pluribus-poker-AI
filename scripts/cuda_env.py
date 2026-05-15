@@ -7,17 +7,23 @@ import sys
 from pathlib import Path
 
 
-def _default_pip_cuda_home(sys_prefix: str | Path | None = None) -> Path:
+def _candidate_pip_cuda_homes(sys_prefix: str | Path | None = None) -> list[Path]:
     prefix = Path(sys_prefix or sys.prefix)
     py_version = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    return (
-        prefix
-        / "lib"
-        / py_version
-        / "site-packages"
-        / "nvidia"
-        / "cuda_nvcc"
-    )
+    nvidia_root = prefix / "lib" / py_version / "site-packages" / "nvidia"
+    return [
+        nvidia_root / "cuda_nvcc",
+        nvidia_root / "cu13",
+        nvidia_root / "cu12",
+    ]
+
+
+def _default_pip_cuda_home(sys_prefix: str | Path | None = None) -> Path:
+    candidates = _candidate_pip_cuda_homes(sys_prefix)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _detect_compute_capability() -> tuple[int, int] | None:

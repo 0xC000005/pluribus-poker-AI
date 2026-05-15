@@ -29,4 +29,6 @@ dependencies = [
     "rlcard>=1.2.0",
     "pip>=26.1.1",
     "pygame>=2.6.1",
+    "numba>=0.65.1",
+    "numba-cuda[cu13]>=0.30.2",
 ]

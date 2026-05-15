@@ -92,6 +92,7 @@
 ## Coding Style & Naming Conventions
 - Python with 4-space indentation, type hints, and PEP 8 names (`snake_case` functions/modules, `PascalCase` classes).
 - Keep the 9-action contract and feature/legal-mask behavior aligned across CPU, fast, CUDA, and Slumbot integration code.
+- Preserve all-in response semantics across CPU, fast, and CUDA states: an unmatched all-in is not terminal until active non-all-in opponents can respond, while matched/no-further-betting all-in states deal to showdown.
 - New Deep CFR checkpoints use the 12 public betting-history features by default and save `uses_betting_history=true`; checkpoints without this metadata load with the legacy masked-history contract.
 - Avoid ad hoc poker strategy rules; prefer learned policies, regret matching, and principled search.
 - Modern architectures are allowed when they serve the learned-search objective: public-belief encoders, card-set encoders, action-sequence attention, residual trunks, uncertainty heads, and mixed precision are valid if they pass root-disjoint resolver gates.
@@ -99,6 +100,7 @@
 ## Testing Guidelines
 - Place isolated logic tests in `test/unit/`; broader flows in `test/functional/`.
 - For any action-space, feature, or mapping change, add/update parity tests and include regression coverage.
+- For all-in, terminal, or betting-round changes, run `test/unit/test_full_deck_allin_semantics.py`, `test/unit/test_legal_mask_parity.py`, and a CUDA kernel smoke if CUDA kernels are touched.
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
 - For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
 - Use `--compare-strategy-source policy-head` only when both candidate and incumbent checkpoints include trained `policy_head` weights; legacy checkpoints must use regret matching.
@@ -167,6 +169,7 @@
 - Add persistent knobs only through `add-knob`; each needs one mechanism, one default, one failure class, and a removal criterion. Do not use broad hyperparameter sweeps as research progress.
 - Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment; the 2,500-slot mode was much slower and not better in the first local gate.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
+- CUDA traversal kernels require the pip CUDA 13 compiler path: keep `numba>=0.65.1` and `numba-cuda[cu13]>=0.30.2` declared, and verify `scripts.cuda_env.configure_numba_cuda_env()` detects `.venv/.../site-packages/nvidia/cu13`.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
 
 ## Commit & Pull Request Guidelines

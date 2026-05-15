@@ -60,6 +60,13 @@ class PokerEngine:
 
     def compute_winners(self):
         """Compute winners and payout the chips to respective players."""
+        active_players = [player for player in self.table.players if player.is_active]
+        if len(active_players) == 1:
+            self._payout_players(
+                collections.Counter({active_players[0]: self.table.pot.total})
+            )
+            return
+
         # From the active players on the table, compute the winners.
         ranked_player_groups = self._rank_players_by_best_hand()
         payouts = self._compute_payouts(ranked_player_groups)
@@ -247,11 +254,16 @@ class PokerEngine:
         bet or folded, the current betting round is complete, else, more
         betting is required from the active players that are not all in.
         """
-        active_complete_bets = []
+        active_bets = []
         for player in self.table.players:
-            if player.is_active and not player.is_all_in:
-                active_complete_bets.append(player.n_bet_chips)
-        all_bets_equal = all(
-            [x == active_complete_bets[0] for x in active_complete_bets]
+            if player.is_active:
+                active_bets.append(player.n_bet_chips)
+        if len(active_bets) <= 1:
+            return False
+        biggest_bet = max(active_bets)
+        return any(
+            player.is_active
+            and not player.is_all_in
+            and player.n_bet_chips < biggest_bet
+            for player in self.table.players
         )
-        return not all_bets_equal

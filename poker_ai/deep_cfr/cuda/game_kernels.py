@@ -57,15 +57,39 @@ def _current_player(player_i_index, stage, n_players, preflop_order, postflop_or
 
 @cuda.jit(device=True)
 def _is_betting_finished(chips, bets, active, n_players):
-    """True when all active non-all-in players have equal bets."""
-    first_bet = int32(-1)
+    """True when active players are folded, all-in, or matched."""
+    active_count = int32(0)
+    biggest = int32(0)
+    for p in range(n_players):
+        if active[p]:
+            active_count += 1
+            if bets[p] > biggest:
+                biggest = bets[p]
+    if active_count <= 1:
+        return True
     for p in range(n_players):
         if active[p] and chips[p] > 0:
-            if first_bet == -1:
-                first_bet = bets[p]
-            elif bets[p] != first_bet:
+            if bets[p] < biggest:
                 return False
     return True
+
+
+@cuda.jit(device=True)
+def _n_active_players(active, n_players):
+    count = int32(0)
+    for p in range(n_players):
+        if active[p]:
+            count += 1
+    return count
+
+
+@cuda.jit(device=True)
+def _n_players_with_moves(chips, active, n_players):
+    count = int32(0)
+    for p in range(n_players):
+        if active[p] and chips[p] > 0:
+            count += 1
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +112,23 @@ def _deal_community(community, deck, deck_cursor, n_cards):
         community[slot] = deck[cursor]
         cursor += 1
     return cursor
+
+
+@cuda.jit(device=True)
+def _deal_remaining_to_showdown(stage, community, deck, deck_cursor):
+    while stage < SHOWDOWN:
+        if stage == PREFLOP:
+            stage = FLOP
+            deck_cursor = _deal_community(community, deck, deck_cursor, 3)
+        elif stage == FLOP:
+            stage = TURN
+            deck_cursor = _deal_community(community, deck, deck_cursor, 1)
+        elif stage == TURN:
+            stage = RIVER
+            deck_cursor = _deal_community(community, deck, deck_cursor, 1)
+        elif stage == RIVER:
+            stage = SHOWDOWN
+    return stage, deck_cursor
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +160,18 @@ def _advance(g, chips, bets, active, community, deck, history,
         pi = _current_player(player_i_index, stage, n_players,
                              preflop_order, postflop_order)
 
+        if _n_active_players(active, n_players) == 1:
+            stage = TERMINAL
+            break
+
         # Check if betting round is finished.
         betting_done = _is_betting_finished(chips, bets, active, n_players)
+        if betting_done and _n_players_with_moves(chips, active, n_players) <= 1:
+            stage, deck_cursor = _deal_remaining_to_showdown(
+                stage, community, deck, deck_cursor
+            )
+            break
+
         if betting_done and n_actions >= n_players_started_round:
             # Increment stage.
             if stage == PREFLOP:
@@ -135,13 +186,22 @@ def _advance(g, chips, bets, active, community, deck, history,
             elif stage == RIVER:
                 stage = SHOWDOWN
 
+            if stage >= SHOWDOWN:
+                break
+
+            if _n_players_with_moves(chips, active, n_players) <= 1:
+                stage, deck_cursor = _deal_remaining_to_showdown(
+                    stage, community, deck, deck_cursor
+                )
+                break
+
             # Reset round.
             n_actions = 0
             n_raises = 0
             player_i_index = 0
             n_players_started_round = 0
             for p in range(n_players):
-                if active[p]:
+                if active[p] and chips[p] > 0:
                     n_players_started_round += 1
 
             # Skip to first active in new round.
@@ -149,30 +209,15 @@ def _advance(g, chips, bets, active, community, deck, history,
             for _ in range(n_players):
                 pi2 = _current_player(player_i_index, stage, n_players,
                                       preflop_order, postflop_order)
-                if active[pi2]:
+                if active[pi2] and chips[pi2] > 0:
                     found_active = True
                     break
                 player_i_index += 1
             pi = _current_player(player_i_index, stage, n_players,
                                  preflop_order, postflop_order)
 
-        if not active[pi]:
+        if not active[pi] or chips[pi] <= 0:
             continue
-
-        # Check terminal: count active players with chips.
-        n_with_moves = int32(0)
-        for p in range(n_players):
-            if active[p] and chips[p] > 0:
-                n_with_moves += 1
-        if n_with_moves <= 1:
-            stage = TERMINAL
-            # Deal remaining community if needed.
-            n_dealt = int32(0)
-            for s in range(5):
-                if community[s] >= 0:
-                    n_dealt += 1
-            if n_dealt == 0:
-                deck_cursor = _deal_community(community, deck, deck_cursor, 3)
 
         if stage >= SHOWDOWN:
             break
@@ -527,7 +572,7 @@ def get_legal_mask_kernel(
     pi = _current_player(player_i_index[i], stage[i], n_players,
                          preflop_order, postflop_order)
 
-    if active[i, pi]:
+    if active[i, pi] and chips[i, pi] > 0:
         out_masks[i, 0] = float32(1.0)  # fold
         out_masks[i, 1] = float32(1.0)  # call
         if n_raises[i] < 3:

@@ -84,3 +84,21 @@ def test_initial_preflop_mask_excludes_under_min_raise_buckets():
     assert mask_fast[3] == 0.0
     assert mask_cpu[4] == 1.0
     assert mask_fast[4] == 1.0
+
+
+def test_allin_response_mask_parity():
+    state_cpu = new_game(2, initial_chips=1000)
+    state_fast = new_fast_game(2, initial_chips=1000)
+
+    state_cpu = state_cpu.apply_action("all_in")
+    state_fast.apply_action(8)
+
+    assert state_cpu.is_terminal is False
+    assert state_fast.is_terminal is False
+    assert state_cpu.player_i == state_fast.current_player_i == 1
+
+    mask_cpu = cpu_get_legal_mask(state_cpu)
+    mask_fast = state_fast.get_legal_mask()
+    np.testing.assert_array_equal((mask_cpu > 0), (mask_fast > 0))
+    assert mask_cpu[0] == 1.0
+    assert mask_cpu[1] == 1.0

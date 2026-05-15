@@ -4313,3 +4313,16 @@
 - Review manifest: docs/research_protocols/poker_review_manifests/20260515T055000Z-restricted-value-capacity-probe.json
 - Commands: `uv run pytest -q test/unit/test_restricted_value_probe.py`; `uv run python scripts/train_restricted_value_probe.py --train-roots 512 --holdout-roots 128 --n-equity-samples 512 --hidden-dim 256 --n-layers 2 --epochs 200 --batch-size 256 --device cuda --seed 20260517`; `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T055000Z-restricted-value-capacity-probe --require-complete`
 - Key metrics: `{"train_loss_initial": 0.0103172, "train_loss_final": 0.0000791, "holdout_loss": 0.0036965, "holdout_top_action_match": 0.8203125, "holdout_mean_action_corr": 0.7948953, "promotion": false}`
+
+## 20260515T051742Z-full-deck-allin-response-semantics - passed
+
+- Timestamp: 2026-05-15T05:17:42Z
+- Type: protected_game_state_fix
+- Gate: all-in response semantics and CPU/fast/CUDA parity
+- Hypothesis: Some early-action calibration failures were contaminated by a rules bug: HU SB all-in terminated immediately because the engine counted only active players with chips, so the covering opponent never received the required call/fold response.
+- Failure class: none
+- Related work: Texas Hold'em betting rules require a betting round to continue until active players have folded, put in all chips, or matched active bets; Numba-CUDA docs support `numba-cuda[cu13]` for pip CUDA 13 JIT.
+- Summary: Added red-green tests showing SB all-in must leave BB to act and BB call must reach a zero-sum showdown. Fixed `PokerEngine.more_betting_needed`, single-active-player payouts, full-deck CPU state transitions, fast traversal state transitions, CUDA game kernels, and CUDA environment detection. Added `numba` plus `numba-cuda[cu13]` dependencies so CUDA kernels can JIT under the local venv. This is a correctness repair, not a checkpoint promotion; old checkpoint/training evidence should be treated as potentially stale until retrained or re-evaluated under corrected semantics.
+- Review manifest: docs/research_protocols/poker_review_manifests/20260515T051742Z-full-deck-allin-response-semantics.json
+- Commands: `uv run pytest -q test/unit/test_full_deck_allin_semantics.py test/unit/test_legal_mask_parity.py test/unit/test_fast_vs_slow.py test/unit/test_network_mask.py test/unit/test_slumbot_mapping.py test/unit/test_restricted_action_value.py test/unit/test_cuda_env.py test/unit/test_gpu_cache_budget.py`; CUDA kernel smoke for SB all-in, BB response mask, BB call, payout; `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T051742Z-full-deck-allin-response-semantics --require-complete`
+- Key metrics: `{"focused_tests_passed": 61, "cuda_after_allin_stage": 0, "cuda_after_allin_player_index": 1, "cuda_after_allin_mask": [1, 1, 0, 0, 0, 0, 0, 0, 1], "cuda_after_call_stage": 4, "cuda_after_call_payout": [-1000, 1000], "promotion": false}`

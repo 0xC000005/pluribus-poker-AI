@@ -1,0 +1,26 @@
+{
+  "review_id": "20260515T051742Z-full-deck-allin-response-semantics",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T051742Z-full-deck-allin-response-semantics",
+  "subject": "Full-deck all-in response semantics",
+  "trigger": "protected_game_state_fix",
+  "decision": "proceed",
+  "changed_paths": [
+    "poker_ai/poker/engine.py",
+    "poker_ai/games/full_deck/state.py",
+    "poker_ai/deep_cfr/fast_state.py",
+    "poker_ai/deep_cfr/cuda/game_kernels.py",
+    "poker_ai/deep_cfr/cuda/game_state.py",
+    "scripts/cuda_env.py",
+    "pyproject.toml",
+    "uv.lock",
+    "test/unit/test_full_deck_allin_semantics.py",
+    "test/unit/test_legal_mask_parity.py",
+    "test/unit/test_cuda_env.py"
+  ],
+  "sources": [
+    "https://poker.fandom.com/wiki/Texas_hold-em",
+    "https://poker.fandom.com/wiki/All_in",
+    "https://nvidia.github.io/numba-cuda/user/installation.html",
+    "https://nvidia.github.io/cuda-python/cuda-bindings/13.0.0/install.html"
+  ]
+}
