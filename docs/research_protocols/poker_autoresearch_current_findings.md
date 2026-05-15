@@ -257,6 +257,17 @@ set, using CFR150 as teacher, CFR75 reached `0.2107` L1, `0.0518` KL, and
 was about `525 ms` on the same holdout. This supports a reviewed, opt-in
 live-budget policy around CFR100 before spending Slumbot confidence hands.
 
+Fast-live profile status: the reviewed opt-in `fast-live` profile is now wired
+through `play_slumbot.py`, `poker_autoresearch_slumbot.py`, and autoresearch
+queueing while the default `live` profile remains the previous `150/250/350`
+iteration schedule. `fast-live` uses the same pressure/depth signals with
+`100/150/250` iterations. Review
+`20260515T012101Z-fast-live-solver-budget-profile` passed for diagnostic use,
+and a 10-hand live smoke with `torch-levelsync-cuda` reached five solver calls
+with zero API errors and zero parse errors. This is integration evidence only,
+not strength evidence; the next gate is same-state live-profile comparison or
+Slumbot confidence, not more iteration-profile knobs.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

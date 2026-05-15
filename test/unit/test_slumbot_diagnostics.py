@@ -12,6 +12,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 from play_slumbot import (
     ActionDiagnostics,
     _base_policy_action,
+    _solver_iterations_for_profile,
     action_to_slumbot,
     network_strategy,
     parse_action,
@@ -62,6 +63,51 @@ def test_action_diagnostics_records_solver_performance_stats():
     assert summary["solver_mean_hands"] == 20.0
     assert summary["solver_mean_full_hands"] == 100.0
     assert summary["solver_mean_prune_ratio"] == 0.2
+
+
+def test_solver_iteration_profiles_keep_live_default_and_fast_live_candidate():
+    assert _solver_iterations_for_profile(
+        "live",
+        to_call=0,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 150
+    assert _solver_iterations_for_profile(
+        "live",
+        to_call=300,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 250
+    assert _solver_iterations_for_profile(
+        "live",
+        to_call=600,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 350
+    assert _solver_iterations_for_profile(
+        "fast-live",
+        to_call=0,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 100
+    assert _solver_iterations_for_profile(
+        "fast-live",
+        to_call=300,
+        pot=1000,
+        hero_stack=12000,
+        villain_stack=5000,
+    ) == 150
+    assert _solver_iterations_for_profile(
+        "fast-live",
+        to_call=600,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 250
 
 
 class _PolicyHeadProbeNet(torch.nn.Module):

@@ -797,7 +797,7 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
 
 def _solver_action(hole_cards, board, action_str, client_pos, parsed,
                     verbose, tracker=None, diagnostics=None,
-                    solver_backend='auto'):
+                    solver_backend='auto', solver_budget_profile='live'):
     """Select action using real-time CFR+ solver (turn or river)."""
     import itertools
 
@@ -835,6 +835,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         street_str,
         int(pot), int(hero_stack), int(villain_stack),
         bool(hero_first),
+        solver_budget_profile,
     )
 
     incr_cached = _SOLVER_CACHE.get(cache_key)
@@ -852,16 +853,13 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     current_street = streets[-1] if streets else ''
     our_street_bet = _get_our_street_bet(current_street, client_pos, parsed['st'])
     to_call = parsed['street_last_bet_to'] - our_street_bet
-    iters = 150
-    # Scale iterations by pressure and depth.
-    if to_call > 0:
-        pressure = to_call / max(pot, 1)
-        if pressure >= 0.25:
-            iters = 250
-        if pressure >= 0.5:
-            iters = 350
-    if max(hero_stack, villain_stack) >= 10000:
-        iters = max(iters, 250)
+    iters = _solver_iterations_for_profile(
+        solver_budget_profile,
+        to_call=to_call,
+        pot=pot,
+        hero_stack=hero_stack,
+        villain_stack=villain_stack,
+    )
 
     solve_started = time.perf_counter()
     solver_action, strategy, solver, node = solve_street(
@@ -886,6 +884,8 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
         backend_name, backend_device = resolve_solver_backend(solver_backend)
         backend_label = backend_device or backend_name
+        if solver_budget_profile != "live":
+            backend_label = f"{backend_label}:{solver_budget_profile}"
         print(f" [{label}:{backend_label}:{SOLVER_ACTION_NAMES[solver_action]}>{incr} ({strat_str})]",
               end="", flush=True)
 
@@ -901,9 +901,36 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     return incr
 
 
+def _solver_iterations_for_profile(profile, *, to_call, pot, hero_stack, villain_stack):
+    """Return the live resolver CFR+ iteration budget for an opt-in profile."""
+    if profile == "live":
+        iters = 150
+        deep_stack_floor = 250
+        medium_pressure_iters = 250
+        high_pressure_iters = 350
+    elif profile == "fast-live":
+        iters = 100
+        deep_stack_floor = 150
+        medium_pressure_iters = 150
+        high_pressure_iters = 250
+    else:
+        raise ValueError(f"Unknown solver budget profile: {profile}")
+
+    if to_call > 0:
+        pressure = to_call / max(pot, 1)
+        if pressure >= 0.25:
+            iters = medium_pressure_iters
+        if pressure >= 0.5:
+            iters = high_pressure_iters
+    if max(hero_stack, villain_stack) >= 10000:
+        iters = max(iters, deep_stack_floor)
+    return iters
+
+
 def play_hand(value_net, token, device, verbose=False, greedy=False,
               no_allin=False, use_solver=True, diagnostics=None,
-              strategy_source="regret", solver_backend='auto'):
+              strategy_source="regret", solver_backend='auto',
+              solver_budget_profile='live'):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token)
     token = r.get('token', token)
@@ -952,6 +979,7 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
                 hole_cards, board, action_str, client_pos, parsed, verbose,
                 tracker=tracker, diagnostics=diagnostics,
                 solver_backend=solver_backend,
+                solver_budget_profile=solver_budget_profile,
             )
         else:
             # ----- Preflop/Flop: use base policy (trained model) -----
@@ -1021,6 +1049,12 @@ def main():
         help='Turn/river CFR+ backend. auto uses the stable reference CPU path.',
     )
     parser.add_argument(
+        '--solver-budget-profile',
+        choices=('live', 'fast-live'),
+        default='live',
+        help='Turn/river CFR+ iteration profile. live preserves the default budget.',
+    )
+    parser.add_argument(
         '--strategy-source',
         choices=('regret', 'policy-head', 'average-policy', 'policy-head-covered'),
         default='regret',
@@ -1034,6 +1068,8 @@ def main():
     if not args.no_solver:
         mode_str += "+turn+river-solver"
         mode_str += f"+solver-{args.solver_backend}"
+        if args.solver_budget_profile != "live":
+            mode_str += f"+budget-{args.solver_budget_profile}"
     if args.strategy_source != "regret":
         mode_str += f"+{args.strategy_source}"
     print("=" * 60)
@@ -1098,7 +1134,8 @@ def main():
                              use_solver=not args.no_solver,
                              diagnostics=diagnostics,
                              strategy_source=args.strategy_source,
-                             solver_backend=args.solver_backend)
+                             solver_backend=args.solver_backend,
+                             solver_budget_profile=args.solver_budget_profile)
         total_winnings += w
         results.append(w)
 

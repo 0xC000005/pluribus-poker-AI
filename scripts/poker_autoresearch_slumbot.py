@@ -38,6 +38,11 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
     )
     parser.add_argument(
+        "--solver-budget-profile",
+        choices=("live", "fast-live"),
+        default="live",
+    )
+    parser.add_argument(
         "--strategy-source",
         choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
@@ -61,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         command.append("--no-solver")
     if not args.no_solver and args.solver_backend != "auto":
         command.extend(["--solver-backend", args.solver_backend])
+    if not args.no_solver and args.solver_budget_profile != "live":
+        command.extend(["--solver-budget-profile", args.solver_budget_profile])
     if args.strategy_source != "regret":
         command.extend(["--strategy-source", args.strategy_source])
 

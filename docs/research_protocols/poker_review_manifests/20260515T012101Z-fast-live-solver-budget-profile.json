@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1443,
+      "path": "benchmark_audit.md",
+      "sha256": "b42d920b1ee74fa7cd657606d18eb2d0f9fd58b90db866bc1b5a1f6a32bfe21e"
+    },
+    {
+      "bytes": 470,
+      "path": "decision.json",
+      "sha256": "8d08daadaa20ff03a78587f3f3b42dd833ada23436327d3d9c4a4113c8d9b759"
+    },
+    {
+      "bytes": 1464,
+      "path": "mechanism_review.md",
+      "sha256": "9a0b1938ae5db36f31c20aea85639fc0136be1355e17448ad1e811e0e1d80ede"
+    },
+    {
+      "bytes": 1909,
+      "path": "related_work.md",
+      "sha256": "7b12b52918d5a8c092384371af46defeafed0b02592eea87e881ca246c7a748d"
+    },
+    {
+      "bytes": 1544,
+      "path": "review.md",
+      "sha256": "d756ce62788b0493efad8dedbe4cca057b600be0d77f5b6b60967b94a1543ca6"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The default live profile is unchanged, fast-live is opt-in, local tests cover the profile and enqueue path, and prior root-disjoint CFR100 evidence justifies a sparse Slumbot smoke but not promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T012101Z-fast-live-solver-budget-profile",
+  "review_id": "20260515T012101Z-fast-live-solver-budget-profile",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://papers.nips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games"
+  ],
+  "written_at": "2026-05-15T01:22:46Z"
+}

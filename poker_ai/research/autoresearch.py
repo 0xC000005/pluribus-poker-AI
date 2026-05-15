@@ -1924,6 +1924,7 @@ def enqueue_slumbot_smoke(
     no_solver: bool = True,
     strategy_source: str = "regret",
     solver_backend: str = "auto",
+    solver_budget_profile: str = "live",
     timeout_seconds: int = 600,
 ) -> dict:
     """Create and queue a sparse live Slumbot smoke for a candidate checkpoint."""
@@ -1953,6 +1954,8 @@ def enqueue_slumbot_smoke(
         command.append("--no-solver")
     if not no_solver and solver_backend != "auto":
         command.extend(["--solver-backend", solver_backend])
+    if not no_solver and solver_budget_profile != "live":
+        command.extend(["--solver-budget-profile", solver_budget_profile])
     if strategy_source != "regret":
         command.extend(["--strategy-source", strategy_source])
 

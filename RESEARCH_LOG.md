@@ -148,6 +148,42 @@
   policy and keep defaults unchanged until same-state gates and Slumbot smoke
   pass.
 
+## 20260515T012101Z-fast-live-solver-budget-profile - passed
+
+- Timestamp: 2026-05-15T01:21:01Z
+- Type: protected integration diagnostic
+- Gate: TDD + methodology-review + related-work check + objective-audit +
+  Slumbot live smoke
+- Hypothesis: A single opt-in `fast-live` profile centered on the CFR100
+  frontier can reduce live Slumbot resolver cost while preserving the default
+  `live` behavior.
+- Failure class: compute_integration
+- Related work: DeepStack and Libratus justify bounded online resolving under
+  real-time constraints; MCCFR supports measuring finite-compute search
+  quality. Sources: https://arxiv.org/abs/1701.01724,
+  https://arxiv.org/abs/1705.02955, and
+  https://papers.nips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games.
+- Summary: Added `_solver_iterations_for_profile(...)` to keep default `live`
+  at the existing `150/250/350` schedule and expose an opt-in `fast-live`
+  schedule at `100/150/250`. Wired the profile through `play_slumbot.py`,
+  `poker_autoresearch_slumbot.py`, and autoresearch queueing. Cache keys now
+  include the budget profile so live and fast-live decisions cannot collide.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T012101Z-fast-live-solver-budget-profile`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T012101Z-fast-live-solver-budget-profile.json`
+  - Tests: `uv run pytest -q test/unit/test_slumbot_diagnostics.py test/unit/test_poker_autoresearch.py test/unit/test_resolver_benchmark.py` -> `84 passed`.
+  - Objective audit passed for the Slumbot adapter, autoresearch queueing, and
+    new tests.
+  - Live smoke: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 10 --greedy --no-allin --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 900` -> passed.
+- Metrics: the 10-hand smoke had `0` API errors, `0` parse errors, `5` solver
+  decisions, mean reported solver latency `676.6 ms`, max `914.4 ms`, and mean
+  prune ratio `0.6569`. The chips result is ignored because this is a tiny
+  integration smoke.
+- Decision: keep `fast-live` diagnostic-only and keep defaults unchanged. The
+  next falsifier should compare live versus fast-live on the same checkpoint and
+  backend, or run a bounded Slumbot confidence check, before any auto/default
+  promotion.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

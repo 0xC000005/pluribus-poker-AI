@@ -129,6 +129,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
     )
     slumbot.add_argument(
+        "--solver-budget-profile",
+        choices=("live", "fast-live"),
+        default="live",
+    )
+    slumbot.add_argument(
         "--strategy-source",
         choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
@@ -409,6 +414,7 @@ def main(argv: list[str] | None = None) -> int:
                 no_solver=args.no_solver,
                 strategy_source=args.strategy_source,
                 solver_backend=args.solver_backend,
+                solver_budget_profile=args.solver_budget_profile,
                 timeout_seconds=args.timeout_seconds,
             )
         )

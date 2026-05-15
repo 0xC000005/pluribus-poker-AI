@@ -299,10 +299,14 @@ The root-disjoint budget frontier now points to CFR100 as the first candidate
 budget policy. CFR100 preserved `98.44%` of CFR150 top actions with `0.1247`
 mean L1 and cut mean solver time to `354 ms` from the CFR150 teacher's roughly
 `525 ms`; CFR75 is faster but less aligned, and CFR125 is more faithful but
-smaller compute savings. The next implementation should be an opt-in
-`fast-live` budget profile or equivalent single reviewed policy, not a sweep of
-many Slumbot knobs. Defaults should stay unchanged until a same-state resolver
-gate and Slumbot smoke both pass.
+smaller compute savings. The opt-in `fast-live` budget profile now implements
+that single reviewed policy with `100/150/250` iterations and leaves the
+default `live` profile unchanged at `150/250/350`. A sparse Slumbot smoke
+exercised the profile with five CUDA solver calls and no API/parse errors, but
+this is not promotion evidence. The next continuation target is a same-state
+live-profile comparison or a bounded Slumbot confidence run that compares
+`live` versus `fast-live` under the same checkpoint and backend; do not add a
+second budget knob before that falsifier.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
