@@ -9,6 +9,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import eval_cfr_budget_frontier as frontier  # noqa: E402
+import eval_solver_budget_profiles as profiles  # noqa: E402
 from eval_cfr_budget_frontier import summarize_budget_frontier_records  # noqa: E402
 
 
@@ -121,3 +122,72 @@ def test_case_budget_frontier_reuses_one_solver_for_all_budgets(monkeypatch):
     assert record["passed"] is True
     assert record["reference_allin_prob"] == 0.25
     assert record["budgets"]["10"]["latency_ms"] == 10.0
+
+
+def test_solver_budget_profile_iterations_match_live_policy():
+    case = SimpleNamespace(action_str="ck/kk/", client_pos=0)
+    parsed = {"st": 2, "street_last_bet_to": 0}
+
+    result = profiles.profile_iterations_for_case(case, parsed)
+
+    assert result == {"live": 250, "fast-live": 150}
+
+    pressure_case = SimpleNamespace(action_str="ck/kk/b600", client_pos=1)
+    pressure_parsed = {"st": 2, "street_last_bet_to": 600}
+
+    pressure_result = profiles.profile_iterations_for_case(pressure_case, pressure_parsed)
+
+    assert pressure_result == {"live": 350, "fast-live": 250}
+
+
+def test_solver_budget_profile_summary_reports_drift_and_latency():
+    records = [
+        {
+            "passed": True,
+            "profiles": {
+                "live": {
+                    "action": 1,
+                    "strategy": [0.1, 0.9, 0, 0, 0, 0, 0, 0, 0],
+                    "latency_ms": 500.0,
+                    "iterations": 150,
+                    "illegal_mass": 0.0,
+                },
+                "fast-live": {
+                    "action": 1,
+                    "strategy": [0.2, 0.8, 0, 0, 0, 0, 0, 0, 0],
+                    "latency_ms": 350.0,
+                    "iterations": 100,
+                    "illegal_mass": 0.0,
+                },
+            },
+        },
+        {
+            "passed": True,
+            "profiles": {
+                "live": {
+                    "action": 8,
+                    "strategy": [0.0, 0.0, 0, 0, 0, 0, 0, 0, 1.0],
+                    "latency_ms": 800.0,
+                    "iterations": 250,
+                    "illegal_mass": 0.0,
+                },
+                "fast-live": {
+                    "action": 1,
+                    "strategy": [0.0, 1.0, 0, 0, 0, 0, 0, 0, 0.0],
+                    "latency_ms": 400.0,
+                    "iterations": 150,
+                    "illegal_mass": 0.0,
+                },
+            },
+        },
+    ]
+
+    metrics = profiles.summarize_profile_records(records)
+
+    assert metrics["passed"] is True
+    assert metrics["n_evaluated"] == 2
+    assert metrics["fast_live_action_agreement"] == 0.5
+    assert metrics["fast_live_mean_l1_to_live"] == 1.1
+    assert metrics["live_mean_latency_ms"] == 650.0
+    assert metrics["fast_live_mean_latency_ms"] == 375.0
+    assert metrics["fast_live_latency_ratio_to_live"] == 0.57692308

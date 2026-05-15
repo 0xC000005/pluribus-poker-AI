@@ -184,6 +184,42 @@
   backend, or run a bounded Slumbot confidence check, before any auto/default
   promotion.
 
+## 20260515T013258Z-live-vs-fast-live-profile-gate - passed
+
+- Timestamp: 2026-05-15T01:32:58Z
+- Type: protected evaluation diagnostic
+- Gate: TDD + methodology-review + related-work check + objective-audit +
+  64-root fixed-state profile comparison
+- Hypothesis: A same-state fixed public-state gate can compare `live` and
+  `fast-live` Slumbot solver budget profiles before spending live Slumbot
+  confidence hands or adding more iteration knobs.
+- Failure class: compute_integration
+- Related work: DeepStack and Libratus motivate bounded online resolving under
+  real-time constraints, and GPU-CFR motivates explicit finite-compute CFR
+  benchmarking. Sources: https://arxiv.org/abs/1701.01724,
+  https://arxiv.org/abs/1705.02955, and https://arxiv.org/abs/2408.14778.
+- Summary: Added `scripts/eval_solver_budget_profiles.py` to evaluate named
+  live budget profiles on identical public states, ranges, and backend. Added
+  the evaluator to protected-surface policy and unit tests for profile
+  iteration mapping, summary semantics, and protected-surface initialization.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate.json`
+  - Smoke artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_budget_profiles_live_vs_fast_smoke8_seed20260515.json`
+  - Holdout artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_budget_profiles_live_vs_fast_holdout64_seed20260515.json`
+  - Tests: `uv run pytest -q test/unit/test_poker_autoresearch.py::test_init_state_creates_resumable_files_and_initial_queue test/unit/test_cfr_budget_frontier.py` -> `7 passed`.
+  - Objective audit with review passed for the new evaluator and protected
+    surface update.
+- Metrics: on the 64-root holdout, `fast-live` matched `live` top actions on
+  `96.875%` of roots, with mean L1 `0.1276`, mean KL `0.0275`, mean latency
+  `593.6 ms` versus `919.7 ms`, latency ratio `0.6455`, and illegal mass `0`.
+  The two action disagreements were `blueprint_self_play-0155-street2`
+  (`live=k`, `fast-live=b4872`) and `blueprint_self_play-0178-street2`
+  (`live=k`, `fast-live=b19300`).
+- Decision: keep `fast-live` diagnostic-only. The next principled step is to
+  inspect disagreement states or run a bounded live confidence comparison, not
+  to add another budget profile.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

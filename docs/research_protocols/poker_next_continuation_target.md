@@ -303,10 +303,13 @@ smaller compute savings. The opt-in `fast-live` budget profile now implements
 that single reviewed policy with `100/150/250` iterations and leaves the
 default `live` profile unchanged at `150/250/350`. A sparse Slumbot smoke
 exercised the profile with five CUDA solver calls and no API/parse errors, but
-this is not promotion evidence. The next continuation target is a same-state
-live-profile comparison or a bounded Slumbot confidence run that compares
-`live` versus `fast-live` under the same checkpoint and backend; do not add a
-second budget knob before that falsifier.
+this is not promotion evidence. The same-state live-profile comparison is now
+available and has run on the 64-root holdout: `fast-live` was materially
+cheaper (`593.6 ms` vs `919.7 ms`, `0.6455x`) and close in distribution
+(`0.1276` L1, `0.0275` KL), but two roots changed top action. The next
+continuation target should inspect those disagreement states and decide whether
+a bounded live confidence comparison is worth the variance. Do not add a second
+budget knob before that falsifier.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow

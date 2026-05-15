@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1395,
+      "path": "benchmark_audit.md",
+      "sha256": "8757347be96884e7b0e0be0d841fafa0ba8b6713074a936dc8ae1ed7db5296af"
+    },
+    {
+      "bytes": 406,
+      "path": "decision.json",
+      "sha256": "55ebbde63bdb3c14a381a95ef0970dbca27c262e61013a59ddc31d6deb6f9bbf"
+    },
+    {
+      "bytes": 1235,
+      "path": "mechanism_review.md",
+      "sha256": "341169306191c773d64d767fad576290f135549393a6e2e9740156ecb3ce2ad8"
+    },
+    {
+      "bytes": 1505,
+      "path": "related_work.md",
+      "sha256": "88fe5b14ee7b92c807533560c02dbc7b3f2e109794c606ee103ff70032d6f8d1"
+    },
+    {
+      "bytes": 1435,
+      "path": "review.md",
+      "sha256": "54653b54444062373d435cbe2e21b1a3b996dd53a158cf33ddad04f9e6c7f484"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The same-state profile evaluator is a protected diagnostic gate, not a promotion path. The first 64-root run supports fast-live as cheaper but not default-safe because two action disagreements remain.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate",
+  "review_id": "20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-15T01:33:54Z"
+}

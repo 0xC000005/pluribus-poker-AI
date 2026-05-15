@@ -265,8 +265,17 @@ iteration schedule. `fast-live` uses the same pressure/depth signals with
 `20260515T012101Z-fast-live-solver-budget-profile` passed for diagnostic use,
 and a 10-hand live smoke with `torch-levelsync-cuda` reached five solver calls
 with zero API errors and zero parse errors. This is integration evidence only,
-not strength evidence; the next gate is same-state live-profile comparison or
-Slumbot confidence, not more iteration-profile knobs.
+not strength evidence.
+
+Same-state live-profile gate status: `scripts/eval_solver_budget_profiles.py`
+now compares the `live` and `fast-live` profiles on identical public states and
+belief ranges. On the 64-root holdout with `torch-levelsync-cuda`, `fast-live`
+matched `live` on `96.875%` of top actions, had mean L1 `0.1276`, mean KL
+`0.0275`, and cut mean solver latency to `593.6 ms` from `919.7 ms`
+(`0.6455x`). Illegal mass stayed `0`, but two roots changed top action
+(`0155` and `0178`), so the profile remains diagnostic-only. The next step is
+to inspect disagreement states or run a bounded confidence comparison; do not
+promote or add more budget knobs.
 
 ## Incumbent
 
