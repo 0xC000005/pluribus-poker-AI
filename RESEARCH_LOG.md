@@ -4288,3 +4288,15 @@
 - Summary: Swept eight existing Slumbot/restored/search-consistency checkpoints on the same 128 deterministic preflop roots with CUDA checkpoint inference. No checkpoint had both strong selected-action payoff and oracle agreement. `iter300` was least bad by selected payoff (`+3.04`) but matched the restricted oracle only `6.25%` of roots. `iter900` and `iter1000` matched more often by over-selecting all-in but still had negative selected payoffs and large oracle gaps. Restored-history reduced all-ins but selected call on `93/128` roots and stayed negative. This rejects historical checkpoint picking as the next main lever.
 - Command: inline `evaluate_restricted_action_values` sweep with `n_roots=128`, `n_equity_samples=512`, `seed=20260516`, `strategy_source=regret`, `device=cuda`
 - Key metrics: `{"best_by_selected_payoff": "models/slumbot_2p_iter300.pt", "iter300_selected_payoff": 3.0365, "iter300_oracle_gap": 68.7286, "iter300_match_rate": 0.0625, "iter1000_selected_payoff": -17.3578, "iter1000_oracle_gap": 89.1229, "restored_selected_payoff": -21.1754, "restored_oracle_gap": 92.9405, "search_consistency_selected_payoff": -21.18, "search_consistency_match_rate": 0.0, "promotion": false}`
+
+## 20260515T054000Z-advantage-value-alignment-diagnostic - failed
+
+- Timestamp: 2026-05-15T05:40:00Z
+- Type: local_alignment_diagnostic
+- Gate: restricted-action-value-advantage-correlation
+- Hypothesis: The checkpoint may choose poor early actions because deployment selection is brittle even if raw advantages preserve a useful hand-conditioned action-value ranking.
+- Failure class: advantage_value_misalignment
+- Related work: Deep CFR depends on learned advantages preserving regret/action ordering well enough for regret matching; this diagnostic asks whether that ordering aligns with a simple hand-conditioned value proxy at root.
+- Summary: Added `checkpoint_mean_advantage_value_corr` to the restricted action-value diagnostic. On the same deterministic 128-root CUDA runs, incumbent `iter1000` had near-zero negative correlation (`-0.0276`) between legal raw advantages and restricted action values; restored-history was more negative (`-0.1283`). This falsifies the "deployment argmax only" story. The early advantage field itself is not ranking root actions by a simple value signal.
+- Commands: `uv run pytest -q test/unit/test_restricted_action_value.py test/unit/test_poker_autoresearch.py`; `uv run python scripts/eval_restricted_action_values.py --n-roots 128 --n-equity-samples 512 --initial-chips 1000 --seed 20260516 --checkpoint models/slumbot_2p_iter1000.pt --strategy-source regret --device cuda`; `uv run python scripts/eval_restricted_action_values.py --n-roots 128 --n-equity-samples 512 --initial-chips 1000 --seed 20260516 --checkpoint autoresearch-session/restored_history_200x2k_20260512/restored_history_200x2k_4x512_final.pt --strategy-source regret --device cuda`
+- Key metrics: `{"incumbent_advantage_value_corr": -0.02756, "restored_advantage_value_corr": -0.12834, "incumbent_selected_payoff": -17.3578, "restored_selected_payoff": -21.1754, "promotion": false}`

@@ -283,6 +283,32 @@ def _checkpoint_strategy(
     )
 
 
+def _checkpoint_advantages(
+    loaded: Any,
+    state: PokerState,
+    device: torch.device,
+) -> np.ndarray:
+    features = state.to_feature_vector().reshape(1, -1).astype(np.float32)
+    with torch.no_grad():
+        tensor = torch.from_numpy(features).to(device)
+        return loaded.value_net(tensor).detach().cpu().numpy().reshape(-1)
+
+
+def _advantage_value_corr(
+    advantages: np.ndarray,
+    action_values: dict[str, float],
+) -> float:
+    legal_indices = [ACTION_TO_INDEX[action] for action in action_values]
+    adv = np.asarray(advantages, dtype=np.float64)[legal_indices]
+    vals = np.asarray([action_values[INDEX_TO_ACTION[idx]] for idx in legal_indices])
+    if float(np.std(adv)) <= 1e-12 or float(np.std(vals)) <= 1e-12:
+        return 0.0
+    corr = float(np.corrcoef(adv, vals)[0, 1])
+    if not np.isfinite(corr):
+        return 0.0
+    return corr
+
+
 def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[str, Any]:
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -305,6 +331,7 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
     checkpoint_policy_values: list[float] = []
     checkpoint_oracle_gaps: list[float] = []
     checkpoint_matches: list[bool] = []
+    checkpoint_advantage_value_corrs: list[float] = []
 
     for root_idx in range(max(int(cfg.n_roots), 1)):
         state = new_game(2, initial_chips=int(cfg.initial_chips))
@@ -334,6 +361,7 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
                 torch_device,
                 strategy_source=cfg.strategy_source,
             )
+            advantages = _checkpoint_advantages(loaded_checkpoint, state, torch_device)
             selected_idx = int(np.argmax(strategy))
             selected_action = INDEX_TO_ACTION[selected_idx]
             selected_value = float(values["action_values"][selected_action])
@@ -345,6 +373,9 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
             checkpoint_policy_values.append(float(policy_value))
             checkpoint_oracle_gaps.append(float(values["best_action_value"] - selected_value))
             checkpoint_matches.append(selected_action == values["best_action"])
+            checkpoint_advantage_value_corrs.append(
+                _advantage_value_corr(advantages, values["action_values"])
+            )
 
     elapsed = time.perf_counter() - started
     per_action_mean = {
@@ -411,6 +442,11 @@ def evaluate_restricted_action_values(cfg: RestrictedActionValueConfig) -> dict[
                 ),
                 "checkpoint_oracle_match_rate": (
                     float(np.mean(checkpoint_matches)) if checkpoint_matches else 0.0
+                ),
+                "checkpoint_mean_advantage_value_corr": (
+                    float(np.mean(checkpoint_advantage_value_corrs))
+                    if checkpoint_advantage_value_corrs
+                    else 0.0
                 ),
             }
         )

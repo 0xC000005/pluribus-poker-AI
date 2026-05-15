@@ -514,6 +514,13 @@ all retained large oracle gaps (`80-122` chips). This rejects checkpoint
 selection as the main fix and points toward changing the learned early policy
 or advantage target so it captures hand-conditioned action value before
 turn/river search is asked to repair the game.
+Raw advantage alignment confirms this is not just a deployment argmax issue.
+On the same 128 roots, incumbent advantage-vs-restricted-value correlation was
+`-0.028`, and restored-history was `-0.128`. The advantage network is not
+ranking root legal actions by even this simple value proxy, so the next
+publishable mechanism should change the learning signal or architecture around
+public belief/private hand-conditioned action values rather than only tuning
+action sampling, checkpoint selection, or Slumbot flags.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow

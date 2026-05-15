@@ -151,3 +151,4 @@ def test_restricted_action_value_scores_checkpoint_oracle_gap(tmp_path):
     assert metrics["checkpoint_action_counts"]["all_in"] == 8
     assert 0.0 <= metrics["checkpoint_oracle_match_rate"] <= 1.0
     assert metrics["checkpoint_mean_oracle_gap"] >= 0.0
+    assert -1.0 <= metrics["checkpoint_mean_advantage_value_corr"] <= 1.0
