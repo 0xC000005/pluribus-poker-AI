@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 989,
+      "path": "benchmark_audit.md",
+      "sha256": "17e8cf7b419a32747da63722e06f15b30bbc3666ecacf5a3c3472fd11197f43e"
+    },
+    {
+      "bytes": 663,
+      "path": "decision.json",
+      "sha256": "14f3c9140914719c81e1652d62692207add029ef5c02153f0bdc145cbe33f1c2"
+    },
+    {
+      "bytes": 1137,
+      "path": "mechanism_review.md",
+      "sha256": "dd5cd99793d8d27e952a265a030e8ddf9ca129cc361e4abc2627367fcd77c402"
+    },
+    {
+      "bytes": 1384,
+      "path": "related_work.md",
+      "sha256": "2f776149fb25c25184e7421da6abaf3f085f94a81ea8e8a56397ac10f77afd99"
+    },
+    {
+      "bytes": 1779,
+      "path": "review.md",
+      "sha256": "fe816e134faad4c7049fa8d832c726c47f743c68f1c2dd390ec208df5504197c"
+    },
+    {
+      "bytes": 749,
+      "path": "team_review.md",
+      "sha256": "39849d9b0644f1b7c58be01b49c671f1cfdb0359e1e2a0ab40207c4689b7c065"
+    }
+  ],
+  "reason": "Proceed as a measurement-correctness fix. Solver traces now preserve replayable full public histories while retaining street-local action_str semantics, and diagnostics skip legacy solver snapshots without full_action_str.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T123132Z-slumbot-full-action-trace-format-fix",
+  "review_id": "20260515T123132Z-slumbot-full-action-trace-format-fix",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://proceedings.mlr.press/v97/brown19b",
+    "autoresearch-session/slumbot_traces/slumbot-trace-format-smoke-20260515T123300Z-avg-strategy-noallin-20h.jsonl",
+    "autoresearch-session/slumbot_trace_cases/20260515T123300Z-trace-format-smoke-action-likelihood.json"
+  ],
+  "written_at": "2026-05-15T12:33:06Z"
+}

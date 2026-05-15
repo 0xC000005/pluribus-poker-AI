@@ -47,7 +47,9 @@ def _read_trace(path: str | Path) -> list[dict[str, Any]]:
 def _last_decisions_by_hand(records: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
     decisions: dict[int, dict[str, Any]] = {}
     for record in records:
-        if record.get("event") != "decision" or record.get("source") != "policy":
+        if record.get("event") != "decision":
+            continue
+        if record.get("source") == "solver" and not record.get("full_action_str"):
             continue
         try:
             hand_index = int(record["hand_index"])
@@ -55,6 +57,10 @@ def _last_decisions_by_hand(records: list[dict[str, Any]]) -> dict[int, dict[str
             continue
         decisions[hand_index] = record
     return decisions
+
+
+def _decision_action_str(decision: dict[str, Any]) -> str:
+    return str(decision.get("full_action_str") or decision.get("action_str") or "")
 
 
 def _street_name(record: dict[str, Any]) -> str:
@@ -107,7 +113,7 @@ def _score_true_hand(
     visible = [*bot_cards, *hero_cards, *board]
     if len(visible) != len(set(visible)):
         return None
-    action_str = str(decision.get("action_str") or "")
+    action_str = _decision_action_str(decision)
     parsed = parse_action(action_str)
     if "error" in parsed:
         return None

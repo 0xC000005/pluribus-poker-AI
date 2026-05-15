@@ -114,6 +114,7 @@
 - For performance changes, report `iters/hour`, `samples/sec`, and `train sec/iter` with command/config used.
 - For longer GPU runs, use `--save-every` plus `--auto-compare` so autoresearch evaluates intermediate checkpoints instead of only the final model.
 - Slumbot autoresearch gates write per-decision JSONL traces under `autoresearch-session/slumbot_traces/`; inspect those traces for live big-pot losses before changing training objectives.
+- Slumbot trace decision records must include replayable `full_action_str`. Solver records may keep street-local `action_str` for solver cache semantics, but diagnostics must use `full_action_str` and skip legacy solver snapshots that do not have it.
 - Revealed-hand Slumbot range diagnostics are protected public-belief evidence. Negative log-lift versus uniform, especially on turn/river or large absolute pots, blocks more policy tuning until the range-update failure is explained.
 - Revealed-hand Slumbot action-likelihood diagnostics localize whether belief failure comes from the opponent-response model. If actual calls/checks are low likelihood while bets are not, do not patch bet sizes; improve opponent-response or belief-state learning and rerun the same trace diagnostic.
 - Leave-one-hand-out opponent-response baselines are causal-localization diagnostics only. If an empirical prior beats the model, treat it as evidence of population/action-frequency shift; do not deploy that prior directly without a reviewed learned belief update and held-out trace/range gates.

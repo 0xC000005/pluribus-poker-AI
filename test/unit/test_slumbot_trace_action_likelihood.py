@@ -86,6 +86,66 @@ def test_diagnose_trace_opponent_action_likelihood_scores_revealed_bot_actions(t
     assert "log_lift_vs_uniform" in record
 
 
+def test_diagnose_trace_opponent_action_likelihood_uses_latest_solver_snapshot(tmp_path):
+    checkpoint = tmp_path / "checkpoint.pt"
+    trace = tmp_path / "trace.jsonl"
+    _small_checkpoint(checkpoint)
+    trace.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "decision",
+                        "source": "policy",
+                        "hand_index": 3,
+                        "client_pos": 0,
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh"],
+                        "action_str": "b200b650c/",
+                        "street_index": 1,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "decision",
+                        "source": "solver",
+                        "hand_index": 3,
+                        "client_pos": 0,
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh", "4s"],
+                        "action_str": "kb400",
+                        "full_action_str": "b200b650c/kb400",
+                        "street_index": 2,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "hand_result",
+                        "hand_index": 3,
+                        "client_pos": 0,
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh", "4s"],
+                        "bot_hole_cards": ["Qs", "Qd"],
+                        "winnings": -400,
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = diagnose_trace_opponent_action_likelihood(
+        checkpoint,
+        trace,
+        strategy_source="regret",
+        device="cpu",
+    )
+
+    assert metrics["passed"] is True
+    assert any(record["street"] == "flop" for record in metrics["records"])
+
+
 def test_diagnose_slumbot_trace_action_likelihood_cli_writes_metrics(tmp_path):
     checkpoint = tmp_path / "checkpoint.pt"
     trace = tmp_path / "trace.jsonl"

@@ -762,6 +762,7 @@ class ActionDiagnostics:
             "action_name": action_name,
             "increment": incr,
             "action_str": action_str,
+            "full_action_str": action_str,
             "board": list(board or []),
             "legal_mask": self._trace_numeric_list(legal_mask, as_int=True),
             "advantages": self._trace_numeric_list(advantages),
@@ -775,7 +776,7 @@ class ActionDiagnostics:
     def record_solver_action(self, incr, *, latency_ms=None, n_hands=None,
                              full_n_hands=None, cached=False, street=None,
                              board=None, action_str=None, solver_action_idx=None,
-                             strategy=None):
+                             strategy=None, full_action_str=None):
         self.decision_solver += 1
         self.action_mix["solver"] += 1
         street_name = self._street_name(street)
@@ -799,6 +800,7 @@ class ActionDiagnostics:
             "increment": incr,
             "board": list(board or []),
             "action_str": action_str,
+            "full_action_str": full_action_str if full_action_str is not None else action_str,
             "cached": bool(cached),
             "solver_action_idx": (
                 int(solver_action_idx) if solver_action_idx is not None else None
@@ -1038,6 +1040,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
                 street=st,
                 board=board[:n_board],
                 action_str=street_str,
+                full_action_str=action_str,
             )
         if verbose:
             label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
@@ -1096,6 +1099,7 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
             street=st,
             board=board[:n_board],
             action_str=street_str,
+            full_action_str=action_str,
             solver_action_idx=solver_action,
             strategy=strategy,
         )

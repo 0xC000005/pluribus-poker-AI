@@ -101,7 +101,8 @@ def test_action_diagnostics_writes_jsonl_trace(tmp_path):
         n_hands=20,
         full_n_hands=100,
         board=["Ah", "7d", "2c", "Ts"],
-        action_str="b500c/k",
+        action_str="k",
+        full_action_str="b500c/k",
         solver_action_idx=7,
         strategy={1: 0.25, 7: 0.75},
     )
@@ -121,10 +122,12 @@ def test_action_diagnostics_writes_jsonl_trace(tmp_path):
     assert records[0]["strategy_source"] == "regret"
     assert records[0]["strategy_probs"][4] == 0.5
     assert records[0]["advantages"][4] == 1.5
+    assert records[0]["full_action_str"] == ""
     assert records[1]["source"] == "solver"
     assert records[1]["solver_latency_ms"] == 125.5
     assert records[1]["board"] == ["Ah", "7d", "2c", "Ts"]
-    assert records[1]["action_str"] == "b500c/k"
+    assert records[1]["action_str"] == "k"
+    assert records[1]["full_action_str"] == "b500c/k"
     assert records[1]["solver_action_idx"] == 7
     assert records[1]["solver_strategy"][7] == 0.75
     assert records[2]["winnings"] == -250

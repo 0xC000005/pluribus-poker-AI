@@ -5910,3 +5910,39 @@
   population-conditioned opponent-response or belief-update model, trained and
   held out by trace/hand, then feed that learned likelihood into range updates
   and rerun the revealed-hand range gate.
+
+## 20260515T123132Z-slumbot-full-action-trace-format-fix - passed
+
+- Timestamp: 2026-05-15T12:31:32Z
+- Type: protected trace-format bugfix
+- Gate: Trace replay parity for solver decisions
+- Hypothesis: Trace-derived range/action-likelihood diagnostics should replay
+  the full public action history. Legacy solver trace records only stored the
+  current-street `action_str`, so using the latest solver snapshot can drop
+  earlier streets and corrupt replay.
+- Failure class: eval_invalid
+- Summary: Added `full_action_str` to Slumbot policy and solver decision trace
+  records. Solver records keep the street-local `action_str` for solver/cache
+  semantics, but now also emit the full public history for diagnostics. Updated
+  revealed-hand range and action-likelihood diagnostics to prefer
+  `full_action_str` and to skip legacy solver snapshots that lack it.
+- Evidence:
+  - New trace smoke:
+    `autoresearch-session/slumbot_traces/slumbot-trace-format-smoke-20260515T123300Z-avg-strategy-noallin-20h.jsonl`
+  - Diagnostic smoke:
+    `autoresearch-session/slumbot_trace_cases/20260515T123300Z-trace-format-smoke-action-likelihood.json`
+- Key metrics: the 20-hand smoke had zero parse/API errors and all decision
+  records included `full_action_str`. Example solver records preserve
+  street-local `action_str` such as `""` or `k` while exposing replayable full
+  histories such as `b200b650c/b325c/` and `b250c/kb125c/k`. The regenerated
+  action-likelihood smoke scored 38 opponent actions across 16 hands and
+  included turn evidence (`n=2`, turn mean log-lift `-0.7373`).
+- Validation: red tests first showed that solver snapshots were ignored or
+  mis-replayed, then `uv run pytest -q
+  test/unit/test_slumbot_diagnostics.py::test_action_diagnostics_writes_jsonl_trace
+  test/unit/test_slumbot_trace_action_likelihood.py::test_diagnose_trace_opponent_action_likelihood_uses_latest_solver_snapshot
+  test/unit/test_slumbot_trace_range_truth.py::test_diagnose_trace_true_range_uses_latest_solver_snapshot`
+  -> 3 passed.
+- Decision: Treat legacy traces without `full_action_str` as early-street-only
+  evidence whenever the latest decision is a solver record. Collect new traces
+  before training or judging any late-street opponent-response model.

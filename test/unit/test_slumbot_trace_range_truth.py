@@ -81,6 +81,67 @@ def test_diagnose_trace_true_range_scores_revealed_slumbot_hand(tmp_path):
     assert metrics["outcome_buckets"]["loss"]["n"] == 1
 
 
+def test_diagnose_trace_true_range_uses_latest_solver_snapshot(tmp_path):
+    checkpoint = tmp_path / "checkpoint.pt"
+    _small_checkpoint(checkpoint)
+    trace = tmp_path / "trace.jsonl"
+    trace.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "decision",
+                        "source": "policy",
+                        "hand_index": 3,
+                        "client_pos": 0,
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh", "4s"],
+                        "action_str": "ck/kk/",
+                        "street_index": 2,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "decision",
+                        "source": "solver",
+                        "hand_index": 3,
+                        "client_pos": 0,
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh", "4s", "9c"],
+                        "action_str": "kk/",
+                        "full_action_str": "ck/kk/kk/",
+                        "street_index": 3,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "hand_result",
+                        "hand_index": 3,
+                        "client_pos": 0,
+                        "hole_cards": ["Ac", "Kd"],
+                        "board": ["2c", "7d", "Jh", "4s", "9c"],
+                        "bot_hole_cards": ["Qs", "Qd"],
+                        "winnings": 100,
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = diagnose_trace_true_range(
+        checkpoint,
+        trace,
+        strategy_source="regret",
+        device="cpu",
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["records"][0]["street"] == "river"
+    assert metrics["by_street"]["river"]["n"] == 1
+
+
 def test_diagnose_slumbot_trace_range_truth_cli_writes_metrics(tmp_path):
     checkpoint = tmp_path / "checkpoint.pt"
     _small_checkpoint(checkpoint)
