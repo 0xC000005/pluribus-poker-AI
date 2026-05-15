@@ -1009,3 +1009,10 @@ diagnostic prototype. The implementation target is not "sample fewer actions"
 by fiat. It is to define an estimator, verify it against exhaustive traversal
 on a small setting, report variance and pool demand, and only then run a
 corrected-semantics Deep CFR probe.
+
+The first estimator-level smoke has passed. A single-infoset
+inverse-probability sampled regret estimator is unbiased in the analytic unit
+test, and synthetic variance falls as sampled actions increase. The next gate
+must move one level closer to poker traversal: compare exhaustive
+external-sampling regret against sampled-action regret on a tiny reproducible
+tree or restricted full-deck state.

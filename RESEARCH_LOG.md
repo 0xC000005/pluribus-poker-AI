@@ -4445,3 +4445,26 @@
 - Review manifest: docs/research_protocols/poker_review_manifests/20260515T054603Z-sampled-action-mccfr-traversal-redesign.json
 - Command: `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T054603Z-sampled-action-mccfr-traversal-redesign --require-complete`
 - Key metrics: `{"review_passed": true, "decision": "proceed", "promotion": false}`
+
+## 20260515T073000Z-sampled-action-regret-estimator-smoke - passed
+
+- Timestamp: 2026-05-15T07:30:00Z
+- Type: estimator_math_diagnostic
+- Gate: analytic unbiasedness unit tests and synthetic Monte Carlo diagnostic
+- Hypothesis: A sampled traverser-action regret estimator can be unbiased at a
+  single infoset when it uses inverse-probability weighting rather than hidden
+  pool-exhaustion demotion.
+- Failure class: none
+- Summary: Added `poker_ai/research/sampled_action_mccfr.py` and
+  `scripts/eval_sampled_action_mccfr_estimator.py`. The unit tests prove the
+  single-draw expectation equals exact immediate regret for a small infoset and
+  reject zero-probability legal actions. A 16-case synthetic diagnostic showed
+  mean absolute bias below `0.05` even with one sampled action, while estimator
+  standard deviation decreased monotonically as sampled actions increased.
+  This validates the local estimator math only; it is not yet a poker traversal
+  method.
+- Commands: `uv run pytest -q test/unit/test_sampled_action_mccfr.py`; `uv run python scripts/eval_sampled_action_mccfr_estimator.py --n-cases 16 --n-repeats 2000 --samples-per-estimate 1,2,4,8 --output-json autoresearch-session/sampled_action_mccfr_estimator_20260515.json`
+- Key metrics: `{"tests_passed": 3, "sample1_mean_abs_bias": 0.045057, "sample1_std": 2.69499, "sample8_mean_abs_bias": 0.016197, "sample8_std": 0.948583, "promotion": false}`
+- Decision: Continue to an exhaustive-vs-sampled traversal gate. Do not wire
+  the estimator into CUDA Deep CFR until it matches full traversal regret on a
+  small reproducible setting and reports variance/fidelity tradeoffs.
