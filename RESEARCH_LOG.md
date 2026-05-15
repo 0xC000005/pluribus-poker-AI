@@ -404,6 +404,36 @@
   cheap signal with a causal link to search difficulty, such as early CFR trace
   state, blueprint policy entropy/margins, or public-belief range shape.
 
+## 20260515T024000Z-trace-boundary-predictor-gate - failed
+
+- Timestamp: 2026-05-15T02:40:00Z
+- Type: protected evaluation diagnostic
+- Gate: trace-regeneration + methodology-review + related-work check + two
+  32/32 root-disjoint split runs
+- Hypothesis: Early CFR trace state plus public-belief context should predict
+  the expensive profile-L1 boundary label better than raw feature rows.
+- Failure class: search_quality
+- Summary: Extended `scripts/eval_solver_budget_boundary_predictor.py` to load
+  trace JSON features at a fixed trace iteration. Regenerated current-schema
+  trace artifacts for roots `128..159` and `192..223`, then evaluated
+  trace-iteration-5 boundary prediction in both split directions.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T024000Z-trace-boundary-predictor-gate`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T024000Z-trace-boundary-predictor-gate.json`
+  - Trace A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_root_trace_128_32_seed20260515.json`
+  - Trace B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_dynamic_root_trace_192_32_seed20260515.json`
+  - Predictor A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_trace_iter5_train128_holdout192_seed20260515.json`
+  - Predictor B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/boundary_predictor_trace_iter5_train192_holdout128_seed20260515.json`
+- Metrics: both split directions failed. Train `128..159` -> holdout
+  `192..223` had MAE `0.1274` versus mean-baseline `0.1126`, Pearson `0.2133`,
+  top-k recall `0.0`, and selected non-oracle roots. Reverse split had MAE
+  `0.1344` versus baseline `0.1195`, Pearson `0.2704`, top-k recall `0.0`,
+  and selected no roots.
+- Decision: abandon profile-L1 prediction as the immediate learned target.
+  Profile-L1 remains useful for offline oracle analysis, but the next method
+  should target direct downstream budget improvement or single-solve early
+  stopping rather than trying to infer the two-profile oracle.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

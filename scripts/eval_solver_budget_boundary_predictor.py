@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 
+from analyze_cfr_trace_predictor import _trace_feature_row
+
 
 RIDGE_ALPHA = 1e-2
 
@@ -310,13 +312,54 @@ def _load_feature_cache(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return data["features"].astype(np.float32, copy=False), data["labels"]
 
 
+def trace_features_from_payloads(
+    payloads: list[dict[str, Any]],
+    *,
+    iteration: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    rows: list[list[float]] = []
+    labels: list[str] = []
+    expected_dim: int | None = None
+    for payload in payloads:
+        for record in payload.get("records", []):
+            if int(record.get("iteration", -1)) != int(iteration):
+                continue
+            context = [
+                float(value)
+                for value in record.get("public_belief_features", [])
+            ]
+            row = [float(value) for value in _trace_feature_row(record)] + context
+            if expected_dim is None:
+                expected_dim = len(row)
+            elif len(row) != expected_dim:
+                raise ValueError("trace feature dimensions are inconsistent")
+            rows.append(row)
+            labels.append(str(record["label"]))
+    if not rows:
+        raise ValueError(f"no trace records found for iteration {iteration}")
+    return (
+        np.asarray(rows, dtype=np.float32),
+        np.asarray(labels),
+    )
+
+
+def _load_trace_feature_cache(paths: list[str], iteration: int) -> tuple[np.ndarray, np.ndarray]:
+    payloads = [
+        json.loads(Path(path).read_text(encoding="utf-8"))
+        for path in paths
+    ]
+    return trace_features_from_payloads(payloads, iteration=int(iteration))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Evaluate cheap feature prediction of profile-L1 budget boundaries."
     )
     parser.add_argument("--frontier-json", required=True)
     parser.add_argument("--profile-json", required=True)
-    parser.add_argument("--cfv-cache", required=True)
+    parser.add_argument("--cfv-cache")
+    parser.add_argument("--trace-json", action="append", default=[])
+    parser.add_argument("--trace-iteration", type=int, default=5)
     parser.add_argument("--train-start-index", type=int, default=128)
     parser.add_argument("--train-limit", type=int, default=64)
     parser.add_argument("--holdout-start-index", type=int, default=192)
@@ -328,7 +371,14 @@ def main(argv: list[str] | None = None) -> int:
 
     frontier_metrics = json.loads(Path(args.frontier_json).read_text(encoding="utf-8"))
     profile_metrics = json.loads(Path(args.profile_json).read_text(encoding="utf-8"))
-    features, feature_labels = _load_feature_cache(Path(args.cfv_cache))
+    if bool(args.cfv_cache) == bool(args.trace_json):
+        parser.error("provide exactly one of --cfv-cache or one or more --trace-json")
+    if args.cfv_cache:
+        features, feature_labels = _load_feature_cache(Path(args.cfv_cache))
+        feature_source = "cfv-cache"
+    else:
+        features, feature_labels = _load_trace_feature_cache(args.trace_json, args.trace_iteration)
+        feature_source = f"trace-iteration-{int(args.trace_iteration)}"
     metrics = evaluate_boundary_predictor(
         frontier_metrics,
         profile_metrics,
@@ -341,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         select_train_top_k=args.select_train_top_k,
         escalation_budget=args.escalation_budget,
     )
+    metrics["feature_source"] = feature_source
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")

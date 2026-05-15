@@ -361,6 +361,14 @@ target should use richer predeclared uncertainty evidence, preferably an early
 CFR trace or blueprint-policy entropy/margin signal, and must still beat the
 same mean-baseline and downstream L1/KL gates before any integration work.
 
+That richer trace attempt has now also failed, so the target should change
+rather than the feature set. Trace iteration-5 plus public-belief context did
+not predict profile-L1 better than a mean baseline and recovered none of the
+oracle selected roots. The next principled target is a direct decision objective:
+predict whether extra iterations improve the same root against CFR500, or learn
+a single-solve early-stopping/continuation policy from trace convergence that
+does not require running two budget profiles.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

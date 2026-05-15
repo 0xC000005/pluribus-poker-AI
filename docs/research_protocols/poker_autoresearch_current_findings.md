@@ -347,6 +347,14 @@ next version needs a stronger cheap signal with a causal link to CFR difficulty:
 early trace state, blueprint policy entropy or margin, public-belief range
 shape, or a small uncertainty head trained directly against boundary labels.
 
+Trace-boundary predictor status: early CFR trace features were tested and also
+failed the profile-L1 target. Current-schema traces for roots `128..159` and
+`192..223` produced 32/32 split gates at trace iteration `5`; both had worse
+MAE than a mean baseline (`0.1274 > 0.1126` and `0.1344 > 0.1195`) and zero
+oracle top-k recall. This is stronger evidence that profile-L1 is useful as an
+offline oracle label but not the next learnable target. Move to direct
+downstream budget-improvement labels or a single-solve early-stopping rule.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

@@ -1,0 +1,46 @@
+{
+  "decision": "abandon",
+  "files": [
+    {
+      "bytes": 534,
+      "path": "benchmark_audit.md",
+      "sha256": "3c454da1c9f90e98f7da424e349783c48a07b854125cde69798508e4459e9128"
+    },
+    {
+      "bytes": 482,
+      "path": "decision.json",
+      "sha256": "0eae2aef38c3cca76f91f7c3a446a69c6cb3ea44d548fda859342024b93b65e0"
+    },
+    {
+      "bytes": 1518,
+      "path": "mechanism_review.md",
+      "sha256": "26028ae1cf974919fe4956fa2c399cc65eb7bfe31bd0f0705ca418496742ee4a"
+    },
+    {
+      "bytes": 924,
+      "path": "related_work.md",
+      "sha256": "fcefe18dd94c47d38f7b94c286af29a1aabf8a4d85a8924063be37e018b243ae"
+    },
+    {
+      "bytes": 1578,
+      "path": "review.md",
+      "sha256": "678b629aab7f6503c701a0aa64e1ac01bc460c31e3570318291673b9d08e07f5"
+    },
+    {
+      "bytes": 499,
+      "path": "team_review.md",
+      "sha256": "cee48281498f8e5cf037d6cb93cf45de2531651090ea928a09585cc103896cf4"
+    }
+  ],
+  "reason": "Trace iteration-5 features failed to predict profile-L1 better than a mean baseline in both 32/32 split directions, with zero oracle top-k recall.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T024000Z-trace-boundary-predictor-gate",
+  "review_id": "20260515T024000Z-trace-boundary-predictor-gate",
+  "sources": [
+    "https://arxiv.org/abs/2106.05022",
+    "https://proceedings.mlr.press/v70/bolukbasi17a.html",
+    "https://arxiv.org/abs/2403.07965",
+    "https://dmorrill10.github.io/assets/publications/17science.pdf",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-15T02:37:48Z"
+}

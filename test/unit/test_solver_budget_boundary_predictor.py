@@ -100,3 +100,42 @@ def test_boundary_predictor_uses_cheap_features_for_holdout_selection():
     assert metrics["uniform_escalation_mean_l1"] == 0.165
     assert metrics["predicted_selective_mean_latency_ms"] == 150.0
     assert metrics["predicted_latency_ratio_to_live"] == 1.5
+
+
+def test_trace_feature_loader_uses_requested_iteration_and_context():
+    payload = {
+        "records": [
+            {
+                "label": "root-0000-street2",
+                "iteration": 5,
+                "legal_actions": [0, 1],
+                "regret_policy": [0.75, 0.25],
+                "strategy_policy": [0.6, 0.4],
+                "regret_mass": 3.0,
+                "strategy_mass": 4.0,
+                "hero_reach_mass": 5.0,
+                "villain_reach_mass": 6.0,
+                "street": 2,
+                "public_belief_features": [0.1, 0.2, 0.3],
+            },
+            {
+                "label": "root-0000-street2",
+                "iteration": 10,
+                "legal_actions": [0, 1],
+                "regret_policy": [0.5, 0.5],
+                "strategy_policy": [0.5, 0.5],
+                "regret_mass": 1.0,
+                "strategy_mass": 1.0,
+                "hero_reach_mass": 1.0,
+                "villain_reach_mass": 1.0,
+                "street": 2,
+                "public_belief_features": [9.0],
+            },
+        ]
+    }
+
+    features, labels = predictor.trace_features_from_payloads([payload], iteration=5)
+
+    assert labels.tolist() == ["root-0000-street2"]
+    assert features.shape == (1, 15)
+    np.testing.assert_allclose(features[0, -3:], [0.1, 0.2, 0.3])
