@@ -4692,3 +4692,69 @@
 - Decision: Keep the sampled-action control-variate path as a research-only
   candidate. Next integration work must preserve this gate and still compare
   downstream traversal/train evidence against the default exhaustive path.
+
+## 20260515T062325Z-methodology-review-for-resolver-latency-attribution-metrics-should - passed
+
+- Timestamp: 2026-05-15T06:23:25Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T005447Z-resolver-latency-attribution-metrics
+- Hypothesis: Methodology review for Resolver latency attribution metrics should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T005447Z-resolver-latency-attribution-metrics passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T062325Z-methodology-review-for-resolver-latency-attribution-metrics-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T005447Z-resolver-latency-attribution-metrics", "passed": true}`
+
+## 20260515T062339Z-methodology-review-for-incremental-turn-equity-evaluator-should - passed
+
+- Timestamp: 2026-05-15T06:23:39Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T010338Z-incremental-turn-equity-evaluator
+- Hypothesis: Methodology review for Incremental turn equity evaluator should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T010338Z-incremental-turn-equity-evaluator passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T062339Z-methodology-review-for-incremental-turn-equity-evaluator-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T010338Z-incremental-turn-equity-evaluator", "passed": true}`
+
+## 20260515T062339Z-methodology-review-for-fast-live-solver-budget-profile - passed
+
+- Timestamp: 2026-05-15T06:23:39Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T012101Z-fast-live-solver-budget-profile
+- Hypothesis: Methodology review for Fast live solver budget profile should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T012101Z-fast-live-solver-budget-profile passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T062339Z-methodology-review-for-fast-live-solver-budget-profile/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T012101Z-fast-live-solver-budget-profile", "passed": true}`
+
+## 20260515T062339Z-methodology-review-for-live-versus-fast-live-solver - passed
+
+- Timestamp: 2026-05-15T06:23:39Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate
+- Hypothesis: Methodology review for Live versus fast-live solver budget profile gate should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T062339Z-methodology-review-for-live-versus-fast-live-solver/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate", "passed": true}`
+
+## 20260515T062339Z-methodology-review-for-profile-drift-selective-escalation-gate - passed
+
+- Timestamp: 2026-05-15T06:23:39Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T015509Z-profile-drift-selective-escalation-gate
+- Hypothesis: Methodology review for Profile-drift selective escalation gate should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T015509Z-profile-drift-selective-escalation-gate passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T062339Z-methodology-review-for-profile-drift-selective-escalation-gate/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T015509Z-profile-drift-selective-escalation-gate", "passed": true}`
+
+## 20260515T062339Z-methodology-review-for-sampled-action-mccfr-traversal-redesign - passed
+
+- Timestamp: 2026-05-15T06:23:39Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T054603Z-sampled-action-mccfr-traversal-redesign
+- Hypothesis: Methodology review for Sampled-action MCCFR traversal redesign should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T054603Z-sampled-action-mccfr-traversal-redesign passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T062339Z-methodology-review-for-sampled-action-mccfr-traversal-redesign/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T054603Z-sampled-action-mccfr-traversal-redesign", "passed": true}`
