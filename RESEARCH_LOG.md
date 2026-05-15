@@ -4300,3 +4300,16 @@
 - Summary: Added `checkpoint_mean_advantage_value_corr` to the restricted action-value diagnostic. On the same deterministic 128-root CUDA runs, incumbent `iter1000` had near-zero negative correlation (`-0.0276`) between legal raw advantages and restricted action values; restored-history was more negative (`-0.1283`). This falsifies the "deployment argmax only" story. The early advantage field itself is not ranking root actions by a simple value signal.
 - Commands: `uv run pytest -q test/unit/test_restricted_action_value.py test/unit/test_poker_autoresearch.py`; `uv run python scripts/eval_restricted_action_values.py --n-roots 128 --n-equity-samples 512 --initial-chips 1000 --seed 20260516 --checkpoint models/slumbot_2p_iter1000.pt --strategy-source regret --device cuda`; `uv run python scripts/eval_restricted_action_values.py --n-roots 128 --n-equity-samples 512 --initial-chips 1000 --seed 20260516 --checkpoint autoresearch-session/restored_history_200x2k_20260512/restored_history_200x2k_4x512_final.pt --strategy-source regret --device cuda`
 - Key metrics: `{"incumbent_advantage_value_corr": -0.02756, "restored_advantage_value_corr": -0.12834, "incumbent_selected_payoff": -17.3578, "restored_selected_payoff": -21.1754, "promotion": false}`
+
+## 20260515T055000Z-restricted-value-capacity-probe - passed
+
+- Timestamp: 2026-05-15T05:50:00Z
+- Type: local_capacity_diagnostic
+- Gate: restricted-value-probe-holdout-fit
+- Hypothesis: If the early-action gap is mainly network capacity, the existing `ValueNetwork` should fail to fit clean hand-conditioned restricted action-value labels even in a supervised probe.
+- Failure class: none
+- Related work: Deep CFR and DeepStack both rely on neural function approximation over generated poker situations; this probe isolates representational capacity from the game-theoretic target quality.
+- Summary: Added a diagnostic probe that builds deterministic restricted root action-value datasets and trains the existing `ValueNetwork` with masked legal-action MSE. A 512/128 CUDA run fit the signal well: training loss fell from `0.0103` to `7.9e-05`, holdout top-action match was `82.03%`, and holdout action correlation was `0.7949`. This argues against raw MLP capacity as the main bottleneck. The next mechanism should improve the Deep CFR/search-generated target distribution for early actions, not just make the same network larger.
+- Review manifest: docs/research_protocols/poker_review_manifests/20260515T055000Z-restricted-value-capacity-probe.json
+- Commands: `uv run pytest -q test/unit/test_restricted_value_probe.py`; `uv run python scripts/train_restricted_value_probe.py --train-roots 512 --holdout-roots 128 --n-equity-samples 512 --hidden-dim 256 --n-layers 2 --epochs 200 --batch-size 256 --device cuda --seed 20260517`; `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T055000Z-restricted-value-capacity-probe --require-complete`
+- Key metrics: `{"train_loss_initial": 0.0103172, "train_loss_final": 0.0000791, "holdout_loss": 0.0036965, "holdout_top_action_match": 0.8203125, "holdout_mean_action_corr": 0.7948953, "promotion": false}`

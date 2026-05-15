@@ -1,0 +1,18 @@
+{
+  "review_id": "20260515T055000Z-restricted-value-capacity-probe",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T055000Z-restricted-value-capacity-probe",
+  "subject": "Restricted value capacity probe",
+  "trigger": "diagnostic_probe",
+  "decision": "proceed",
+  "changed_paths": [
+    "poker_ai/research/restricted_value_probe.py",
+    "scripts/train_restricted_value_probe.py",
+    "test/unit/test_restricted_value_probe.py"
+  ],
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1807.00900",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/25661"
+  ]
+}

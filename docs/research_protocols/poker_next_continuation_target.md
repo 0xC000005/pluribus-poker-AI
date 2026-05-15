@@ -521,6 +521,13 @@ ranking root legal actions by even this simple value proxy, so the next
 publishable mechanism should change the learning signal or architecture around
 public belief/private hand-conditioned action values rather than only tuning
 action sampling, checkpoint selection, or Slumbot flags.
+A restricted-value capacity probe makes that interpretation more precise. The
+same `ValueNetwork` class fit clean restricted root labels with
+`holdout_top_action_match=0.8203` and `holdout_mean_action_corr=0.7949` after a
+small CUDA run (`512` train roots, `128` holdout roots). This argues against
+"the MLP is simply too small" as the main explanation. The stronger next method
+should improve the generated game-theoretic target/data distribution for early
+actions, not merely increase hidden size or layers.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
