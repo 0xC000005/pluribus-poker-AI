@@ -512,6 +512,41 @@
   continuation/stopping policy, and it must beat uniform iteration 10 rather
   than only low iteration 5.
 
+## 20260515T031000Z-trace-sequence-predictor-gate - failed
+
+- Timestamp: 2026-05-15T03:10:00Z
+- Type: protected evaluation diagnostic
+- Gate: TDD + methodology-review + related-work check + two matched trace
+  split runs
+- Hypothesis: A ridge predictor over the full iteration `0..5` trace trajectory
+  should predict low-to-uniform continuation improvement better than a
+  train-mean baseline and select roots that beat uniform iteration `10`.
+- Failure class: search_quality
+- Related work: DeepStack supports resolver-boundary evaluation, GPU-CFR
+  supports solver-trajectory compute boundaries, and adaptive computation time
+  motivates learned continuation while requiring a compute baseline. Sources
+  are recorded in
+  `docs/research_protocols/poker_review_manifests/20260515T031000Z-trace-sequence-predictor-gate.json`.
+- Summary: Added `scripts/analyze_cfr_trace_sequence_predictor.py`, registered
+  it as a protected evaluation surface, and added unit coverage for a synthetic
+  sequence signal plus protected-surface initialization. The real matched-trace
+  run failed both directions.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T031000Z-trace-sequence-predictor-gate`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T031000Z-trace-sequence-predictor-gate.json`
+  - Forward: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_sequence_predictor_train128_holdout192_seed20260515.json`
+  - Reverse: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_sequence_predictor_train192_holdout128_seed20260515.json`
+- Metrics: forward ridge MAE was `0.3270` versus train-mean `0.1748`, Pearson
+  `0.0773`, adaptive L1 `0.4456` versus low `0.5102` and uniform `0.3288`.
+  Reverse ridge MAE was `0.1799` versus train-mean `0.1698`, Pearson `0.3716`,
+  adaptive L1 `0.4603` versus low `0.5202` and uniform `0.3119`. Both adaptive
+  top-match rates were `0.78125` versus uniform `0.84375`.
+- Decision: shallow sequence features are also insufficient. Do not tune
+  selection fraction or ridge features. The next learned-search step needs a
+  structurally different target, such as a true recurrent solver-dynamics model
+  with more roots, direct learned CFR update dynamics, or a fused GPU solver
+  path that makes uniform extra CFR cheap enough to dominate.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

@@ -382,6 +382,18 @@ mechanism must use the solver trajectory itself, such as sequence-level
 convergence features, learned stopping/continuation, or update-aligned regret
 dynamics.
 
+Trace-sequence predictor status: a shallow sequence-level version has now also
+failed. The new protected diagnostic uses the iteration `0..5` trajectory to
+predict low-to-uniform continuation improvement, but it did not beat a
+train-mean MAE baseline in either split (`0.3270 > 0.1748` and `0.1799 >
+0.1698`). Adaptive continuation improved over low iteration 5 but still lost to
+uniform iteration 10 (`0.4456` vs `0.3288`, and `0.4603` vs `0.3119`). This
+means the current trace family has useful qualitative signal but no deployable
+controller. The next step should not be another ridge/selector feature variant;
+it should either make uniform extra CFR cheaper with fused GPU solving or learn
+a more faithful solver-update dynamic with substantially more root-disjoint
+data.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

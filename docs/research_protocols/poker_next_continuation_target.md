@@ -392,6 +392,17 @@ target. The next bounded experiment should either model the trace sequence
 continuation action that is evaluated against the fixed uniform iteration-10
 baseline.
 
+The first shallow sequence-level check also failed. A ridge model over the full
+iteration `0..5` trajectory did not beat train-mean target MAE in either
+matched split and its adaptive continuation policy still lost to uniform
+iteration 10. This retires the cheap trace-selector line for now: low-iteration
+trace state is informative, but the information is not stable enough under the
+current small root-disjoint splits and linear decision rule. The next
+continuation target should change scale or mechanism: either make uniform CFR
+cheap through a fused/batched GPU solver path, or learn a recurrent
+solver-dynamics/update model trained on a larger root-disjoint trace corpus and
+judged by the same uniform-budget baseline.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

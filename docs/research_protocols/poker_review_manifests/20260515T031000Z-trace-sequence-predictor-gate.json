@@ -1,0 +1,45 @@
+{
+  "decision": "abandon",
+  "files": [
+    {
+      "bytes": 673,
+      "path": "benchmark_audit.md",
+      "sha256": "c6b053da88c8fae89f2a3ceae78a93801788ac1e868a36cb8c998244b82cafcb"
+    },
+    {
+      "bytes": 434,
+      "path": "decision.json",
+      "sha256": "ac7b806a7d3318fbf64cc05af6c5dbff87d86d8a4129f12f671ca78ff4b36504"
+    },
+    {
+      "bytes": 1239,
+      "path": "mechanism_review.md",
+      "sha256": "7295cd0d549a72dae7d3f570d1ab0b000c4246209c54e5c67c3eeba9b3fed3bd"
+    },
+    {
+      "bytes": 1275,
+      "path": "related_work.md",
+      "sha256": "6554f113838381781adc5c252a2ef69d3b07c5fcca561b7928cf0de242227aa2"
+    },
+    {
+      "bytes": 1273,
+      "path": "review.md",
+      "sha256": "ba643e7bf7ed0589ff4083e214c55518cce7024e27d39246701b8caebd30f5da"
+    },
+    {
+      "bytes": 320,
+      "path": "team_review.md",
+      "sha256": "fdc843e62bfe8fab8ef315f1e004e2c9018e834e3f8056fa211c746bf88629b6"
+    }
+  ],
+  "reason": "The sequence-level ridge diagnostic failed train-mean MAE baselines and still lost to uniform iteration 10 in both matched trace split directions.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T031000Z-trace-sequence-predictor-gate",
+  "review_id": "20260515T031000Z-trace-sequence-predictor-gate",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2408.14778",
+    "https://arxiv.org/abs/1603.08983",
+    "https://papers.nips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games"
+  ],
+  "written_at": "2026-05-15T02:55:17Z"
+}
