@@ -4970,3 +4970,31 @@
   align exhaustive and sampled opponent/chance randomization or switch to a
   standard MCCFR sampling contract with a validated baseline, then rerun the
   same strict per-case gate.
+
+## 20260515T153000Z-sampled-traverser-action-pivot - failed
+
+- Timestamp: 2026-05-15T15:30:00Z
+- Type: estimator_protocol_review
+- Gate: related-work check plus hard-seed 512-repeat variance check
+- Hypothesis: The sample-4 priority-baseline failure might be a finite-sample
+  artifact that disappears with more repeats.
+- Failure class: estimator_contract_mismatch
+- Related work: MCCFR external sampling samples chance/opponent actions while
+  enumerating the updating player's legal actions; outcome sampling and
+  external sampling both have regret bounds, but directly dropping updating
+  player actions at the regret-target node is not the standard external
+  sampling contract. Sources:
+  https://papers.neurips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games,
+  https://arxiv.org/abs/1809.03057, and
+  https://poker.cs.ualberta.ca/publications/NIPS12.pdf.
+- Summary: Searched related MCCFR work and reran the hard seed with `512`
+  repeats using the learned priority model as both priority and baseline. Bias
+  dropped, but top-action agreement still failed. The method retained only a
+  small speedup, so scaling repeats does not rescue the sampled-traverser-action
+  direction as an acceleration path.
+- Commands: `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260527 --initial-chips-values 300 --n-repeats 512 --n-reference-repeats 512 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --priority-source priority-model --priority-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --use-priority-baseline --hidden-dim 64 --n-layers 1 --min-top-match-rate 1.0 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --require-all-top-match --max-case-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_model_baseline_xxl_f2_sample4_seed20260527_512rep_20260515.json`
+- Key metrics: `{"seed": 20260527, "n_repeats": 512, "top_action_match": false, "exhaustive_top_action": 0, "sampled_top_action": 8, "mean_abs_bias": 0.042405, "mean_speedup": 1.146842, "promotion": false}`
+- Decision: Stop treating sampled traverser-action pruning as the main compute
+  path. The next principled acceleration should preserve updating-player action
+  enumeration and seek speed from batching, GPU kernels, caching, or
+  external/chance-sampling variance reduction.

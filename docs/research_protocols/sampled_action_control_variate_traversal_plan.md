@@ -26,6 +26,9 @@ or Slumbot-specific patch.
 
 - VR-MCCFR formalizes baselines/control variates for MCCFR variance reduction:
   https://arxiv.org/abs/1809.03057
+- External-sampling MCCFR samples chance/opponent actions while enumerating the
+  updating player's actions, which is the safer contract for regret target
+  ordering: https://papers.neurips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games
 - Low-/zero-variance baseline work supports predictive baselines as an
   estimator-quality target: https://arxiv.org/abs/1907.09633
 - Without-replacement estimators avoid duplicate samples and can reduce
@@ -81,3 +84,8 @@ traversal estimator so exhaustive and sampled branches share a cleaner
 opponent/chance randomization contract, or move to a recognized MCCFR sampling
 scheme with a validated baseline target. The current sample-4 priority family
 is too unstable even under oracle branch-value diagnostics.
+
+Practically, this means the next acceleration attempt should preserve updating
+player action enumeration and seek speed from batching, GPU kernels, caching, or
+external/chance-sampling variance reduction, not from dropping traverser actions
+at the regret-target node.
