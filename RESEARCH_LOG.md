@@ -256,6 +256,32 @@
   next method target should be a teacher-aligned boundary detector or selective
   escalation rule that improves L1/KL per millisecond against `live`.
 
+## 20260515T015500Z-profile-drift-boundary-signal - passed
+
+- Timestamp: 2026-05-15T01:55:00Z
+- Type: diagnostic
+- Gate: artifact-only boundary-signal split check
+- Hypothesis: The distribution drift between `live` and `fast-live` profiles
+  can identify public states where the live profile is farthest from a CFR500
+  teacher, enabling selective escalation instead of a fixed budget knob.
+- Failure class: search_quality
+- Summary: Reused the CFR500 frontier and live-vs-fast profile artifacts to
+  test profile L1 as an uncertainty signal. No gameplay code changed.
+- Evidence:
+  - Teacher frontier: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_100_150_250_350_vs500_holdout64_seed20260515.json`
+  - Profile comparison: `autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_budget_profiles_live_vs_fast_holdout64_seed20260515.json`
+- Metrics: the two live-vs-fast action-disagreement roots had mean live L1
+  `0.5659` to CFR500 versus `0.1362` for other roots. The top-eight roots by
+  profile L1 had mean live L1 `0.4451` and mean CFR350 improvement `0.2329`,
+  versus `0.1074` and `0.0436` for the rest. A train-first-half top-4
+  threshold improved second-half L1/KL from `0.1330`/`0.0421` to
+  `0.1069`/`0.0335`, with latency `972 ms` -> `1020 ms`. The reverse split
+  improved L1/KL from `0.1662`/`0.0682` to `0.1392`/`0.0543`, with latency
+  `867 ms` -> `899 ms`.
+- Decision: formalize this as a protected selective-escalation diagnostic gate
+  before any live-policy change. Success should be teacher L1/KL per
+  millisecond versus `live`, not Slumbot smoke variance.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

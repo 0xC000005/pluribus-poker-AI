@@ -296,6 +296,19 @@ cheaper (`0.64x` live latency) and slightly better on top-action agreement
 budget selector that escalates ambiguous states, not promoting fast-live as the
 default.
 
+Boundary-signal status: live-vs-fast profile distribution drift appears to
+identify the states where `live` is farthest from CFR500. The two profile
+action-disagreement states had mean live L1 `0.5659` versus `0.1362` for the
+other roots. The top-eight roots by profile L1 had mean live L1 `0.4451` and
+mean CFR350 improvement `0.2329`, versus `0.1074` and `0.0436` for the rest.
+On a first-half-to-second-half split, escalating holdout roots above the
+train top-4 profile-L1 threshold improved L1 from `0.1330` to `0.1069` and KL
+from `0.0421` to `0.0335`, with latency rising from `972 ms` to `1020 ms`.
+The reverse split also improved L1 (`0.1662` to `0.1392`) and KL (`0.0682` to
+`0.0543`) with latency `867 ms` to `899 ms`. This is promising
+mechanism evidence for selective escalation, but it needs a formal gate before
+any gameplay change.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

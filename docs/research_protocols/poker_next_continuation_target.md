@@ -328,6 +328,14 @@ available profile/frontier signals and selectively escalate ambiguous states;
 success means improving teacher L1/KL per millisecond against `live`, not
 maximizing a Slumbot smoke score.
 
+The first boundary-signal diagnostic is positive enough to formalize. Profile
+L1 between `live` and `fast-live` identifies high-error roots, and a fixed
+train-top-4 threshold improved held-out L1/KL in both half-splits while adding
+only about `3-5%` latency. The next implementation should turn this into a
+protected diagnostic gate that reports train-derived threshold, selected roots,
+L1/KL/latency against CFR500, and low/live/uniform-CFR350 baselines. Keep it
+off the Slumbot live path until that gate survives a root-disjoint split.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
