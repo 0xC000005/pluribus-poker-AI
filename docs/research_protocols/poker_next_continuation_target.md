@@ -507,6 +507,13 @@ the restored-history checkpoint selected call on `93/128` roots and was also
 negative (`-21.18`, oracle gap `92.94`). This is not promotion evidence; it is
 a local falsifier showing both over-pressure and passive variants miss a
 simple hand-conditioned value signal.
+A wider 128-root historical sweep did not reveal a ready checkpoint: `iter300`
+was least bad by restricted selected-action payoff (`+3.04`) but had only
+`6.25%` oracle match, while later and restored/search-consistency checkpoints
+all retained large oracle gaps (`80-122` chips). This rejects checkpoint
+selection as the main fix and points toward changing the learned early policy
+or advantage target so it captures hand-conditioned action value before
+turn/river search is asked to repair the game.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow

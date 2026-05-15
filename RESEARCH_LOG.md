@@ -4276,3 +4276,15 @@
 - Review manifest: docs/research_protocols/poker_review_manifests/20260515T052000Z-restricted-action-value-checkpoint-attribution.json
 - Commands: `uv run pytest -q test/unit/test_restricted_action_value.py test/unit/test_poker_autoresearch.py`; `uv run python scripts/eval_restricted_action_values.py --n-roots 128 --n-equity-samples 512 --initial-chips 1000 --seed 20260516 --checkpoint models/slumbot_2p_iter1000.pt --strategy-source regret --device cuda`; `uv run python scripts/eval_restricted_action_values.py --n-roots 128 --n-equity-samples 512 --initial-chips 1000 --seed 20260516 --checkpoint autoresearch-session/restored_history_200x2k_20260512/restored_history_200x2k_4x512_final.pt --strategy-source regret --device cuda`
 - Key metrics: `{"incumbent_selected_payoff": -17.3578, "incumbent_oracle_gap": 89.1229, "incumbent_match_rate": 0.3672, "incumbent_actions": {"all_in": 105, "call": 2, "fold": 14, "raise_0.75": 5, "raise_1.0": 2}, "restored_selected_payoff": -21.1754, "restored_oracle_gap": 92.9405, "restored_match_rate": 0.3828, "restored_actions": {"all_in": 21, "call": 93, "fold": 7, "raise_1.0": 7}, "promotion": false}`
+
+## 20260515T053000Z-restricted-action-value-history-sweep - failed
+
+- Timestamp: 2026-05-15T05:30:00Z
+- Type: local_checkpoint_sweep
+- Gate: restricted-action-value-history-sweep
+- Hypothesis: A historical checkpoint may already have materially better early-action restricted value, allowing a cheap candidate before another training change.
+- Failure class: early_action_value_gap
+- Related work: Deep CFR checkpoint history and SD-CFR-style checkpoint mixtures can matter, but selection still needs a mechanism signal beyond local H2H. This sweep uses the new restricted diagnostic as a falsifier, not a promotion gate.
+- Summary: Swept eight existing Slumbot/restored/search-consistency checkpoints on the same 128 deterministic preflop roots with CUDA checkpoint inference. No checkpoint had both strong selected-action payoff and oracle agreement. `iter300` was least bad by selected payoff (`+3.04`) but matched the restricted oracle only `6.25%` of roots. `iter900` and `iter1000` matched more often by over-selecting all-in but still had negative selected payoffs and large oracle gaps. Restored-history reduced all-ins but selected call on `93/128` roots and stayed negative. This rejects historical checkpoint picking as the next main lever.
+- Command: inline `evaluate_restricted_action_values` sweep with `n_roots=128`, `n_equity_samples=512`, `seed=20260516`, `strategy_source=regret`, `device=cuda`
+- Key metrics: `{"best_by_selected_payoff": "models/slumbot_2p_iter300.pt", "iter300_selected_payoff": 3.0365, "iter300_oracle_gap": 68.7286, "iter300_match_rate": 0.0625, "iter1000_selected_payoff": -17.3578, "iter1000_oracle_gap": 89.1229, "restored_selected_payoff": -21.1754, "restored_oracle_gap": 92.9405, "search_consistency_selected_payoff": -21.18, "search_consistency_match_rate": 0.0, "promotion": false}`
