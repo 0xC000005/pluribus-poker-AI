@@ -372,6 +372,16 @@ conclusion: low-iteration trace state has signal, but the top-predicted-error
 selector is not the mechanism. Any single-solve continuation policy must beat
 uniform iteration 10 on the same trace artifacts.
 
+Current trace-delta MLP rerun status: the existing nonlinear single-row MLP
+also fails on the same fresh traces. CUDA training fit the tiny train split to
+zero loss, but holdout predictions were worse than low iteration 5 and much
+worse than uniform iteration 10 in both directions (`0.5398` vs `0.5102` vs
+`0.3288`, and `0.5334` vs `0.5202` vs `0.3119`). This rules out more
+hidden-size/epoch tuning on one trace row as research progress. The next trace
+mechanism must use the solver trajectory itself, such as sequence-level
+convergence features, learned stopping/continuation, or update-aligned regret
+dynamics.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

@@ -382,6 +382,16 @@ matched split directions. Therefore the next target should not be another
 top-k escalation rule. It should ask whether the whole trace sequence can
 predict a stopping/continuation decision that beats a fixed uniform budget.
 
+The existing nonlinear trace-delta MLP has now been rechecked on those matched
+traces and failed more strongly than the older compact split result. It fit the
+tiny train roots to zero loss on CUDA, but holdout predicted-policy L1 was worse
+than the low iteration-5 trace and far worse than uniform iteration 10 in both
+directions. This retires single-row trace-delta MLP tuning as a continuation
+target. The next bounded experiment should either model the trace sequence
+(`0..5` or `0..10`) as a solver trajectory, or learn a direct stopping/
+continuation action that is evaluated against the fixed uniform iteration-10
+baseline.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

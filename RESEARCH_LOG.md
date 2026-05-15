@@ -486,6 +486,32 @@
   single-solve work must beat uniform iteration 10 and should model the full
   solver sequence or stopping policy, not just top predicted iteration-5 error.
 
+## 20260515T030000Z-current-trace-delta-mlp-rerun - failed
+
+- Timestamp: 2026-05-15T03:00:00Z
+- Type: diagnostic rerun
+- Gate: existing nonlinear trace-delta MLP on matched current-schema traces
+- Hypothesis: The existing CUDA trace-delta MLP might recover on the fresh
+  matched `128..159` / `192..223` trace splits when targeting the final
+  iteration-24 reference directly.
+- Failure class: search_quality
+- Summary: Reran `scripts/train_cfr_trace_delta_mlp.py` in both split
+  directions with low trace iteration `5`, target/reference iteration `24`,
+  uniform iteration `10`, hidden dim `64`, `2` layers, and `400` epochs.
+  Training used CUDA and fit the tiny train split to zero loss, but both
+  holdout directions failed the target-fit and decision gates.
+- Evidence:
+  - Forward: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_delta_mlp_final_train128_holdout192_seed20260515.json`
+  - Reverse: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_delta_mlp_final_train192_holdout128_seed20260515.json`
+- Metrics: forward predicted L1 to reference was `0.5398` versus low `0.5102`
+  and uniform `0.3288`, with predicted top-match `0.625` versus uniform
+  `0.84375`. Reverse predicted L1 was `0.5334` versus low `0.5202` and uniform
+  `0.3119`, with predicted top-match `0.78125` versus uniform `0.84375`.
+- Decision: retire single-row trace-delta MLP tuning at this scale. The next
+  trace method needs sequence-level solver dynamics or a more direct learned
+  continuation/stopping policy, and it must beat uniform iteration 10 rather
+  than only low iteration 5.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z
