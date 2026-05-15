@@ -126,6 +126,7 @@ def run_diagnostic(
             "sum_l2_bias": 0.0,
             "sum_estimator_std": 0.0,
             "sum_top_action_match_rate": 0.0,
+            "sum_mean_estimate_top_action_match": 0.0,
         }
         for sample_count in samples_per_estimate
     }
@@ -227,6 +228,7 @@ def run_diagnostic(
             legal_bias = mean_estimate[legal_indices] - target[legal_indices]
             legal_estimates = estimates[:, legal_indices]
             target_top_local = int(np.argmax(target[legal_indices]))
+            mean_estimate_top_local = int(np.argmax(mean_estimate[legal_indices]))
             estimate_top_local = np.argmax(legal_estimates, axis=1)
             results[sample_count]["sum_abs_bias"] += float(np.mean(np.abs(legal_bias)))
             results[sample_count]["sum_l2_bias"] += float(
@@ -237,6 +239,9 @@ def run_diagnostic(
             )
             results[sample_count]["sum_top_action_match_rate"] += float(
                 np.mean(estimate_top_local == target_top_local)
+            )
+            results[sample_count]["sum_mean_estimate_top_action_match"] += float(
+                mean_estimate_top_local == target_top_local
             )
 
     metrics_by_sample_count = {}
@@ -251,6 +256,10 @@ def run_diagnostic(
             "mean_estimator_std": round(estimator_std, 6),
             "mean_top_action_match_rate": round(
                 values_by_metric["sum_top_action_match_rate"] / n_roots,
+                6,
+            ),
+            "mean_estimate_top_action_match_rate": round(
+                values_by_metric["sum_mean_estimate_top_action_match"] / n_roots,
                 6,
             ),
         }

@@ -1059,3 +1059,9 @@ stochastic regret targets, not as one-shot decisions. Even with the XL baseline,
 individual sampled estimates match the exhaustive top-regret action only about
 `0.70` at eight samples. The next probe should therefore compare averaged
 sampled regret targets to exhaustive regret targets over repeated samples.
+
+That averaged-target check now passes: the top action of the mean sampled
+regret estimate matches exhaustive regret on roughly `96%` of 256 roots. This
+is the clearest current path: learned control-variate sampled traversal should
+write stochastic regret samples to the buffer, then rely on replay/training
+averaging rather than using sampled estimates for immediate play decisions.

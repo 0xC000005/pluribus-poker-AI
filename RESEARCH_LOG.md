@@ -4633,3 +4633,22 @@
 - Decision: Keep sampled-action updates as a stochastic training estimator, not
   a direct action-selection policy. The traversal probe should compare averaged
   regret targets over repeated samples against exhaustive targets.
+
+## 20260515T093000Z-averaged-sampled-regret-topmatch - passed
+
+- Timestamp: 2026-05-15T09:30:00Z
+- Type: averaged_estimator_decision_diagnostic
+- Gate: mean sampled-regret top-action agreement
+- Hypothesis: Although individual sampled estimates are noisy, their average
+  should preserve exhaustive regret action ordering well enough for training.
+- Failure class: none
+- Summary: Added `mean_estimate_top_action_match_rate` to the full-deck
+  sampled-action diagnostic and reran the XL learned-baseline 256-root check.
+  Averaged sampled estimates match the exhaustive top-regret action on
+  `95.7%` to `96.9%` of roots across 1, 2, 4, and 8 sampled traverser actions.
+  This supports sampled-action regrets as a buffer/training target, while the
+  per-sample top-action metric still warns against one-shot deployment.
+- Commands: `uv run pytest -q test/unit/test_restricted_value_probe.py test/unit/test_sampled_action_mccfr.py test/unit/test_gpu_cache_budget.py`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_256roots_mean_top_20260515.json`
+- Key metrics: `{"tests_passed": 24, "sample1_mean_top_match": 0.957031, "sample2_mean_top_match": 0.960938, "sample4_mean_top_match": 0.96875, "sample8_mean_top_match": 0.96875, "promotion": false}`
+- Decision: The next opt-in traversal prototype should evaluate averaged
+  sampled regret targets, not single sampled decisions.

@@ -179,6 +179,7 @@
 - `train_restricted_value_probe.py --output-checkpoint ...` can save a diagnostic learned baseline for sampled-action estimator studies. The first larger baseline supports 2+ sampled traverser actions but does not make one-sample traversal acceptable.
 - An XL restricted-value baseline (`4096` train roots, `512` equity samples, 4x512) made one-sample learned-baseline estimates pass the 256-root restricted estimator gate. This is still diagnostic, but it makes learned control-variate sampled traversal the active candidate.
 - Full-deck sampled-action diagnostics now report `mean_top_action_match_rate`; do not use sampled estimates as direct one-shot action choices. The active comparison is averaged sampled regret targets versus exhaustive regret targets.
+- `mean_estimate_top_action_match_rate` is the preferred decision-facing sampled-action diagnostic; the XL learned-baseline run reached about `96%` on 256 restricted roots after averaging repeated sampled estimates.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - CUDA traversal kernels require the pip CUDA 13 compiler path: keep `numba>=0.65.1` and `numba-cuda[cu13]>=0.30.2` declared, and verify `scripts.cuda_env.configure_numba_cuda_env()` detects `.venv/.../site-packages/nvidia/cu13`.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
