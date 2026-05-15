@@ -5572,3 +5572,101 @@
   terminal/large-pot regrets by pot-normalized outcome calibration, or using
   conservative search only when the resolver's selected action has sufficient
   regret/strategy confidence.
+
+## 20260515T111200Z-average-strategy-related-work-check - passed
+
+- Timestamp: 2026-05-15T11:12:00Z
+- Type: related_work
+- Gate: Deep CFR / SD-CFR policy-deployment alignment check
+- Hypothesis: The live large-pot calibration failure may come from deploying a
+  single regret-derived policy rather than the average strategy object that
+  Deep CFR theory and SD-CFR variants target.
+- Failure class: none
+- Summary: Related work supports the diagnosis. Deep CFR trains a separate
+  policy network to approximate the weighted average strategy because the
+  average strategy, not one iteration's instantaneous regret policy, is the
+  equilibrium object. SD-CFR avoids average-policy-network approximation error
+  by sampling among stored iteration value networks at trajectory start. ReBeL
+  motivates aligning learning and search around public belief state values
+  rather than isolated live subgame patches.
+- Sources:
+  - Deep CFR paper: https://proceedings.mlr.press/v97/brown19b/brown19b.pdf
+  - SD-CFR paper: https://arxiv.org/abs/1901.07621
+  - ReBeL / thesis discussion: https://www.csd.cmu.edu/sites/default/files/phd-thesis/CMU-CS-20-132.pdf
+- Local check: `scripts/eval_sd_cfr_mixture.py` on retry-clean iteration 25/50
+  vs incumbent produced mean `+119.7 chips/hand` but lower95 `-480.7`, so the
+  tiny available checkpoint mixture is not promotable.
+- Decision: Run a bounded GPU Deep CFR candidate with traversal-collected
+  average-strategy targets and evaluate with `--strategy-source average-policy`.
+  This is more principled than risk caps because it restores the Deep CFR
+  deployed-object contract.
+
+## 20260515T111752Z-gpu-deep-cfr-training-should-produce-avg-strategy - passed
+
+- Timestamp: 2026-05-15T11:27:10Z
+- Type: experiment
+- Gate: train-gpu-deep-cfr-20260515T111750Z-avg-strategy-candidate
+- Hypothesis: GPU Deep CFR training should produce avg_strategy_candidate_final.pt with machine-readable throughput metrics.
+- Failure class: none
+- Summary: Gate train-gpu-deep-cfr-20260515T111750Z-avg-strategy-candidate passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T111752Z-gpu-deep-cfr-training-should-produce-avg-strategy/metrics.json
+- Key metrics: `{"avg_iter_seconds": 22.23, "gate": "train-gpu-deep-cfr-20260515T111750Z-avg-strategy-candidate", "iters_per_hour": 161.946, "mode": "autoresearch_gpu_deep_cfr_train", "passed": true, "traversals_per_second": 179.937}`
+
+## 20260515T112910Z-candidate-checkpoint-avg-strategy-candidate-final-pt-should - passed
+
+- Timestamp: 2026-05-15T11:29:33Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T112908Z-avg-strategy-candidate-final
+- Hypothesis: Candidate checkpoint avg_strategy_candidate_final.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: Gate slumbot-candidate-smoke-20260515T112908Z-avg-strategy-candidate-final passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T112910Z-candidate-checkpoint-avg-strategy-candidate-final-pt-should/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -622, "ci95_chips_per_hand": 1124, "gate": "slumbot-candidate-smoke-20260515T112908Z-avg-strategy-candidate-final", "mbb_per_hand": -6220, "passed": true, "seconds_per_hand": 0.475}`
+
+## 20260515T113043Z-candidate-checkpoint-avg-strategy-candidate-final-pt-should - failed
+
+- Timestamp: 2026-05-15T11:31:21Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T113038Z-avg-strategy-candidate-final
+- Hypothesis: Candidate checkpoint avg_strategy_candidate_final.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: distribution_shift
+- Summary: Gate slumbot-candidate-smoke-20260515T113038Z-avg-strategy-candidate-final failed.
+- Metrics file: autoresearch-session/poker_runs/20260515T113043Z-candidate-checkpoint-avg-strategy-candidate-final-pt-should/metrics.json
+- Key metrics: `{"gate": "slumbot-candidate-smoke-20260515T113038Z-avg-strategy-candidate-final", "passed": false}`
+
+## 20260515T113200Z-average-policy-transfer-diagnostic - failed
+
+- Timestamp: 2026-05-15T11:32:00Z
+- Type: diagnostic
+- Gate: local H2H + live Slumbot smoke + trace risk audit
+- Hypothesis: Training and deploying an explicit Deep CFR average-strategy
+  policy network should reduce the regret-snapshot deployment mismatch seen in
+  Slumbot traces.
+- Failure class: distribution_shift
+- Summary: The average-policy hypothesis improved the local model-vs-model
+  gate but did not transfer to live Slumbot. The candidate checkpoint
+  `models/autoresearch_gpu_20260515T111750Z/avg_strategy_candidate_final.pt`
+  contains a trained `average_policy_net`, 2,000,000 traversal-collected
+  average-strategy targets, and the current betting-history feature contract.
+  It beat incumbent regret deployment locally, but policy-only Slumbot smokes
+  stayed negative with and without explicit all-in. This falsifies the narrow
+  claim that regret-snapshot deployment alone explains the live failure.
+- Evidence:
+  - Training metrics: `autoresearch-session/poker_runs/20260515T111752Z-gpu-deep-cfr-training-should-produce-avg-strategy/metrics.json`
+  - Live average-policy smoke: `autoresearch-session/poker_runs/20260515T112910Z-candidate-checkpoint-avg-strategy-candidate-final-pt-should/metrics.json`
+  - Failed queued no-allin smoke was an API timeout, not a method result:
+    `autoresearch-session/poker_runs/20260515T113043Z-candidate-checkpoint-avg-strategy-candidate-final-pt-should/metrics.json`
+  - No-allin retry trace audit: `autoresearch-session/slumbot_trace_audits/20260515T113200Z-avg-strategy-candidate-noallin-risk-audit.json`
+- Key metrics: local duplicate-swapped H2H candidate average-policy vs
+  incumbent regret was `+458.37 chips/hand`, lower95 `+103.75`, over 1,800
+  games. Live 50-hand average-policy smoke was `-622 chips/hand` with
+  `ci95=1124`; trace risk audit showed all-in hands averaged `-3245`. Live
+  50-hand no-allin retry was still `-639 chips/hand` with `ci95=1313`; risk
+  hands averaged `-1734`, no-risk hands averaged `+294`, and two big-call
+  hands lost stacks.
+- Decision: Do not promote the average-policy checkpoint. Average-strategy
+  deployment is locally promising and should stay in the toolbox, but the main
+  blocker is still live large-pot calibration/range transfer. The next
+  principled step is not a hard all-in cap; it is a root-disjoint diagnostic
+  that compares policy-selected large-pot actions against search/value targets
+  under public states resembling the Slumbot trace failures.
