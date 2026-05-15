@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1044,
+      "path": "benchmark_audit.md",
+      "sha256": "c987f894e74ac8b9a8bb706cc9f885e02893ca669e232f206d663abff4850c92"
+    },
+    {
+      "bytes": 663,
+      "path": "decision.json",
+      "sha256": "3d9aba210c20234fc40daa4a149e541ca34dcb07179245079f25dbaa77232d99"
+    },
+    {
+      "bytes": 1252,
+      "path": "mechanism_review.md",
+      "sha256": "c5e8242d3be9e545b37fafa8cc7c620916bac772876fa8c27138f63a4eabbe6b"
+    },
+    {
+      "bytes": 1631,
+      "path": "related_work.md",
+      "sha256": "bb93f3d48d9e44d48d492cdea9b8c657878c9d3838c34234b0aade0f654a35df"
+    },
+    {
+      "bytes": 1847,
+      "path": "review.md",
+      "sha256": "dae37f92ff063bf38a8f272bf0c52d55e8b22a2c1450f97a8134f30601f7e043"
+    },
+    {
+      "bytes": 378,
+      "path": "team_review.md",
+      "sha256": "95160005a65e871edba298f069bf5273ca74b03c6ffa6ed04ad33c81810dfdfa"
+    }
+  ],
+  "reason": "Proceed as a measurement-correctness fix. Chronological one-shot replay now matches incremental public-board reveal, corrected Slumbot range artifacts still show late-street belief-calibration failure, and no promotion logic was changed.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T120318Z-chronological-range-replay-fix",
+  "review_id": "20260515T120318Z-chronological-range-replay-fix",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://proceedings.mlr.press/v97/brown19b",
+    "autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-range-diagnostic.json",
+    "autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json"
+  ],
+  "written_at": "2026-05-15T12:06:23Z"
+}

@@ -1,11 +1,13 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from scripts.range_tracker import (
     RangeTracker,
     map_slumbot_action_to_idx,
+    update_tracker_from_actions,
     _parse_action,
     SMALL_BLIND,
     BIG_BLIND,
@@ -126,3 +128,29 @@ def test_range_tracker_maps_positive_hero_mass_to_actual_hand():
     assert villain_range[actual_idx] == 0.0
     assert abs(float(hero_range.sum()) - 1.0) < 1e-9
     assert abs(float(villain_range.sum()) - 1.0) < 1e-9
+
+
+def test_range_tracker_one_shot_replay_matches_incremental_board_reveal():
+    our_cards = [0, 1]
+    board = [8, 12, 16, 20, 24]
+    client_pos = 0
+    action_str = "b200b800c/b1600c/b3600c/b9000b14000"
+    net = torch.nn.Linear(126, 9)
+
+    one_shot = RangeTracker(our_cards, net, torch.device("cpu"))
+    update_tracker_from_actions(one_shot, action_str, client_pos, board)
+
+    incremental = RangeTracker(our_cards, net, torch.device("cpu"))
+    for partial_action, visible_board in [
+        ("b200b800c", []),
+        ("b200b800c/", board[:3]),
+        ("b200b800c/b1600c", board[:3]),
+        ("b200b800c/b1600c/", board[:4]),
+        ("b200b800c/b1600c/b3600c", board[:4]),
+        ("b200b800c/b1600c/b3600c/", board[:5]),
+        (action_str, board[:5]),
+    ]:
+        update_tracker_from_actions(incremental, partial_action, client_pos, visible_board)
+
+    assert np.allclose(one_shot.opponent_range, incremental.opponent_range, atol=1e-12)
+    assert np.allclose(one_shot.hero_range, incremental.hero_range, atol=1e-12)

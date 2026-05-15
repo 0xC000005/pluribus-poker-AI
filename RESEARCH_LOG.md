@@ -5768,11 +5768,12 @@
 - Evidence:
   - Trace: `autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl`
   - Artifact: `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json`
-- Key metrics: `n_scored=46`, `n_skipped_results=4`,
-  `mean_log_lift_vs_uniform=-0.7211`, and
-  `mean_true_hand_percentile=0.5805`. Street slices: preflop `+0.0147`,
-  flop `-0.0235`, turn `-1.0809`, river `-4.2831`. Large absolute pots had
-  `mean_log_lift_vs_uniform=-2.2045`; big losses had `-3.6951`.
+- Key metrics after the chronological range-replay fix:
+  `n_scored=46`, `n_skipped_results=4`,
+  `mean_log_lift_vs_uniform=-0.6399`, and
+  `mean_true_hand_percentile=0.5736`. Street slices: preflop `+0.0147`,
+  flop `-0.3115`, turn `-1.0253`, river `-3.1975`. Large absolute pots had
+  `mean_log_lift_vs_uniform=-1.7149`; big losses had `-1.7286`.
 - Validation: `uv run pytest -q test/unit/test_slumbot_trace_range_truth.py`
   -> 2 passed. Real diagnostic command:
   `uv run python scripts/diagnose_slumbot_trace_range_truth.py --checkpoint models/autoresearch_gpu_20260515T111750Z/avg_strategy_candidate_final.pt --strategy-source average-policy --trace autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl --device cuda --output autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json`.
@@ -5783,3 +5784,51 @@
   belief-state inference or opponent-response conditioning that search can
   consume, then rerun this same revealed-hand diagnostic before any Slumbot
   confidence spend.
+
+## 20260515T115614Z-methodology-review-for-trace-true-hand-range-calibration - passed
+
+- Timestamp: 2026-05-15T11:56:14Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T115255Z-trace-true-hand-range-calibration-diagnostic
+- Hypothesis: Methodology review for Trace true-hand range calibration diagnostic should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T115255Z-trace-true-hand-range-calibration-diagnostic passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T115614Z-methodology-review-for-trace-true-hand-range-calibration/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T115255Z-trace-true-hand-range-calibration-diagnostic", "passed": true}`
+
+## 20260515T120318Z-chronological-range-replay-fix - passed
+
+- Timestamp: 2026-05-15T12:03:18Z
+- Type: protected diagnostic bugfix
+- Gate: RangeTracker one-shot replay parity
+- Hypothesis: Fixed-state diagnostics should replay board cards in the same
+  chronological order as live incremental Slumbot play; otherwise one-shot
+  range reconstruction can leak future board cards into earlier action
+  likelihoods.
+- Failure class: eval_invalid
+- Summary: Added a red regression test showing one-shot replay disagreed with
+  incremental board reveal on a multi-street action string. Fixed
+  `update_tracker_from_actions` to reveal board cards by action prefix before
+  scoring each action likelihood, and to pass only the then-visible board to
+  the batched strategy call. Regenerated the trace range and true-range
+  artifacts with the corrected replay.
+- Evidence:
+  - Range artifact:
+    `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-range-diagnostic.json`
+  - True-range artifact:
+    `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json`
+- Key metrics: the corrected trace range diagnostic completed `23/23` cases
+  with mean villain normalized entropy `0.9232` and top-1 mass `0.0073`.
+  The corrected revealed-hand diagnostic still failed directionally:
+  overall log-lift `-0.6399`, turn `-1.0253`, river `-3.1975`, and large
+  absolute pots `-1.7149`.
+- Validation: `uv run pytest -q test/unit/test_slumbot_mapping.py
+  test/unit/test_slumbot_trace_range_truth.py test/unit/test_slumbot_trace_cases.py
+  test/unit/test_slumbot_trace_analysis.py
+  test/unit/test_resolver_benchmark.py::test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics
+  test/unit/test_resolver_benchmark.py::test_resolver_benchmark_can_measure_average_policy_source`
+  -> 15 passed.
+- Decision: Treat the corrected replay as required infrastructure. The
+  Slumbot belief-calibration blocker remains, but future fixed-state range
+  diagnostics and belief-conditioned target builders must use chronological
+  replay parity as a regression gate.

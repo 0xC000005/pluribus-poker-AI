@@ -675,33 +675,41 @@ def update_tracker_from_actions(tracker, action_str, client_pos, board_idx):
 
     opp_pos = 1 - client_pos
 
-    # Board updates: update_board is idempotent (zeroes already-zero hands).
-    streets = action_str.split('/')
-    board_cards_to_reveal = []
-    if len(streets) > 1 and len(board_idx) >= 3:
-        board_cards_to_reveal = list(board_idx[:3])
-    if len(streets) > 2 and len(board_idx) >= 4:
-        board_cards_to_reveal = list(board_idx[:4])
-    if len(streets) > 3 and len(board_idx) >= 5:
-        board_cards_to_reveal = list(board_idx[:5])
-    if len(board_cards_to_reveal) > tracker._processed_board_len:
+    def visible_board_for(prefix):
+        n_slashes = prefix.count('/')
+        if n_slashes >= 3 and len(board_idx) >= 5:
+            return list(board_idx[:5])
+        if n_slashes >= 2 and len(board_idx) >= 4:
+            return list(board_idx[:4])
+        if n_slashes >= 1 and len(board_idx) >= 3:
+            return list(board_idx[:3])
+        return []
+
+    def reveal_board_for(prefix):
+        # Board updates are idempotent, but the action likelihood must only see
+        # cards that were public before that action.
+        board_cards_to_reveal = visible_board_for(prefix)
+        if len(board_cards_to_reveal) <= tracker._processed_board_len:
+            return board_cards_to_reveal
         new_cards = board_cards_to_reveal[tracker._processed_board_len:]
         if new_cards:
             tracker.update_board(new_cards)
         tracker._processed_board_len = len(board_cards_to_reveal)
+        return board_cards_to_reveal
 
-    # Only process new actions (characters after _processed_len).
+    # Board updates for streets that may have opened without a new action.
     if len(action_str) <= tracker._processed_len:
+        reveal_board_for(action_str)
         return
 
     # Walk all actions but skip already-processed ones.
-    char_pos = 0
     for (before, acting_pos, action_char, bet_to) in walk_actions(action_str):
         # Compute char_pos of this action in the string.
         action_start = len(before)
         if action_start < tracker._processed_len:
             continue  # Already processed.
 
+        current_board = reveal_board_for(before)
         parsed_before = _parse_action(before)
         if 'error' in parsed_before:
             continue
@@ -710,9 +718,10 @@ def update_tracker_from_actions(tracker, action_str, client_pos, board_idx):
 
         if acting_pos == opp_pos:
             tracker.update_opponent_action(
-                action_idx, before, opp_pos, parsed_before, board_idx)
+                action_idx, before, opp_pos, parsed_before, current_board)
         else:
             tracker.update_hero_action(
-                action_idx, before, client_pos, parsed_before, board_idx)
+                action_idx, before, client_pos, parsed_before, current_board)
 
+    reveal_board_for(action_str)
     tracker._processed_len = len(action_str)

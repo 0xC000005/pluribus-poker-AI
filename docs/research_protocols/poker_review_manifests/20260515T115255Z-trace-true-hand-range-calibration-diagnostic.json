@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1408,
+      "path": "benchmark_audit.md",
+      "sha256": "497143970e915703b6be70739999b53ce0784de57a7e8c9f3620c13720b6c3e1"
+    },
+    {
+      "bytes": 686,
+      "path": "decision.json",
+      "sha256": "1a68e9936397fe66d937aac4054f7355618cc00ecd307faca72c57fce5a5f81f"
+    },
+    {
+      "bytes": 1715,
+      "path": "mechanism_review.md",
+      "sha256": "7d8e2179570556db134ecb10e2e4413769ffc6faef6c2183a4b11660ef9aa1d8"
+    },
+    {
+      "bytes": 2029,
+      "path": "related_work.md",
+      "sha256": "25cafb1baea2de5a13aeabd9b5476884b2bc6e344300b716d380ba8ef702c708"
+    },
+    {
+      "bytes": 2742,
+      "path": "review.md",
+      "sha256": "cb0c262919929fe0213027a80ef9a57f15963ec331fdff1df430d0e45850dd74"
+    },
+    {
+      "bytes": 779,
+      "path": "team_review.md",
+      "sha256": "6465b92b47a49ef2055456bf7254ddb271824de930b18e1428188b7007951f56"
+    }
+  ],
+  "reason": "Proceed as diagnostic-only protected tooling. The revealed-hand likelihood test uses live Slumbot traces and the deployed range update path, found a late-street range calibration failure, and does not alter promotion logic or adapters.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T115255Z-trace-true-hand-range-calibration-diagnostic",
+  "review_id": "20260515T115255Z-trace-true-hand-range-calibration-diagnostic",
+  "sources": [
+    "https://proceedings.mlr.press/v97/brown19b",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json",
+    "autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl"
+  ],
+  "written_at": "2026-05-15T12:06:18Z"
+}
