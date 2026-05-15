@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1566,
+      "path": "benchmark_audit.md",
+      "sha256": "037e6835ea9fc6268bdc2f1042e7e645c19d9693c062bda7e70941f0e208743e"
+    },
+    {
+      "bytes": 715,
+      "path": "decision.json",
+      "sha256": "182ecfb341ce525a2c98ee94e161db3aa65754906e5dadddd64ccaee5b708f3b"
+    },
+    {
+      "bytes": 1396,
+      "path": "mechanism_review.md",
+      "sha256": "8a70e5c7e926cded0899603b5c73ef679968c259f0a248a0ad24b8cef64baf80"
+    },
+    {
+      "bytes": 1758,
+      "path": "related_work.md",
+      "sha256": "416f65d57999f8a13ea5d89b6f47caa8e79d1e092f03f759ea6962ef77be901e"
+    },
+    {
+      "bytes": 2061,
+      "path": "review.md",
+      "sha256": "b465925f2a6fb0c32eec41041e2d967f8b7006f977742b7622e7ada25e1d87d0"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed diagnostic-only with a sampled-action MCCFR traversal design or prototype. Telemetry shows fixed-pool demotion breaks the external-sampling contract, but any replacement must include estimator correction, variance checks, and small exhaustive-vs-sampled validation before it can affect default training.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T054603Z-sampled-action-mccfr-traversal-redesign",
+  "review_id": "20260515T054603Z-sampled-action-mccfr-traversal-redesign",
+  "sources": [
+    "https://proceedings.mlr.press/v97/brown19b/brown19b.pdf",
+    "https://papers.neurips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games",
+    "https://papers.neurips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions"
+  ],
+  "written_at": "2026-05-15T07:20:00Z"
+}

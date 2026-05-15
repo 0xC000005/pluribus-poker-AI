@@ -1003,3 +1003,9 @@ algorithmically clean substitute. The next target should be a source-backed
 MCCFR sampling redesign: streaming external-sampling traversal, outcome
 sampling, average-strategy/action-subset sampling, or another estimator with
 explicit correction and variance accounting.
+
+The sampled-action MCCFR redesign review is complete and allows only a
+diagnostic prototype. The implementation target is not "sample fewer actions"
+by fiat. It is to define an estimator, verify it against exhaustive traversal
+on a small setting, report variance and pool demand, and only then run a
+corrected-semantics Deep CFR probe.

@@ -4426,3 +4426,22 @@
   principled direction is an algorithmic one: either stream full external
   sampling without fixed-pool demotion, or implement a published sampled-action
   MCCFR variant with proper importance weighting/variance controls.
+
+## 20260515T072000Z-sampled-action-mccfr-review - passed
+
+- Timestamp: 2026-05-15T07:20:00Z
+- Type: methodology_review
+- Gate: independent-verifier artifact, related-work artifact, mechanism
+  review, benchmark-hacking audit, and manifest
+- Hypothesis: A sampled-action MCCFR traversal redesign is a permissible next
+  diagnostic if it replaces hidden pool-exhaustion demotion with a documented
+  estimator and small exhaustive-vs-sampled validation.
+- Failure class: none
+- Summary: Completed the methodology review for sampled-action MCCFR traversal
+  redesign. The decision is `proceed`, diagnostic-only. The review explicitly
+  rejects naive action caps and Slumbot-specific action suppression; any
+  implementation must include estimator correction, variance accounting, and a
+  small correctness/fidelity gate before default training can use it.
+- Review manifest: docs/research_protocols/poker_review_manifests/20260515T054603Z-sampled-action-mccfr-traversal-redesign.json
+- Command: `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T054603Z-sampled-action-mccfr-traversal-redesign --require-complete`
+- Key metrics: `{"review_passed": true, "decision": "proceed", "promotion": false}`
