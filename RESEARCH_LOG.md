@@ -5747,3 +5747,39 @@
   score the revealed Slumbot terminal hand under the model's opponent range on
   completed trace hands and compare against uniform/weak baselines. Pause new
   policy/search tuning if this likelihood/rank test fails.
+
+## 20260515T115157Z-trace-true-range-calibration-diagnostic - failed
+
+- Timestamp: 2026-05-15T11:51:57Z
+- Type: protected diagnostic tooling
+- Gate: TDD + revealed-hand Slumbot range likelihood
+- Hypothesis: If the live average-policy no-allin failure is a
+  public-belief/range-update problem, the actual revealed Slumbot hands should
+  have poor likelihood under the trace-conditioned opponent range, especially
+  after turn/river large-pot lines.
+- Failure class: distribution_shift
+- Summary: Added `scripts/diagnose_slumbot_trace_range_truth.py` and
+  `poker_ai/research/slumbot_trace_range_truth.py` to score terminal revealed
+  Slumbot hands against the range tracker built from each hand's last policy
+  decision. The diagnostic reports per-hand likelihood, percentile, and
+  aggregate street/outcome buckets. On the 50-hand noallin average-policy trace,
+  the revealed Slumbot hands were worse than uniform overall and sharply worse
+  on late streets and large pots.
+- Evidence:
+  - Trace: `autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl`
+  - Artifact: `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json`
+- Key metrics: `n_scored=46`, `n_skipped_results=4`,
+  `mean_log_lift_vs_uniform=-0.7211`, and
+  `mean_true_hand_percentile=0.5805`. Street slices: preflop `+0.0147`,
+  flop `-0.0235`, turn `-1.0809`, river `-4.2831`. Large absolute pots had
+  `mean_log_lift_vs_uniform=-2.2045`; big losses had `-3.6951`.
+- Validation: `uv run pytest -q test/unit/test_slumbot_trace_range_truth.py`
+  -> 2 passed. Real diagnostic command:
+  `uv run python scripts/diagnose_slumbot_trace_range_truth.py --checkpoint models/autoresearch_gpu_20260515T111750Z/avg_strategy_candidate_final.pt --strategy-source average-policy --trace autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T113200Z-avg-strategy-candidate-final-noallin-retry.jsonl --device cuda --output autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-true-range.json`.
+- Decision: Do not tune deployment flags or action caps next. The clean
+  falsifier failed in the direction predicted by the causal model: late-street
+  public-belief/range updates are not learning Slumbot's revealed holdings
+  from action histories. The next principled work should improve learned
+  belief-state inference or opponent-response conditioning that search can
+  consume, then rerun this same revealed-hand diagnostic before any Slumbot
+  confidence spend.
