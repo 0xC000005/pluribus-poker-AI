@@ -46,6 +46,7 @@ PROTECTED_EVAL_SURFACES = [
     "scripts/eval_solver_budget_selective_escalation.py",
     "scripts/eval_solver_budget_boundary_predictor.py",
     "scripts/analyze_cfr_trace_sequence_predictor.py",
+    "scripts/run_frozen_best_response.py",
     "scripts/poker_objective_audit.py",
     "poker_ai/research/autoresearch.py",
     "poker_ai/research/promotion.py",

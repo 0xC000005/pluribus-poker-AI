@@ -481,6 +481,14 @@ opponent. The next implementation target should be a local approximate
 best-response or adversarial early-street evaluator that punishes weak passive
 blueprint behavior before Slumbot spend.
 
+The first approximate-BR attempt is not that evaluator. A DQN-style frozen
+checkpoint BR with Monte-Carlo returns failed its passive-call positive control,
+so low exploitability from that script is non-evidence. The next attempt should
+start from a positive-control-first design: exact/brute-force response in a
+small public-state abstraction, stronger offline fitted Q with balanced action
+coverage, or a restricted preflop/flop action-value evaluator that can exploit
+known passive and over-all-in controls before touching real candidates.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

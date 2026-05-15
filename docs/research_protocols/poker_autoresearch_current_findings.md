@@ -471,6 +471,14 @@ the early blueprint appears value-miscalibrated on passive first actions, so the
 next local gate should estimate early action value or exploitability rather than
 only suppress all-ins.
 
+Approximate best-response prototype status: a bounded frozen-checkpoint DQN
+best-response evaluator was implemented as a protected diagnostic but failed
+its positive control. Even after switching to Monte-Carlo final-return targets,
+the BR did not exploit a deliberately passive call/check checkpoint from either
+seat. Do not use this prototype for candidate gating; the next value-transfer
+gate needs a stronger BR method, exact small-subgame response, or public-state
+action-value evaluator with a passing positive control.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

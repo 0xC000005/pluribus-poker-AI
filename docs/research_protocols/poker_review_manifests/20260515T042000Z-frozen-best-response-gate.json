@@ -1,0 +1,19 @@
+{
+  "review_id": "20260515T042000Z-frozen-best-response-gate",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T042000Z-frozen-best-response-gate",
+  "subject": "Frozen checkpoint best-response diagnostic",
+  "trigger": "new_evaluation_gate",
+  "decision": "abandon",
+  "changed_paths": [
+    "poker_ai/research/frozen_best_response.py",
+    "scripts/run_frozen_best_response.py",
+    "poker_ai/research/autoresearch.py",
+    "test/unit/test_frozen_best_response.py",
+    "test/unit/test_poker_autoresearch.py"
+  ],
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1908.09453",
+    "https://arxiv.org/abs/1603.01121"
+  ]
+}
