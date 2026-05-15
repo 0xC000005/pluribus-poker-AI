@@ -412,6 +412,14 @@ compare `fast-live`/CFR125-style budgets against the live teacher on fixed
 states or bounded Slumbot confidence hands, and only then consider changing
 runtime budget policy.
 
+The first bounded Slumbot latency smoke is consistent with that direction:
+fast-live and live both passed 50 hands with zero API/parse errors, and
+fast-live reduced mean solver latency from `1436.9 ms` to `858.0 ms` in this
+sample. The next continuation target should be a statistically cleaner strength
+check, not another latency smoke: use larger Slumbot confidence hands only when
+API time is acceptable, or prefer local duplicate-swapped gates where variance
+is controlled.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

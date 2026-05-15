@@ -574,6 +574,33 @@
   the next same-state live-profile or Slumbot confidence check before any
   default-budget change.
 
+## 20260515T033000Z-slumbot-fast-live-latency-smoke - passed
+
+- Timestamp: 2026-05-15T03:30:00Z
+- Type: live integration diagnostic
+- Gate: two bounded 50-hand Slumbot smokes with explicit
+  `torch-levelsync-cuda`
+- Hypothesis: The opt-in `fast-live` budget profile should preserve Slumbot API
+  stability while reducing live solver latency versus the default `live`
+  profile.
+- Failure class: none
+- Summary: Ran two 50-hand online smokes with the same checkpoint and explicit
+  CUDA level-sync solver, one with `--solver-budget-profile fast-live` and one
+  with the default `live` profile. These hands are not duplicate-swapped and
+  are far too small for strength claims.
+- Evidence:
+  - Fast-live command: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 50 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 1200`
+  - Live command: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 50 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile live --timeout-seconds 1200`
+- Metrics: both runs had `0` API errors, `0` parse errors, and `5` solver
+  decisions. Fast-live mean solver latency was `858.0 ms`, max `1140.3 ms`,
+  elapsed `0.463 s/hand`; default live mean solver latency was `1436.9 ms`, max
+  `1558.3 ms`, elapsed `0.537 s/hand`. Fast-live chips/hand was `+47 +/- 1110`;
+  live was `-284 +/- 784`, which is non-comparable noise at this sample size.
+- Decision: live integration supports the latency direction, not promotion.
+  Keep `fast-live` opt-in until a larger confidence run or duplicate-style
+  local gate supports strength, and do not use the 50-hand chip result as
+  evidence of beating Slumbot.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

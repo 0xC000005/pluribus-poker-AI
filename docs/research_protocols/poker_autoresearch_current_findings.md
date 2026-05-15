@@ -403,6 +403,12 @@ Illegal mass stayed zero. This supports continuing the compute branch and
 testing opt-in fast-live style budgets on same-state/live Slumbot gates before
 another learned selector.
 
+Fast-live Slumbot smoke status: a bounded 50-hand live integration check passed
+for both `fast-live` and default `live` using `torch-levelsync-cuda`. Both had
+zero API and parse errors with five solver decisions. Fast-live mean solver
+latency was `858.0 ms` versus live `1436.9 ms`, but the chip outcomes are
+non-duplicate 50-hand noise and must not be treated as strength evidence.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
