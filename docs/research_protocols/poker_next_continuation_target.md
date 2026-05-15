@@ -1065,3 +1065,8 @@ regret estimate matches exhaustive regret on roughly `96%` of 256 roots. This
 is the clearest current path: learned control-variate sampled traversal should
 write stochastic regret samples to the buffer, then rely on replay/training
 averaging rather than using sampled estimates for immediate play decisions.
+
+The integration contract is now captured in
+`docs/research_protocols/sampled_action_control_variate_traversal_plan.md`.
+Keep all implementation opt-in and research-only until exhaustive-vs-sampled
+regret comparisons pass on deterministic small states.
