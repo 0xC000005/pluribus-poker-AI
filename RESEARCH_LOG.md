@@ -5436,3 +5436,113 @@
 - Key metrics: `{"avg_chips_per_hand": 155, "ci95_chips_per_hand": 265, "gate": "slumbot-candidate-smoke-20260515T104311Z-slumbot-2p-iter1000", "mbb_per_hand": 1554, "passed": true, "seconds_per_hand": 0.927, "trace_records": 13, "api_errors": 0, "parse_errors": 0}`
 - Decision: Trace plumbing is verified on a tiny live run. Use trace-backed
   solver-enabled runs next to inspect big-pot loss paths.
+
+## 20260515T104755Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T10:49:41Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T104752Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: A 50-hand solver-enabled fast-live trace reproduced the live
+  large-pot failure with no API or parse errors. Trace analysis found four
+  stack losses: two ended after policy flop call-offs and two after turn solver
+  near-stack bets (`b15800`, `b19250`). This points to a shared live
+  calibration problem and possible resolver amplification.
+- Metrics file: autoresearch-session/poker_runs/20260515T104755Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -953, "ci95_chips_per_hand": 1740, "mbb_per_hand": -9532, "hands": 50, "total_chips": -47661, "trace_records": 159, "decision_solver": 13, "decision_policy": 96, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 2.119}`
+- Decision: Do not promote. Run policy-only controls before attributing the
+  failure entirely to the resolver.
+
+## 20260515T105111Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T10:51:58Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T105110Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: A 50-hand policy-only trace removed the turn/river resolver and
+  produced positive but very wide results. This suggested that the resolver
+  might amplify loss paths, but the interval was too wide to separate signal
+  from variance.
+- Metrics file: autoresearch-session/poker_runs/20260515T105111Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 557, "ci95_chips_per_hand": 1691, "mbb_per_hand": 5572, "hands": 50, "total_chips": 27858, "trace_records": 193, "decision_solver": 0, "decision_policy": 143, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 0.934}`
+- Decision: Scale the policy-only control to 300 hands before changing solver
+  behavior.
+
+## 20260515T105233Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T10:55:21Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T105231Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: The 300-hand policy-only control was still negative with no solver
+  decisions, no API errors, and no parse errors. Trace analysis found ten stack
+  losses and twenty-six other big losses, including weak-hole-card call-downs
+  and repeated pot-fraction betting. This weakens the hypothesis that the
+  resolver alone causes the Slumbot transfer failure.
+- Metrics file: autoresearch-session/poker_runs/20260515T105233Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -216, "ci95_chips_per_hand": 515, "mbb_per_hand": -2159, "hands": 300, "total_chips": -64777, "trace_records": 1002, "decision_solver": 0, "decision_policy": 702, "street_all_in": {"preflop": 8, "flop": 1, "turn": 7, "river": 4}, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 0.559}`
+- Decision: Treat the base policy as uncalibrated in live large pots. Test
+  `--no-allin` as a diagnostic only; do not promote all-in masking as a
+  bitter-lesson-aligned method.
+
+## 20260515T105601Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T10:58:38Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T105600Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: Disabling explicit all-in actions did not fix the policy-only live
+  failure and made the 300-hand result worse. The trace still showed large
+  losses through repeated pot-fraction bets, so the root issue is broader
+  large-pot risk calibration/action selection rather than only the all-in
+  action.
+- Metrics file: autoresearch-session/poker_runs/20260515T105601Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -377, "ci95_chips_per_hand": 485, "mbb_per_hand": -3765, "hands": 300, "total_chips": -112957, "trace_records": 993, "decision_solver": 0, "decision_policy": 693, "street_all_in": {"preflop": 0, "flop": 0, "turn": 0, "river": 0}, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 0.524}`
+- Decision: Next root-cause step is richer trace evidence, not another training
+  run: record board cards, terminal bot cards, legal masks, model advantage
+  vectors, policy probabilities, and solver strategy distributions for large-pot
+  decisions so live losses can be mapped back to model calibration and resolver
+  sampling.
+
+## 20260515T110348Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T11:04:37Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T110347Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: A 20-hand solver-enabled smoke verified the richer trace schema on
+  real Slumbot data. The trace now contains board cards, legal masks, advantage
+  vectors, policy probabilities, terminal bot cards when exposed, selected
+  solver action IDs, and solver strategy distributions. It also surfaced a
+  concrete pathology: on several losses, tiny advantage margins selected very
+  large pot actions; the resolver can also place high mass on 2x/all-in actions
+  in some turn/river states.
+- Metrics file: autoresearch-session/poker_runs/20260515T110348Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -3671, "ci95_chips_per_hand": 3585, "mbb_per_hand": -36710, "hands": 20, "total_chips": -73420, "trace_records": 66, "decision_solver": 8, "decision_policy": 38, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 2.455}`
+- Decision: Rich traces are live-verified. Test whether sampled regret-matching
+  policy play fixes the greedy argmax calibration failure before changing code.
+
+## 20260515T110537Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T11:08:07Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T110535Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: A 300-hand sampled regret-matching policy-only run did not fix live
+  performance and was worse than the greedy no-solver control in this sample.
+  This falsifies the simple hypothesis that deterministic argmax over noisy
+  advantages is the whole issue. The learned mixed strategy itself still places
+  too much probability on large-pot lines against Slumbot.
+- Metrics file: autoresearch-session/poker_runs/20260515T110537Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"avg_chips_per_hand": -415, "ci95_chips_per_hand": 612, "mbb_per_hand": -4151, "hands": 300, "total_chips": -124544, "trace_records": 1005, "decision_solver": 0, "decision_policy": 705, "street_all_in": {"preflop": 2, "flop": 4, "turn": 8, "river": 6}, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 0.498}`
+- Decision: Do not switch default live play to sampled policy as a fix. The next
+  principled step is an offline trace-calibration audit: replay rich live traces
+  through the model and compare selected high-risk actions against legal-mask,
+  advantage-margin, and policy-probability evidence before proposing a learned
+  risk/calibration objective.

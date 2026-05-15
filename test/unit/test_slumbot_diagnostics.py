@@ -82,12 +82,30 @@ def test_action_diagnostics_writes_jsonl_trace(tmp_path):
 
     diagnostics.begin_hand(hand_index=7, client_pos=1, hole_cards=["Ac", "Kd"])
     diagnostics.record_policy_action(
-        4, "b500", "", client_pos=1, parsed=parse_action(""), street=0
+        4,
+        "b500",
+        "",
+        client_pos=1,
+        parsed=parse_action(""),
+        street=0,
+        board=["Ah", "7d", "2c"],
+        legal_mask=[0, 1, 1, 1, 1, 1, 0, 0, 1],
+        advantages=[-1.0, 0.2, 0.3, 0.4, 1.5, 0.1, -0.4, -0.5, 0.0],
+        strategy=[0.0, 0.1, 0.1, 0.1, 0.5, 0.1, 0.0, 0.0, 0.1],
+        strategy_source="regret",
     )
     diagnostics.record_solver_action(
-        "b300", street=2, latency_ms=125.5, n_hands=20, full_n_hands=100
+        "b300",
+        street=2,
+        latency_ms=125.5,
+        n_hands=20,
+        full_n_hands=100,
+        board=["Ah", "7d", "2c", "Ts"],
+        action_str="b500c/k",
+        solver_action_idx=7,
+        strategy={1: 0.25, 7: 0.75},
     )
-    diagnostics.end_hand(-250)
+    diagnostics.end_hand(-250, board=["Ah", "7d", "2c", "Ts", "9h"], bot_hole_cards=["Qs", "Qd"])
 
     records = [json.loads(line) for line in trace_path.read_text().splitlines()]
     assert [record["event"] for record in records] == [
@@ -98,10 +116,21 @@ def test_action_diagnostics_writes_jsonl_trace(tmp_path):
     assert records[0]["source"] == "policy"
     assert records[0]["action_name"] == "r0.75x"
     assert records[0]["hand_index"] == 7
+    assert records[0]["board"] == ["Ah", "7d", "2c"]
+    assert records[0]["legal_mask"] == [0, 1, 1, 1, 1, 1, 0, 0, 1]
+    assert records[0]["strategy_source"] == "regret"
+    assert records[0]["strategy_probs"][4] == 0.5
+    assert records[0]["advantages"][4] == 1.5
     assert records[1]["source"] == "solver"
     assert records[1]["solver_latency_ms"] == 125.5
+    assert records[1]["board"] == ["Ah", "7d", "2c", "Ts"]
+    assert records[1]["action_str"] == "b500c/k"
+    assert records[1]["solver_action_idx"] == 7
+    assert records[1]["solver_strategy"][7] == 0.75
     assert records[2]["winnings"] == -250
     assert records[2]["first_policy_action"] == "r0.75x"
+    assert records[2]["board"] == ["Ah", "7d", "2c", "Ts", "9h"]
+    assert records[2]["bot_hole_cards"] == ["Qs", "Qd"]
 
 
 def test_action_diagnostics_records_fallback_and_parse_error():

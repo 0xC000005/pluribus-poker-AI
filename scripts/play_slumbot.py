@@ -644,14 +644,24 @@ class ActionDiagnostics:
         self._current_hand_index = None
         self._current_client_pos = None
         self._current_hole_cards = []
+        self._current_terminal_board = []
+        self._current_bot_hole_cards = []
 
     def begin_hand(self, hand_index=None, client_pos=None, hole_cards=None):
         self._current_first_policy_action = None
         self._current_hand_index = hand_index
         self._current_client_pos = client_pos
         self._current_hole_cards = list(hole_cards or [])
+        self._current_terminal_board = []
+        self._current_bot_hole_cards = []
 
-    def end_hand(self, winnings):
+    def set_terminal_context(self, *, board=None, bot_hole_cards=None):
+        self._current_terminal_board = list(board or [])
+        self._current_bot_hole_cards = list(bot_hole_cards or [])
+
+    def end_hand(self, winnings, *, board=None, bot_hole_cards=None):
+        if board is not None or bot_hole_cards is not None:
+            self.set_terminal_context(board=board, bot_hole_cards=bot_hole_cards)
         action_name = self._current_first_policy_action
         if action_name is not None:
             self.first_policy_outcome_counts[action_name] += 1
@@ -660,6 +670,8 @@ class ActionDiagnostics:
             "event": "hand_result",
             "winnings": int(winnings),
             "first_policy_action": action_name,
+            "board": self._current_terminal_board,
+            "bot_hole_cards": self._current_bot_hole_cards,
         })
 
     def _emit_trace(self, record):
@@ -704,8 +716,31 @@ class ActionDiagnostics:
         drift = max(0.0, min(1.0, 1.0 - intended_weight))
         self.mapping_drifts.append(drift)
 
+    def _trace_numeric_list(self, values, *, as_int=False):
+        if values is None:
+            return None
+        if hasattr(values, "detach"):
+            values = values.detach().cpu().numpy()
+        if hasattr(values, "tolist"):
+            values = values.tolist()
+        if as_int:
+            return [int(x) for x in values]
+        return [float(x) for x in values]
+
+    def _trace_strategy_dict(self, strategy):
+        if strategy is None:
+            return None
+        out = [0.0] * len(ACTION_NAMES)
+        for action_idx, prob in dict(strategy).items():
+            idx = int(action_idx)
+            if 0 <= idx < len(out):
+                out[idx] = float(prob)
+        return out
+
     def record_policy_action(self, action_idx, incr, action_str, client_pos, parsed,
-                             street=None):
+                             street=None, board=None, legal_mask=None,
+                             advantages=None, strategy=None,
+                             strategy_source=None):
         self.decision_policy += 1
         action_name = ACTION_NAMES[action_idx]
         self.action_mix[action_name] += 1
@@ -727,13 +762,20 @@ class ActionDiagnostics:
             "action_name": action_name,
             "increment": incr,
             "action_str": action_str,
+            "board": list(board or []),
+            "legal_mask": self._trace_numeric_list(legal_mask, as_int=True),
+            "advantages": self._trace_numeric_list(advantages),
+            "strategy_probs": self._trace_numeric_list(strategy),
+            "strategy_source": strategy_source,
             "last_bet_size": int(parsed.get("last_bet_size", 0)),
             "street_last_bet_to": int(parsed.get("street_last_bet_to", 0)),
             "total_last_bet_to": int(parsed.get("total_last_bet_to", 0)),
         })
 
     def record_solver_action(self, incr, *, latency_ms=None, n_hands=None,
-                             full_n_hands=None, cached=False, street=None):
+                             full_n_hands=None, cached=False, street=None,
+                             board=None, action_str=None, solver_action_idx=None,
+                             strategy=None):
         self.decision_solver += 1
         self.action_mix["solver"] += 1
         street_name = self._street_name(street)
@@ -755,7 +797,13 @@ class ActionDiagnostics:
             "street": street_name,
             "street_index": int(street) if street is not None else None,
             "increment": incr,
+            "board": list(board or []),
+            "action_str": action_str,
             "cached": bool(cached),
+            "solver_action_idx": (
+                int(solver_action_idx) if solver_action_idx is not None else None
+            ),
+            "solver_strategy": self._trace_strategy_dict(strategy),
             "solver_latency_ms": float(latency_ms) if latency_ms is not None else None,
             "solver_n_hands": int(n_hands) if n_hands is not None else None,
             "solver_full_n_hands": int(full_n_hands) if full_n_hands is not None else None,
@@ -920,7 +968,17 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
     incr = action_to_slumbot(action_idx, parsed, action_str, client_pos)
     if diagnostics is not None:
         diagnostics.record_policy_action(
-            action_idx, incr, action_str, client_pos, parsed, street=parsed.get("st")
+            action_idx,
+            incr,
+            action_str,
+            client_pos,
+            parsed,
+            street=parsed.get("st"),
+            board=board,
+            legal_mask=legal_mask,
+            advantages=advantages,
+            strategy=strategy,
+            strategy_source=effective_source,
         )
     if verbose:
         print(f" [{ACTION_NAMES[action_idx]}→{incr}]", end="", flush=True)
@@ -974,7 +1032,13 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     if incr_cached is not None:
         incr = incr_cached
         if diagnostics is not None:
-            diagnostics.record_solver_action(incr, cached=True, street=st)
+            diagnostics.record_solver_action(
+                incr,
+                cached=True,
+                street=st,
+                board=board[:n_board],
+                action_str=street_str,
+            )
         if verbose:
             label = "TURN-SOLVE" if st == 2 else "RIVER-SOLVE"
             print(f" [{label}:CACHED>{incr}]", end="", flush=True)
@@ -1030,6 +1094,10 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
             n_hands=solver.n,
             full_n_hands=solver.full_n,
             street=st,
+            board=board[:n_board],
+            action_str=street_str,
+            solver_action_idx=solver_action,
+            strategy=strategy,
         )
     return incr
 
@@ -1083,6 +1151,11 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
         print(f"  pos={pos_name} cards={hole_cards}", end="", flush=True)
 
     if r.get('winnings') is not None:
+        if diagnostics is not None:
+            diagnostics.set_terminal_context(
+                board=r.get('board', []),
+                bot_hole_cards=r.get('bot_hole_cards', []),
+            )
         if verbose:
             print(f" | bot folded preflop | {r['winnings']:+d}")
         return token, r['winnings']
@@ -1138,6 +1211,11 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
         bot_cards = r.get('bot_hole_cards', [])
         board_str = ' '.join(board) if board else ''
         print(f" | {board_str} | {w:+d}")
+    if diagnostics is not None:
+        diagnostics.set_terminal_context(
+            board=r.get('board', []),
+            bot_hole_cards=r.get('bot_hole_cards', []),
+        )
 
     return token, w
 
