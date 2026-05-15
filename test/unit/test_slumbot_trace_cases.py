@@ -74,6 +74,33 @@ def test_extract_resolver_cases_from_trace_keeps_valid_turn_and_river_decisions(
     assert cases[0].source == "slumbot_trace"
 
 
+def test_extract_resolver_cases_from_trace_accepts_solver_decision_full_history(tmp_path):
+    trace = tmp_path / "trace.jsonl"
+    trace.write_text(
+        json.dumps(
+            {
+                "event": "decision",
+                "source": "solver",
+                "hand_index": 9,
+                "street_index": 2,
+                "hole_cards": ["Tc", "2s"],
+                "board": ["Jd", "Ts", "5h", "3d"],
+                "action_str": "",
+                "full_action_str": "b200b350b1800c/b3600b9000c/",
+                "client_pos": 0,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    cases = extract_resolver_cases_from_trace(trace)
+
+    assert len(cases) == 1
+    assert cases[0].label == "trace-hand9-decision1-street2"
+    assert cases[0].action_str == "b200b350b1800c/b3600b9000c/"
+
+
 def test_extract_resolver_cases_from_trace_respects_limit(tmp_path):
     trace = tmp_path / "trace.jsonl"
     record = {

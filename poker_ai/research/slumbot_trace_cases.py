@@ -33,7 +33,7 @@ def _valid_cards(cards: list[str]) -> bool:
 
 
 def _case_from_record(record: dict[str, Any], *, decision_index: int) -> ResolverBenchmarkCase | None:
-    if record.get("event") != "decision" or record.get("source") != "policy":
+    if record.get("event") != "decision" or record.get("source") not in {"policy", "solver"}:
         return None
     try:
         street = int(record.get("street_index"))
@@ -52,7 +52,7 @@ def _case_from_record(record: dict[str, Any], *, decision_index: int) -> Resolve
     if not _valid_cards([*hole_cards, *board]):
         return None
 
-    action_str = str(record.get("action_str") or "")
+    action_str = str(record.get("full_action_str") or record.get("action_str") or "")
     parsed = parse_action(action_str)
     if "error" in parsed:
         return None

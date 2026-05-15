@@ -6235,3 +6235,46 @@
   negative versus uniform overall and has not passed fixed-state resolver A/B.
   The next required gate is resolver-level evaluation using calibrated response
   ranges on disjoint trace states.
+
+## 20260515T133700Z-response-range-fixed-state-resolver-ab - diagnostic-pass
+
+- Timestamp: 2026-05-15T13:37:00Z
+- Type: fixed-state resolver A/B with session-disjoint Slumbot response ranges
+- Gate: Train calibrated opponent-response model on the first 500-hand trace,
+  replay all turn/river solver states from the second 500-hand trace, and
+  compare incumbent `RangeTracker` villain ranges against calibrated response
+  villain ranges before resolving the same public states.
+- Hypothesis: If calibrated response likelihood is a useful mechanism rather
+  than a range-likelihood-only artifact, it should improve revealed Slumbot
+  hand likelihood on the exact public states used by turn/river resolving and
+  produce legal, finite resolver policies.
+- Summary: Fixed `extract_resolver_cases_from_trace` so real Slumbot
+  turn/river decisions are included (`source=solver`) and use `full_action_str`
+  rather than street-local `action_str`. Added
+  `poker_ai/research/slumbot_response_solver_ab.py` and
+  `scripts/eval_slumbot_response_range_solver_ab.py` as an offline diagnostic;
+  live `play_slumbot.py` and `RangeTracker` remain unchanged.
+- Evidence:
+  - Resolver cases:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-session2-resolver-cases.json`
+  - 16-state smoke:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-session2-response-range-solver-ab-smoke16-truth.json`
+  - Full 192-state diagnostic:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-session2-response-range-solver-ab-full192-truth.json`
+  - Methodology review:
+    `autoresearch-session/poker_reviews/20260515T133501Z-slumbot-response-range-fixed-state-resolver-a-b`
+- Key metrics: Full gate evaluated 192/192 states with `passed=true`.
+  Response ranges improved revealed-hand log lift by `+0.9242` on average and
+  beat incumbent ranges on `72.92%` of states. The range swap materially changed
+  resolving (`action_agreement_rate=0.2708`,
+  `mean_action_l1_drift=0.3125`) and reduced top-action all-in rate from
+  `0.3750` to `0.3125` in this offline diagnostic.
+- Validation: `uv run pytest -q test/unit/test_slumbot_response_solver_ab.py
+  test/unit/test_slumbot_trace_cases.py` -> 6 passed. `uv run python -m
+  py_compile poker_ai/research/slumbot_response_solver_ab.py
+  scripts/eval_slumbot_response_range_solver_ab.py` passed. Methodology review
+  and objective audit passed.
+- Decision: Treat as a positive mechanism result, not a promotion. The next
+  step is an opt-in live or replay-counterfactual integration gate that feeds
+  calibrated response ranges into resolving while preserving the incumbent path
+  as default until Slumbot confidence evidence improves.
