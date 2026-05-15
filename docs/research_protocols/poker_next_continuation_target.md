@@ -319,6 +319,15 @@ teacher-aligned boundary detector or disagreement filter for live budget
 selection, evaluated on root-disjoint states. Keep it as a diagnostic gate; do
 not turn it into a Slumbot-specific budget sweep.
 
+The CFR500 holdout frontier confirms the shape of that target. Uniform CFR350
+is the cleanest tested approximation to the CFR500 teacher but costs about
+`1.19 s` per solve. The current `fast-live` profile is cheaper and slightly
+better on top-action agreement than `live`, but it is worse on L1/KL. The next
+implementation should therefore estimate action-boundary uncertainty from
+available profile/frontier signals and selectively escalate ambiguous states;
+success means improving teacher L1/KL per millisecond against `live`, not
+maximizing a Slumbot smoke score.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

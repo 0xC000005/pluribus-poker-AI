@@ -286,6 +286,16 @@ near action-boundary states, not a simple "more or fewer iterations" rule. A
 confidence run should be preceded by either disagreement filtering or a
 teacher-aligned boundary detector, not another fixed budget profile.
 
+Higher-teacher frontier status: the full 64-root CFR500 teacher run sharpens
+the tradeoff. Uniform CFR350 is the best tested budget against CFR500
+(`0.0823` L1, `0.0151` KL, `96.875%` action agreement) but costs about
+`1192 ms`. Mapping the current profiles onto that teacher, `fast-live` is
+cheaper (`0.64x` live latency) and slightly better on top-action agreement
+(`92.19%` vs `90.63%`), but worse in distributional fit (`0.2408` L1 and
+`0.1211` KL vs live `0.1496`/`0.0551`). This argues for a boundary-aware
+budget selector that escalates ambiguous states, not promoting fast-live as the
+default.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

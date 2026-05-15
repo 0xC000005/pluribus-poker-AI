@@ -230,6 +230,32 @@
   build a teacher-aligned boundary/disagreement detector or run a bounded live
   confidence comparison, not to add another budget profile.
 
+## 20260515T014600Z-cfr500-budget-frontier-boundary-check - passed
+
+- Timestamp: 2026-05-15T01:46:00Z
+- Type: diagnostic
+- Gate: 64-root fixed-state CFR500 teacher frontier
+- Hypothesis: A higher-budget teacher can distinguish whether the `fast-live`
+  disagreements are harmless speed wins or action-boundary instability.
+- Failure class: compute_integration
+- Summary: Ran the existing budget-frontier evaluator on the same 64-root
+  holdout with `torch-levelsync-cuda`, using CFR500 as teacher and budgets
+  `100,150,250,350`. Also compared the current `live` and `fast-live` profile
+  schedules by selecting the corresponding budget metrics from the frontier.
+- Evidence:
+  - Frontier artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_100_150_250_350_vs500_holdout64_seed20260515.json`
+- Metrics: uniform CFR350 was the best tested budget against CFR500 (`0.0823`
+  L1, `0.0151` KL, `96.875%` action agreement, `1192 ms`). CFR250 had
+  `0.1551` L1, `0.0561` KL, `90.625%` action agreement, and `858 ms`; CFR150
+  had `0.2566` L1, `0.1271` KL, `90.625%` agreement, and `524 ms`; CFR100 had
+  `0.3556` L1, `0.1880` KL, `89.063%` agreement, and `358 ms`. The derived
+  profile comparison to CFR500 was mixed: `fast-live` had better top-action
+  agreement than `live` (`92.19%` vs `90.63%`) but worse L1/KL (`0.2408`/
+  `0.1211` vs `0.1496`/`0.0551`) at about `0.64x` live latency.
+- Decision: do not promote `fast-live` or spend a long confidence run yet. The
+  next method target should be a teacher-aligned boundary detector or selective
+  escalation rule that improves L1/KL per millisecond against `live`.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z
