@@ -343,6 +343,13 @@ where computationally feasible, and test whether profile-L1 selective
 escalation still improves L1/KL per millisecond against `live`. If it does not
 hold, return to trace-derived uncertainty rather than tuning the top-k.
 
+The 128-root scale-up passed, so the next target can move from artifact-only
+diagnostics to integration design. The most conservative path is still not to
+change Slumbot play directly; first add a resolver-benchmark mode or adapter
+that can run `live` plus profile-L1 selective escalation on fixed states and
+report the same CFR500-teacher deltas. Only after that should a short live
+Slumbot smoke exercise the selected-budget path.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

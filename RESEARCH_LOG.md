@@ -314,6 +314,35 @@
 - Decision: keep this gate diagnostic-only and scale it to a larger
   root-disjoint pool before any live Slumbot policy change.
 
+## 20260515T021000Z-selective-escalation-scale128 - passed
+
+- Timestamp: 2026-05-15T02:10:00Z
+- Type: diagnostic
+- Gate: 128-root CFR500 frontier + two 64/64 split selective-escalation checks
+- Hypothesis: The profile-L1 selective escalation signal should survive a
+  larger root-disjoint slice before it is considered for fixed-state integration.
+- Failure class: search_quality
+- Summary: Reran live-vs-fast profile comparison and CFR500 budget frontier on
+  roots `128..255`, then evaluated train-thresholded selective CFR350
+  escalation in both 64/64 split directions.
+- Evidence:
+  - Profile artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/solver_budget_profiles_live_vs_fast_holdout128_seed20260515.json`
+  - CFR500 frontier: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_100_150_250_350_vs500_holdout128_seed20260515.json`
+  - Split A: `autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_escalation_profile_l1_train128_holdout192_seed20260515.json`
+  - Split B: `autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_escalation_profile_l1_train192_holdout128_seed20260515.json`
+- Metrics: the 128-root profile comparison passed with `95.3125%` live-vs-fast
+  action agreement, mean profile L1 `0.1305`, KL `0.0279`, and `0.6430x`
+  latency. Against CFR500, uniform CFR350 remained the best fixed budget
+  (`0.0841` L1, `0.0206` KL, `97.656%` action agreement, `1177 ms`), while
+  CFR250 was `0.1541` L1, `0.0575` KL, `94.531%` action agreement, and
+  `847 ms`. Selective escalation train `128..191` -> holdout `192..255`
+  selected 6/64 roots and improved L1/KL from `0.1611`/`0.0674` to
+  `0.1304`/`0.0476` at `1.0394x` latency. Reverse split selected 8/64 roots
+  and improved `0.1496`/`0.0551` to `0.1205`/`0.0427` at `1.0501x` latency.
+- Decision: selective escalation remains diagnostic-only but has now survived a
+  larger split. The next step is fixed-state integration or adapter design,
+  not direct Slumbot default changes.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

@@ -318,6 +318,15 @@ split selected 3/32 and improved `0.1662`/`0.0682` to `0.1392`/`0.0543` at
 `1.0366x`. Keep this diagnostic-only until repeated on a larger root-disjoint
 pool.
 
+Scaled selective-escalation status: the same gate now passes on a larger
+128-root slice (`128..255`) using a CFR500 teacher frontier. Training the
+profile-L1 threshold on roots `128..191` and evaluating on `192..255` selected
+6/64 roots and improved L1/KL from `0.1611`/`0.0674` to `0.1304`/`0.0476` at
+`1.0394x` live latency. The reverse split selected 8/64 and improved
+`0.1496`/`0.0551` to `0.1205`/`0.0427` at `1.0501x`. This remains
+diagnostic-only, but it is now the strongest local evidence for selective
+compute allocation.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
