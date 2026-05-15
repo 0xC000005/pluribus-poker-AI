@@ -15,6 +15,60 @@ if str(REPO_ROOT) not in sys.path:
 from poker_ai.research.sampled_deep_cfr_traversal_probe import run_probe_grid  # noqa: E402
 
 
+def _case_label(case: dict) -> str:
+    return f"seed={case.get('seed')} initial_chips={case.get('initial_chips')}"
+
+
+def evaluate_gate_failures(
+    metrics: dict,
+    *,
+    min_top_match_rate: float | None = None,
+    min_mean_speedup: float | None = None,
+    max_mean_abs_bias: float | None = None,
+    require_all_top_match: bool = False,
+    max_case_mean_abs_bias: float | None = None,
+) -> list[str]:
+    failures: list[str] = []
+    if (
+        min_top_match_rate is not None
+        and metrics["top_action_match_rate"] < min_top_match_rate
+    ):
+        failures.append(
+            f"top_action_match_rate {metrics['top_action_match_rate']:.6f} "
+            f"< {min_top_match_rate:.6f}"
+        )
+    if min_mean_speedup is not None and metrics["mean_speedup"] < min_mean_speedup:
+        failures.append(
+            f"mean_speedup {metrics['mean_speedup']:.6f} < {min_mean_speedup:.6f}"
+        )
+    if max_mean_abs_bias is not None and metrics["mean_abs_bias"] > max_mean_abs_bias:
+        failures.append(
+            f"mean_abs_bias {metrics['mean_abs_bias']:.6f} > {max_mean_abs_bias:.6f}"
+        )
+    if require_all_top_match:
+        mismatches = [case for case in metrics["cases"] if not bool(case["top_action_match"])]
+        if mismatches:
+            failures.append(
+                "top_action_match failed for "
+                + ", ".join(_case_label(case) for case in mismatches)
+            )
+    if max_case_mean_abs_bias is not None:
+        biased_cases = [
+            case
+            for case in metrics["cases"]
+            if float(case["mean_abs_bias"]) > max_case_mean_abs_bias
+        ]
+        if biased_cases:
+            failures.append(
+                f"case mean_abs_bias exceeded {max_case_mean_abs_bias:.6f} for "
+                + ", ".join(
+                    f"{_case_label(case)} mean_abs_bias={float(case['mean_abs_bias']):.6f}"
+                    for case in biased_cases
+                )
+            )
+    return failures
+
+
 def _parse_ints(value: str) -> list[int]:
     parsed = [int(part) for part in value.split(",") if part.strip()]
     if not parsed:
@@ -39,9 +93,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--priority-forced-count", type=int, default=0)
     parser.add_argument(
         "--priority-source",
-        choices=("strategy", "advantage", "abs-advantage"),
+        choices=("strategy", "advantage", "abs-advantage", "priority-model"),
         default="strategy",
     )
+    parser.add_argument("--priority-checkpoint")
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--n-layers", type=int, default=1)
     parser.add_argument("--uniform-mix", type=float, default=0.25)
@@ -49,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-top-match-rate", type=float)
     parser.add_argument("--min-mean-speedup", type=float)
     parser.add_argument("--max-mean-abs-bias", type=float)
+    parser.add_argument("--require-all-top-match", action="store_true")
+    parser.add_argument("--max-case-mean-abs-bias", type=float)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
 
@@ -64,29 +121,23 @@ def main(argv: list[str] | None = None) -> int:
         sampling_mode=args.sampling_mode,
         priority_forced_count=args.priority_forced_count,
         priority_source=args.priority_source,
+        priority_checkpoint=args.priority_checkpoint,
         device=args.device,
     )
-    failures = []
-    if (
-        args.min_top_match_rate is not None
-        and metrics["top_action_match_rate"] < args.min_top_match_rate
-    ):
-        failures.append(
-            f"top_action_match_rate {metrics['top_action_match_rate']:.6f} "
-            f"< {args.min_top_match_rate:.6f}"
-        )
-    if args.min_mean_speedup is not None and metrics["mean_speedup"] < args.min_mean_speedup:
-        failures.append(
-            f"mean_speedup {metrics['mean_speedup']:.6f} < {args.min_mean_speedup:.6f}"
-        )
-    if args.max_mean_abs_bias is not None and metrics["mean_abs_bias"] > args.max_mean_abs_bias:
-        failures.append(
-            f"mean_abs_bias {metrics['mean_abs_bias']:.6f} > {args.max_mean_abs_bias:.6f}"
-        )
+    failures = evaluate_gate_failures(
+        metrics,
+        min_top_match_rate=args.min_top_match_rate,
+        min_mean_speedup=args.min_mean_speedup,
+        max_mean_abs_bias=args.max_mean_abs_bias,
+        require_all_top_match=args.require_all_top_match,
+        max_case_mean_abs_bias=args.max_case_mean_abs_bias,
+    )
     metrics["gate_thresholds"] = {
         "min_top_match_rate": args.min_top_match_rate,
         "min_mean_speedup": args.min_mean_speedup,
         "max_mean_abs_bias": args.max_mean_abs_bias,
+        "require_all_top_match": args.require_all_top_match,
+        "max_case_mean_abs_bias": args.max_case_mean_abs_bias,
     }
     metrics["gate_failures"] = failures
     metrics["passed"] = not failures

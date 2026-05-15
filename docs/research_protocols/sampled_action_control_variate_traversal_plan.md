@@ -60,6 +60,9 @@ or Slumbot-specific patch.
   action ordering. The first CPU probe found sample-4 faster but top-unstable,
   while sample-8 matched top action but gave little speedup after exact
   enumeration.
+- Aggregate grid metrics that hide one unstable public state. Learned
+  priority-model sampling reached the aggregate sample-4 thresholds, but the
+  stricter gate exposed a seed-specific top-action flip and high per-case bias.
 - Fixed higher sample budgets that recover action ordering by nearly enumerating
   the tree. A four-seed sample-6 grid matched top actions but lost throughput,
   so fixed-count sampling alone is not the target method.
@@ -69,7 +72,9 @@ or Slumbot-specific patch.
 
 ## Next Implementation Step
 
-Investigate a true action-value priority model before CUDA integration.
-Strategy, raw-advantage, and absolute-advantage priority did not fix the
-four-seed traversal grid; the sampler must be guided by a value signal trained
-for branch impact, not by the current regret network alone.
+Train a true traversal branch-impact priority model before CUDA integration.
+The restricted showdown-value proxy was the first priority signal to pass
+aggregate thresholds, but it failed the stricter per-case gate. The next model
+should learn from exhaustive traversal branch values or uncertainty/margin
+labels, then use sampled traversal only when the priority model can preserve
+root action ordering on every held-out probe state.

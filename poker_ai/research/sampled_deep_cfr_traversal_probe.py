@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import copy
 import random
 import time
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -63,6 +64,7 @@ def _priority_scores(
     advantages: np.ndarray,
     *,
     priority_source: str,
+    priority_values: np.ndarray | None = None,
 ) -> np.ndarray:
     if priority_source == "strategy":
         return strategy
@@ -70,7 +72,30 @@ def _priority_scores(
         return advantages
     if priority_source == "abs-advantage":
         return np.abs(advantages)
+    if priority_source == "priority-model":
+        if priority_values is None:
+            raise ValueError("priority-model source requires priority_values")
+        return priority_values
     raise ValueError(f"unknown priority source: {priority_source}")
+
+
+def _load_priority_model(
+    checkpoint_path: str | None,
+    device: torch.device,
+) -> tuple[ValueNetwork | None, float]:
+    if not checkpoint_path:
+        return None, 1.0
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model = ValueNetwork(
+        N_FEATURES,
+        hidden_dim=int(checkpoint.get("hidden_dim", 128)),
+        output_dim=N_ACTIONS,
+        n_layers=int(checkpoint.get("n_layers", 2)),
+        use_betting_history=bool(checkpoint.get("uses_betting_history", True)),
+    ).to(device)
+    model.load_state_dict(checkpoint["value_net"])
+    model.eval()
+    return model, float(checkpoint.get("initial_chips", 1) or 1)
 
 
 def _initial_chips(state: PokerState) -> float:
@@ -260,6 +285,8 @@ def _sampled_traverse(
     sampling_mode: str,
     priority_forced_count: int,
     priority_source: str,
+    priority_model: ValueNetwork | None,
+    priority_scale: float,
 ) -> _TraversalResult:
     if state.is_terminal:
         return _TraversalResult(value=float(state.payout[traverser]))
@@ -277,6 +304,8 @@ def _sampled_traverse(
             sampling_mode=sampling_mode,
             priority_forced_count=priority_forced_count,
             priority_source=priority_source,
+            priority_model=priority_model,
+            priority_scale=priority_scale,
         )
 
     strategy, legal_mask, legal_actions, advantages = _strategy(value_net, state, device)
@@ -310,6 +339,23 @@ def _sampled_traverse(
                 sample_count=sample_count,
             )
         elif sampling_mode == "priority-without-replacement":
+            priority_values = None
+            if priority_source == "priority-model":
+                if priority_model is None:
+                    raise ValueError("priority-model source requires priority_checkpoint")
+                with torch.no_grad():
+                    priority_values = (
+                        priority_model(
+                            torch.from_numpy(state.to_feature_vector())
+                            .to(device)
+                            .unsqueeze(0)
+                        )
+                        .squeeze(0)
+                        .detach()
+                        .cpu()
+                        .numpy()
+                        * float(priority_scale)
+                    )
             sampled, inclusion_probs = priority_sample_without_replacement(
                 traverser_rng,
                 q,
@@ -320,6 +366,7 @@ def _sampled_traverse(
                     strategy,
                     advantages,
                     priority_source=priority_source,
+                    priority_values=priority_values,
                 ),
             )
             sampled_all_legal = int(sampled.size) >= int(legal_indices.size)
@@ -341,6 +388,8 @@ def _sampled_traverse(
                 sampling_mode=sampling_mode,
                 priority_forced_count=priority_forced_count,
                 priority_source=priority_source,
+                priority_model=priority_model,
+                priority_scale=priority_scale,
             )
             sampled_values[idx] = float(child.value)
         if sampled_all_legal:
@@ -388,6 +437,8 @@ def _sampled_traverse(
         sampling_mode=sampling_mode,
         priority_forced_count=priority_forced_count,
         priority_source=priority_source,
+        priority_model=priority_model,
+        priority_scale=priority_scale,
     )
 
 
@@ -405,6 +456,8 @@ def _mean_root_regret(
     sampling_mode: str,
     priority_forced_count: int,
     priority_source: str,
+    priority_model: ValueNetwork | None,
+    priority_scale: float,
 ) -> tuple[np.ndarray, float]:
     regrets = []
     started = time.perf_counter()
@@ -426,6 +479,8 @@ def _mean_root_regret(
                 sampling_mode=sampling_mode,
                 priority_forced_count=priority_forced_count,
                 priority_source=priority_source,
+                priority_model=priority_model,
+                priority_scale=priority_scale,
             )
         else:
             result = _exhaustive_traverse(
@@ -462,6 +517,7 @@ def run_probe(
     sampling_mode: str = "with-replacement",
     priority_forced_count: int = 0,
     priority_source: str = "strategy",
+    priority_checkpoint: str | None = None,
     seed: int = 20260525,
     device: str = "cpu",
 ) -> dict[str, Any]:
@@ -477,6 +533,7 @@ def run_probe(
         n_layers=int(n_layers),
     ).to(resolved_device)
     value_net.eval()
+    priority_model, priority_scale = _load_priority_model(priority_checkpoint, resolved_device)
 
     reference_repeats = int(n_reference_repeats or n_repeats)
     exhaustive_mean, exhaustive_seconds = _mean_root_regret(
@@ -492,6 +549,8 @@ def run_probe(
         sampling_mode=sampling_mode,
         priority_forced_count=priority_forced_count,
         priority_source=priority_source,
+        priority_model=priority_model,
+        priority_scale=priority_scale,
     )
     sampled_mean, sampled_seconds = _mean_root_regret(
         state,
@@ -506,6 +565,8 @@ def run_probe(
         sampling_mode=sampling_mode,
         priority_forced_count=priority_forced_count,
         priority_source=priority_source,
+        priority_model=priority_model,
+        priority_scale=priority_scale,
     )
     legal_mask = get_legal_mask(state) > 0.0
     bias = sampled_mean - exhaustive_mean
@@ -524,6 +585,8 @@ def run_probe(
         "sampling_mode": sampling_mode,
         "priority_forced_count": int(priority_forced_count),
         "priority_source": priority_source,
+        "priority_checkpoint": str(Path(priority_checkpoint)) if priority_checkpoint else "",
+        "seed": int(seed),
         "uniform_mix": float(uniform_mix),
         "hidden_dim": int(hidden_dim),
         "n_layers": int(n_layers),
@@ -560,6 +623,7 @@ def run_probe_grid(
     sampling_mode: str = "with-replacement",
     priority_forced_count: int = 0,
     priority_source: str = "strategy",
+    priority_checkpoint: str | None = None,
     device: str = "cpu",
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
@@ -577,6 +641,7 @@ def run_probe_grid(
                     sampling_mode=sampling_mode,
                     priority_forced_count=priority_forced_count,
                     priority_source=priority_source,
+                    priority_checkpoint=priority_checkpoint,
                     seed=int(seed),
                     device=device,
                 )
@@ -594,6 +659,7 @@ def run_probe_grid(
         "sampling_mode": sampling_mode,
         "priority_forced_count": int(priority_forced_count),
         "priority_source": priority_source,
+        "priority_checkpoint": str(Path(priority_checkpoint)) if priority_checkpoint else "",
         "n_repeats": int(n_repeats),
         "n_reference_repeats": int(n_reference_repeats or n_repeats),
         "top_action_match_rate": round(float(np.mean(top_matches)), 6),

@@ -4919,3 +4919,27 @@
   train an uncertainty-aware priority model against exhaustive traversal
   targets, then use sampled traversal only where the priority model is
   confident.
+
+## 20260515T143000Z-priority-model-sampled-traversal-check - partial
+
+- Timestamp: 2026-05-15T14:30:00Z
+- Type: priority_sampler_check
+- Gate: learned-priority sample-4 traversal grid plus stricter per-case gate
+- Hypothesis: A separate learned action-value-like checkpoint should be a
+  better forced-action priority source than strategy, raw advantage, or
+  absolute advantage from the current regret network.
+- Failure class: action_order_variance
+- Summary: Added `priority_source=priority-model` support to the sampled
+  traversal probe and grid runner, loading a `ValueNetwork` checkpoint only as
+  the branch-priority source. The existing XXL restricted-value baseline was
+  the first priority signal to pass the aggregate four-seed sample-4 thresholds
+  (`0.75` top-match, positive speedup, low mean bias). A stricter gate then
+  correctly rejected the same run because seed `20260527` flipped the root top
+  action and exceeded the per-case bias cap. The result is promising as
+  mechanism evidence, but not CUDA-ready or promotable.
+- Commands: `uv run pytest -q test/unit/test_sampled_deep_cfr_traversal_probe.py`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --priority-source priority-model --priority-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_model_xxl_f2_sample4_4seeds_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --priority-source priority-model --priority-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --require-all-top-match --max-case-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_model_xxl_f2_sample4_4seeds_strict_20260515.json`
+- Key metrics: `{"aggregate_gate_top_match_rate": 0.75, "aggregate_gate_mean_speedup": 1.170238, "aggregate_gate_mean_abs_bias": 0.040039, "strict_gate_passed": false, "strict_gate_failure_seed": 20260527, "strict_gate_seed20260527_top_match": false, "strict_gate_seed20260527_mean_abs_bias": 0.095097, "promotion": false}`
+- Decision: Do not integrate priority-model sample-4 traversal into CUDA yet.
+  Keep the stricter per-case gate. The next principled step is to build a
+  branch-impact priority target from exhaustive traversal values, rather than
+  reusing the restricted showdown-value baseline as a proxy.
