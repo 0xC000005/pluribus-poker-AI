@@ -1268,6 +1268,46 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
     assert "policy-head" in goal["gates"][queued["gate"]]["commands"][0]
 
 
+def test_cli_enqueue_slumbot_accepts_torch_levelsync_cuda_backend(tmp_path):
+    script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
+    model = tmp_path / "models" / "candidate.pt"
+    model.parent.mkdir()
+    model.write_bytes(b"checkpoint")
+
+    subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "init"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    _cli_set_open_research(script, tmp_path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root",
+            str(tmp_path),
+            "enqueue-slumbot",
+            "--model",
+            str(model),
+            "--hands",
+            "2",
+            "--solver-backend",
+            "torch-levelsync-cuda",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    queued = json.loads(result.stdout)
+    goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
+    command = goal["gates"][queued["gate"]]["commands"][0]
+    assert "--solver-backend" in command
+    assert "torch-levelsync-cuda" in command
+
+
 def test_cli_enqueue_resolver_benchmark_creates_gate(tmp_path):
     script = Path(__file__).resolve().parents[2] / "scripts" / "poker_autoresearch.py"
     model = tmp_path / "models" / "candidate.pt"

@@ -27,7 +27,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-solver", action="store_true")
     parser.add_argument(
         "--solver-backend",
-        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        choices=(
+            "auto",
+            "cpu",
+            "torch-cuda",
+            "torch-cpu",
+            "torch-levelsync-cuda",
+            "torch-levelsync-cpu",
+        ),
         default="auto",
     )
     parser.add_argument(

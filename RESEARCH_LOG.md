@@ -9,6 +9,33 @@
 - Notes: generated local state and run artifacts live under
   `autoresearch-session/` and are ignored except for the directory README.
 
+## 20260515T004946Z-slumbot-torch-levelsync-cuda-integration - passed
+
+- Timestamp: 2026-05-15T00:49:46Z
+- Type: protected integration diagnostic
+- Gate: TDD + methodology-review + objective-audit + live smoke
+- Hypothesis: The new level-synchronous Torch CUDA resolver should be callable
+  from live Slumbot smoke paths explicitly, without changing the default solver
+  backend or promotion policy.
+- Failure class: compute_integration
+- Summary: Extended Slumbot and autoresearch CLI backend choices to accept
+  `torch-levelsync-cuda` and `torch-levelsync-cpu`, while leaving `auto` on the
+  stable CPU path. Added regression tests for queue forwarding and Slumbot help
+  exposure.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T004500Z-torch-levelsync-cuda-cfr`
+  - Tests: `uv run pytest -q test/unit/test_poker_autoresearch.py test/unit/test_slumbot_diagnostics.py test/unit/test_solver_backend.py` -> `67 passed`.
+  - Objective audit with review passed for `scripts/play_slumbot.py`,
+    `scripts/poker_autoresearch_slumbot.py`, `scripts/poker_autoresearch.py`,
+    and the new tests.
+  - Live smoke: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 3 --greedy --no-allin --solver-backend torch-levelsync-cuda --timeout-seconds 600` -> passed.
+- Metrics: live smoke had `0` API errors, `0` parse errors, `2` solver
+  decisions, mean reported solver latency `1270.3 ms`, max `1593.3 ms`, mean
+  solver hands `1005.5`, and elapsed `2.031 s/hand`.
+- Decision: integration is valid but not promoted. Do not flip `auto` to CUDA
+  until mixed turn/river fixed-state parity and live latency attribution show
+  that the end-to-end path beats CPU on the same states.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

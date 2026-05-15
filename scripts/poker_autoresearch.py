@@ -118,7 +118,14 @@ def build_parser() -> argparse.ArgumentParser:
     slumbot.add_argument("--no-solver", action="store_true")
     slumbot.add_argument(
         "--solver-backend",
-        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        choices=(
+            "auto",
+            "cpu",
+            "torch-cuda",
+            "torch-cpu",
+            "torch-levelsync-cuda",
+            "torch-levelsync-cpu",
+        ),
         default="auto",
     )
     slumbot.add_argument(
@@ -136,7 +143,14 @@ def build_parser() -> argparse.ArgumentParser:
     resolver.add_argument("--solver-iterations", type=int, default=25)
     resolver.add_argument(
         "--solver-backend",
-        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        choices=(
+            "auto",
+            "cpu",
+            "torch-cuda",
+            "torch-cpu",
+            "torch-levelsync-cuda",
+            "torch-levelsync-cpu",
+        ),
         default="auto",
     )
     resolver.add_argument("--max-cases", type=int)
@@ -178,7 +192,14 @@ def build_parser() -> argparse.ArgumentParser:
     falsify.add_argument("--solver-iterations", type=int, default=25)
     falsify.add_argument(
         "--solver-backend",
-        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        choices=(
+            "auto",
+            "cpu",
+            "torch-cuda",
+            "torch-cpu",
+            "torch-levelsync-cuda",
+            "torch-levelsync-cpu",
+        ),
         default="auto",
     )
     falsify.add_argument("--max-resolver-cases", type=int)

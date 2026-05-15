@@ -175,3 +175,4 @@ def test_play_slumbot_script_help_imports_from_repo_root():
 
     assert result.returncode == 0
     assert "--strategy-source" in result.stdout
+    assert "torch-levelsync-cuda" in result.stdout

@@ -259,10 +259,13 @@ first real GPU resolver win. On the 64-root turn holdout,
 solver latency to `39.7/55.4 ms`, while CPU was previously `144.8/280.4 ms`.
 CPU CFR25 versus Torch CUDA CFR25 parity over the same roots had perfect
 top-action agreement and small strategy drift (`0.0281` mean L1). The next
-single continuation target should therefore be **validation before promotion**:
-run mixed turn/river parity and a no-strategy-change Slumbot latency smoke with
-`torch-levelsync-cuda`, then decide whether `auto` can safely prefer it on CUDA
-for supported no-callback CFR+ solves.
+single continuation target is still **validation before promotion**. The
+Slumbot smoke path now accepts explicit `torch-levelsync-cuda`, and a 3-hand
+live smoke passed with two solver calls and no parse/API errors, but mean live
+reported solver latency was `1270 ms`. Before changing `auto`, isolate whether
+the remaining live cost is range construction, solver-tree construction,
+callback pruning, or CUDA recurrence overhead, then compare against CPU on the
+same fixed mixed turn/river states.
 
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow

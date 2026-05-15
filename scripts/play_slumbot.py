@@ -1009,9 +1009,16 @@ def main():
     parser.add_argument('--no-solver', action='store_true', help='Disable river CFR solver')
     parser.add_argument(
         '--solver-backend',
-        choices=('auto', 'cpu', 'torch-cuda', 'torch-cpu'),
+        choices=(
+            'auto',
+            'cpu',
+            'torch-cuda',
+            'torch-cpu',
+            'torch-levelsync-cuda',
+            'torch-levelsync-cpu',
+        ),
         default='auto',
-        help='Turn/river CFR+ backend. auto uses CUDA when available.',
+        help='Turn/river CFR+ backend. auto uses the stable reference CPU path.',
     )
     parser.add_argument(
         '--strategy-source',

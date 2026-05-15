@@ -208,6 +208,15 @@ latency `330 ms`, compared with the earlier Python-driven `torch-cuda` smoke
 of `1219 ms` and CPU `743 ms`. Keep this backend explicit until mixed
 turn/river parity and live Slumbot latency are checked.
 
+Slumbot CUDA resolver integration status: explicit live-play wiring is now in
+place for `torch-levelsync-cuda` and `torch-levelsync-cpu`; `auto` still uses
+the stable CPU path. A 3-hand live smoke with `--greedy --no-allin
+--solver-backend torch-levelsync-cuda` passed with zero API errors, zero parse
+errors, two solver decisions, and mean reported solver latency `1270 ms`. This
+validates the wrapper path, but it does not promote CUDA auto-selection because
+live latency still includes range tracking, solver construction, and small-hand
+overhead beyond the fixed-state kernel benchmark.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
