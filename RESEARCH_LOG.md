@@ -5946,3 +5946,41 @@
 - Decision: Treat legacy traces without `full_action_str` as early-street-only
   evidence whenever the latest decision is a solver record. Collect new traces
   before training or judging any late-street opponent-response model.
+
+## 20260515T123741Z-full-history-slumbot-belief-evidence - failed
+
+- Timestamp: 2026-05-15T12:37:41Z
+- Type: trace evidence
+- Gate: Fresh Slumbot full-history trace diagnostics
+- Hypothesis: With replayable `full_action_str`, the larger trace should
+  confirm whether the opponent-response and true-range failures persist beyond
+  the original 50-hand smoke and include late-street evidence.
+- Failure class: belief_calibration
+- Summary: Collected a fresh 200-hand no-allin average-policy Slumbot trace
+  after the trace-format fix. The run had zero parse/API errors, 322 policy
+  decisions, 77 CUDA solver decisions, and every decision record included
+  `full_action_str`. The chip result remained negative (`-752 +/- 691`
+  chips/hand), but this sample is used as diagnostic evidence, not promotion.
+- Evidence:
+  - Trace:
+    `autoresearch-session/slumbot_traces/slumbot-candidate-trace-20260515T123500Z-avg-strategy-noallin-fullhist-200h.jsonl`
+  - Action likelihood:
+    `autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-action-likelihood.json`
+  - Opponent-response baseline:
+    `autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-opponent-response-baseline.json`
+  - True range:
+    `autoresearch-session/slumbot_trace_cases/20260515T123500Z-avg-strategy-noallin-fullhist-200h-true-range.json`
+- Key metrics: action likelihood scored 336 actions from 141 hands with mean
+  log-lift `-0.2896`; calls were the main failure (`-0.9410`), while bets were
+  mildly positive (`+0.0937`). Street slices were preflop `-0.4293`, flop
+  `-0.1477`, turn `+0.0605`, and river `+0.0619`. The leave-one-hand-out
+  empirical prior again beat the model: global LOO `+0.6850` and street LOO
+  `+0.8400` versus model `-0.2896`, driven by calls/checks. True-range
+  likelihood scored 191 hands with overall log-lift `-0.4178`; turn `-1.3103`,
+  river `-1.4882`, and large absolute pots `-1.0011`.
+- Decision: The blocker is now better localized. The action-likelihood model is
+  coarse-population mismatched on continuation actions, and the resulting range
+  tracker remains especially wrong on late streets and large pots. The next
+  principled method should learn an opponent-response/public-belief update from
+  full-history traces and validate on trace-held-out action likelihood plus
+  revealed-hand range likelihood before any live Slumbot confidence spend.
