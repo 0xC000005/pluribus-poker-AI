@@ -4189,9 +4189,9 @@
 - Commands: `uv run pytest -q test/unit/test_slumbot_diagnostics.py test/unit/test_poker_autoresearch_slumbot.py`; `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T034000Z-slumbot-street-action-diagnostics --require-complete`; `uv run python scripts/poker_autoresearch.py objective-audit --changed-path scripts/play_slumbot.py --changed-path poker_ai/research/slumbot_eval.py --changed-path test/unit/test_slumbot_diagnostics.py --changed-path test/unit/test_poker_autoresearch_slumbot.py --review-dir autoresearch-session/poker_reviews/20260515T034000Z-slumbot-street-action-diagnostics`; `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 2400`
 - Key metrics: `{"avg_chips_per_hand": -351, "ci95_chips_per_hand": 458, "api_errors": 0, "parse_errors": 0, "decision_policy": 364, "decision_solver": 28, "street_all_in": {"preflop": 60, "flop": 22, "turn": 0, "river": 0}, "street_decisions": {"preflop": 308, "flop": 56, "turn": 20, "river": 8}, "street_solver": {"preflop": 0, "flop": 0, "turn": 20, "river": 8}, "solver_latency_mean_ms": 815.2, "promotion": false}`
 
-## 20260515T041500Z-early-street-policy-calibration-diagnostic - passed
+## 20260515T035000Z-early-street-policy-calibration-diagnostic - passed
 
-- Timestamp: 2026-05-15T04:15:00Z
+- Timestamp: 2026-05-15T03:50:00Z
 - Type: local_calibration_diagnostic
 - Gate: early-street-policy-target-diagnostics
 - Hypothesis: The live early-street all-in failure should be locally detectable by measuring per-street action distributions from learned self-play policy-calibration targets, without adding Slumbot-specific rules.
@@ -4200,3 +4200,15 @@
 - Summary: Extended policy-calibration target metadata with `per_street_target_diagnostics` and unit coverage. Built 4,096-target CUDA samples for `iter1000` and `iter900`. The local diagnostic predicts the live ordering: `iter900` is pathological with `58.09%` preflop top-action all-in and `52.18%` mean all-in probability, consistent with its later live `836/999` all-in mix. `iter1000` is less extreme but still early-street aggressive (`17.33%` preflop and `30.80%` flop top-action all-in), matching the 300-hand street-level Slumbot attribution. This gives a cheap pre-Slumbot calibration gate for future candidates.
 - Commands: `uv run pytest -q test/unit/test_policy_targets.py`; `uv run python scripts/build_policy_calibration_targets.py --checkpoint models/slumbot_2p_iter1000.pt --output autoresearch-session/policy_calibration/iter1000_selfplay_policy_targets_4096_seed20260515.npz --n-targets 4096 --seed 20260515 --strategy-source regret --device cuda`; `uv run python scripts/build_policy_calibration_targets.py --checkpoint models/slumbot_2p_iter900.pt --output autoresearch-session/policy_calibration/iter900_selfplay_policy_targets_4096_seed20260515.npz --n-targets 4096 --seed 20260515 --strategy-source regret --device cuda`
 - Key metrics: `{"iter1000_preflop_top_allin": 0.173309, "iter1000_flop_top_allin": 0.308036, "iter1000_mean_allin_prob": 0.208411, "iter900_preflop_top_allin": 0.580899, "iter900_flop_top_allin": 0.65, "iter900_mean_allin_prob": 0.521808, "promotion": false}`
+
+## 20260515T035314Z-deployment-semantics-diagnostics - failed
+
+- Timestamp: 2026-05-15T03:53:14Z
+- Type: live_transfer_diagnostic
+- Gate: slumbot-deployment-semantics-smoke
+- Hypothesis: The live early-street all-in failure might be mainly a deployment semantics issue: greedy argmax over advantages may be worse than sampling the regret-matched mixed strategy, or a diagnostic no-all-in run may show that one action is the primary causal damage.
+- Failure class: blueprint_policy_miscalibration
+- Related work: Deep CFR's learned advantages induce regret-matched mixed strategies, so testing non-greedy deployment is principled. However, using a hard no-all-in rule would be an action patch, not a learned method; it is diagnostic only.
+- Summary: Ran two bounded 300-hand Slumbot fast-live checks on `iter1000`. Non-greedy mixed regret matching remained negative (`-232 +/- 477`) and had more early all-ins than the greedy attribution run (`69` preflop, `35` flop). A hard `--no-allin` diagnostic removed all all-ins but was still negative (`-331 +/- 288`) and slower (`0.715` seconds/hand) because more decisions reached turn/river solving. This rejects deployment flags as the main solution and points back to improving the learned early-street blueprint distribution under the existing action contract.
+- Commands: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 2400`; `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --no-allin --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 2400`
+- Key metrics: `{"mixed_avg_chips_per_hand": -232, "mixed_ci95": 477, "mixed_street_all_in": {"preflop": 69, "flop": 35, "turn": 0, "river": 0}, "noallin_avg_chips_per_hand": -331, "noallin_ci95": 288, "noallin_solver_decisions": 103, "noallin_seconds_per_hand": 0.715, "promotion": false}`

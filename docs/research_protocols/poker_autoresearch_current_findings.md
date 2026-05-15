@@ -444,6 +444,15 @@ though the flop sample was only `20` targets). This means the live
 over-all-in failure is locally detectable; future Slumbot spend should be gated
 by early-street distribution diagnostics before larger confidence runs.
 
+Deployment-semantics diagnostic status: switching `iter1000` from greedy
+argmax to mixed regret-matching did not solve the live issue on a 300-hand
+fast-live check (`-232 +/- 477`) and increased early all-ins (`69` preflop,
+`35` flop). A diagnostic hard `--no-allin` run was still negative
+(`-331 +/- 288`) and slower (`0.715` seconds/hand) because more hands reached
+turn/river solving. The failure is therefore not just greedy argmax or one bad
+all-in action; the early-street blueprint distribution itself needs better
+training/calibration.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

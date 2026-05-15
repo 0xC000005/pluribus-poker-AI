@@ -456,6 +456,13 @@ into a falsifiable candidate gate: train or select a checkpoint whose
 early-street top-action all-in and mean all-in probability fall materially while
 preserving duplicate-swapped H2H and fixed-state resolver behavior.
 
+Two bounded deployment diagnostics rule out easy fixes. Non-greedy mixed
+regret-matching did not reduce live all-ins or chips lost, and a hard
+`--no-allin` diagnostic was still negative while increasing solver load. The
+next step should not be a deployment flag change. It should change the learning
+objective or self-play/evaluation signal so the early blueprint learns a less
+degenerate betting distribution under the existing 9-action contract.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
