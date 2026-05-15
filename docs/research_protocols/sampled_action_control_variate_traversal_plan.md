@@ -16,6 +16,9 @@ or Slumbot-specific patch.
   mass on every legal action.
 - Use inverse-probability correction for sampled actions.
 - Use a learned/search-derived baseline for action-value control variates.
+- Start with at least four sampled traverser actions per infoset; one- and
+  two-action estimates failed the first different-seed Dirichlet robustness
+  gate even with the XL baseline.
 - Write stochastic regret samples to replay; do not use sampled estimates as
   direct one-shot action decisions.
 
@@ -32,9 +35,10 @@ or Slumbot-specific patch.
 
 - Compare averaged sampled regret targets against exhaustive traverser regrets
   on deterministic small states.
-- Require explicit estimator-quality thresholds before trainer integration:
-  `--max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95` on a
-  root-disjoint holdout with a fixed baseline checkpoint.
+- Require explicit estimator-quality thresholds before trainer integration on
+  the selected action-sample budget: `--max-mean-abs-bias 3.0
+  --min-mean-estimate-top-match 0.95` on a root-disjoint holdout with a fixed
+  baseline checkpoint.
 - Report mean absolute regret error, L2 error, top-action agreement of averaged
   targets, per-sample top-action agreement, and estimator standard deviation.
 - Report traversal-fidelity metrics if the prototype touches CUDA or batched

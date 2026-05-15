@@ -4758,3 +4758,23 @@
 - Summary: Gate methodology-review-20260515T054603Z-sampled-action-mccfr-traversal-redesign passed.
 - Metrics file: autoresearch-session/poker_runs/20260515T062339Z-methodology-review-for-sampled-action-mccfr-traversal-redesign/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T054603Z-sampled-action-mccfr-traversal-redesign", "passed": true}`
+
+## 20260515T101500Z-sampled-regret-robustness-check - partial
+
+- Timestamp: 2026-05-15T10:15:00Z
+- Type: estimator_robustness_check
+- Gate: different-seed and strategy-mode sampled-action estimator checks
+- Hypothesis: The XL learned control-variate baseline should pass the
+  thresholded sampled-regret gate across seed and strategy-mode perturbations.
+- Failure class: action_order_variance
+- Summary: Different-seed Dirichlet evaluation failed the all-count gate
+  because one-action and two-action sampled estimates missed the
+  `0.95` averaged top-action threshold. Four- and eight-action estimates
+  passed on the same seed, and a uniform-strategy check passed all counts.
+  This supports the learned control-variate direction but falsifies a cheap
+  one-action integration path under skewed regret-matching strategies.
+- Commands: `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260516 --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_gate_seed20260516_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260516 --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_gate_seed20260516_4_8_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --strategy-mode uniform --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260517 --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_gate_uniform_seed20260517_20260515.json`
+- Key metrics: `{"dirichlet_seed20260516_sample1_mean_top_match": 0.914062, "dirichlet_seed20260516_sample2_mean_top_match": 0.945312, "dirichlet_seed20260516_sample4_mean_top_match": 0.96875, "dirichlet_seed20260516_sample8_mean_top_match": 0.957031, "uniform_seed20260517_passed": true, "promotion": false}`
+- Decision: Initial sampled-traversal prototypes should use at least four
+  sampled traverser actions per infoset and keep reporting one/two-action
+  diagnostics as variance warnings, not as accepted integration budgets.
