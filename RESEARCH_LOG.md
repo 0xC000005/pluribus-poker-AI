@@ -5871,3 +5871,42 @@
   actions without hard-coded action patches, then rerun both revealed-hand
   range and action-likelihood diagnostics before any new Slumbot confidence
   spend.
+
+## 20260515T121956Z-opponent-response-empirical-baseline - failed
+
+- Timestamp: 2026-05-15T12:19:56Z
+- Type: protected diagnostic tooling
+- Gate: TDD + leave-one-hand-out opponent-response baseline
+- Hypothesis: If the Slumbot action-likelihood failure is mostly coarse
+  population/action-frequency shift, then a simple leave-one-hand-out empirical
+  prior over legal actions should beat the current model on the same revealed
+  trace actions. If it does not, the blocker is more likely a richer
+  state/hand-conditioned likelihood problem.
+- Failure class: distribution_shift
+- Summary: Added `scripts/analyze_slumbot_opponent_response_baseline.py` and
+  `poker_ai/research/slumbot_opponent_response_baseline.py` to compare the
+  model's per-action likelihood against legal-action empirical priors that
+  exclude all examples from the same hand. This is a diagnostic split baseline,
+  not a candidate playing policy.
+- Evidence:
+  - Input artifact:
+    `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-action-likelihood.json`
+  - Output artifact:
+    `autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-opponent-response-baseline.json`
+- Key metrics: on 100 scored actions from 37 hands, model mean log-lift versus
+  uniform was `-0.2867`, global leave-one-hand-out prior was `+1.0242`, and
+  street leave-one-hand-out prior was `+1.0825`. The empirical prior explains
+  calls and checks much better than the model: global LOO calls `+1.5846`
+  versus model calls `-0.7913`, and global LOO checks `+1.5865` versus model
+  checks `-0.0460`. Bets remain the exception: model bets `+0.1632`, global
+  LOO bets `-0.2248`.
+- Validation: `uv run pytest -q test/unit/test_slumbot_opponent_response_baseline.py`
+  -> 2 passed. Real diagnostic command:
+  `uv run python scripts/analyze_slumbot_opponent_response_baseline.py --action-likelihood autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-action-likelihood.json --output autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-opponent-response-baseline.json`.
+- Decision: The failure is at least partly a coarse opponent-response mismatch:
+  the self-play policy is a poor likelihood model for Slumbot continuation
+  actions before any sophisticated hidden-card reasoning. Do not deploy the
+  empirical prior as a Slumbot patch. The next method should learn a
+  population-conditioned opponent-response or belief-update model, trained and
+  held out by trace/hand, then feed that learned likelihood into range updates
+  and rerun the revealed-hand range gate.

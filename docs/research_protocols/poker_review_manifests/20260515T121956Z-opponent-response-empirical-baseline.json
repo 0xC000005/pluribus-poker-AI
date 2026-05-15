@@ -1,0 +1,46 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1371,
+      "path": "benchmark_audit.md",
+      "sha256": "2da0b3b30d577b4ad2c0bd1af8a22d45422d7b2a55296ff73d33c4cf41d296c8"
+    },
+    {
+      "bytes": 632,
+      "path": "decision.json",
+      "sha256": "09d8adab905c01c4652b006d27bdb5df55f66d04e2e069672aae4fe5869c66a9"
+    },
+    {
+      "bytes": 1341,
+      "path": "mechanism_review.md",
+      "sha256": "939fe5c78754608dfa8d74dce9f01b379d9c0e820e9697b5e2edadc92242efb1"
+    },
+    {
+      "bytes": 1920,
+      "path": "related_work.md",
+      "sha256": "4b66014ffd79291292cf49dc9fbf139f2be2d0c51f69aa184757c7680bdc9814"
+    },
+    {
+      "bytes": 1908,
+      "path": "review.md",
+      "sha256": "c0617b328d9e9b0ae1fe7a03c9cdff49c8a9590c1de37cfc9b550f03366f4d8a"
+    },
+    {
+      "bytes": 811,
+      "path": "team_review.md",
+      "sha256": "af6280cb41064ee0712b5233643722505ec588a5e19afd5f03f54db8bb1bf489"
+    }
+  ],
+  "reason": "Proceed as a diagnostic. The leave-one-hand-out prior strongly beats the current model on observed Slumbot continuation actions, localizing the failure to coarse opponent-response calibration while preserving the ban on direct empirical-prior deployment.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T121956Z-opponent-response-empirical-baseline",
+  "review_id": "20260515T121956Z-opponent-response-empirical-baseline",
+  "sources": [
+    "https://arxiv.org/abs/1603.03491",
+    "https://arxiv.org/abs/1207.1411",
+    "https://arxiv.org/abs/2212.06027",
+    "https://www.cs.cmu.edu/~sandholm/gs1.atal11.pdf",
+    "autoresearch-session/slumbot_trace_cases/20260515T113200Z-avg-strategy-noallin-opponent-response-baseline.json"
+  ],
+  "written_at": "2026-05-15T12:21:38Z"
+}
