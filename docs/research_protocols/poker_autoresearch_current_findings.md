@@ -417,6 +417,15 @@ and worse (`-264 +/- 233`). Fast-live remained materially faster
 back to blueprint/model quality and policy/search calibration, not the live
 budget profile.
 
+Historical-checkpoint live transfer status: `models/slumbot_2p_iter900.pt`
+failed the same 1,000-hand fast-live Slumbot check despite prior local H2H hints
+against `iter1000`. It produced `-533 +/- 296` chips/hand with zero API/parse
+errors, only `7` solver decisions, and an extreme `836/999` all-in action mix.
+This rejects local historical checkpoint selection as the next live lever and
+strengthens the calibration diagnosis: local self-play/H2H signals can prefer a
+policy that transfers worse to Slumbot because its betting distribution is
+miscalibrated.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

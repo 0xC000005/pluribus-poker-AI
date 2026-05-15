@@ -428,6 +428,15 @@ strategy quality: train or evaluate a stronger blueprint/search-calibration
 candidate, then reuse the faster CUDA profile for confidence checks only after
 local gates show a real improvement.
 
+The historical-checkpoint follow-up also says checkpoint picking is not the
+answer. `slumbot_2p_iter900.pt` had looked slightly better than `iter1000` in a
+larger local duplicate-swapped H2H, but its 1,000-hand fast-live Slumbot check
+was worse (`-533 +/- 296` chips/hand) and mostly all-in (`836/999` selected
+actions). Do not spend more live hands on old checkpoints unless a new gate
+predicts live transfer for a mechanism reason. The next task should diagnose
+why the blueprint overbets/all-ins under live Slumbot distributions, or build a
+root-disjoint calibration/evaluation gate that catches this before API spend.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

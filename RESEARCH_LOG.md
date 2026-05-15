@@ -4163,3 +4163,15 @@
 - Review manifest: docs/research_protocols/poker_review_manifests/20260515T004500Z-torch-levelsync-cuda-cfr.json
 - Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_torch_levelsync_cuda_holdout64_seed20260676.json, autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr25_cpu_vs_torch_levelsync_cuda_holdout64_seed20260676.json, and autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_torch_levelsync_cuda_iter10_smoke4_seed20260676.json
 - Key metrics: `{"cfr5_latency_ms": 39.71634375, "cfr10_latency_ms": 55.4038125, "cfr5_l1": 0.52546177, "cfr10_l1": 0.36524483, "cpu_vs_cuda_cfr25_action_agreement": 1.0, "cpu_vs_cuda_cfr25_mean_l1": 0.02805684, "cpu_vs_cuda_cfr25_mean_kl": 0.00402004, "cpu_cfr25_latency_ms": 698.021, "cuda_cfr25_latency_ms": 108.483, "max_illegal_mass": 0.0, "promotion": false}`
+
+## 20260515T033350Z-slumbot-iter900-transfer-check - failed
+
+- Timestamp: 2026-05-15T03:33:50Z
+- Type: live_transfer_diagnostic
+- Gate: slumbot-fast-live-iter900-confidence
+- Hypothesis: The historical `models/slumbot_2p_iter900.pt` checkpoint should transfer better to Slumbot than `iter1000` if the larger local duplicate-swapped H2H edge reflected true strategy quality rather than local-eval mismatch.
+- Failure class: policy_transfer_miscalibration
+- Related work: Deep CFR average-strategy checkpoints must be evaluated under the deployment policy and action mapping actually used in play. DeepStack/ReBeL-style continual resolving also requires calibrated blueprint/range behavior before search can correct turn/river decisions.
+- Summary: Ran the same 1,000-hand `torch-levelsync-cuda` fast-live Slumbot wrapper on `slumbot_2p_iter900.pt`. The run was operationally clean with zero API/parse errors and faster solver calls, but the checkpoint was much worse than `iter1000`: `-533 +/- 296` chips/hand versus `iter1000` fast-live `-143 +/- 202`. It selected all-in `836/999` actions and invoked the solver only `7` times. This rejects old-checkpoint selection as the next live lever and strengthens the diagnosis that current local H2H/random gates miss live betting-distribution calibration failures.
+- Command: `uv run python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter900.pt --hands 1000 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 7200`
+- Key metrics: `{"avg_chips_per_hand": -533, "ci95_chips_per_hand": 296, "mbb_per_hand": -5334, "total_chips": -533450, "api_errors": 0, "parse_errors": 0, "decision_policy": 992, "decision_solver": 7, "decision_fallback": 0, "solver_latency_mean_ms": 549.8, "seconds_per_hand": 0.308, "all_in_actions": 836, "promotion": false}`
