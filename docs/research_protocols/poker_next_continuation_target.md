@@ -1046,3 +1046,10 @@ The 256-root check keeps the same direction but clarifies risk: sample-2 can
 pass with enough repetitions, yet it is visibly noisy; sample-4 and sample-8
 are more stable. Use four sampled traverser actions as the first safer
 diagnostic integration point, with sample-2 kept as a lower-bound ablation.
+
+Scaling the learned baseline changed the conclusion: a stronger baseline makes
+even one sampled action pass the 256-root restricted estimator gate. This
+points toward a clean learned control-variate sampled traversal method. The
+next gate is no longer "can sampling be unbiased"; it is whether a learned
+baseline sampled traversal matches exhaustive traversal decisions on small
+states before touching CUDA/default training.

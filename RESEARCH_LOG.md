@@ -4586,3 +4586,28 @@
 - Decision: Treat two sampled traverser actions as a lower-bound diagnostic
   and four sampled actions as the safer first integration target. Continue to
   an opt-in exhaustive-vs-sampled traversal probe before CUDA/default changes.
+
+## 20260515T090000Z-xl-learned-baseline-variance-check - passed
+
+- Timestamp: 2026-05-15T09:00:00Z
+- Type: learned_control_variate_scale_diagnostic
+- Gate: larger restricted value baseline plus 256-root sampled-action
+  estimator check
+- Hypothesis: Improving the learned action-value baseline should reduce
+  sampled-action estimator variance enough to make smaller sampled traverser
+  subsets viable.
+- Failure class: none
+- Summary: Trained a larger restricted value baseline on `4096` roots with
+  `512` equity samples and evaluated it as the sampled-action control variate
+  on the same 256 deterministic full-deck roots. Holdout fit improved
+  substantially (`0.942` action correlation, `0.919` top-action match). The
+  estimator gate then passed even with one sampled action: baseline MAE fell to
+  `23.77` chips, sample-1 bias to `2.44`, and sample-1 std to `72.3`. This is
+  the first strong evidence that a learned control-variate baseline can make
+  sampled traverser-action updates plausible.
+- Commands: `uv run python scripts/train_restricted_value_probe.py --train-roots 4096 --holdout-roots 1024 --n-equity-samples 512 --hidden-dim 512 --n-layers 4 --epochs 240 --batch-size 512 --device cuda --seed 20260523 --output-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xl_20260515.pt --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xl_256roots_20260515.json`
+- Key metrics: `{"xl_holdout_corr": 0.942263, "xl_holdout_top_match": 0.918945, "baseline_mae": 23.769171, "sample1_abs_bias": 2.438916, "sample1_std": 72.299836, "sample4_abs_bias": 1.285755, "sample8_abs_bias": 0.944688, "promotion": false}`
+- Decision: The next implementation target is learned-baseline sampled
+  traversal, still opt-in. The first integration should use one and two sampled
+  actions as ablations and must compare against exhaustive traversal on a
+  small state set before any GPU/default training change.
