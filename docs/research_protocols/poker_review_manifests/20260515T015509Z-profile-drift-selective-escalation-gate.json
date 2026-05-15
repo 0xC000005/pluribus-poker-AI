@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1254,
+      "path": "benchmark_audit.md",
+      "sha256": "d43984bc488ea14b61faf994548ba21c2488b0ee467a7cca59dcae410243ac36"
+    },
+    {
+      "bytes": 370,
+      "path": "decision.json",
+      "sha256": "194d7b206e061e811484934324d6101f9c7832de6b17fe7c59f90c5fc5a1b5a3"
+    },
+    {
+      "bytes": 1243,
+      "path": "mechanism_review.md",
+      "sha256": "98bc1412b76b9480bf37ed1681e7b8abfde4a7bb087fa4341b1fa4efe33ff68a"
+    },
+    {
+      "bytes": 1622,
+      "path": "related_work.md",
+      "sha256": "c34af352fb96638a54ec7bb324df6feb811f1f0e746555c93ec95412ad6b3a1e"
+    },
+    {
+      "bytes": 1242,
+      "path": "review.md",
+      "sha256": "83d82d6d311b4a69d92858a52d54a87e407cde14ce4f01aa204a5fc676d75aa3"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The gate is evaluation-only, train-thresholded, and passed both half-splits against CFR500, but it remains diagnostic until repeated on a larger root-disjoint pool.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T015509Z-profile-drift-selective-escalation-gate",
+  "review_id": "20260515T015509Z-profile-drift-selective-escalation-gate",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-15T01:56:14Z"
+}

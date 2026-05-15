@@ -336,6 +336,13 @@ protected diagnostic gate that reports train-derived threshold, selected roots,
 L1/KL/latency against CFR500, and low/live/uniform-CFR350 baselines. Keep it
 off the Slumbot live path until that gate survives a root-disjoint split.
 
+That formal gate now exists and passes both half-splits on the current 64-root
+pool. The next continuation target is scale, not live deployment: generate or
+reuse a larger root-disjoint public-state pool, rerun the CFR500 frontier only
+where computationally feasible, and test whether profile-L1 selective
+escalation still improves L1/KL per millisecond against `live`. If it does not
+hold, return to trace-derived uncertainty rather than tuning the top-k.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

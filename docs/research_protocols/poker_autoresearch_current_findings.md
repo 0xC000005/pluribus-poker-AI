@@ -309,6 +309,15 @@ The reverse split also improved L1 (`0.1662` to `0.1392`) and KL (`0.0682` to
 mechanism evidence for selective escalation, but it needs a formal gate before
 any gameplay change.
 
+Selective-escalation gate status: `scripts/eval_solver_budget_selective_escalation.py`
+now formalizes that check from saved artifacts. It derives a profile-L1
+threshold on train roots and applies it to holdout roots only. The first
+half-split selected 4/32 holdout roots and improved L1/KL from
+`0.1330`/`0.0421` to `0.1069`/`0.0335` at `1.0498x` live latency. The reverse
+split selected 3/32 and improved `0.1662`/`0.0682` to `0.1392`/`0.0543` at
+`1.0366x`. Keep this diagnostic-only until repeated on a larger root-disjoint
+pool.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

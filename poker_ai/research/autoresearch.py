@@ -43,6 +43,7 @@ PROTECTED_EVAL_SURFACES = [
     "scripts/fast_cfr.py",
     "scripts/eval_cfr_budget_frontier.py",
     "scripts/eval_solver_budget_profiles.py",
+    "scripts/eval_solver_budget_selective_escalation.py",
     "scripts/poker_objective_audit.py",
     "poker_ai/research/autoresearch.py",
     "poker_ai/research/promotion.py",

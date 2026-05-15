@@ -10,6 +10,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import eval_cfr_budget_frontier as frontier  # noqa: E402
 import eval_solver_budget_profiles as profiles  # noqa: E402
+import eval_solver_budget_selective_escalation as selective  # noqa: E402
 from eval_cfr_budget_frontier import summarize_budget_frontier_records  # noqa: E402
 
 
@@ -204,3 +205,98 @@ def test_solver_budget_profile_summary_reports_drift_and_latency():
             "l1_to_reference": 2.0,
         }
     ]
+
+
+def test_selective_escalation_uses_train_threshold_on_holdout_only():
+    frontier_metrics = {
+        "records": [
+            {
+                "label": "root-0000-street2",
+                "passed": True,
+                "budgets": {
+                    "150": {"l1_to_reference": 0.4, "kl_to_reference": 0.2, "latency_ms": 100.0},
+                    "350": {"l1_to_reference": 0.1, "kl_to_reference": 0.05, "latency_ms": 200.0},
+                },
+            },
+            {
+                "label": "root-0001-street2",
+                "passed": True,
+                "budgets": {
+                    "150": {"l1_to_reference": 0.3, "kl_to_reference": 0.1, "latency_ms": 100.0},
+                    "350": {"l1_to_reference": 0.2, "kl_to_reference": 0.08, "latency_ms": 200.0},
+                },
+            },
+            {
+                "label": "root-0002-street2",
+                "passed": True,
+                "budgets": {
+                    "150": {"l1_to_reference": 0.5, "kl_to_reference": 0.3, "latency_ms": 100.0},
+                    "350": {"l1_to_reference": 0.15, "kl_to_reference": 0.06, "latency_ms": 200.0},
+                },
+            },
+            {
+                "label": "root-0003-street2",
+                "passed": True,
+                "budgets": {
+                    "150": {"l1_to_reference": 0.2, "kl_to_reference": 0.09, "latency_ms": 100.0},
+                    "350": {"l1_to_reference": 0.18, "kl_to_reference": 0.07, "latency_ms": 200.0},
+                },
+            },
+        ]
+    }
+    profile_metrics = {
+        "records": [
+            {
+                "label": "root-0000-street2",
+                "passed": True,
+                "profiles": {
+                    "live": {"iterations": 150, "strategy": [0.8, 0.2, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {"iterations": 100, "strategy": [0.4, 0.6, 0, 0, 0, 0, 0, 0, 0]},
+                },
+            },
+            {
+                "label": "root-0001-street2",
+                "passed": True,
+                "profiles": {
+                    "live": {"iterations": 150, "strategy": [0.55, 0.45, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {"iterations": 100, "strategy": [0.5, 0.5, 0, 0, 0, 0, 0, 0, 0]},
+                },
+            },
+            {
+                "label": "root-0002-street2",
+                "passed": True,
+                "profiles": {
+                    "live": {"iterations": 150, "strategy": [0.9, 0.1, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {"iterations": 100, "strategy": [0.45, 0.55, 0, 0, 0, 0, 0, 0, 0]},
+                },
+            },
+            {
+                "label": "root-0003-street2",
+                "passed": True,
+                "profiles": {
+                    "live": {"iterations": 150, "strategy": [0.6, 0.4, 0, 0, 0, 0, 0, 0, 0]},
+                    "fast-live": {"iterations": 100, "strategy": [0.58, 0.42, 0, 0, 0, 0, 0, 0, 0]},
+                },
+            },
+        ]
+    }
+
+    metrics = selective.evaluate_selective_escalation(
+        frontier_metrics,
+        profile_metrics,
+        train_start_index=0,
+        train_limit=2,
+        holdout_start_index=2,
+        holdout_limit=2,
+        select_train_top_k=1,
+        escalation_budget=350,
+    )
+
+    assert metrics["passed"] is True
+    assert metrics["threshold_profile_l1"] == 0.8
+    assert metrics["holdout_selected"] == 1
+    assert metrics["selected_labels"] == ["root-0002-street2"]
+    assert metrics["live_mean_l1"] == 0.35
+    assert metrics["selective_mean_l1"] == 0.175
+    assert metrics["uniform_escalation_mean_l1"] == 0.165
+    assert metrics["selective_mean_latency_ms"] == 150.0

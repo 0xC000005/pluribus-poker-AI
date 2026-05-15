@@ -282,6 +282,38 @@
   before any live-policy change. Success should be teacher L1/KL per
   millisecond versus `live`, not Slumbot smoke variance.
 
+## 20260515T015509Z-profile-drift-selective-escalation-gate - passed
+
+- Timestamp: 2026-05-15T01:55:09Z
+- Type: protected evaluation diagnostic
+- Gate: TDD + methodology-review + related-work check + objective-audit +
+  two half-split selective-escalation checks
+- Hypothesis: A train-thresholded profile-L1 boundary signal can selectively
+  escalate ambiguous live-budget roots to CFR350 and improve CFR500 teacher
+  L1/KL per millisecond without changing gameplay policy.
+- Failure class: search_quality
+- Related work: DeepStack/Libratus motivate online resolving and fixed-state
+  subgame quality checks; GPU-CFR motivates explicit budget/quality tradeoff
+  measurement. Sources: https://arxiv.org/abs/1701.01724,
+  https://arxiv.org/abs/1705.02955, and https://arxiv.org/abs/2408.14778.
+- Summary: Added `scripts/eval_solver_budget_selective_escalation.py`, which
+  consumes saved CFR500 frontier and profile-comparison artifacts, derives a
+  profile-L1 threshold on train roots, and evaluates selective CFR350
+  escalation only on holdout roots. Added unit coverage and registered the
+  script as a protected surface.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T015509Z-profile-drift-selective-escalation-gate`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T015509Z-profile-drift-selective-escalation-gate.json`
+  - Split A artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_escalation_profile_l1_train128_holdout160_seed20260515.json`
+  - Split B artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_escalation_profile_l1_train160_holdout128_seed20260515.json`
+- Metrics: train `128..159` -> holdout `160..191` selected 4/32 roots and
+  improved L1/KL from `0.1330`/`0.0421` to `0.1069`/`0.0335`, with latency
+  `972 ms` -> `1020 ms` (`1.0498x`). Reverse split selected 3/32 roots and
+  improved L1/KL from `0.1662`/`0.0682` to `0.1392`/`0.0543`, with latency
+  `867 ms` -> `899 ms` (`1.0366x`).
+- Decision: keep this gate diagnostic-only and scale it to a larger
+  root-disjoint pool before any live Slumbot policy change.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z
