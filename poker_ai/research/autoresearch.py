@@ -1550,6 +1550,9 @@ def enqueue_gpu_training(
     traversal_pool_max_slots: int = 1_000_000,
     traversal_slots_per_traversal: int = 500,
     policy_slots_per_traversal: int = 64,
+    max_pool_exhausted_per_traversal: float | None = None,
+    max_overflow_chunk_fraction: float | None = None,
+    min_traversals_per_second: float | None = None,
     average_strategy_weight: float = 0.0,
     average_strategy_memory_capacity: int = 0,
     average_strategy_batch_size: int = 0,
@@ -1633,6 +1636,21 @@ def enqueue_gpu_training(
         "--eval-games",
         str(eval_games),
     ]
+    if max_pool_exhausted_per_traversal is not None:
+        command.extend([
+            "--max-pool-exhausted-per-traversal",
+            str(max_pool_exhausted_per_traversal),
+        ])
+    if max_overflow_chunk_fraction is not None:
+        command.extend([
+            "--max-overflow-chunk-fraction",
+            str(max_overflow_chunk_fraction),
+        ])
+    if min_traversals_per_second is not None:
+        command.extend([
+            "--min-traversals-per-second",
+            str(min_traversals_per_second),
+        ])
     if resume:
         command.extend(["--resume", str(resume)])
     if search_targets:

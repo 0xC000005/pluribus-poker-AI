@@ -5041,3 +5041,24 @@
 - Decision: Future GPU acceleration work must reduce `pool_exhausted_nodes` at
   acceptable throughput or explicitly justify any demotions as a separate
   stochastic estimator. Do not treat raw iters/hour as sufficient.
+
+## 20260515T162000Z-training-pool-fidelity-gate - passed
+
+- Timestamp: 2026-05-15T16:20:00Z
+- Type: autoresearch_gate_hardening
+- Gate: TDD plus intentionally failing GPU train smoke
+- Hypothesis: Candidate training gates should be able to fail on traversal
+  fidelity even when a checkpoint is produced, so continuous autoresearch does
+  not promote compute-throughput artifacts that collected regrets through many
+  pool-exhaustion demotions.
+- Failure class: none
+- Summary: Added optional pool-fidelity thresholds to
+  `scripts/poker_autoresearch_train.py` and threaded them through
+  `enqueue_gpu_training`/`poker_autoresearch.py`. The smoke run saved a
+  checkpoint but returned `passed=false` because pool-exhaustion and overflow
+  thresholds were violated.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py test/unit/test_poker_autoresearch.py::test_enqueue_gpu_training_creates_candidate_gate`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 100 --n-training-steps 5 --hidden-dim 64 --n-layers 1 --batch-size 128 --buffer-capacity 10000 --save-dir autoresearch-session/gpu_train_fidelity_gate_smoke_20260515 --prefix gate_smoke --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`
+- Key metrics: `{"gate_smoke_passed": false, "gate_smoke_failures": ["traversal_pool_exhausted_per_traversal", "traversal_overflow_chunk_fraction"], "gate_smoke_pool_exhausted_per_traversal": 213.07, "promotion": false}`
+- Decision: Use fidelity thresholds for unattended training diagnostics when
+  the objective is compute quality. Leave thresholds opt-in for exploratory
+  training until a zero-demotion or bounded-demotion configuration is found.

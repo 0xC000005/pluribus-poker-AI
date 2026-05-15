@@ -9,6 +9,7 @@ import json
 import logging
 import sys
 import time
+import warnings
 from pathlib import Path
 
 
@@ -32,6 +33,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     parser.add_argument("--traversal-slots-per-traversal", type=int, default=500)
+    parser.add_argument("--max-pool-exhausted-per-traversal", type=float)
+    parser.add_argument("--max-overflow-chunk-fraction", type=float)
+    parser.add_argument("--min-traversals-per-second", type=float)
     parser.add_argument(
         "--search-targets",
         default="",
@@ -61,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
     logging.getLogger("numba").setLevel(logging.WARNING)
     logging.getLogger("numba.cuda").setLevel(logging.WARNING)
     logging.getLogger("numba.cuda.cudadrv.driver").setLevel(logging.WARNING)
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Grid size .* will likely result in GPU under-utilization.*",
+    )
 
     with contextlib.redirect_stdout(sys.stderr):
         from cuda_env import configure_numba_cuda_env
@@ -158,8 +166,42 @@ def main(argv: list[str] | None = None) -> int:
         avg_iter_seconds = (
             sum(iteration_times) / len(iteration_times) if iteration_times else 0.0
         )
+        gate_failures = []
+        if (
+            args.max_pool_exhausted_per_traversal is not None
+            and traversal_pool_summary.get("traversal_pool_exhausted_per_traversal", 0.0)
+            > args.max_pool_exhausted_per_traversal
+        ):
+            gate_failures.append(
+                "traversal_pool_exhausted_per_traversal "
+                f"{traversal_pool_summary.get('traversal_pool_exhausted_per_traversal', 0.0):.6f} "
+                f"> {args.max_pool_exhausted_per_traversal:.6f}"
+            )
+        if (
+            args.max_overflow_chunk_fraction is not None
+            and traversal_pool_summary.get("traversal_overflow_chunk_fraction", 0.0)
+            > args.max_overflow_chunk_fraction
+        ):
+            gate_failures.append(
+                "traversal_overflow_chunk_fraction "
+                f"{traversal_pool_summary.get('traversal_overflow_chunk_fraction', 0.0):.6f} "
+                f"> {args.max_overflow_chunk_fraction:.6f}"
+            )
+        traversals_per_second = (
+            round(float(args.n_iterations * args.n_traversals) / elapsed, 3)
+            if elapsed > 0 else 0.0
+        )
+        if (
+            args.min_traversals_per_second is not None
+            and traversals_per_second < args.min_traversals_per_second
+        ):
+            gate_failures.append(
+                f"traversals_per_second {traversals_per_second:.6f} "
+                f"< {args.min_traversals_per_second:.6f}"
+            )
+
         metrics = {
-            "passed": checkpoint.exists(),
+            "passed": checkpoint.exists() and not gate_failures,
             "mode": "autoresearch_gpu_deep_cfr_train",
             "checkpoint": str(checkpoint),
             "device": str(trainer.device),
@@ -170,6 +212,14 @@ def main(argv: list[str] | None = None) -> int:
             "batch_size": int(args.batch_size),
             "traversal_pool_max_slots": int(args.traversal_pool_max_slots),
             "traversal_slots_per_traversal": int(args.traversal_slots_per_traversal),
+            "gate_thresholds": {
+                "max_pool_exhausted_per_traversal": (
+                    args.max_pool_exhausted_per_traversal
+                ),
+                "max_overflow_chunk_fraction": args.max_overflow_chunk_fraction,
+                "min_traversals_per_second": args.min_traversals_per_second,
+            },
+            "gate_failures": gate_failures,
             "policy_slots_per_traversal": int(args.policy_slots_per_traversal),
             "search_targets": str(args.search_targets),
             "search_target_weight": float(args.search_target_weight),
@@ -196,9 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             "avg_iter_seconds": round(float(avg_iter_seconds), 3),
             "iters_per_hour": round(3600.0 / avg_iter_seconds, 3)
             if avg_iter_seconds > 0 else 0.0,
-            "traversals_per_second": round(
-                float(args.n_iterations * args.n_traversals) / elapsed, 3
-            ) if elapsed > 0 else 0.0,
+            "traversals_per_second": traversals_per_second,
             "eval_chips_per_game": eval_chips,
         }
 

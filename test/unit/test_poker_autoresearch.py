@@ -998,6 +998,9 @@ def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
         save_dir="models/train_gate",
         prefix="probe",
         eval_games=5,
+        max_pool_exhausted_per_traversal=0.0,
+        max_overflow_chunk_fraction=0.0,
+        min_traversals_per_second=100.0,
         timeout_seconds=678,
     )
 
@@ -1012,6 +1015,11 @@ def test_enqueue_gpu_training_creates_candidate_gate(tmp_path):
     assert str(tmp_path / "models" / "train_gate") in command
     assert "--prefix" in command
     assert "probe" in command
+    assert "--max-pool-exhausted-per-traversal" in command
+    assert "0.0" in command
+    assert "--max-overflow-chunk-fraction" in command
+    assert "--min-traversals-per-second" in command
+    assert "100.0" in command
     assert "678" == str(gate["timeout_seconds"])
 
 

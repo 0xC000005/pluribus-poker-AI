@@ -285,6 +285,9 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     train.add_argument("--traversal-slots-per-traversal", type=int, default=500)
     train.add_argument("--policy-slots-per-traversal", type=int, default=64)
+    train.add_argument("--max-pool-exhausted-per-traversal", type=float)
+    train.add_argument("--max-overflow-chunk-fraction", type=float)
+    train.add_argument("--min-traversals-per-second", type=float)
     train.add_argument("--average-strategy-weight", type=float, default=0.0)
     train.add_argument("--average-strategy-memory-capacity", type=int, default=0)
     train.add_argument("--average-strategy-batch-size", type=int, default=0)
@@ -555,6 +558,9 @@ def main(argv: list[str] | None = None) -> int:
                 traversal_pool_max_slots=args.traversal_pool_max_slots,
                 traversal_slots_per_traversal=args.traversal_slots_per_traversal,
                 policy_slots_per_traversal=args.policy_slots_per_traversal,
+                max_pool_exhausted_per_traversal=args.max_pool_exhausted_per_traversal,
+                max_overflow_chunk_fraction=args.max_overflow_chunk_fraction,
+                min_traversals_per_second=args.min_traversals_per_second,
                 average_strategy_weight=args.average_strategy_weight,
                 average_strategy_memory_capacity=args.average_strategy_memory_capacity,
                 average_strategy_batch_size=args.average_strategy_batch_size,
