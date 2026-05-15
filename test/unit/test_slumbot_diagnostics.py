@@ -1,3 +1,4 @@
+import json
 import sys
 import subprocess
 from pathlib import Path
@@ -13,6 +14,7 @@ from play_slumbot import (
     ActionDiagnostics,
     _base_policy_action,
     _solver_iterations_for_profile,
+    api_new_hand,
     action_to_slumbot,
     network_strategy,
     parse_action,
@@ -74,6 +76,34 @@ def test_action_diagnostics_records_first_policy_action_outcome():
     assert summary["first_policy_outcomes"]["r0.75x"]["avg_chips"] == -250
 
 
+def test_action_diagnostics_writes_jsonl_trace(tmp_path):
+    trace_path = tmp_path / "slumbot_trace.jsonl"
+    diagnostics = ActionDiagnostics(trace_path=trace_path)
+
+    diagnostics.begin_hand(hand_index=7, client_pos=1, hole_cards=["Ac", "Kd"])
+    diagnostics.record_policy_action(
+        4, "b500", "", client_pos=1, parsed=parse_action(""), street=0
+    )
+    diagnostics.record_solver_action(
+        "b300", street=2, latency_ms=125.5, n_hands=20, full_n_hands=100
+    )
+    diagnostics.end_hand(-250)
+
+    records = [json.loads(line) for line in trace_path.read_text().splitlines()]
+    assert [record["event"] for record in records] == [
+        "decision",
+        "decision",
+        "hand_result",
+    ]
+    assert records[0]["source"] == "policy"
+    assert records[0]["action_name"] == "r0.75x"
+    assert records[0]["hand_index"] == 7
+    assert records[1]["source"] == "solver"
+    assert records[1]["solver_latency_ms"] == 125.5
+    assert records[2]["winnings"] == -250
+    assert records[2]["first_policy_action"] == "r0.75x"
+
+
 def test_action_diagnostics_records_fallback_and_parse_error():
     diagnostics = ActionDiagnostics()
 
@@ -101,6 +131,31 @@ def test_action_diagnostics_records_solver_performance_stats():
     assert summary["solver_mean_hands"] == 20.0
     assert summary["solver_mean_full_hands"] == 100.0
     assert summary["solver_mean_prune_ratio"] == 0.2
+
+
+def test_api_new_hand_uses_explicit_request_timeout(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def json(self):
+            return {"token": "abc", "client_pos": 1, "hole_cards": ["Ac", "Kd"]}
+
+    def fake_post(url, *, json, timeout):
+        calls.append({"url": url, "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    monkeypatch.setattr("play_slumbot.requests.post", fake_post)
+
+    result = api_new_hand(None, timeout_seconds=3.5)
+
+    assert result["token"] == "abc"
+    assert calls == [
+        {
+            "url": "https://slumbot.com/slumbot/api/new_hand",
+            "json": {},
+            "timeout": 3.5,
+        }
+    ]
 
 
 def test_solver_iteration_profiles_keep_live_default_and_fast_live_candidate():
@@ -260,3 +315,5 @@ def test_play_slumbot_script_help_imports_from_repo_root():
     assert result.returncode == 0
     assert "--strategy-source" in result.stdout
     assert "torch-levelsync-cuda" in result.stdout
+    assert "--trace-jsonl" in result.stdout
+    assert "--api-timeout-seconds" in result.stdout

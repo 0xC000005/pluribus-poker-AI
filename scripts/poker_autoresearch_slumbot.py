@@ -47,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
     )
+    parser.add_argument("--trace-jsonl")
+    parser.add_argument("--api-timeout-seconds", type=float, default=10.0)
     parser.add_argument("--timeout-seconds", type=float, default=300.0)
     args = parser.parse_args(argv)
 
@@ -70,6 +72,9 @@ def main(argv: list[str] | None = None) -> int:
         command.extend(["--solver-budget-profile", args.solver_budget_profile])
     if args.strategy_source != "regret":
         command.extend(["--strategy-source", args.strategy_source])
+    if args.trace_jsonl:
+        command.extend(["--trace-jsonl", args.trace_jsonl])
+    command.extend(["--api-timeout-seconds", str(args.api_timeout_seconds)])
 
     started = time.monotonic()
     completed = subprocess.run(
@@ -92,6 +97,11 @@ def main(argv: list[str] | None = None) -> int:
             "stderr_tail": completed.stderr[-2000:],
         }
     )
+    if args.trace_jsonl:
+        trace_path = Path(args.trace_jsonl)
+        metrics["trace_jsonl"] = str(trace_path)
+        if trace_path.exists():
+            metrics["trace_records"] = sum(1 for _ in trace_path.open(encoding="utf-8"))
     if completed.returncode != 0:
         metrics["passed"] = False
     print(json.dumps(metrics, indent=2, sort_keys=True))

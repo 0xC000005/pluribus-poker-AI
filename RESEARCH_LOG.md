@@ -5232,3 +5232,207 @@
   signal to prioritize active-frontier compaction/slot reuse. The next full
   candidate run can require zero accepted overflow while allowing rejected
   chunks to be reported as overhead.
+
+## 20260515T092210Z-gpu-deep-cfr-training-should-produce-retry-slots7000 - passed
+
+- Timestamp: 2026-05-15T09:50:59Z
+- Type: experiment
+- Gate: train-gpu-deep-cfr-20260515T092206Z-retry-slots7000-gpu-4x512
+- Hypothesis: GPU Deep CFR training should produce retry_slots7000_gpu_4x512_final.pt with machine-readable throughput metrics.
+- Failure class: none
+- Summary: Full retry-guarded CUDA training completed and wrote iteration-25,
+  iteration-50, and final checkpoints. Accepted replay samples stayed
+  fidelity-clean with zero pool exhaustion and zero overflow; six overflow
+  chunks were rejected and retried before replay insertion. Throughput remained
+  poor, so this solves replay correctness but not GPU utilization.
+- Metrics file: autoresearch-session/poker_runs/20260515T092210Z-gpu-deep-cfr-training-should-produce-retry-slots7000/metrics.json
+- Key metrics: `{"passed": true, "device": "cuda", "elapsed_seconds": 1725.829, "avg_iter_seconds": 34.516, "iters_per_hour": 104.298, "traversals_per_second": 115.886, "accepted_overflow_fraction": 0.0, "accepted_pool_exhausted_per_traversal": 0.0, "traversal_chunks": 5104, "rejected_chunks": 6, "rejected_requested_traversals": 567, "rejected_max_pool_demand_ratio": 1.151906, "adaptive_batch_min": 53, "mean_allocated_to_live_ratio": 6.856335, "checkpoints_written": 3}`
+- Decision: Keep the checkpoints for gated comparison only. This run confirms
+  replay-fidelity hygiene but strengthens the case that active-frontier
+  compaction/slot reuse is required before large-scale training is practical.
+
+## 20260515T095104Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T09:51:05Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260515T095059Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: none
+- Summary: The fixed iteration-25 checkpoint passed duplicate-swapped
+  head-to-head against the incumbent on the predeclared seeds with positive
+  lower95. It remains non-promotable because local H2H requires Slumbot and
+  additional falsification evidence before promotion.
+- Metrics file: autoresearch-session/poker_runs/20260515T095104Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"passed": true, "avg_chips_per_hand": 747.9611111111111, "paired_delta_lower95_chips_per_hand_across_seeds": 78.36650389083388, "ci95_chips_per_hand_across_seeds": 669.5946072202772, "n_games": 1800, "strategy_source": "regret", "promotable": false, "promotion_blockers": ["local_head_to_head_requires_slumbot_confirmation"]}`
+- Decision: Treat the iteration-25 checkpoint as the only live candidate from
+  this run. Queue a falsification ladder before any Slumbot confidence spend.
+
+## 20260515T095110Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-50 - failed
+
+- Timestamp: 2026-05-15T09:51:11Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260515T095059Z-retry-slots7000-gpu-4x512-iter-50
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_50.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: The fixed iteration-50 checkpoint had a positive mean delta but
+  failed the positive-lower95 requirement. Later training did not monotonically
+  improve local H2H quality relative to the iteration-25 checkpoint.
+- Metrics file: autoresearch-session/poker_runs/20260515T095110Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-50/metrics.json
+- Key metrics: `{"passed": false, "avg_chips_per_hand": 347.21111111111117, "paired_delta_lower95_chips_per_hand_across_seeds": -72.44753360808215, "ci95_chips_per_hand_across_seeds": 419.6586447191933, "n_games": 1800, "strategy_source": "regret", "promotion_blockers": ["local_head_to_head_requires_slumbot_confirmation", "comparison_requires_positive_lower95"]}`
+- Decision: Do not promote or spend Slumbot hands on iteration 50.
+
+## 20260515T095158Z-candidate-checkpoint-retry-slots7000-gpu-4x512-final-pt - failed
+
+- Timestamp: 2026-05-15T09:52:00Z
+- Type: experiment
+- Gate: eval-candidate-compare-20260515T095059Z-retry-slots7000-gpu-4x512-final
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_final.pt should improve local comparison metrics against incumbent slumbot_2p_iter1000.pt without claiming local-only promotion using regret strategy source.
+- Failure class: strategy_quality
+- Summary: The final checkpoint is the same trainer iteration as iteration 50
+  and failed the same positive-lower95 local H2H requirement. This reinforces
+  the checkpoint-selection signal rather than a separate method result.
+- Metrics file: autoresearch-session/poker_runs/20260515T095158Z-candidate-checkpoint-retry-slots7000-gpu-4x512-final-pt/metrics.json
+- Key metrics: `{"passed": false, "avg_chips_per_hand": 347.21111111111117, "paired_delta_lower95_chips_per_hand_across_seeds": -72.44753360808215, "ci95_chips_per_hand_across_seeds": 419.6586447191933, "n_games": 1800, "strategy_source": "regret"}`
+- Decision: Do not promote the final checkpoint. Continue with the
+  iteration-25 candidate plus falsification, and separately attack traversal
+  compaction for compute efficiency.
+
+## 20260515T095320Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T09:53:27Z
+- Type: falsification
+- Gate: falsification-ladder-20260515T095314Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should survive falsification of mechanism: retry-clean GPU Deep CFR iteration 25 improves incumbent local H2H without accepted traversal overflow
+- Failure class: none
+- Summary: The iteration-25 checkpoint survived the falsification ladder:
+  objective drift audit passed, duplicate-swapped local H2H stayed positive
+  over 3,000 games, and the fixed public-state resolver benchmark passed its
+  mechanical checks. This is still not promotion evidence because the local
+  H2H gate explicitly requires live Slumbot confirmation.
+- Metrics file: autoresearch-session/poker_runs/20260515T095320Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"passed": true, "local_h2h_avg_chips_per_hand": 294.305, "local_h2h_lower95_chips_per_hand": 48.11892326000458, "local_h2h_n_games": 3000, "resolver_mean_action_l1_drift": 1.4432201833695042, "resolver_mechanical_passed": true}`
+- Decision: Escalate this candidate to a bounded Slumbot smoke. Do not spend
+  larger Slumbot confidence hands until a small live integration gate produces
+  parsed metrics.
+
+## 20260515T095847Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - failed
+
+- Timestamp: 2026-05-15T10:08:02Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T095842Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: distribution_shift
+- Summary: The first live Slumbot smoke was an oversized workflow attempt: it
+  requested 300 solver-enabled hands with a 1,800 second timeout and was
+  terminated after 555 seconds before any parsed stdout was emitted. Treat this
+  as evaluation sizing/infrastructure evidence, not candidate strategy-quality
+  evidence.
+- Metrics file: autoresearch-session/poker_runs/20260515T095847Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"passed": false, "returncode": -15, "elapsed_seconds_before_termination": 555.257, "hands_requested": 300, "solver_budget_profile": "fast-live"}`
+- Decision: Requeue a smaller 50-hand solver-enabled fast-live Slumbot smoke
+  with a 1,200 second timeout before deciding whether to scale live hands.
+
+## 20260515T100834Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T10:10:41Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T100828Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: The bounded 50-hand solver-enabled fast-live Slumbot smoke produced
+  parsed metrics with no API or parse errors and positive mean chips/hand. The
+  interval is still much too wide for strategy promotion, so this is live
+  integration evidence only.
+- Metrics file: autoresearch-session/poker_runs/20260515T100834Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"passed": true, "hands": 50, "avg_chips_per_hand": 350, "ci95_chips_per_hand": 987, "mbb_per_hand": 3503, "win_rate": 0.88, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 2.538, "solver_latency_mean_ms": 4346.6, "solver_latency_n": 23}`
+- Decision: Queue a 300-hand fast-live Slumbot confirmation run before any
+  stronger claim. Treat the 50-hand result as a smoke, not a confidence gate.
+
+## 20260515T101321Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25 - passed
+
+- Timestamp: 2026-05-15T10:26:59Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T101317Z-retry-slots7000-gpu-4x512-iter-25
+- Hypothesis: Candidate checkpoint retry_slots7000_gpu_4x512_iter_25.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: The 300-hand fast-live Slumbot confirmation produced parsed metrics
+  but was negative in chips/hand despite a high hand win rate. This falsifies
+  promotion of the retry-clean iteration-25 checkpoint and exposes a local-H2H
+  to live-Slumbot transfer gap.
+- Metrics file: autoresearch-session/poker_runs/20260515T101321Z-candidate-checkpoint-retry-slots7000-gpu-4x512-iter-25/metrics.json
+- Key metrics: `{"passed": true, "hands": 300, "avg_chips_per_hand": -395, "ci95_chips_per_hand": 673, "mbb_per_hand": -3953, "win_rate": 0.843, "total_chips": -118585, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 2.726, "decision_policy": 582, "decision_solver": 156, "solver_latency_mean_ms": 4103.8, "mapping_drift_mean": 0.003, "mapping_drift_max": 1.0}`
+- Decision: Do not promote this checkpoint. Run the incumbent under the same
+  300-hand fast-live Slumbot protocol before attributing the loss to the new
+  training change versus the live evaluation protocol itself.
+
+## 20260515T102834Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-produce - passed
+
+- Timestamp: 2026-05-15T10:33:44Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T102834Z-slumbot-2p-iter1000
+- Hypothesis: Candidate checkpoint slumbot_2p_iter1000.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: The incumbent same-protocol Slumbot control also produced parsed
+  metrics but lost chips/hand. This means the retry-clean candidate is not
+  uniquely failing; the shared live policy/search interface remains a blocker.
+  The candidate still should not be promoted because it did not beat Slumbot
+  and did not clearly improve over this control.
+- Metrics file: autoresearch-session/poker_runs/20260515T102834Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-produce/metrics.json
+- Key metrics: `{"passed": true, "hands": 300, "avg_chips_per_hand": -306, "ci95_chips_per_hand": 407, "mbb_per_hand": -3057, "win_rate": 0.447, "total_chips": -91713, "api_errors": 0, "parse_errors": 0, "seconds_per_hand": 1.033, "decision_policy": 354, "decision_solver": 34, "solver_latency_mean_ms": 5463.5, "mapping_drift_mean": 0.002, "mapping_drift_max": 0.013}`
+- Decision: Instrument Slumbot runs with per-decision JSONL traces and request
+  timeouts. The next live diagnostic should inspect big-pot loss paths rather
+  than training another checkpoint from the same opaque aggregate signal.
+
+## 20260515T103900Z-slumbot-trace-instrumentation - passed
+
+- Timestamp: 2026-05-15T10:39:00Z
+- Type: tooling
+- Gate: protected Slumbot evaluation instrumentation
+- Hypothesis: Per-decision JSONL traces and explicit API timeouts should make
+  live Slumbot transfer failures diagnosable without changing strategy
+  behavior.
+- Summary: Added tested trace plumbing to `scripts/play_slumbot.py`, passed
+  trace paths through `scripts/poker_autoresearch_slumbot.py`, and made
+  autoresearch Slumbot gates allocate trace files under
+  `autoresearch-session/slumbot_traces/`. Added explicit Slumbot API request
+  timeouts so future live gates fail boundedly instead of hanging inside
+  `requests.post`.
+- Validation: `uv run pytest -q test/unit/test_slumbot_diagnostics.py test/unit/test_poker_autoresearch_slumbot.py test/unit/test_poker_autoresearch.py` -> 61 passed.
+- Review: `autoresearch-session/poker_reviews/20260515T104035Z-slumbot-trace-instrumentation` passed methodology review with decision `proceed`.
+- Objective audit: `uv run python scripts/poker_objective_audit.py --base-ref HEAD --review-dir autoresearch-session/poker_reviews/20260515T104035Z-slumbot-trace-instrumentation` -> passed.
+- Tiny trace smoke: `autoresearch-session/poker_runs/20260515T104315Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-produce/metrics.json` passed with `trace_records=13` and trace file `autoresearch-session/slumbot_traces/slumbot-candidate-smoke-20260515T104311Z-slumbot-2p-iter1000.jsonl`.
+- Decision: Keep this as diagnostic infrastructure only. Use the new traces to
+  inspect live big-pot loss paths before changing training objectives.
+
+## 20260515T104039Z-methodology-review-for-slumbot-trace-instrumentation-should-verify - failed
+
+- Timestamp: 2026-05-15T10:40:39Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T104035Z-slumbot-trace-instrumentation
+- Hypothesis: Methodology review for Slumbot trace instrumentation should verify the claim and include related work before the next research action.
+- Failure class: eval_invalid
+- Summary: The initial autoresearch methodology-review gate ran while the
+  review directory still contained pending skeleton files, so the gate failed
+  as an incomplete-review workflow timing artifact. The review files were then
+  completed manually and validated with `scripts/poker_methodology_review.py`.
+- Metrics file: autoresearch-session/poker_runs/20260515T104039Z-methodology-review-for-slumbot-trace-instrumentation-should-verify/metrics.json
+- Key metrics: `{"gate": "methodology-review-20260515T104035Z-slumbot-trace-instrumentation", "passed": false}`
+- Decision: Superseded by the completed review recorded in the
+  `20260515T103900Z-slumbot-trace-instrumentation` entry. Do not treat this as
+  a strategy or instrumentation failure.
+
+## 20260515T104315Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-produce - passed
+
+- Timestamp: 2026-05-15T10:43:20Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260515T104311Z-slumbot-2p-iter1000
+- Hypothesis: Candidate checkpoint slumbot_2p_iter1000.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: Tiny 5-hand no-solver trace smoke verified that autoresearch Slumbot
+  gates allocate a JSONL trace path, pass it through to `scripts/play_slumbot.py`,
+  and parse the resulting trace metadata into metrics. This is trace-plumbing
+  evidence only, not strategy evidence.
+- Metrics file: autoresearch-session/poker_runs/20260515T104315Z-candidate-checkpoint-slumbot-2p-iter1000-pt-should-produce/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 155, "ci95_chips_per_hand": 265, "gate": "slumbot-candidate-smoke-20260515T104311Z-slumbot-2p-iter1000", "mbb_per_hand": 1554, "passed": true, "seconds_per_hand": 0.927, "trace_records": 13, "api_errors": 0, "parse_errors": 0}`
+- Decision: Trace plumbing is verified on a tiny live run. Use trace-backed
+  solver-enabled runs next to inspect big-pot loss paths.

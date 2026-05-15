@@ -1959,6 +1959,7 @@ def enqueue_slumbot_smoke(
         f"slumbot-candidate-smoke-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(model_path.stem)}"
     ))
+    trace_path = _session(root) / "slumbot_traces" / f"{gate_name}.jsonl"
     python = _project_python(root)
     command = [
         python,
@@ -1969,6 +1970,8 @@ def enqueue_slumbot_smoke(
         str(hands),
         "--timeout-seconds",
         str(timeout_seconds),
+        "--trace-jsonl",
+        str(trace_path),
     ]
     if greedy:
         command.append("--greedy")

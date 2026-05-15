@@ -876,6 +876,10 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     assert "--no-solver" in command
     assert "--strategy-source" in command
     assert "policy-head" in command
+    assert "--trace-jsonl" in command
+    trace_path = command[command.index("--trace-jsonl") + 1]
+    assert trace_path.endswith(".jsonl")
+    assert "slumbot_traces" in trace_path
     assert "123" in command
 
 

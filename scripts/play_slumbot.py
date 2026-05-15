@@ -7,6 +7,7 @@ Usage:
     python scripts/play_slumbot.py --model models/slumbot_2p_final.pt --hands 200
 """
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -43,6 +44,7 @@ SMALL_BLIND = 50
 BIG_BLIND = 100
 STACK_SIZE = 20000
 NUM_STREETS = 4
+API_TIMEOUT_SECONDS = 10.0
 
 # Card encoding: Slumbot uses "Ac", "Kh" etc.
 # Our features use card_idx = (rank - 2) * 4 + suit_idx
@@ -567,23 +569,32 @@ def network_strategy(value_net, features, legal_mask, device, strategy_source="r
 # Slumbot API
 # ---------------------------------------------------------------------------
 
-def api_new_hand(token):
+def api_new_hand(token, timeout_seconds=API_TIMEOUT_SECONDS):
     data = {'token': token} if token else {}
-    r = requests.post(f'https://{HOST}/slumbot/api/new_hand', json=data).json()
+    r = requests.post(
+        f'https://{HOST}/slumbot/api/new_hand',
+        json=data,
+        timeout=timeout_seconds,
+    ).json()
     if 'error_msg' in r:
         print(f"API error: {r['error_msg']}")
         sys.exit(1)
     return r
 
 
-def api_act(token, incr):
+def api_act(token, incr, timeout_seconds=API_TIMEOUT_SECONDS):
     data = {'token': token, 'incr': incr}
-    r = requests.post(f'https://{HOST}/slumbot/api/act', json=data).json()
+    r = requests.post(
+        f'https://{HOST}/slumbot/api/act',
+        json=data,
+        timeout=timeout_seconds,
+    ).json()
     if 'error_msg' in r:
         print(f"\n  API error on '{incr}': {r['error_msg']}")
         # Try folding to recover the hand gracefully.
         r2 = requests.post(f'https://{HOST}/slumbot/api/act',
-                           json={'token': token, 'incr': 'f'}).json()
+                           json={'token': token, 'incr': 'f'},
+                           timeout=timeout_seconds).json()
         if 'error_msg' not in r2:
             return r2
         # If fold also fails, return the original error with winnings=0.
@@ -606,7 +617,7 @@ STREET_NAMES = ["preflop", "flop", "turn", "river"]
 class ActionDiagnostics:
     """Track cheap live-play diagnostics for Slumbot distribution shift."""
 
-    def __init__(self):
+    def __init__(self, trace_path=None):
         self.decision_policy = 0
         self.decision_solver = 0
         self.decision_fallback = 0
@@ -626,16 +637,42 @@ class ActionDiagnostics:
         self.solver_hand_counts = []
         self.solver_full_hand_counts = []
         self.solver_cache_hits = 0
+        self.trace_path = Path(trace_path) if trace_path else None
+        if self.trace_path is not None:
+            self.trace_path.parent.mkdir(parents=True, exist_ok=True)
+            self.trace_path.write_text("")
+        self._current_hand_index = None
+        self._current_client_pos = None
+        self._current_hole_cards = []
 
-    def begin_hand(self):
+    def begin_hand(self, hand_index=None, client_pos=None, hole_cards=None):
         self._current_first_policy_action = None
+        self._current_hand_index = hand_index
+        self._current_client_pos = client_pos
+        self._current_hole_cards = list(hole_cards or [])
 
     def end_hand(self, winnings):
         action_name = self._current_first_policy_action
-        if action_name is None:
+        if action_name is not None:
+            self.first_policy_outcome_counts[action_name] += 1
+            self.first_policy_outcome_sums[action_name] += float(winnings)
+        self._emit_trace({
+            "event": "hand_result",
+            "winnings": int(winnings),
+            "first_policy_action": action_name,
+        })
+
+    def _emit_trace(self, record):
+        if self.trace_path is None:
             return
-        self.first_policy_outcome_counts[action_name] += 1
-        self.first_policy_outcome_sums[action_name] += float(winnings)
+        payload = {
+            "hand_index": self._current_hand_index,
+            "client_pos": self._current_client_pos,
+            "hole_cards": self._current_hole_cards,
+            **record,
+        }
+        with self.trace_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
 
     def _street_name(self, street):
         if street is None:
@@ -681,6 +718,19 @@ class ActionDiagnostics:
                 self.street_all_in[street_name] += 1
         self._record_increment(incr)
         self._record_mapping_drift(action_idx, incr, action_str, client_pos, parsed)
+        self._emit_trace({
+            "event": "decision",
+            "source": "policy",
+            "street": street_name,
+            "street_index": int(street) if street is not None else None,
+            "action_idx": int(action_idx),
+            "action_name": action_name,
+            "increment": incr,
+            "action_str": action_str,
+            "last_bet_size": int(parsed.get("last_bet_size", 0)),
+            "street_last_bet_to": int(parsed.get("street_last_bet_to", 0)),
+            "total_last_bet_to": int(parsed.get("total_last_bet_to", 0)),
+        })
 
     def record_solver_action(self, incr, *, latency_ms=None, n_hands=None,
                              full_n_hands=None, cached=False, street=None):
@@ -699,6 +749,17 @@ class ActionDiagnostics:
             self.solver_hand_counts.append(int(n_hands))
         if full_n_hands is not None:
             self.solver_full_hand_counts.append(int(full_n_hands))
+        self._emit_trace({
+            "event": "decision",
+            "source": "solver",
+            "street": street_name,
+            "street_index": int(street) if street is not None else None,
+            "increment": incr,
+            "cached": bool(cached),
+            "solver_latency_ms": float(latency_ms) if latency_ms is not None else None,
+            "solver_n_hands": int(n_hands) if n_hands is not None else None,
+            "solver_full_n_hands": int(full_n_hands) if full_n_hands is not None else None,
+        })
 
     def record_fallback(self, incr):
         self.decision_fallback += 1
@@ -1002,13 +1063,20 @@ def _solver_iterations_for_profile(profile, *, to_call, pot, hero_stack, villain
 def play_hand(value_net, token, device, verbose=False, greedy=False,
               no_allin=False, use_solver=True, diagnostics=None,
               strategy_source="regret", solver_backend='auto',
-              solver_budget_profile='live'):
+              solver_budget_profile='live', hand_index=None,
+              api_timeout_seconds=API_TIMEOUT_SECONDS):
     """Play one hand against Slumbot. Returns (token, winnings)."""
-    r = api_new_hand(token)
+    r = api_new_hand(token, timeout_seconds=api_timeout_seconds)
     token = r.get('token', token)
 
     client_pos = r['client_pos']
     hole_cards = r['hole_cards']
+    if diagnostics is not None:
+        diagnostics.begin_hand(
+            hand_index=hand_index,
+            client_pos=client_pos,
+            hole_cards=hole_cards,
+        )
 
     if verbose:
         pos_name = "BB" if client_pos == 0 else "SB"
@@ -1036,7 +1104,7 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
             if diagnostics is not None:
                 diagnostics.record_parse_error()
             # Fold to recover.
-            r = api_act(token, 'f')
+            r = api_act(token, 'f', timeout_seconds=api_timeout_seconds)
             token = r.get('token', token)
             break
 
@@ -1061,7 +1129,7 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
                 diagnostics=diagnostics, strategy_source=strategy_source,
             )
 
-        r = api_act(token, incr)
+        r = api_act(token, incr, timeout_seconds=api_timeout_seconds)
         token = r.get('token', token)
 
     w = r.get('winnings', 0)
@@ -1132,6 +1200,17 @@ def main():
         default='regret',
         help='Learned blueprint source for non-solver decisions and range tracking.',
     )
+    parser.add_argument(
+        '--trace-jsonl',
+        type=str,
+        help='Optional JSONL path for per-decision and per-hand live diagnostics.',
+    )
+    parser.add_argument(
+        '--api-timeout-seconds',
+        type=float,
+        default=API_TIMEOUT_SECONDS,
+        help='Per-request Slumbot API timeout.',
+    )
     args = parser.parse_args()
 
     mode_str = "greedy" if args.greedy else "sampled"
@@ -1195,20 +1274,21 @@ def main():
     token = None
     total_winnings = 0
     results = []
-    diagnostics = ActionDiagnostics()
+    diagnostics = ActionDiagnostics(trace_path=args.trace_jsonl)
 
     for h in range(args.hands):
         if args.verbose:
             print(f"Hand {h+1:3d}:", end="")
 
-        diagnostics.begin_hand()
         token, w = play_hand(value_net, token, device, verbose=args.verbose,
                              greedy=args.greedy, no_allin=args.no_allin,
                              use_solver=not args.no_solver,
                              diagnostics=diagnostics,
                              strategy_source=args.strategy_source,
                              solver_backend=args.solver_backend,
-                             solver_budget_profile=args.solver_budget_profile)
+                             solver_budget_profile=args.solver_budget_profile,
+                             hand_index=h + 1,
+                             api_timeout_seconds=args.api_timeout_seconds)
         diagnostics.end_hand(w)
         total_winnings += w
         results.append(w)
