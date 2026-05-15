@@ -403,6 +403,15 @@ cheap through a fused/batched GPU solver path, or learn a recurrent
 solver-dynamics/update model trained on a larger root-disjoint trace corpus and
 judged by the same uniform-budget baseline.
 
+The immediate evidence now favors the fused GPU search path. On 128 fixed
+roots, `torch-levelsync-cuda` CFR100/125 remained close to a CFR150 teacher,
+with CFR125 reaching `99.21875%` action agreement at lower latency than CFR150.
+The next continuation target should therefore be a same-state live-budget
+validation, not another trace-selector probe: keep default `live` unchanged,
+compare `fast-live`/CFR125-style budgets against the live teacher on fixed
+states or bounded Slumbot confidence hands, and only then consider changing
+runtime budget policy.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

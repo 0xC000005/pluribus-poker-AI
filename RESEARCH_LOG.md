@@ -547,6 +547,33 @@
   with more roots, direct learned CFR update dynamics, or a fused GPU solver
   path that makes uniform extra CFR cheap enough to dominate.
 
+## 20260515T032000Z-cuda-cfr150-frontier-holdout128 - passed
+
+- Timestamp: 2026-05-15T03:20:00Z
+- Type: compute_budget_diagnostic
+- Gate: 128-root `torch-levelsync-cuda` budget frontier against CFR150 teacher
+- Hypothesis: After repeated trace-selector failures, uniform GPU CFR budgets
+  may be the stronger practical path if CFR100/125 preserve CFR150 decisions on
+  a larger fixed public-state holdout.
+- Failure class: none
+- Related work: GPU-CFR supports accelerating CFR at a coarse solver boundary,
+  while DeepStack-style continual resolving keeps the search correction
+  mechanism in play.
+- Summary: Ran `scripts/eval_cfr_budget_frontier.py` over roots `128..255`
+  using `torch-levelsync-cuda`, budgets `50/75/100/125`, and reference
+  `150`. All `128` roots evaluated with zero illegal mass.
+- Evidence:
+  - Frontier: `autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_torch_levelsync_cuda_ref150_holdout128_seed20260515.json`
+- Metrics: CFR100 reached L1/KL `0.1281/0.0219`, action agreement `0.96875`,
+  all-in gap `0`, and mean latency `352.5 ms`. CFR125 reached
+  `0.0589/0.0047`, action agreement `0.9921875`, all-in gap `0`, and mean
+  latency `435.0 ms`. CFR150 reference mean latency was `519.8 ms` with p95
+  `624.8 ms`.
+- Decision: the compute branch is currently more promising than shallow learned
+  selectors. Keep `fast-live` opt-in, but use this 128-root result to justify
+  the next same-state live-profile or Slumbot confidence check before any
+  default-budget change.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

@@ -394,6 +394,15 @@ it should either make uniform extra CFR cheaper with fused GPU solving or learn
 a more faithful solver-update dynamic with substantially more root-disjoint
 data.
 
+CUDA budget frontier status: uniform GPU search is the stronger current path.
+On a larger 128-root holdout against a CFR150 teacher, `torch-levelsync-cuda`
+CFR100 reached L1/KL `0.1281/0.0219` and `96.875%` action agreement at
+`352.5 ms`; CFR125 reached `0.0589/0.0047` and `99.21875%` action agreement at
+`435.0 ms`. The CFR150 teacher averaged `519.8 ms` with p95 `624.8 ms`.
+Illegal mass stayed zero. This supports continuing the compute branch and
+testing opt-in fast-live style budgets on same-state/live Slumbot gates before
+another learned selector.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
