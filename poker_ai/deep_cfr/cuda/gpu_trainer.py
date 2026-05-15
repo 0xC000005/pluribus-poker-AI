@@ -128,6 +128,20 @@ def _adapt_traversal_batch_size(
     return max(1, min(current_batch, safe_batch))
 
 
+def _should_retry_traversal_chunk(
+    stats: dict[str, float | int],
+    *,
+    chunk_size: int,
+) -> bool:
+    """Return true when a biased overflow chunk can be retried smaller."""
+    if int(chunk_size) <= 1:
+        return False
+    requested_slots = float(stats.get("requested_slots", 0.0))
+    pool_max_slots = max(1.0, float(stats.get("pool_max_slots", 1.0)))
+    pool_exhausted_nodes = int(stats.get("pool_exhausted_nodes", 0))
+    return requested_slots > pool_max_slots or pool_exhausted_nodes > 0
+
+
 def _nn_forward_chunk_size(
     value_net: torch.nn.Module,
     device: torch.device,
@@ -323,6 +337,40 @@ def _summarize_traversal_pool_stats(
         "traversal_pool_exhausted_peak_depth": peak_depth,
         "traversal_pool_exhausted_peak_depth_nodes": peak_depth_nodes,
         "traversal_pool_exhausted_last_depth": last_depth,
+    }
+
+
+def _summarize_rejected_traversal_pool_stats(
+    records: list[dict[str, float | int]],
+) -> dict[str, float | int]:
+    if not records:
+        return {
+            "traversal_rejected_chunks": 0,
+            "traversal_rejected_requested_traversals": 0,
+            "traversal_rejected_overflow_chunks": 0,
+            "traversal_rejected_pool_exhausted_nodes": 0,
+            "traversal_rejected_max_pool_demand_ratio": 0.0,
+        }
+    overflow_chunks = sum(
+        1 for record in records
+        if float(record.get("requested_slots", 0.0))
+        > max(1.0, float(record.get("pool_max_slots", 1.0)))
+    )
+    demand_ratios = [
+        float(record.get("requested_slots", 0.0))
+        / max(1.0, float(record.get("pool_max_slots", 1.0)))
+        for record in records
+    ]
+    return {
+        "traversal_rejected_chunks": len(records),
+        "traversal_rejected_requested_traversals": sum(
+            max(1, int(record.get("n_traversals", 0))) for record in records
+        ),
+        "traversal_rejected_overflow_chunks": overflow_chunks,
+        "traversal_rejected_pool_exhausted_nodes": sum(
+            int(record.get("pool_exhausted_nodes", 0)) for record in records
+        ),
+        "traversal_rejected_max_pool_demand_ratio": round(max(demand_ratios), 6),
     }
 
 
@@ -928,6 +976,7 @@ def gpu_traverse_for_player(
     initial_chips: int = 10000,
     workspace: _GPUTraverseWorkspace | None = None,
     policy_buffer: PolicyReservoirBuffer | None = None,
+    discard_on_pool_exhaustion: bool = False,
 ):
     """Run n_traversals game tree traversals on GPU for one player.
 
@@ -1162,31 +1211,38 @@ def gpu_traverse_for_player(
         d_collected_features, d_collected_regrets, d_n_collected,
         np.float32(initial_chips), n_active,
     )
-    # Copy collected samples to CPU and add to buffer.
-    n_collected = min(int(d_n_collected.copy_to_host()[0]), max_pool)
+    final_next_free = int(d_next_free.copy_to_host()[0])
+    pool_exhausted_nodes = int(d_pool_exhausted.copy_to_host()[0])
+    overflowed = final_next_free > max_pool or pool_exhausted_nodes > 0
+    accepted_chunk = not (discard_on_pool_exhaustion and overflowed)
+    raw_n_collected = min(int(d_n_collected.copy_to_host()[0]), max_pool)
+    n_collected = raw_n_collected if accepted_chunk else 0
+    raw_n_policy = 0
+    if policy_buffer is not None:
+        raw_n_policy = min(
+            int(d_n_policy_collected.copy_to_host()[0]),
+            workspace.policy_capacity,
+        )
+    n_policy = raw_n_policy if accepted_chunk else 0
+
+    # Copy accepted samples to CPU and add to replay. Overflowed chunks are
+    # retried by the caller so biased demotion samples never enter training.
     if n_collected > 0:
         h_features = d_collected_features[:n_collected].copy_to_host()
         h_regrets = d_collected_regrets[:n_collected].copy_to_host()
         buffer.add_batch(h_features, iteration, h_regrets, n_collected)
-    if policy_buffer is not None:
-        n_policy = min(
-            int(d_n_policy_collected.copy_to_host()[0]),
-            workspace.policy_capacity,
+    if policy_buffer is not None and n_policy > 0:
+        h_policy_features = d_policy_features[:n_policy].copy_to_host()
+        h_policy_masks = d_policy_masks[:n_policy].copy_to_host()
+        h_policy_targets = d_policy_targets[:n_policy].copy_to_host()
+        policy_buffer.add_batch(
+            h_policy_features,
+            h_policy_masks,
+            h_policy_targets,
+            float(max(iteration, 1)),
+            n_policy,
         )
-        if n_policy > 0:
-            h_policy_features = d_policy_features[:n_policy].copy_to_host()
-            h_policy_masks = d_policy_masks[:n_policy].copy_to_host()
-            h_policy_targets = d_policy_targets[:n_policy].copy_to_host()
-            policy_buffer.add_batch(
-                h_policy_features,
-                h_policy_masks,
-                h_policy_targets,
-                float(max(iteration, 1)),
-                n_policy,
-            )
 
-    final_next_free = int(d_next_free.copy_to_host()[0])
-    pool_exhausted_nodes = int(d_pool_exhausted.copy_to_host()[0])
     pool_exhausted_by_depth = [
         int(value) for value in d_pool_exhausted_by_depth.copy_to_host().tolist()
     ]
@@ -1211,14 +1267,18 @@ def gpu_traverse_for_player(
         "pool_max_slots": max_pool,
         "n_traversals": n_traversals,
         "regret_samples": n_collected,
+        "raw_regret_samples": raw_n_collected,
         "pool_exhausted_nodes": pool_exhausted_nodes,
+        "accepted_chunk": int(accepted_chunk),
+        "discarded_overflow_chunk": int(not accepted_chunk),
         "depths_executed": depths_executed,
         "max_nonterminal_slots": max_nonterminal_slots,
         "max_nonterminal_depth": max_nonterminal_depth,
         "last_frontier_slots": last_frontier_slots,
         "pool_exhausted_by_depth": pool_exhausted_by_depth,
         "pool_exhausted_by_stage": pool_exhausted_by_stage,
-        "policy_samples": min(n_policy_seen, workspace.policy_capacity),
+        "policy_samples": n_policy,
+        "raw_policy_samples": raw_n_policy if policy_buffer is not None else 0,
         "policy_capacity": workspace.policy_capacity,
     }
 
@@ -1310,6 +1370,8 @@ class GPUDeepCFRTrainer:
         self._schedule_logged = False
         self.last_traversal_pool_stats: List[dict[str, float | int]] = []
         self.traversal_pool_stats_history: List[dict[str, float | int]] = []
+        self.last_rejected_traversal_pool_stats: List[dict[str, float | int]] = []
+        self.rejected_traversal_pool_stats_history: List[dict[str, float | int]] = []
         self.last_profile: dict[str, float | int] = {}
         self.profile_history: list[dict[str, float | int]] = []
         self._adaptive_traversal_batch_size: int | None = None
@@ -1347,6 +1409,7 @@ class GPUDeepCFRTrainer:
 
         t0 = _time.perf_counter()
         self.last_traversal_pool_stats = []
+        self.last_rejected_traversal_pool_stats = []
         active_trav_batch = min(
             trav_batch,
             int(self._adaptive_traversal_batch_size or trav_batch),
@@ -1368,6 +1431,7 @@ class GPUDeepCFRTrainer:
                     policy_buffer=(
                         self.strategy_buffer if self.average_strategy_weight > 0 else None
                     ),
+                    discard_on_pool_exhaustion=True,
                 )
                 stats["adaptive_traversal_batch_before"] = int(chunk)
                 next_trav_batch = _adapt_traversal_batch_size(
@@ -1378,6 +1442,10 @@ class GPUDeepCFRTrainer:
                 stats["adaptive_traversal_batch_after"] = int(next_trav_batch)
                 active_trav_batch = next_trav_batch
                 self._adaptive_traversal_batch_size = active_trav_batch
+                if _should_retry_traversal_chunk(stats, chunk_size=chunk):
+                    self.last_rejected_traversal_pool_stats.append(stats)
+                    self.rejected_traversal_pool_stats_history.append(stats)
+                    continue
                 self.last_traversal_pool_stats.append(stats)
                 self.traversal_pool_stats_history.append(stats)
                 remaining -= chunk
@@ -1462,7 +1530,13 @@ class GPUDeepCFRTrainer:
         return self.last_profile
 
     def traversal_pool_summary(self) -> dict[str, float | int]:
-        return _summarize_traversal_pool_stats(self.traversal_pool_stats_history)
+        summary = _summarize_traversal_pool_stats(self.traversal_pool_stats_history)
+        summary.update(
+            _summarize_rejected_traversal_pool_stats(
+                self.rejected_traversal_pool_stats_history
+            )
+        )
+        return summary
 
     def _release_workspace_for_training(self):
         """Drop traversal buffers before replay-cache allocation/training."""

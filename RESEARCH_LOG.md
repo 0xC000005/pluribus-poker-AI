@@ -5177,3 +5177,58 @@
   next principled optimization is active-frontier compaction/slot reuse, because
   7000 slots fixes correctness but still leaves allocated/live ratios around
   `7x` and does not fully satisfy the throughput gate.
+
+## 20260515T084604Z-methodology-review-for-gpu-traversal-slot-default-7000 - passed
+
+- Timestamp: 2026-05-15T08:46:04Z
+- Type: methodology_review
+- Gate: methodology-review-20260515T084157Z-gpu-traversal-slot-default-7000
+- Hypothesis: Methodology review for GPU traversal slot default 7000 should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260515T084157Z-gpu-traversal-slot-default-7000 passed.
+- Metrics file: autoresearch-session/poker_runs/20260515T084604Z-methodology-review-for-gpu-traversal-slot-default-7000/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260515T084157Z-gpu-traversal-slot-default-7000", "passed": true}`
+
+## 20260515T084609Z-gpu-deep-cfr-training-should-produce-slots7000-gpu - failed
+
+- Timestamp: 2026-05-15T09:10:43Z
+- Type: experiment
+- Gate: train-gpu-deep-cfr-20260515T084559Z-slots7000-gpu-4x512
+- Hypothesis: GPU Deep CFR training should produce slots7000_gpu_4x512_final.pt with machine-readable throughput metrics.
+- Failure class: compute_efficiency
+- Summary: CUDA training completed and wrote iteration-25, iteration-50, and
+  final checkpoints, but the gate failed strict traversal fidelity. The 7000
+  default reduced overflow from the prior 2000-slot run by two orders of
+  magnitude, but rare late-depth river/turn outliers still exhausted the pool.
+  Throughput dropped sharply because the fidelity-clean default created 3348
+  small traversal chunks and the second half of training spent much longer in
+  traversal.
+- Metrics file: autoresearch-session/poker_runs/20260515T084609Z-gpu-deep-cfr-training-should-produce-slots7000-gpu/metrics.json
+- Key metrics: `{"passed": false, "device": "cuda", "elapsed_seconds": 1472.273, "avg_iter_seconds": 29.445, "iters_per_hour": 122.262, "traversals_per_second": 135.844, "checkpoints_written": 3, "traversal_slots_per_traversal": 7000, "adaptive_batch_min": 73, "adaptive_batch_shrinks": 6, "traversal_chunks": 3348, "overflow_chunks": 6, "overflow_fraction": 0.001792, "pool_exhausted_per_traversal": 0.066892, "pool_exhausted_nodes": 26757, "max_pool_demand_ratio": 1.03838, "max_slots_per_traversal": 15466.7, "stage_counts": {"preflop": 0, "flop": 0, "turn": 31, "river": 26726}, "first_depth": 14, "peak_depth": 14, "last_depth": 18, "mean_allocated_to_live_ratio": 6.887493}`
+- Decision: Do not auto-compare or promote the checkpoints. The next local fix
+  should reject-and-retry overflowing traversal chunks before they enter replay,
+  then keep active-frontier compaction as the main throughput target. Simply
+  raising `--traversal-slots-per-traversal` again would improve fidelity by
+  making chunks even smaller, but it moves away from efficient GPU utilization.
+
+## 20260515T092019Z-overflowing-gpu-traversal-chunks-should-be-retried - passed
+
+- Timestamp: 2026-05-15T09:20:19Z
+- Type: compute_fidelity_fix
+- Gate: TDD, CUDA smoke, and forced-overflow stress diagnostic
+- Hypothesis: Overflowing GPU traversal chunks should be discarded before replay
+  insertion, shrink the future chunk cap, and retry until the requested
+  traversals are collected without accepted pool-exhaustion demotions.
+- Failure class: none
+- Summary: Added reject-and-retry handling for overflowed traversal chunks. The
+  trainer now skips replay insertion for chunks with pool exhaustion, tracks
+  rejected-chunk pressure separately, and retries the same requested traversal
+  budget with a smaller adaptive chunk size. Accepted traversal summaries remain
+  the fidelity gate; rejected summaries are compute-pressure evidence.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py test/unit/test_gpu_optimizations.py::TestTraversalFrontierKernel::test_active_frontier_counter_skips_expanded_traverser_nodes`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 4000 --n-training-steps 2 --hidden-dim 64 --n-layers 1 --batch-size 128 --buffer-capacity 10000 --save-dir autoresearch-session/gpu_train_retry_overflow_smoke_20260515 --prefix retry_overflow_smoke --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 10 --n-traversals 4000 --n-training-steps 100 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 500000 --save-dir autoresearch-session/gpu_train_retry_overflow_diag_20260515 --prefix retry_overflow_diag --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 5 --n-traversals 4000 --n-training-steps 100 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 500000 --traversal-slots-per-traversal 2000 --save-dir autoresearch-session/gpu_train_retry_overflow_stress_20260515 --prefix retry_overflow_stress --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`
+- Key metrics: `{"unit_tests": "25 passed", "default_retry_smoke": {"passed": true, "accepted_overflow_fraction": 0.0, "accepted_pool_exhausted_per_traversal": 0.0, "rejected_chunks": 0}, "retry_4x512_10iter": {"passed": true, "traversals_per_second": 483.13, "accepted_overflow_fraction": 0.0, "accepted_pool_exhausted_per_traversal": 0.0, "rejected_chunks": 0}, "forced_2000_slot_stress": {"passed": true, "traversals_per_second": 114.629, "accepted_overflow_fraction": 0.0, "accepted_pool_exhausted_per_traversal": 0.0, "rejected_chunks": 3, "rejected_requested_traversals": 791, "rejected_max_pool_demand_ratio": 2.55075, "rejected_pool_exhausted_nodes": 573880}}`
+- Decision: Use reject-and-retry as the replay-fidelity guard for GPU Deep CFR
+  training. Do not treat rejected chunks as a solved speed problem; they are a
+  signal to prioritize active-frontier compaction/slot reuse. The next full
+  candidate run can require zero accepted overflow while allowing rejected
+  chunks to be reported as overhead.

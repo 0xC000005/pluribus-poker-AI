@@ -10,6 +10,8 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     _gpu_cache_budget_allows,
     _gpu_cache_nbytes,
     _nn_forward_chunk_size,
+    _should_retry_traversal_chunk,
+    _summarize_rejected_traversal_pool_stats,
     _summarize_traversal_pool_stats,
     _traversal_batch_size,
     _traversal_pool_slots,
@@ -117,6 +119,28 @@ def test_adaptive_traversal_batch_keeps_safe_chunk():
     assert next_batch == 500
 
 
+def test_overflowing_traversal_chunk_should_retry_before_buffer_insert():
+    assert _should_retry_traversal_chunk(
+        {
+            "requested_slots": 1_038_380,
+            "pool_max_slots": 1_000_000,
+            "pool_exhausted_nodes": 10,
+        },
+        chunk_size=142,
+    )
+
+
+def test_single_traversal_overflow_cannot_retry_smaller():
+    assert not _should_retry_traversal_chunk(
+        {
+            "requested_slots": 1_038_380,
+            "pool_max_slots": 1_000_000,
+            "pool_exhausted_nodes": 10,
+        },
+        chunk_size=1,
+    )
+
+
 def test_nn_forward_chunk_size_reduces_when_cuda_memory_is_tight():
     net = torch.nn.Module()
     net.hidden_dim = 512
@@ -186,6 +210,23 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
     assert summary["traversal_max_nonterminal_slots_per_traversal"] == 50.0
     assert summary["traversal_mean_allocated_to_live_ratio"] == 4.0
     assert summary["traversal_max_allocated_to_live_ratio"] == 6.0
+
+
+def test_summarize_rejected_traversal_pool_stats_reports_retry_pressure():
+    summary = _summarize_rejected_traversal_pool_stats([
+        {
+            "requested_slots": 1_038_380,
+            "pool_max_slots": 1_000_000,
+            "n_traversals": 142,
+            "pool_exhausted_nodes": 10,
+        }
+    ])
+
+    assert summary["traversal_rejected_chunks"] == 1
+    assert summary["traversal_rejected_requested_traversals"] == 142
+    assert summary["traversal_rejected_overflow_chunks"] == 1
+    assert summary["traversal_rejected_pool_exhausted_nodes"] == 10
+    assert summary["traversal_rejected_max_pool_demand_ratio"] == 1.03838
 
 
 def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():
