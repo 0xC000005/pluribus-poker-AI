@@ -224,6 +224,22 @@ def _validated_initial_array(initial, expected_shape, name):
     return arr.copy()
 
 
+def _regret_matching_strategy(regret_rows):
+    """Return regret-matching strategy rows for one decision node.
+
+    ``regret_rows`` has shape ``(n_actions, n_hands)``. Columns with no
+    positive regret use the standard uniform fallback.
+    """
+    regret_rows = np.asarray(regret_rows, dtype=np.float32)
+    if regret_rows.ndim != 2 or regret_rows.shape[0] == 0:
+        raise ValueError("regret_rows must have shape (n_actions, n_hands)")
+    positive = np.maximum(regret_rows, np.float32(0.0))
+    totals = positive.sum(axis=0, dtype=np.float32)
+    safe = np.where(totals > 0.0, totals, np.float32(1.0))
+    uniform = np.float32(1.0 / regret_rows.shape[0])
+    return np.where(totals.reshape(1, -1) > 0.0, positive / safe.reshape(1, -1), uniform)
+
+
 def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               pot_start, hero_stack_start, villain_stack_start,
               n_iterations=100, hero_range=None, villain_range=None,
@@ -277,7 +293,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     """
     n = n_hands
     nn = tree['n_nodes']
-    na = tree['n_actions']
+    n_actions = tree['n_actions']
     player = tree['player']
     children = tree['children']
     decision_actions = tree['decision_actions']
@@ -328,7 +344,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         vf_vill_coeff = (-vi_vf).reshape(-1, 1)
 
     # CFR arrays
-    expected_shape = (nn, na, n)
+    expected_shape = (nn, n_actions, n)
     regret_sum = _validated_initial_array(
         initial_regret_sum,
         expected_shape,
@@ -361,6 +377,17 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
 
     # BFS order is just 0..n_nodes-1 (nodes were added in BFS order)
     bfs_order = range(nn)
+    decision_action_arrays = []
+    decision_child_arrays = []
+    for i, actions in enumerate(decision_actions):
+        if actions:
+            action_array = np.asarray(actions, dtype=np.intp)
+            child_array = children[i, action_array].astype(np.intp, copy=False)
+        else:
+            action_array = np.zeros(0, dtype=np.intp)
+            child_array = np.zeros(0, dtype=np.intp)
+        decision_action_arrays.append(action_array)
+        decision_child_arrays.append(child_array)
 
     # Transpose matrices once (for villain terminal eval)
     win_mT = win_m.T.copy()   # contiguous for GEMM
@@ -382,6 +409,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 0.0,
             )
 
+        iteration_strategy = [None] * nn
         if cut_idx.size:
             hr_at.fill(0.0)
             vr_at.fill(0.0)
@@ -399,24 +427,17 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 continue
             if cut_mask[i]:
                 continue
-            acts = decision_actions[i]
-            # Compute strategy from regret_sum
-            rs_acts = np.stack([policy_regret_sum[i, a] for a in acts])  # (n_acts, n)
-            pos = np.maximum(rs_acts, 0)
-            tot = pos.sum(axis=0)
-            safe = np.where(tot > 0, tot, np.float32(1.0))
-            na = len(acts)
-            uniform = np.float32(1.0 / na)
+            actions = decision_action_arrays[i]
+            child_indices = decision_child_arrays[i]
+            strategy = _regret_matching_strategy(policy_regret_sum[i, actions, :])
+            iteration_strategy[i] = strategy
 
-            for k, a in enumerate(acts):
-                strat_a = np.where(tot > 0, pos[k] / safe, uniform)
-                ci = children[i, a]
-                if player[i] == 0:
-                    np.multiply(hr_at[i], strat_a, out=hr_at[ci])
-                    np.copyto(vr_at[ci], vr_at[i])
-                else:
-                    np.copyto(hr_at[ci], hr_at[i])
-                    np.multiply(vr_at[i], strat_a, out=vr_at[ci])
+            if player[i] == 0:
+                hr_at[child_indices, :] = hr_at[i].reshape(1, -1) * strategy
+                vr_at[child_indices, :] = vr_at[i]
+            else:
+                hr_at[child_indices, :] = hr_at[i]
+                vr_at[child_indices, :] = vr_at[i].reshape(1, -1) * strategy
 
         # ===== Batched terminal evaluation =====
 
@@ -519,58 +540,55 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
             if cut_mask[i]:
                 continue
 
-            acts = decision_actions[i]
-            rs_acts = np.stack([policy_regret_sum[i, a] for a in acts])
-            pos = np.maximum(rs_acts, 0)
-            tot = pos.sum(axis=0)
-            safe = np.where(tot > 0, tot, np.float32(1.0))
-            na = len(acts)
-            uniform = np.float32(1.0 / na)
+            actions = decision_action_arrays[i]
+            child_indices = decision_child_arrays[i]
+            strategy = iteration_strategy[i]
+            if strategy is None:
+                strategy = _regret_matching_strategy(policy_regret_sum[i, actions, :])
+            child_hvals = hvals[child_indices, :]
+            child_vvals = vvals[child_indices, :]
 
-            # Compute strategy and node values
-            hval = np.zeros(n, dtype=np.float32)
-            vval = np.zeros(n, dtype=np.float32)
-
-            strat_cache = {}
-            for k, a in enumerate(acts):
-                strat_a = np.where(tot > 0, pos[k] / safe, uniform)
-                strat_cache[a] = strat_a
-                ci = children[i, a]
-                hval += strat_a * hvals[ci]
-                vval += strat_a * vvals[ci]
+            hval = np.sum(strategy * child_hvals, axis=0, dtype=np.float32)
+            vval = np.sum(strategy * child_vvals, axis=0, dtype=np.float32)
 
             hvals[i] = hval
             vvals[i] = vval
 
             # Update regrets (CFR+: clamp to >= 0)
             if player[i] == 0:
-                for a in acts:
-                    ci = children[i, a]
-                    instant = hvals[ci] - hval
-                    if solver_update == "pdcfr_plus":
-                        regret_sum[i, a] = np.maximum(
-                            regret_sum[i, a] * _pdcfr_discount_factor(iteration_number) + instant,
-                            0,
-                        )
-                        prev_imm_regret[i, a] = instant
-                    else:
-                        regret_sum[i, a] = np.maximum(regret_sum[i, a] + instant, 0)
-                for a in acts:
-                    strategy_sum[i, a] += hr_at[i] * strat_cache[a]
+                instant = child_hvals - hval.reshape(1, -1)
+                if solver_update == "pdcfr_plus":
+                    regret_discount = _pdcfr_discount_factor(iteration_number)
+                    regret_sum[i, actions, :] = np.maximum(
+                        regret_sum[i, actions, :] * regret_discount + instant,
+                        0,
+                    )
+                    prev_imm_regret[i, actions, :] = instant
+                else:
+                    regret_sum[i, actions, :] = np.maximum(
+                        regret_sum[i, actions, :] + instant,
+                        0,
+                    )
+                strategy_sum[i, actions, :] = (
+                    strategy_sum[i, actions, :] + hr_at[i].reshape(1, -1) * strategy
+                )
             else:
-                for a in acts:
-                    ci = children[i, a]
-                    instant = vvals[ci] - vval
-                    if solver_update == "pdcfr_plus":
-                        regret_sum[i, a] = np.maximum(
-                            regret_sum[i, a] * _pdcfr_discount_factor(iteration_number) + instant,
-                            0,
-                        )
-                        prev_imm_regret[i, a] = instant
-                    else:
-                        regret_sum[i, a] = np.maximum(regret_sum[i, a] + instant, 0)
-                for a in acts:
-                    strategy_sum[i, a] += vr_at[i] * strat_cache[a]
+                instant = child_vvals - vval.reshape(1, -1)
+                if solver_update == "pdcfr_plus":
+                    regret_discount = _pdcfr_discount_factor(iteration_number)
+                    regret_sum[i, actions, :] = np.maximum(
+                        regret_sum[i, actions, :] * regret_discount + instant,
+                        0,
+                    )
+                    prev_imm_regret[i, actions, :] = instant
+                else:
+                    regret_sum[i, actions, :] = np.maximum(
+                        regret_sum[i, actions, :] + instant,
+                        0,
+                    )
+                strategy_sum[i, actions, :] = (
+                    strategy_sum[i, actions, :] + vr_at[i].reshape(1, -1) * strategy
+                )
 
         if trace_idx.size:
             hero_action_values = np.zeros(

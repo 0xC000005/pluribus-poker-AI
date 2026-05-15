@@ -157,11 +157,12 @@ solves the teacher once, and solves each requested budget once, so it avoids
 the candidate-equals-baseline duplication in the solver-update A/B script and
 does not recompute turn-equity matrices per budget. On the fixed 64-root
 holdout, CFR5 measured `0.5254` L1, `0.2602` KL, `0.7656` action agreement,
-and about `186 ms`; CFR10 measured `0.3630` L1, `0.1251` KL, `0.8125` action
-agreement, and about `355 ms` (`1.9140x` CFR5 latency in the reuse run). The
-script emits `promotion=false` and is now a protected evaluation surface. The
-8-root cProfile smoke improved from `32.711s` before solver reuse to `18.787s`
-after reuse; remaining runtime is dominated by `fast_cfr.solve_cfr`.
+and about `145 ms`; CFR10 measured `0.3630` L1, `0.1251` KL, `0.8125` action
+agreement, and about `280 ms` after CPU CFR strategy reuse. The script emits
+`promotion=false` and is now a protected evaluation surface. The 8-root
+cProfile smoke improved from `32.711s` before solver reuse to `18.787s` after
+solver reuse and `16.687s` after strategy reuse; remaining runtime is split
+between `fast_cfr.solve_cfr` and turn-equity construction.
 
 Resolver backend status: forcing the current `torch-cuda` street-solver backend
 is still not an acceleration path for fixed-state solving. A fresh four-case

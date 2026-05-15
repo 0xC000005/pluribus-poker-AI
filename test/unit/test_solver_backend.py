@@ -8,8 +8,33 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+from fast_cfr import _regret_matching_strategy
 from solver import StreetSolver
 from solver import solve_street
+
+
+def test_regret_matching_strategy_uses_positive_regrets_or_uniform_fallback():
+    regret_rows = np.array(
+        [
+            [-2.0, 2.0, 0.0, 0.5],
+            [0.0, 1.0, -4.0, 0.5],
+            [-1.0, -3.0, 3.0, -2.0],
+        ],
+        dtype=np.float32,
+    )
+
+    strategy = _regret_matching_strategy(regret_rows)
+
+    expected = np.array(
+        [
+            [1.0 / 3.0, 2.0 / 3.0, 0.0, 0.5],
+            [1.0 / 3.0, 1.0 / 3.0, 0.0, 0.5],
+            [1.0 / 3.0, 0.0, 1.0, 0.0],
+        ],
+        dtype=np.float32,
+    )
+    np.testing.assert_allclose(strategy, expected, atol=1e-7)
+    assert strategy.dtype == np.float32
 
 
 def test_street_solver_accepts_torch_cpu_backend_and_returns_strategy():

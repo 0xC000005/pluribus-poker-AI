@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1197,
+      "path": "benchmark_audit.md",
+      "sha256": "958775770e82f440a856281e2da1fb7bffb5ce12277de6a0d8bd24efa92942cc"
+    },
+    {
+      "bytes": 476,
+      "path": "decision.json",
+      "sha256": "3c2dac967622fbd363b6f9df398ef9546c64369b7cf4009731ac623aeb9ee78c"
+    },
+    {
+      "bytes": 1241,
+      "path": "mechanism_review.md",
+      "sha256": "d65370c8a724fa85481ba4029c80850e580fe280fb22846a12cf1ab29687ea34"
+    },
+    {
+      "bytes": 1279,
+      "path": "related_work.md",
+      "sha256": "640d8d6863837f32c5095cd44b1455daa644f5267986e3003bc366eded26a02b"
+    },
+    {
+      "bytes": 1712,
+      "path": "review.md",
+      "sha256": "975b3db17bf49ba269a2c145f31d24b0092d11179698328971ad63fb40f3a907"
+    },
+    {
+      "bytes": 383,
+      "path": "team_review.md",
+      "sha256": "c33f300df473465ebbcd29e5941889975f1e51a5e2a798c8ce4b00c6a986d11d"
+    }
+  ],
+  "reason": "The protected fast_cfr throughput refactor preserved 64-root CFR+ decision metrics and zero illegal mass while improving CPU resolver latency.",
+  "review_dir": "autoresearch-session/poker_reviews/20260514T235548Z-fast-cfr-vectorized-strategy",
+  "review_id": "20260514T235548Z-fast-cfr-vectorized-strategy",
+  "sources": [
+    "https://papers.nips.cc/paper_files/paper/2007/file/08d98638c6fcd194a4b1e6992063e944-Paper.pdf",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-14T23:55:48Z"
+}
