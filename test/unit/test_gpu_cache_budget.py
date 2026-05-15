@@ -8,6 +8,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     _gpu_cache_budget_allows,
     _gpu_cache_nbytes,
     _nn_forward_chunk_size,
+    _summarize_traversal_pool_stats,
     _traversal_batch_size,
 )
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
@@ -98,6 +99,30 @@ def test_nn_forward_chunk_size_keeps_fast_default_when_cuda_memory_is_plentiful(
         torch.device("cuda"),
         free_bytes=3 * 1024**3,
     ) == 500_000
+
+
+def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
+    summary = _summarize_traversal_pool_stats([
+        {
+            "requested_slots": 1_200,
+            "pool_max_slots": 1_000,
+            "n_traversals": 10,
+            "regret_samples": 800,
+        },
+        {
+            "requested_slots": 500,
+            "pool_max_slots": 1_000,
+            "n_traversals": 5,
+            "regret_samples": 300,
+        },
+    ])
+
+    assert summary["traversal_chunks"] == 2
+    assert summary["traversal_overflow_chunks"] == 1
+    assert summary["traversal_overflow_chunk_fraction"] == 0.5
+    assert summary["traversal_mean_pool_demand_ratio"] == 0.85
+    assert summary["traversal_max_pool_demand_ratio"] == 1.2
+    assert summary["traversal_max_slots_per_traversal"] == 120.0
 
 
 def test_release_workspace_for_training_drops_traversal_workspace():

@@ -130,6 +130,52 @@ def _nn_forward_chunk_size(
     return max(_MIN_NN_FORWARD_CHUNK, min(max_chunk, int(rows)))
 
 
+def _summarize_traversal_pool_stats(
+    records: List[dict[str, float | int]],
+) -> dict[str, float | int]:
+    if not records:
+        return {
+            "traversal_chunks": 0,
+            "traversal_overflow_chunks": 0,
+            "traversal_overflow_chunk_fraction": 0.0,
+            "traversal_mean_pool_demand_ratio": 0.0,
+            "traversal_max_pool_demand_ratio": 0.0,
+            "traversal_mean_slots_per_traversal": 0.0,
+            "traversal_max_slots_per_traversal": 0.0,
+            "traversal_regret_sample_fill_ratio": 0.0,
+        }
+
+    chunks = len(records)
+    demand_ratios = [
+        float(record["requested_slots"]) / max(1.0, float(record["pool_max_slots"]))
+        for record in records
+    ]
+    slots_per_traversal = [
+        float(record["requested_slots"]) / max(1.0, float(record["n_traversals"]))
+        for record in records
+    ]
+    total_capacity = sum(max(1, int(record["pool_max_slots"])) for record in records)
+    total_regret_samples = sum(int(record.get("regret_samples", 0)) for record in records)
+    overflow_chunks = sum(1 for ratio in demand_ratios if ratio > 1.0)
+
+    return {
+        "traversal_chunks": chunks,
+        "traversal_overflow_chunks": overflow_chunks,
+        "traversal_overflow_chunk_fraction": round(overflow_chunks / chunks, 6),
+        "traversal_mean_pool_demand_ratio": round(sum(demand_ratios) / chunks, 6),
+        "traversal_max_pool_demand_ratio": round(max(demand_ratios), 6),
+        "traversal_mean_slots_per_traversal": round(
+            sum(slots_per_traversal) / chunks,
+            6,
+        ),
+        "traversal_max_slots_per_traversal": round(max(slots_per_traversal), 6),
+        "traversal_regret_sample_fill_ratio": round(
+            total_regret_samples / max(1, total_capacity),
+            6,
+        ),
+    }
+
+
 def _gpu_cache_nbytes(
     n_samples: int,
     *,
@@ -917,6 +963,7 @@ def gpu_traverse_for_player(
             )
 
     final_next_free = int(d_next_free.copy_to_host()[0])
+    n_policy_seen = 0
     if n_traversals >= 1000:
         print(f"    [pool] used {final_next_free}/{max_pool} slots "
               f"({final_next_free/max_pool*100:.0f}%), "
@@ -926,6 +973,17 @@ def gpu_traverse_for_player(
             n_policy_seen = int(d_n_policy_collected.copy_to_host()[0])
             print(f"    [policy] collected {min(n_policy_seen, workspace.policy_capacity)}"
                   f"/{workspace.policy_capacity} targets")
+    elif policy_buffer is not None:
+        n_policy_seen = int(d_n_policy_collected.copy_to_host()[0])
+
+    return {
+        "requested_slots": final_next_free,
+        "pool_max_slots": max_pool,
+        "n_traversals": n_traversals,
+        "regret_samples": n_collected,
+        "policy_samples": min(n_policy_seen, workspace.policy_capacity),
+        "policy_capacity": workspace.policy_capacity,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1013,6 +1071,8 @@ class GPUDeepCFRTrainer:
         self.iteration = 0
         self._workspace: _GPUTraverseWorkspace | None = None
         self._schedule_logged = False
+        self.last_traversal_pool_stats: List[dict[str, float | int]] = []
+        self.traversal_pool_stats_history: List[dict[str, float | int]] = []
 
     def run_iteration(self):
         """Run one CFR iteration with GPU traversal."""
@@ -1044,11 +1104,12 @@ class GPUDeepCFRTrainer:
             )
 
         t0 = _time.perf_counter()
+        self.last_traversal_pool_stats = []
         for player_i in range(self.n_players):
             remaining = self.n_traversals
             while remaining > 0:
                 chunk = min(remaining, trav_batch)
-                gpu_traverse_for_player(
+                stats = gpu_traverse_for_player(
                     traverser=player_i,
                     n_traversals=chunk,
                     value_net=self.value_net,
@@ -1062,6 +1123,8 @@ class GPUDeepCFRTrainer:
                         self.strategy_buffer if self.average_strategy_weight > 0 else None
                     ),
                 )
+                self.last_traversal_pool_stats.append(stats)
+                self.traversal_pool_stats_history.append(stats)
                 remaining -= chunk
         t1 = _time.perf_counter()
 
@@ -1126,6 +1189,9 @@ class GPUDeepCFRTrainer:
                     combined.release_gpu_cache()
         t2 = _time.perf_counter()
         print(f"  [profile] traverse={t1-t0:.1f}s  train={t2-t1:.1f}s")
+
+    def traversal_pool_summary(self) -> dict[str, float | int]:
+        return _summarize_traversal_pool_stats(self.traversal_pool_stats_history)
 
     def _release_workspace_for_training(self):
         """Drop traversal buffers before replay-cache allocation/training."""

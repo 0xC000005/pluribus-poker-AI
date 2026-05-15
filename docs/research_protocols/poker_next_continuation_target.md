@@ -986,3 +986,10 @@ an engineering reliability improvement, not research evidence for scaling the
 pool. The 2M/1000 probe still runs at only `199.6` traversals/sec and still
 shows several-times-over pool demand, so the active blocker remains traversal
 fidelity and tree-shape control under corrected all-in semantics.
+
+Traversal-fidelity telemetry is now part of autoresearch training JSON. Future
+training runs must report overflow chunk fraction and pool demand ratios before
+their checkpoint evidence is interpreted. The next real research step can now
+be framed cleanly: reduce traversal overflow by a principled state-aware
+allocation or sampling design, then compare against the same fast default on
+both throughput and downstream decision quality.

@@ -4376,3 +4376,23 @@
 - Decision: Keep the adaptive forward chunk. Do not treat a larger global pool
   as the answer; the next useful work is explicit traversal-fidelity telemetry
   and a state-aware sampling/allocation design.
+
+## 20260515T070000Z-traversal-fidelity-json-telemetry - passed
+
+- Timestamp: 2026-05-15T07:00:00Z
+- Type: trainer_measurement_change
+- Gate: TDD, focused unit tests, and tiny GPU smoke
+- Hypothesis: Autoresearch cannot make principled pool/fidelity decisions while
+  traversal overflow exists only as stdout text.
+- Failure class: none
+- Summary: Added traversal-pool stats collection to `GPUDeepCFRTrainer` and
+  surfaced aggregate metrics in `scripts/poker_autoresearch_train.py` JSON:
+  chunk count, overflow count/fraction, mean/max pool demand ratio, mean/max
+  requested slots per traversal, and regret-sample fill ratio. A tiny CUDA
+  smoke confirmed the fields are emitted. This is measurement-only; it does
+  not change game rules, action selection, or regret updates.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 16 --n-training-steps 1 --hidden-dim 64 --n-layers 2 --batch-size 128 --buffer-capacity 1000 --save-dir autoresearch-session/telemetry_smoke_20260515 --prefix telemetry_smoke --save-every 0 --eval-games 0`
+- Key metrics: `{"focused_tests_passed": 16, "smoke_traversal_chunks": 2, "smoke_traversal_overflow_chunk_fraction": 1.0, "smoke_traversal_max_pool_demand_ratio": 1.878625, "smoke_traversal_mean_slots_per_traversal": 749.875, "promotion": false}`
+- Decision: Use these JSON fields in future training gates. A candidate with
+  high H2H variance and high traversal-overflow fraction should be treated as
+  under-fidelity evidence, not as a clean network result.

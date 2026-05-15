@@ -149,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         elapsed = time.monotonic() - started
         buffer_size = sum(len(buffer) for buffer in trainer.buffers)
         average_strategy_target_size = int(trainer.strategy_buffer.size)
+        traversal_pool_summary = trainer.traversal_pool_summary()
 
         eval_chips = None
         if args.eval_games > 0:
@@ -189,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
             "n_layers": int(args.n_layers),
             "buffer_capacity": int(args.buffer_capacity),
             "buffer_size": int(buffer_size),
+            **traversal_pool_summary,
             "checkpoints": checkpoints,
             "elapsed_seconds": round(float(elapsed), 3),
             "avg_iter_seconds": round(float(avg_iter_seconds), 3),
