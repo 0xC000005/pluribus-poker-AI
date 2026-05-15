@@ -4494,3 +4494,28 @@
   test variance reduction: baselines/control variates, better sampling
   distributions, or a small action subset plus correction that keeps variance
   within a useful range at 2-8 sampled actions.
+
+## 20260515T080000Z-sampled-action-baseline-variance-reduction - passed
+
+- Timestamp: 2026-05-15T08:00:00Z
+- Type: estimator_variance_reduction_diagnostic
+- Gate: control-variate unbiasedness unit test and full-deck restricted-root
+  variance diagnostics
+- Hypothesis: A baseline/control-variate version of the sampled-action regret
+  estimator can reduce full-deck payoff-scale variance without introducing
+  bias, making sampled-action traversal more plausible.
+- Failure class: none
+- Summary: Extended the sampled-action estimator with optional action-value
+  baselines. Unit tests verify the estimator remains unbiased with an arbitrary
+  wrong baseline. The full-deck restricted-root diagnostic shows the variance
+  lever is large: a simple legal-mean baseline reduces one-sample mean absolute
+  bias from `4.89` to `2.89` and std from `190.8` to `125.6`; a noisy-oracle
+  baseline with `0.50` action-value noise reduces one-sample std to `68.4`,
+  and `0.25` noise reduces it to `34.2`. This suggests a learned baseline
+  head/control variate is a principled next target.
+- Commands: `uv run pytest -q test/unit/test_sampled_action_mccfr.py`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 16 --n-repeats 1000 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-mode legal-mean --output-json autoresearch-session/sampled_action_full_deck_estimator_legalmean_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 16 --n-repeats 1000 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-mode noisy-oracle --baseline-noise-scale 0.25 --output-json autoresearch-session/sampled_action_full_deck_estimator_noisyoracle025_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 16 --n-repeats 1000 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-mode noisy-oracle --baseline-noise-scale 0.5 --output-json autoresearch-session/sampled_action_full_deck_estimator_noisyoracle050_20260515.json`
+- Key metrics: `{"tests_passed": 5, "legal_mean_sample1_abs_bias": 2.893435, "legal_mean_sample1_std": 125.577812, "noisy025_sample1_std": 34.223065, "noisy050_sample1_std": 68.44613, "promotion": false}`
+- Decision: Do not integrate sampled-action traversal with a zero baseline.
+  The next method should learn or reuse a baseline/control-variate estimate of
+  action values and test whether 2-8 sampled traverser actions can match
+  exhaustive regret with acceptable variance.

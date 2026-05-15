@@ -1023,3 +1023,9 @@ scale makes low sample counts too noisy: one sampled action has unacceptable
 variance, while 16-32 sampled actions are tolerable in the restricted root
 diagnostic. The next target should therefore be variance reduction at the
 estimator level, not immediate CUDA integration.
+
+The variance-reduction follow-up passed at the diagnostic level. Optional
+action-value baselines preserve unbiasedness, and even crude baselines reduce
+the full-deck estimator variance sharply. The next research objective is now
+more specific: learn a baseline/control-variate action-value head that lets a
+small sampled traverser-action set approximate exhaustive traversal regret.

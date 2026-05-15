@@ -51,6 +51,7 @@ def sampled_action_regret_estimate(
     *,
     sampled_actions: np.ndarray,
     sample_probs: np.ndarray,
+    baseline_values: np.ndarray | None = None,
 ) -> np.ndarray:
     """Unbiased single-infoset regret estimate from sampled traverser actions.
 
@@ -75,15 +76,24 @@ def sampled_action_regret_estimate(
     if actions.size == 0:
         raise ValueError("sampled_actions must be non-empty")
 
-    estimated_values = np.zeros_like(values, dtype=np.float64)
-    estimated_state_value = 0.0
+    if baseline_values is None:
+        baseline = np.zeros_like(values, dtype=np.float64)
+    else:
+        baseline = np.asarray(baseline_values, dtype=np.float64)
+        if baseline.shape != values.shape:
+            raise ValueError("baseline_values must match action_values")
+        baseline = np.where(legal_bool, baseline, 0.0)
+
+    estimated_values = baseline.astype(np.float64, copy=True)
+    estimated_state_value = float(np.dot(sigma, baseline))
     sample_count = float(actions.size)
     for action in actions:
         if action < 0 or action >= values.shape[0] or not legal_bool[action]:
             raise ValueError("sampled action must be legal")
         weight = 1.0 / (sample_count * q[action])
-        estimated_values[action] += values[action] * weight
-        estimated_state_value += sigma[action] * values[action] * weight
+        residual = values[action] - baseline[action]
+        estimated_values[action] += residual * weight
+        estimated_state_value += sigma[action] * residual * weight
 
     regret = estimated_values - estimated_state_value
     regret[~legal_bool] = 0.0

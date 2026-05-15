@@ -36,6 +36,27 @@ def test_sampled_action_regret_estimator_is_unbiased_for_single_draw():
     assert np.allclose(expected, full_regret(values, strategy, legal_mask))
 
 
+def test_sampled_action_regret_estimator_with_baseline_is_still_unbiased():
+    values = np.array([3.0, -1.0, 0.5], dtype=np.float32)
+    strategy = np.array([0.25, 0.5, 0.25], dtype=np.float32)
+    legal_mask = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+    sample_probs = np.array([0.2, 0.3, 0.5], dtype=np.float32)
+    baseline = np.array([1.0, -2.0, 0.25], dtype=np.float32)
+
+    expected = np.zeros_like(values)
+    for action, prob in enumerate(sample_probs):
+        expected += prob * sampled_action_regret_estimate(
+            values,
+            strategy,
+            legal_mask,
+            sampled_actions=np.array([action], dtype=np.int64),
+            sample_probs=sample_probs,
+            baseline_values=baseline,
+        )
+
+    assert np.allclose(expected, full_regret(values, strategy, legal_mask))
+
+
 def test_sampled_action_regret_estimator_rejects_zero_sampling_probability():
     values = np.array([1.0, 2.0], dtype=np.float32)
     strategy = np.array([0.5, 0.5], dtype=np.float32)

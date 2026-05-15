@@ -51,6 +51,30 @@ def _strategy_for_root(
     return strategy
 
 
+def _baseline_for_root(
+    rng: np.random.Generator,
+    action_values: np.ndarray,
+    legal_mask: np.ndarray,
+    mode: str,
+    noise_scale: float,
+) -> np.ndarray | None:
+    legal = legal_mask > 0.0
+    if mode == "zero":
+        return None
+    if mode == "legal-mean":
+        baseline = np.zeros_like(action_values, dtype=np.float32)
+        baseline[legal] = float(np.mean(action_values[legal]))
+        return baseline
+    if mode == "oracle":
+        return action_values.astype(np.float32, copy=True)
+    if mode == "noisy-oracle":
+        baseline = action_values.astype(np.float32, copy=True)
+        scale = float(np.std(action_values[legal])) * max(0.0, float(noise_scale))
+        baseline[legal] += rng.normal(0.0, scale, size=int(legal.sum())).astype(np.float32)
+        return baseline
+    raise ValueError(f"unknown baseline mode: {mode}")
+
+
 def run_diagnostic(
     *,
     n_roots: int,
@@ -60,6 +84,8 @@ def run_diagnostic(
     samples_per_estimate: list[int],
     strategy_mode: str,
     uniform_mix: float,
+    baseline_mode: str,
+    baseline_noise_scale: float,
     seed: int,
 ) -> dict:
     random.seed(seed)
@@ -105,6 +131,13 @@ def run_diagnostic(
         ).astype(np.float32)
         sample_probs = sample_probs / float(sample_probs.sum())
         target = full_regret(action_values, strategy, legal_mask).astype(np.float64)
+        baseline_values = _baseline_for_root(
+            rng,
+            action_values,
+            legal_mask,
+            baseline_mode,
+            baseline_noise_scale,
+        )
 
         legal_indices = np.flatnonzero(legal_mask > 0.0)
         for sample_count in samples_per_estimate:
@@ -122,6 +155,7 @@ def run_diagnostic(
                     legal_mask,
                     sampled_actions=actions,
                     sample_probs=sample_probs,
+                    baseline_values=baseline_values,
                 )
             mean_estimate = estimates.mean(axis=0).astype(np.float64)
             legal_bias = mean_estimate[legal_indices] - target[legal_indices]
@@ -158,6 +192,8 @@ def run_diagnostic(
         "samples_per_estimate": samples_per_estimate,
         "strategy_mode": strategy_mode,
         "uniform_mix": uniform_mix,
+        "baseline_mode": baseline_mode,
+        "baseline_noise_scale": float(baseline_noise_scale),
         "seed": int(seed),
         "mean_legal_actions": round(float(np.mean(legal_action_counts)), 6),
         "metrics_by_sample_count": metrics_by_sample_count,
@@ -177,6 +213,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--samples-per-estimate", type=_parse_samples, default="1,2,4,8")
     parser.add_argument("--strategy-mode", choices=("uniform", "dirichlet"), default="dirichlet")
     parser.add_argument("--uniform-mix", type=float, default=0.25)
+    parser.add_argument(
+        "--baseline-mode",
+        choices=("zero", "legal-mean", "oracle", "noisy-oracle"),
+        default="zero",
+    )
+    parser.add_argument("--baseline-noise-scale", type=float, default=0.25)
     parser.add_argument("--seed", type=int, default=20260515)
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
@@ -189,6 +231,8 @@ def main(argv: list[str] | None = None) -> int:
         samples_per_estimate=args.samples_per_estimate,
         strategy_mode=args.strategy_mode,
         uniform_mix=args.uniform_mix,
+        baseline_mode=args.baseline_mode,
+        baseline_noise_scale=args.baseline_noise_scale,
         seed=args.seed,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)
