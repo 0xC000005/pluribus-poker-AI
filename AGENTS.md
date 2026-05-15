@@ -18,6 +18,7 @@
 - Slumbot training: `python scripts/train_slumbot_2p.py --n-iterations 1000 --n-traversals 10000 --hidden-dim 512 --n-layers 4`
 - Slumbot play/eval: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 300 --greedy --solver-backend auto`
 - Slumbot trace smoke: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 20 --greedy --solver-budget-profile fast-live --trace-jsonl autoresearch-session/slumbot_traces/manual_trace.jsonl`
+- Slumbot trace audit: `python scripts/analyze_slumbot_trace.py --trace autoresearch-session/slumbot_traces/<trace>.jsonl --output-json autoresearch-session/slumbot_trace_audits/<audit>.json`
 - Opt-in fast live solver profile: `python scripts/play_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 50 --greedy --no-allin --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live`
 - Fast-live Slumbot latency smoke: `python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 50 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 1200`
 - Fast-live Slumbot confidence check: `python scripts/poker_autoresearch_slumbot.py --model models/slumbot_2p_iter1000.pt --hands 1000 --greedy --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --timeout-seconds 7200`

@@ -5546,3 +5546,29 @@
   through the model and compare selected high-risk actions against legal-mask,
   advantage-margin, and policy-probability evidence before proposing a learned
   risk/calibration objective.
+
+## 20260515T110900Z-slumbot-trace-risk-calibration-audit - passed
+
+- Timestamp: 2026-05-15T11:09:00Z
+- Type: analysis
+- Gate: offline Slumbot trace risk calibration audit
+- Hypothesis: Rich Slumbot traces should reveal whether large live losses are
+  concentrated in identifiable high-risk policy decisions rather than uniform
+  noise across all hands.
+- Failure class: none
+- Summary: Added a reusable offline trace analyzer and applied it to the
+  300-hand sampled regret-matching policy-only trace. The audit shows that the
+  policy's large-pot decisions are strongly associated with stack losses:
+  high-risk hands averaged `-1374 chips/hand`, no-risk hands averaged `+224`,
+  all-in hands averaged `-5269`, and big call-off hands averaged `-11488`.
+  Low-margin high-risk decisions were also strongly negative, which supports
+  the calibration hypothesis.
+- Metrics file: autoresearch-session/slumbot_trace_audits/20260515T110535Z-sampled300-risk-audit.json
+- Key metrics: `{"hands": 300, "avg_chips_per_hand": -415.147, "stack_losses": 16, "risk_hands_avg": -1374.267, "no_risk_hands_avg": 224.267, "allin_hands_avg": -5269.4, "big_call_hands_avg": -11487.5, "low_margin_risk_hands_avg": -1560.902}`
+- Validation: `uv run pytest -q test/unit/test_slumbot_trace_analysis.py` -> 1 passed.
+- Decision: The next algorithmic hypothesis should address learned large-pot
+  calibration, not add a hard cap. Candidate directions include training an
+  explicit average-policy head on traversal reach frequencies, weighting
+  terminal/large-pot regrets by pot-normalized outcome calibration, or using
+  conservative search only when the resolver's selected action has sufficient
+  regret/strategy confidence.
