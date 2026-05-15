@@ -267,6 +267,16 @@ the remaining live cost is range construction, solver-tree construction,
 callback pruning, or CUDA recurrence overhead, then compare against CPU on the
 same fixed mixed turn/river states.
 
+That attribution is now partially done. The mixed four-state benchmark shows
+that CUDA has solved only the recurrence part: `torch-levelsync-cuda` cut CFR10
+recurrence time from `325.4 ms` to `94.0 ms`, but residual setup overhead stayed
+about `235 ms`. The next single continuation target should therefore be setup
+amortization: cache or precompute board/active-hand payoff components where it
+does not change ranges or action semantics, then rerun the same CPU/CUDA
+attribution benchmark and the live smoke. A valid optimization must reduce
+`avg_solver_overhead_latency_ms` without changing legality, root actions, or
+solver strategy beyond normal numeric tolerance.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

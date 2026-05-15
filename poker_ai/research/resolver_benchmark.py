@@ -66,6 +66,8 @@ class SolverDecision:
     increment: str
     strategy: np.ndarray
     latency_ms: float
+    cfr_latency_ms: float
+    overhead_latency_ms: float
     node_terminal: bool
 
 
@@ -242,7 +244,17 @@ def _solver_decision(
         node_terminal = False
 
     latency_ms = (time.perf_counter() - started) * 1000.0
-    return SolverDecision(action, increment, strategy_vec, latency_ms, node_terminal)
+    cfr_latency_ms = float(getattr(solver, "last_solve_ms", 0.0))
+    overhead_latency_ms = max(0.0, latency_ms - cfr_latency_ms)
+    return SolverDecision(
+        action,
+        increment,
+        strategy_vec,
+        latency_ms,
+        cfr_latency_ms,
+        overhead_latency_ms,
+        node_terminal,
+    )
 
 
 def _validate_case(case: ResolverBenchmarkCase, parsed: dict) -> list[str]:
@@ -378,6 +390,8 @@ def _case_metrics(
         "solver_action_legal": solver_legal,
         "solver_increment_legal": solver_increment_legal,
         "solver_latency_ms": round(float(solver.latency_ms), 3),
+        "solver_cfr_latency_ms": round(float(solver.cfr_latency_ms), 3),
+        "solver_overhead_latency_ms": round(float(solver.overhead_latency_ms), 3),
         "solver_node_terminal": solver.node_terminal,
         "action_l1_drift": action_l1_drift,
         "advantage_delta_proxy": advantage_delta,
@@ -416,6 +430,12 @@ def run_resolver_benchmark(
     ]
     solver_results = [item for item in results if "solver_latency_ms" in item]
     latency_values = [float(item["solver_latency_ms"]) for item in solver_results]
+    cfr_latency_values = [
+        float(item["solver_cfr_latency_ms"]) for item in solver_results
+    ]
+    overhead_latency_values = [
+        float(item["solver_overhead_latency_ms"]) for item in solver_results
+    ]
     drift_values = [float(item["action_l1_drift"]) for item in solver_results]
     policy_head_drift_values = [
         float(item["policy_head_action_l1_drift"]) for item in solver_results
@@ -493,6 +513,12 @@ def run_resolver_benchmark(
         "n_layers": metadata.get("n_layers"),
         "avg_solver_latency_ms": float(np.mean(latency_values)) if latency_values else 0.0,
         "max_solver_latency_ms": float(np.max(latency_values)) if latency_values else 0.0,
+        "avg_solver_cfr_latency_ms": (
+            float(np.mean(cfr_latency_values)) if cfr_latency_values else 0.0
+        ),
+        "avg_solver_overhead_latency_ms": (
+            float(np.mean(overhead_latency_values)) if overhead_latency_values else 0.0
+        ),
         "mean_action_l1_drift": float(np.mean(drift_values)) if drift_values else 0.0,
         "policy_head_mean_action_l1_drift": policy_head_mean_l1,
         "mean_advantage_delta_proxy": (

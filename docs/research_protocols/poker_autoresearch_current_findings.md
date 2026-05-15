@@ -217,6 +217,16 @@ validates the wrapper path, but it does not promote CUDA auto-selection because
 live latency still includes range tracking, solver construction, and small-hand
 overhead beyond the fixed-state kernel benchmark.
 
+Latency-attribution status: the fixed resolver benchmark now reports total
+solver path time, inner CFR recurrence time, and residual setup overhead. On
+the same four mixed turn/river states at CFR10, CPU averaged `568.4 ms` total,
+`325.4 ms` CFR, and `243.1 ms` overhead; `torch-levelsync-cuda` averaged
+`329.2 ms` total, `94.0 ms` CFR, and `235.2 ms` overhead. This confirms the GPU
+recurrence is useful, but the remaining live bottleneck is mostly CPU setup:
+turn equity/payoff matrices, tree construction, navigation/bookkeeping, and
+range plumbing. The next compute work should target setup amortization or
+fused construction, not another recurrence rewrite.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

@@ -107,6 +107,9 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     assert 0.0 <= result["policy_head_action_l1_drift"] <= 2.0
     assert result["solver_action_legal"] is True
     assert result["solver_latency_ms"] >= 0.0
+    assert result["solver_cfr_latency_ms"] >= 0.0
+    assert result["solver_overhead_latency_ms"] >= 0.0
+    assert result["solver_cfr_latency_ms"] <= result["solver_latency_ms"]
     assert 0.0 <= result["action_l1_drift"] <= 2.0
     assert isinstance(result["advantage_delta_proxy"], float)
     assert "blueprint_allin_rate" in metrics
@@ -118,6 +121,8 @@ def test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics():
     assert "solver_mean_allin_prob" in metrics
     assert "policy_head_solver_allin_prob_gap" in metrics
     assert "policy_head_mean_action_l1_drift" in metrics
+    assert "avg_solver_cfr_latency_ms" in metrics
+    assert "avg_solver_overhead_latency_ms" in metrics
     assert "policy_head_behavior_passed" in metrics
     assert metrics["mechanical_passed"] is True
 

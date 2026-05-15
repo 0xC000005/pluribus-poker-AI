@@ -36,6 +36,36 @@
   until mixed turn/river fixed-state parity and live latency attribution show
   that the end-to-end path beats CPU on the same states.
 
+## 20260515T005447Z-resolver-latency-attribution-metrics - passed
+
+- Timestamp: 2026-05-15T00:54:47Z
+- Type: protected evaluation diagnostic
+- Gate: TDD + methodology-review + related-work check + objective-audit
+- Hypothesis: Separating inner CFR recurrence latency from resolver setup
+  overhead will explain why the CUDA level-sync recurrence does not fully
+  translate into live Slumbot latency.
+- Failure class: compute_integration
+- Related work: GPU-CFR supports coarse matrix/vector boundaries for GPU
+  acceleration; DeepStack supports end-to-end continual resolving latency as
+  the relevant online boundary. Sources: https://arxiv.org/abs/2408.14778,
+  https://arxiv.org/abs/1701.01724, and
+  https://pubmed.ncbi.nlm.nih.gov/28254783/.
+- Summary: Added per-case and aggregate latency attribution to the fixed
+  resolver benchmark: total solver path, `StreetSolver.solve(...)` CFR
+  recurrence time, and residual setup overhead.
+- Evidence:
+  - Review: `autoresearch-session/poker_reviews/20260515T005447Z-resolver-latency-attribution-metrics`
+  - Manifest: `docs/research_protocols/poker_review_manifests/20260515T005447Z-resolver-latency-attribution-metrics.json`
+  - CPU artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_cpu_iter10_mixed4_attribution_seed20260515.json`
+  - CUDA artifact: `autoresearch-session/search_consistency_restored200_100x2k_20260513/resolver_benchmark_torch_levelsync_cuda_iter10_mixed4_attribution_seed20260515.json`
+  - Focused test: `uv run pytest -q test/unit/test_resolver_benchmark.py::test_resolver_benchmark_reports_fixed_state_policy_and_solver_metrics` -> `1 passed`.
+- Metrics: fixed mixed four-state CFR10 CPU averaged `568.4 ms` total,
+  `325.4 ms` CFR, and `243.1 ms` overhead. `torch-levelsync-cuda` averaged
+  `329.2 ms` total, `94.0 ms` CFR, and `235.2 ms` overhead.
+- Decision: keep the metric as diagnostic instrumentation. The next compute
+  target is setup overhead, especially turn equity/payoff matrix and tree
+  construction, not another recurrence-only CUDA port.
+
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 
 - Timestamp: 2026-05-14T21:43:59Z

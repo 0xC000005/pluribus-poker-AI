@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1377,
+      "path": "benchmark_audit.md",
+      "sha256": "82850599940966b32a680a30c9ac79cfc31c1b49fdd302e405f00400dba577d8"
+    },
+    {
+      "bytes": 378,
+      "path": "decision.json",
+      "sha256": "382309eeb9b92f8897c63bd7cc5682f10f0fa77719db96b8587a941202a3038a"
+    },
+    {
+      "bytes": 1016,
+      "path": "mechanism_review.md",
+      "sha256": "0196999bb5a37b95c64cd3524e3cccdf4c945df3f2db768c8b90388384700827"
+    },
+    {
+      "bytes": 1786,
+      "path": "related_work.md",
+      "sha256": "3592b73e21d300cf9b51ae850dfe89476976339834656ceb6f8bae4619d4260f"
+    },
+    {
+      "bytes": 2230,
+      "path": "review.md",
+      "sha256": "9e6d983f52c4a24c67c3bb9e2687112fbaf86b331b7468aee373abf43a8bcc08"
+    },
+    {
+      "bytes": 633,
+      "path": "team_review.md",
+      "sha256": "aa8c3dff71c2ee3e4a77e23bc9344be0124ed8214ea8566799321613a00fdf0d"
+    }
+  ],
+  "reason": "The attribution fields are observational, preserve solver behavior, and identify setup overhead as the remaining CUDA promotion blocker.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T005447Z-resolver-latency-attribution-metrics",
+  "review_id": "20260515T005447Z-resolver-latency-attribution-metrics",
+  "sources": [
+    "https://arxiv.org/abs/2408.14778",
+    "https://arxiv.org/abs/1701.01724",
+    "https://pubmed.ncbi.nlm.nih.gov/28254783/"
+  ],
+  "written_at": "2026-05-15T00:56:10Z"
+}
