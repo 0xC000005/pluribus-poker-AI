@@ -965,3 +965,17 @@ could skip opponent response states after an all-in. The next principled step
 after this repair is to retrain or run a controlled short corrected-semantics
 baseline before drawing more conclusions from Slumbot or restricted
 early-action diagnostics.
+
+That controlled short baseline is now complete and is not promotable. A
+20-iteration corrected-semantics CUDA run improved the restricted early-action
+value proxy versus the stale incumbent (`+0.12` selected payoff and `0.410`
+advantage/value correlation versus `-14.50` and `-0.025`), but local H2H against
+the old incumbent was inconclusive (`+164` chips/hand with lower95 `-280`).
+More importantly, corrected all-in semantics expanded traversal enough that the
+fixed GPU traversal pool now visibly truncates many traversals. The fast
+default reached `419` traversals/sec but often overfilled the pool; 1000 slots
+fell to `199` traversals/sec and still overflowed later; 2500 slots fell to
+`87` traversals/sec. The next target is therefore not a larger network or a
+longer run. Add hard traversal-fidelity telemetry and test an adaptive or
+state-aware traversal allocation that preserves all-in response states without
+global slot inflation.

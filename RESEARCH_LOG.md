@@ -4326,3 +4326,32 @@
 - Review manifest: docs/research_protocols/poker_review_manifests/20260515T051742Z-full-deck-allin-response-semantics.json
 - Commands: `uv run pytest -q test/unit/test_full_deck_allin_semantics.py test/unit/test_legal_mask_parity.py test/unit/test_fast_vs_slow.py test/unit/test_network_mask.py test/unit/test_slumbot_mapping.py test/unit/test_restricted_action_value.py test/unit/test_cuda_env.py test/unit/test_gpu_cache_budget.py`; CUDA kernel smoke for SB all-in, BB response mask, BB call, payout; `uv run python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260515T051742Z-full-deck-allin-response-semantics --require-complete`
 - Key metrics: `{"focused_tests_passed": 61, "cuda_after_allin_stage": 0, "cuda_after_allin_player_index": 1, "cuda_after_allin_mask": [1, 1, 0, 0, 0, 0, 0, 0, 1], "cuda_after_call_stage": 4, "cuda_after_call_payout": [-1000, 1000], "promotion": false}`
+
+## 20260515T063000Z-corrected-allin-training-and-pool-fidelity - failed
+
+- Timestamp: 2026-05-15T06:30:00Z
+- Type: corrected_semantics_training_diagnostic
+- Gate: short GPU Deep CFR retrain, restricted early-action attribution, local
+  H2H, and traversal-pool fidelity probes
+- Hypothesis: After repairing all-in response semantics, a short corrected
+  full-deck Deep CFR retrain should improve early-action alignment enough to
+  justify scaling the same trainer.
+- Failure class: traversal_fidelity_and_policy_calibration
+- Related work: Deep CFR relies on sampled traversal distributions; if the
+  game tree expands after a rules repair, fixed traversal-slot truncation can
+  bias the data stream before the neural net sees it.
+- Summary: Ran a 20-iteration CUDA retrain with corrected all-in semantics and
+  compared it against the old incumbent. The new checkpoint improved the
+  restricted early-action value proxy versus the stale incumbent, but it was
+  inconclusive in local H2H and not promotable. The training logs exposed a
+  new bottleneck: default 500 traversal slots overflowed heavily after the
+  rules repair. Raising slots to 1000 slowed throughput to `199.5`
+  traversals/sec and still overflowed later (`~300%` slot use); raising slots
+  to 2500 slowed to `87.2` traversals/sec. Simple global slot inflation is
+  therefore not the principled fix.
+- Commands: `uv run python scripts/run_gpu_deep_cfr.py --n-iterations 3 --n-traversals 128 --hidden-dim 128 --n-layers 2 --n-training-steps 20 --batch-size 256 --save-path autoresearch-session/corrected_allin_smoke_20260515 --save-every 0 --eval-every 0`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 20 --n-traversals 4000 --n-training-steps 200 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 2000000 --save-dir autoresearch-session/corrected_allin_gpu_20x4k_20260515 --prefix corrected_allin_20x4k --save-every 10 --eval-games 0`; restricted-action evaluations for final, iter10, and `models/slumbot_2p_iter1000.pt`; local H2H iter10-vs-final and final-vs-incumbent; 3-iteration pool probes with `--traversal-slots-per-traversal 1000` and `2500`.
+- Key metrics: `{"corrected20_iters_per_hour": 377.393, "corrected20_traversals_per_second": 419.305, "corrected20_restricted_selected_payoff": 0.1241, "corrected20_advantage_value_corr": 0.4103, "old_incumbent_restricted_selected_payoff": -14.4955, "old_incumbent_advantage_value_corr": -0.0245, "corrected20_vs_incumbent_h2h_mean": 163.9755, "corrected20_vs_incumbent_h2h_lower95": -280.2693, "pool1000_traversals_per_second": 199.53, "pool1000_iters_per_hour": 179.588, "pool2500_traversals_per_second": 87.235, "pool2500_iters_per_hour": 78.514, "promotion": false}`
+- Decision: Do not scale the corrected 20-iteration checkpoint as a candidate
+  yet. The next principled engineering step is traversal telemetry and/or an
+  adaptive pool design that preserves corrected all-in response coverage
+  without globally wasting GPU work on oversized low-occupancy chunks.
