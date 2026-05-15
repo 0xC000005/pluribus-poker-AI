@@ -35,6 +35,12 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=20260515)
+    parser.add_argument(
+        "--eval-split",
+        choices=("hand-heldout", "all"),
+        default="hand-heldout",
+        help="Use hand-heldout training split or score all hands in the trace.",
+    )
     args = parser.parse_args()
 
     metrics = evaluate_opponent_response_range_ab(
@@ -51,6 +57,7 @@ def main() -> None:
         weight_decay=args.weight_decay,
         device=args.device,
         seed=args.seed,
+        eval_split=args.eval_split,
     )
     write_metrics(metrics, args.output)
     print(json.dumps(metrics, indent=2, sort_keys=True))

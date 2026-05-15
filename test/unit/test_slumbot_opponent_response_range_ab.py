@@ -130,6 +130,34 @@ def test_evaluate_opponent_response_range_ab_scores_holdout_hands(tmp_path):
     assert all("response_true_hand_prob" in record for record in metrics["records"])
 
 
+def test_evaluate_opponent_response_range_ab_can_score_all_trace_hands(tmp_path):
+    checkpoint = tmp_path / "checkpoint.pt"
+    trace = tmp_path / "trace.jsonl"
+    action_likelihood = tmp_path / "action_likelihood.json"
+    _small_checkpoint(checkpoint)
+    _write_trace(trace)
+    _write_action_likelihood(action_likelihood)
+
+    metrics = evaluate_opponent_response_range_ab(
+        checkpoint,
+        trace,
+        action_likelihood,
+        strategy_source="regret",
+        holdout_fraction=0.5,
+        eval_split="all",
+        hidden_dim=16,
+        n_layers=1,
+        epochs=3,
+        batch_size=4,
+        device="cpu",
+        seed=7,
+    )
+
+    assert metrics["eval_split"] == "all"
+    assert metrics["baseline"]["n"] == metrics["response"]["n"] == 6
+    assert metrics["n_eval_hands"] == 6
+
+
 def test_eval_slumbot_opponent_response_range_ab_cli_writes_metrics(tmp_path):
     checkpoint = tmp_path / "checkpoint.pt"
     trace = tmp_path / "trace.jsonl"

@@ -299,8 +299,11 @@ def evaluate_opponent_response_range_ab(
     weight_decay: float = 1e-4,
     device: str | torch.device = "auto",
     seed: int = 20260515,
+    eval_split: str = "hand-heldout",
 ) -> dict[str, Any]:
     """Train a response probe and A/B its range updates on held-out trace hands."""
+    if eval_split not in {"hand-heldout", "all"}:
+        raise ValueError("eval_split must be 'hand-heldout' or 'all'")
     resolved_device = _resolve_device(device)
     (
         response_model,
@@ -329,6 +332,7 @@ def evaluate_opponent_response_range_ab(
     response_records: list[dict[str, Any]] = []
     paired_records: list[dict[str, Any]] = []
     skipped_results = 0
+    eval_hands_seen: set[int] = set()
 
     for record in trace_records:
         if record.get("event") != "hand_result":
@@ -338,8 +342,9 @@ def evaluate_opponent_response_range_ab(
         except (KeyError, TypeError, ValueError):
             skipped_results += 1
             continue
-        if hand_index not in holdout_hands:
+        if eval_split == "hand-heldout" and hand_index not in holdout_hands:
             continue
+        eval_hands_seen.add(hand_index)
         decision = last_decisions.get(hand_index)
         if decision is None:
             skipped_results += 1
@@ -397,6 +402,8 @@ def evaluate_opponent_response_range_ab(
         "batch_size": int(batch_size),
         "seed": int(seed),
         "temperature": float(temperature),
+        "eval_split": eval_split,
+        "n_eval_hands": int(len(eval_hands_seen)),
         "n_holdout_hands": int(len(holdout_hands)),
         "n_skipped_results": skipped_results,
         **data_metrics,

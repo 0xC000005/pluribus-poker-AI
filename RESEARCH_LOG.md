@@ -6148,3 +6148,47 @@
 - Decision: Proceed only as an offline diagnostic. The next falsifier must use
   disjoint Slumbot traces or sessions, then fixed-state resolver A/B, before
   any live range-tracker integration or Slumbot confidence spend.
+
+## 20260515T131500Z-session-heldout-response-range-ab - failed
+
+- Timestamp: 2026-05-15T13:15:00Z
+- Type: disjoint-session falsification
+- Gate: Train response likelihood on the first 500-hand Slumbot trace, then
+  evaluate all hands from a separate 500-hand Slumbot trace with no shared
+  hand-heldout split.
+- Hypothesis: If the opponent-response range updater is a real mechanism rather
+  than same-session calibration, it should improve revealed-hand range
+  likelihood on a disjoint Slumbot session.
+- Summary: Added `--eval-split all` to
+  `scripts/eval_slumbot_opponent_response_range_ab.py` so the response model
+  can train from one action-likelihood artifact and score every hand in a
+  separate trace. Collected a second 500-hand full-history Slumbot trace with
+  the same average-policy/no-all-in/fast-live solver configuration.
+- Evidence:
+  - Trace:
+    `autoresearch-session/slumbot_traces/slumbot-candidate-trace-20260515T131500Z-avg-strategy-noallin-fullhist-500h-session2.jsonl`
+  - Session action likelihood:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-avg-strategy-noallin-fullhist-500h-session2-action-likelihood.json`
+  - Session true-range likelihood:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-avg-strategy-noallin-fullhist-500h-session2-true-range.json`
+  - Session-heldout range A/B:
+    `autoresearch-session/slumbot_trace_cases/20260515T131500Z-sessionheldout-trained125000-opponent-response-range-ab.json`
+- Key metrics: The second Slumbot run finished 500 hands with zero parse/API
+  errors and zero fallbacks; live score was `-177 +/- 423` chips/hand. The
+  current model's opponent-action likelihood again scored below uniform overall
+  (`-0.2921`) with calls weak (`-0.9005`). Baseline true-range likelihood was
+  `-0.4683` over 475 scored hands. The learned response updater trained on the
+  first trace scored `-0.5604`, for delta `-0.0921`, so the disjoint-session
+  A/B failed. Turn improved (`-1.3842` to `-0.8648`), but preflop, flop, and
+  river degraded.
+- Validation: `uv run pytest -q
+  test/unit/test_slumbot_opponent_response_range_ab.py` -> 3 passed before the
+  session run. The diagnostic command used
+  `scripts/eval_slumbot_opponent_response_range_ab.py --eval-split all` with
+  first-trace action-likelihood training data and the second trace as the
+  evaluation trace.
+- Decision: Do not integrate the learned response updater. The mechanism is not
+  robust enough across Slumbot sessions. The next principled step is not hidden
+  hyperparameter tuning; it is to redesign the learned belief update toward a
+  calibrated multi-session population model or public-belief sequence model,
+  then require session-heldout range likelihood before resolver/live gates.
