@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1003,
+      "path": "benchmark_audit.md",
+      "sha256": "5e1379548884b0e0d5cd3665d83c7f27bd21f54fe4724c39c0800f24151c1997"
+    },
+    {
+      "bytes": 442,
+      "path": "decision.json",
+      "sha256": "64eb0b2e4b0dac09be1d816c4c3e269a950eb8d3490ae6b9ea0a35a64c1f7061"
+    },
+    {
+      "bytes": 934,
+      "path": "mechanism_review.md",
+      "sha256": "2f7a3a6cd587aa4b6551e1fbe465b00535fc961751038f7ff0829da5485259c6"
+    },
+    {
+      "bytes": 1387,
+      "path": "related_work.md",
+      "sha256": "859a726e6538ffb44af0bcdba91ff8b432c03a12855e56b8ff556507a0472109"
+    },
+    {
+      "bytes": 1242,
+      "path": "review.md",
+      "sha256": "a340207132845393519980890fb15740da7779a08bad2beaf8f3162c7e424d61"
+    },
+    {
+      "bytes": 373,
+      "path": "team_review.md",
+      "sha256": "985a064ee775453b43db2722387b4b29d5eb418baef77a84232a495239fb2c42"
+    }
+  ],
+  "reason": "Proceed only as an opt-in diagnostic prototype. The level-synchronous recurrence preserves decision semantics but is slower than the current CPU solver on the smoke gate, so it must not become default or be used for promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T003000Z-levelsync-cfr-prototype",
+  "review_id": "20260515T003000Z-levelsync-cfr-prototype",
+  "sources": [
+    "https://arxiv.org/abs/2408.14778",
+    "https://arxiv.org/abs/1701.01724",
+    "https://openreview.net/forum?id=6PbvbLyqT6"
+  ],
+  "written_at": "2026-05-15T00:30:33Z"
+}

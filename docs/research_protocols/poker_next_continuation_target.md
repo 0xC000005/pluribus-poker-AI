@@ -245,6 +245,14 @@ next GPU step should be a level-synchronous batched/chunked CFR recurrence over
 node-by-hand tensors, not another per-operation torch port or adjacency-only
 matrix experiment. Keep CPU CFR10 as the quality/latency baseline.
 
+The first local level-synchronous recurrence is implemented as `cpu-levelsync`
+and should remain diagnostic-only. It preserves average-strategy behavior and
+legality, but the 8-root budget smoke was slower than the current CPU solver
+(`158/294 ms` for CFR5/CFR10 versus `120/243 ms`). This falsifies a NumPy
+level-synchronous rewrite as a CPU optimization. The remaining principled
+compute path is either a real fused/chunked GPU recurrence or a learned
+public-belief correction that reduces solver work while beating uniform CFR10.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

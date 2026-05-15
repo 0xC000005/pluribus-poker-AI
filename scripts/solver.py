@@ -19,6 +19,7 @@ from fast_cfr import (
     get_average_strategy,
     prune_hands,
     solve_cfr,
+    solve_cfr_levelsync,
     solve_cfr_torch,
 )
 
@@ -127,6 +128,8 @@ def resolve_solver_backend(backend='auto', device=None):
         # NumPy because the CFR tree recurrence is still Python-driven. Keep
         # auto on the measured-fast reference backend until the solver is fused.
         return 'cpu', None
+    if backend == 'cpu-levelsync':
+        return 'cpu-levelsync', None
     if backend == 'torch-cuda':
         if not torch.cuda.is_available():
             raise RuntimeError("torch-cuda solver backend requested but CUDA is unavailable.")
@@ -358,6 +361,22 @@ class StreetSolver:
                 'trace_node_indices': trace_node_indices,
                 'trace_node_fn': trace_node_fn,
                 'solver_update': solver_update,
+            }
+        elif backend == 'cpu-levelsync':
+            if (
+                showdown_leaf_fn is not None
+                or cut_node_fn is not None
+                or trace_node_fn is not None
+            ):
+                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+            if cut_node_indices is not None or trace_node_indices is not None:
+                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+            if solver_update != 'cfr_plus':
+                raise ValueError("cpu-levelsync currently supports solver_update='cfr_plus' only")
+            solver_fn = solve_cfr_levelsync
+            kwargs = {
+                'initial_regret_sum': initial_regret_sum,
+                'initial_strategy_sum': initial_strategy_sum,
             }
         elif backend == 'torch':
             if (

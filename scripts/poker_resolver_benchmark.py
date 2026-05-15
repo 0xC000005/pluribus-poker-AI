@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--solver-iterations", type=int, default=25)
     parser.add_argument(
         "--solver-backend",
-        choices=("auto", "cpu", "torch-cuda", "torch-cpu"),
+        choices=("auto", "cpu", "cpu-levelsync", "torch-cuda", "torch-cpu"),
         default="auto",
     )
     parser.add_argument(

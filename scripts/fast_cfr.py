@@ -240,6 +240,252 @@ def _regret_matching_strategy(regret_rows):
     return np.where(totals.reshape(1, -1) > 0.0, positive / safe.reshape(1, -1), uniform)
 
 
+def _tree_depths(parent_idx):
+    parent_idx = np.asarray(parent_idx, dtype=np.int32)
+    depths = np.zeros(parent_idx.shape[0], dtype=np.int32)
+    for idx in range(parent_idx.shape[0]):
+        parent = int(parent_idx[idx])
+        if parent >= 0:
+            depths[idx] = depths[parent] + 1
+    return depths
+
+
+def _level_edge_groups(tree):
+    """Build parent/action/child edge groups ordered by tree depth."""
+    player = tree['player']
+    children = tree['children']
+    depths = _tree_depths(tree['parent_idx'])
+    groups = []
+    max_depth = int(depths.max()) if depths.size else 0
+    for depth in range(max_depth):
+        parents = [
+            int(idx)
+            for idx in np.nonzero((depths == depth) & (player >= 0))[0]
+            if np.any(children[idx] >= 0)
+        ]
+        if not parents:
+            groups.append(None)
+            continue
+        edge_parent = []
+        edge_action = []
+        edge_child = []
+        edge_parent_pos = []
+        for parent_pos, parent in enumerate(parents):
+            actions = np.nonzero(children[parent] >= 0)[0]
+            for action in actions:
+                edge_parent.append(parent)
+                edge_action.append(int(action))
+                edge_child.append(int(children[parent, action]))
+                edge_parent_pos.append(parent_pos)
+        groups.append(
+            {
+                'parents': np.asarray(parents, dtype=np.intp),
+                'edge_parent': np.asarray(edge_parent, dtype=np.intp),
+                'edge_action': np.asarray(edge_action, dtype=np.intp),
+                'edge_child': np.asarray(edge_child, dtype=np.intp),
+                'edge_parent_pos': np.asarray(edge_parent_pos, dtype=np.intp),
+            }
+        )
+        groups[-1]['legal_mask'] = children[groups[-1]['parents']] >= 0
+        groups[-1]['edge_player'] = player[groups[-1]['edge_parent']]
+        groups[-1]['starts'] = np.r_[
+            0,
+            np.nonzero(np.diff(groups[-1]['edge_parent_pos']))[0] + 1,
+        ]
+    return groups
+
+
+def _level_regret_matching(regret_rows, legal_mask):
+    positive = np.maximum(regret_rows, np.float32(0.0)) * legal_mask[:, :, None]
+    totals = positive.sum(axis=1, dtype=np.float32)
+    safe = np.where(totals > 0.0, totals, np.float32(1.0))
+    legal_counts = legal_mask.sum(axis=1, dtype=np.float32)
+    uniform = np.divide(
+        np.float32(1.0),
+        legal_counts,
+        out=np.zeros_like(legal_counts, dtype=np.float32),
+        where=legal_counts > 0.0,
+    )
+    return np.where(
+        totals[:, None, :] > 0.0,
+        positive / safe[:, None, :],
+        legal_mask[:, :, None] * uniform[:, None, None],
+    ).astype(np.float32, copy=False)
+
+
+def solve_cfr_levelsync(tree, n_hands, win_m, lose_m, tie_m, valid_m,
+                        pot_start, hero_stack_start, villain_stack_start,
+                        n_iterations=100, hero_range=None, villain_range=None,
+                        initial_regret_sum=None, initial_strategy_sum=None):
+    """Run CFR+ with level-synchronous vectorized tree updates.
+
+    This is an opt-in prototype for the fused/matrix CFR boundary. It preserves
+    the vanilla CFR+ recurrence but intentionally excludes diagnostic callback
+    hooks and alternative solver updates until exactness and speed are proven.
+    """
+    n = n_hands
+    nn = tree['n_nodes']
+    n_actions = tree['n_actions']
+    player = tree['player']
+    children = tree['children']
+    groups = tree.setdefault('_level_edge_groups', _level_edge_groups(tree))
+
+    show_idx = tree['showdown_idx']
+    hfold_idx = tree['hero_fold_idx']
+    vfold_idx = tree['villain_fold_idx']
+
+    hi_all = hero_stack_start - tree['stacks_h']
+    vi_all = villain_stack_start - tree['stacks_v']
+
+    if len(show_idx) > 0:
+        hi_s = hi_all[show_idx].astype(np.float32)
+        vi_s = vi_all[show_idx].astype(np.float32)
+        hw_s = (pot_start + vi_s).reshape(-1, 1)
+        hl_s = (-hi_s).reshape(-1, 1)
+        ht_s = ((pot_start + vi_s - hi_s) / 2).reshape(-1, 1)
+        vw_s = (pot_start + hi_s).reshape(-1, 1)
+        vl_s = (-vi_s).reshape(-1, 1)
+        vt_s = ((pot_start + hi_s - vi_s) / 2).reshape(-1, 1)
+
+    if len(hfold_idx) > 0:
+        hi_hf = hi_all[hfold_idx].astype(np.float32)
+        hf_hero_coeff = (-hi_hf).reshape(-1, 1)
+        hf_vill_coeff = (pot_start + hi_hf).reshape(-1, 1)
+
+    if len(vfold_idx) > 0:
+        vi_vf = vi_all[vfold_idx].astype(np.float32)
+        vf_hero_coeff = (pot_start + vi_vf).reshape(-1, 1)
+        vf_vill_coeff = (-vi_vf).reshape(-1, 1)
+
+    expected_shape = (nn, n_actions, n)
+    regret_sum = _validated_initial_array(
+        initial_regret_sum,
+        expected_shape,
+        "initial_regret_sum",
+    )
+    if regret_sum is None:
+        regret_sum = np.zeros(expected_shape, dtype=np.float32)
+    strategy_sum = _validated_initial_array(
+        initial_strategy_sum,
+        expected_shape,
+        "initial_strategy_sum",
+    )
+    if strategy_sum is None:
+        strategy_sum = np.zeros(expected_shape, dtype=np.float32)
+
+    hr_at = np.zeros((nn, n), dtype=np.float32)
+    vr_at = np.zeros((nn, n), dtype=np.float32)
+    hvals = np.zeros((nn, n), dtype=np.float32)
+    vvals = np.zeros((nn, n), dtype=np.float32)
+    hr_init = hero_range if hero_range is not None else np.ones(n, dtype=np.float32)
+    vr_init = villain_range if villain_range is not None else np.ones(n, dtype=np.float32)
+
+    win_mT = win_m.T.copy()
+    lose_mT = lose_m.T.copy()
+    tie_mT = tie_m.T.copy()
+    valid_mT = valid_m.T.copy()
+
+    for _iter in range(n_iterations):
+        hr_at[0] = hr_init
+        vr_at[0] = vr_init
+        level_strategies = []
+
+        for group in groups:
+            if group is None:
+                level_strategies.append(None)
+                continue
+            parents = group['parents']
+            strategies = _level_regret_matching(regret_sum[parents], group['legal_mask'])
+            level_strategies.append(strategies)
+            edge_parent = group['edge_parent']
+            edge_action = group['edge_action']
+            edge_child = group['edge_child']
+            edge_strategy = strategies[group['edge_parent_pos'], edge_action]
+            hero_edges = group['edge_player'] == 0
+            villain_edges = ~hero_edges
+            if np.any(hero_edges):
+                hp = edge_parent[hero_edges]
+                hc = edge_child[hero_edges]
+                hr_at[hc] = hr_at[hp] * edge_strategy[hero_edges]
+                vr_at[hc] = vr_at[hp]
+            if np.any(villain_edges):
+                vp = edge_parent[villain_edges]
+                vc = edge_child[villain_edges]
+                hr_at[vc] = hr_at[vp]
+                vr_at[vc] = vr_at[vp] * edge_strategy[villain_edges]
+
+        if len(show_idx) > 0:
+            VR_s = vr_at[show_idx]
+            HR_s = hr_at[show_idx]
+            h_win = VR_s @ win_mT
+            h_lose = VR_s @ lose_mT
+            h_tie = VR_s @ tie_mT
+            v_win = HR_s @ win_m
+            v_lose = HR_s @ lose_m
+            v_tie = HR_s @ tie_m
+            hvals[show_idx] = hw_s * h_win + hl_s * h_lose + ht_s * h_tie
+            vvals[show_idx] = vw_s * v_lose + vl_s * v_win + vt_s * v_tie
+
+        if len(hfold_idx) > 0:
+            VR_hf = vr_at[hfold_idx]
+            HR_hf = hr_at[hfold_idx]
+            hvals[hfold_idx] = hf_hero_coeff * (VR_hf @ valid_mT)
+            vvals[hfold_idx] = hf_vill_coeff * (HR_hf @ valid_m)
+
+        if len(vfold_idx) > 0:
+            VR_vf = vr_at[vfold_idx]
+            HR_vf = hr_at[vfold_idx]
+            hvals[vfold_idx] = vf_hero_coeff * (VR_vf @ valid_mT)
+            vvals[vfold_idx] = vf_vill_coeff * (HR_vf @ valid_m)
+
+        for group, strategies in zip(reversed(groups), reversed(level_strategies), strict=False):
+            if group is None or strategies is None:
+                continue
+            parents = group['parents']
+            edge_parent = group['edge_parent']
+            edge_action = group['edge_action']
+            edge_child = group['edge_child']
+            edge_parent_pos = group['edge_parent_pos']
+            edge_strategy = strategies[edge_parent_pos, edge_action]
+            product_h = edge_strategy * hvals[edge_child]
+            product_v = edge_strategy * vvals[edge_child]
+            parent_hvals = np.add.reduceat(product_h, group['starts'], axis=0)
+            parent_vvals = np.add.reduceat(product_v, group['starts'], axis=0)
+            hvals[parents] = parent_hvals
+            vvals[parents] = parent_vvals
+
+            hero_edges = group['edge_player'] == 0
+            villain_edges = ~hero_edges
+            if np.any(hero_edges):
+                hp = edge_parent[hero_edges]
+                ha = edge_action[hero_edges]
+                hpos = edge_parent_pos[hero_edges]
+                instant = hvals[edge_child[hero_edges]] - parent_hvals[hpos]
+                regret_sum[hp, ha, :] = np.maximum(
+                    regret_sum[hp, ha, :] + instant,
+                    0,
+                )
+                strategy_sum[hp, ha, :] = (
+                    strategy_sum[hp, ha, :]
+                    + hr_at[hp] * edge_strategy[hero_edges]
+                )
+            if np.any(villain_edges):
+                vp = edge_parent[villain_edges]
+                va = edge_action[villain_edges]
+                vpos = edge_parent_pos[villain_edges]
+                instant = vvals[edge_child[villain_edges]] - parent_vvals[vpos]
+                regret_sum[vp, va, :] = np.maximum(
+                    regret_sum[vp, va, :] + instant,
+                    0,
+                )
+                strategy_sum[vp, va, :] = (
+                    strategy_sum[vp, va, :]
+                    + vr_at[vp] * edge_strategy[villain_edges]
+                )
+
+    return regret_sum, strategy_sum
+
+
 def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               pot_start, hero_stack_start, villain_stack_start,
               n_iterations=100, hero_range=None, villain_range=None,

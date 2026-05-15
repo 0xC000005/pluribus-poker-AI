@@ -187,6 +187,14 @@ states and fuse the hand-by-node reach/value/regret recurrence. This matches
 the 2024 GPU-CFR paper's matrix-operator framing while explaining why the
 current Python-driven `torch-cuda` backend is slower.
 
+Level-synchronous CFR prototype status: an opt-in `cpu-levelsync` backend now
+implements a level-wise vectorized CFR+ recurrence and is exact enough for
+average-strategy decisions against the CPU reference. It is not a CPU speedup:
+on the same 8-root budget-frontier smoke, CFR5/CFR10 latency was `158/294 ms`
+versus the current CPU solver's `120/243 ms`, with matching decision metrics
+and zero illegal mass. Keep it diagnostic-only. Its value is as a tested
+stepping stone for a future fused/GPU recurrence, not as a default backend.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
@@ -297,6 +305,9 @@ current Python-driven `torch-cuda` backend is slower.
   plausible for chunked GPU batching (`93.4 MiB` mean solver state per root,
   `5.98 GiB` for all 64 roots concurrently), but the useful boundary is the
   hand-by-node CFR recurrence, not the tiny adjacency matrices.
+- The first level-synchronous NumPy recurrence is mechanically valid but slower
+  than CPU on the 8-root smoke. Treat `cpu-levelsync` as a GPU-boundary
+  prototype, not an optimization or promotion path.
 
 ## Metric Snapshot
 

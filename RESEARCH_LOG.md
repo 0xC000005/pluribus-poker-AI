@@ -3520,3 +3520,16 @@
 - Summary: Added `poker_ai/research/cfr_matrix_footprint.py` and `scripts/analyze_cfr_matrix_footprint.py` to report tree depth, edge counts, level widths, and solver-state memory for matrix/fused CFR feasibility. The 64-root turn holdout is graph-small but hand-state-heavy: up to `1,257` nodes, fixed `1,128` private hands, mean solver state `93.4 MiB` per root, and `5.98 GiB` if all 64 roots are held concurrently. This supports a chunked level-synchronous GPU recurrence over node-by-hand tensors, not forcing the current `torch-cuda` backend or moving only tiny adjacency matrices.
 - Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_matrix_footprint_default_cases_seed20260515.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_matrix_footprint_holdout64_seed20260515.json
 - Key metrics: `{"n_evaluated": 64, "max_nodes": 1257, "max_edges": 1256, "max_depth": 5, "mean_solver_state_mib": 93.431648, "max_solver_state_mib": 138.409607, "batch_solver_state_mib": 5979.625488, "max_cfr_state_mib": 97.359192, "promotion": false}`
+
+## 20260515T003033Z-levelsync-cfr-prototype - failed
+
+- Timestamp: 2026-05-15T00:30:33Z
+- Type: solver_throughput_diagnostic
+- Gate: cpu-levelsync-cfr-budget-frontier-smoke8
+- Hypothesis: A level-synchronous vectorized CFR+ recurrence should preserve the current solver's behavior and may expose a cleaner fused/GPU boundary than the Python node loop.
+- Failure class: compute_backend_overhead
+- Related work: GPU-CFR motivates level-wise matrix/vector CFR operations (`https://arxiv.org/abs/2408.14778`), while DeepStack motivates preserving resolving as the runtime correction operator (`https://arxiv.org/abs/1701.01724`). DDCFR remains relevant future work for learned update schedules (`https://openreview.net/forum?id=6PbvbLyqT6`).
+- Summary: Added an opt-in `solve_cfr_levelsync` implementation and `cpu-levelsync` backend. Unit tests verify average-strategy parity against the CPU CFR+ reference, and the 8-root budget-frontier smoke preserved L1/KL/action metrics with zero illegal mass. The CPU runtime regressed, however: CFR5/CFR10 averaged `158/294 ms` versus the current CPU solver's `120/243 ms`. Keep this path diagnostic-only; it is a stepping stone for a real fused/chunked GPU recurrence, not an optimization or default backend.
+- Review manifest: docs/research_protocols/poker_review_manifests/20260515T003000Z-levelsync-cfr-prototype.json
+- Metrics files: autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_levelsync_smoke8_cached_seed20260675.json and autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_cpu_smoke8_seed20260674.json
+- Key metrics: `{"levelsync_cfr5_latency_ms": 158.223125, "cpu_cfr5_latency_ms": 120.20875, "levelsync_cfr10_latency_ms": 293.549375, "cpu_cfr10_latency_ms": 242.863625, "levelsync_cfr10_l1": 0.38470745, "cpu_cfr10_l1": 0.38470743, "max_illegal_mass": 0.0, "promotion": false}`
