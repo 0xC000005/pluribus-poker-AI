@@ -61,6 +61,23 @@ def test_sampled_traversal_probe_supports_without_replacement_mode():
     assert metrics["promotion"] is False
 
 
+def test_sampled_traversal_probe_supports_priority_without_replacement_mode():
+    metrics = run_probe(
+        n_repeats=4,
+        initial_chips=300,
+        sample_count=4,
+        sampling_mode="priority-without-replacement",
+        priority_forced_count=2,
+        hidden_dim=16,
+        n_layers=1,
+        seed=20260531,
+    )
+
+    assert metrics["sampling_mode"] == "priority-without-replacement"
+    assert metrics["priority_forced_count"] == 2
+    assert metrics["promotion"] is False
+
+
 def test_sampled_traversal_probe_reproducible_for_same_seed():
     first = run_probe(
         n_repeats=2,
@@ -110,6 +127,7 @@ def test_sampled_traversal_probe_grid_aggregates_cases():
         n_reference_repeats=2,
         sample_count=4,
         sampling_mode="without-replacement",
+        priority_forced_count=0,
         hidden_dim=16,
         n_layers=1,
     )

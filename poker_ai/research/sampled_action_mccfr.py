@@ -181,6 +181,69 @@ def sample_pps_without_replacement(
     return np.asarray(selected, dtype=np.int64)
 
 
+def priority_sample_without_replacement(
+    rng: np.random.Generator,
+    sample_probs: np.ndarray,
+    legal_mask: np.ndarray,
+    *,
+    sample_count: int,
+    forced_count: int,
+    priority_scores: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Force top-priority legal actions, then sample residual actions.
+
+    Returns selected unique actions and the corresponding inclusion
+    probabilities for all actions. Forced actions have inclusion probability 1.
+    Residual actions use exact PPS-without-replacement inclusion probabilities
+    over the residual legal set.
+    """
+    legal = np.asarray(legal_mask, dtype=np.float64) > 0.0
+    q = np.asarray(sample_probs, dtype=np.float64)
+    if q.shape != legal.shape:
+        raise ValueError("sample_probs must match legal_mask")
+    if priority_scores is None:
+        priority = q.copy()
+    else:
+        priority = np.asarray(priority_scores, dtype=np.float64)
+        if priority.shape != legal.shape:
+            raise ValueError("priority_scores must match legal_mask")
+    legal_indices = np.flatnonzero(legal).astype(np.int64)
+    if legal_indices.size == 0:
+        raise ValueError("at least one legal action is required")
+    k = min(max(1, int(sample_count)), int(legal_indices.size))
+    n_forced = min(max(0, int(forced_count)), k)
+    ordered = sorted(
+        (int(action) for action in legal_indices),
+        key=lambda action: (-float(priority[action]), action),
+    )
+    forced = ordered[:n_forced]
+    residual_legal = legal.copy()
+    for action in forced:
+        residual_legal[action] = False
+    residual_k = k - len(forced)
+    inclusion = np.zeros_like(q, dtype=np.float64)
+    if forced:
+        inclusion[forced] = 1.0
+    sampled = list(forced)
+    if residual_k > 0:
+        residual_mask = residual_legal.astype(np.float32)
+        residual_inclusion = pps_without_replacement_inclusion_probs(
+            q,
+            residual_mask,
+            sample_count=residual_k,
+        )
+        inclusion += residual_inclusion
+        sampled.extend(
+            sample_pps_without_replacement(
+                rng,
+                q,
+                residual_mask,
+                sample_count=residual_k,
+            ).tolist()
+        )
+    return np.asarray(sampled, dtype=np.int64), inclusion.astype(np.float32)
+
+
 def sampled_action_regret_estimate_without_replacement(
     action_values: np.ndarray,
     strategy: np.ndarray,

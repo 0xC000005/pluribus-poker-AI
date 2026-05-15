@@ -69,7 +69,7 @@ or Slumbot-specific patch.
 
 ## Next Implementation Step
 
-Investigate an adaptive or priority-aware without-replacement sampler before
-CUDA integration. The sampler should enumerate high-impact actions and sample
-only low-impact residual branches, preserving action ordering while still
-reducing branch factor.
+Investigate a value- or advantage-priority adaptive sampler before CUDA
+integration. Strategy-probability priority did not fix the four-seed traversal
+grid; the sampler must protect low-probability actions that can still change
+regret ordering.

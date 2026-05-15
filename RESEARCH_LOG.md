@@ -4874,3 +4874,25 @@
   candidate should be adaptive or priority-aware: enumerate actions that can
   change regret ordering, and sample only the residual low-impact branches with
   inclusion correction.
+
+## 20260515T131500Z-strategy-priority-sampling-check - partial
+
+- Timestamp: 2026-05-15T13:15:00Z
+- Type: priority_sampler_check
+- Gate: strategy-priority without-replacement sample-4 traversal grid
+- Hypothesis: Forcing the highest-strategy legal actions before residual
+  without-replacement sampling should preserve root action ordering while
+  retaining sample-4 speedup.
+- Failure class: action_order_variance
+- Summary: Added a priority-without-replacement estimator path that forces a
+  configurable number of high-priority legal actions and applies inclusion
+  correction to residual sampled actions. The root estimator gate passed and
+  improved averaged top-match (`0.9766`), but traversal-level grids with
+  forced-2 and forced-3 strategy-priority actions still matched root top action
+  in only `2/4` seeds. This means strategy probability is not the right
+  priority signal: low-probability actions can still dominate the regret target.
+- Commands: `uv run pytest -q test/unit/test_sampled_deep_cfr_traversal_probe.py test/unit/test_sampled_action_mccfr.py test/unit/test_sampled_action_full_deck_estimator.py`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260516 --output-json autoresearch-session/sampled_action_full_deck_estimator_xxl_priority_wor_f2_sample4_seed20260516.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 2 --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_wor_f2_sample4_4seeds_20260515.json`; `uv run python scripts/eval_sampled_deep_cfr_traversal_grid.py --seeds 20260525,20260526,20260527,20260528 --initial-chips-values 300 --n-repeats 128 --n-reference-repeats 128 --sample-count 4 --sampling-mode priority-without-replacement --priority-forced-count 3 --hidden-dim 64 --n-layers 1 --min-top-match-rate 0.75 --min-mean-speedup 1.05 --max-mean-abs-bias 0.08 --output-json autoresearch-session/sampled_deep_cfr_traversal_grid_priority_wor_f3_sample4_4seeds_20260515.json`
+- Key metrics: `{"root_priority_f2_top_match": 0.976562, "priority_f2_grid_top_match_rate": 0.5, "priority_f2_mean_speedup": 1.307071, "priority_f3_grid_top_match_rate": 0.5, "priority_f3_mean_speedup": 1.271093, "promotion": false}`
+- Decision: Do not use strategy-probability priority as the CUDA criterion.
+  Next test should prioritize by predicted action value or advantage magnitude,
+  or adaptively expand nodes whose estimated regret margin is uncertain.

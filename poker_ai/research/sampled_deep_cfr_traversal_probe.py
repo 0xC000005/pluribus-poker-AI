@@ -28,6 +28,7 @@ from poker_ai.games.full_deck.state import (
 )
 from poker_ai.research.sampled_action_mccfr import (
     pps_without_replacement_inclusion_probs,
+    priority_sample_without_replacement,
     sample_pps_without_replacement,
 )
 
@@ -242,6 +243,7 @@ def _sampled_traverse(
     sample_count: int,
     uniform_mix: float,
     sampling_mode: str,
+    priority_forced_count: int,
 ) -> _TraversalResult:
     if state.is_terminal:
         return _TraversalResult(value=float(state.payout[traverser]))
@@ -257,6 +259,7 @@ def _sampled_traverse(
             sample_count=sample_count,
             uniform_mix=uniform_mix,
             sampling_mode=sampling_mode,
+            priority_forced_count=priority_forced_count,
         )
 
     strategy, legal_mask, legal_actions = _strategy(value_net, state, device)
@@ -289,6 +292,16 @@ def _sampled_traverse(
                 legal_mask,
                 sample_count=sample_count,
             )
+        elif sampling_mode == "priority-without-replacement":
+            sampled, inclusion_probs = priority_sample_without_replacement(
+                traverser_rng,
+                q,
+                legal_mask,
+                sample_count=sample_count,
+                forced_count=priority_forced_count,
+                priority_scores=strategy,
+            )
+            sampled_all_legal = int(sampled.size) >= int(legal_indices.size)
         else:
             raise ValueError(f"unknown sampling mode: {sampling_mode}")
         sampled_values = np.zeros(sampled.shape[0], dtype=np.float32)
@@ -305,6 +318,7 @@ def _sampled_traverse(
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
                 sampling_mode=sampling_mode,
+                priority_forced_count=priority_forced_count,
             )
             sampled_values[idx] = float(child.value)
         if sampled_all_legal:
@@ -350,6 +364,7 @@ def _sampled_traverse(
         sample_count=sample_count,
         uniform_mix=uniform_mix,
         sampling_mode=sampling_mode,
+        priority_forced_count=priority_forced_count,
     )
 
 
@@ -365,6 +380,7 @@ def _mean_root_regret(
     sample_count: int,
     uniform_mix: float,
     sampling_mode: str,
+    priority_forced_count: int,
 ) -> tuple[np.ndarray, float]:
     regrets = []
     started = time.perf_counter()
@@ -384,6 +400,7 @@ def _mean_root_regret(
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
                 sampling_mode=sampling_mode,
+                priority_forced_count=priority_forced_count,
             )
         else:
             result = _exhaustive_traverse(
@@ -418,6 +435,7 @@ def run_probe(
     n_layers: int = 1,
     uniform_mix: float = 0.25,
     sampling_mode: str = "with-replacement",
+    priority_forced_count: int = 0,
     seed: int = 20260525,
     device: str = "cpu",
 ) -> dict[str, Any]:
@@ -446,6 +464,7 @@ def run_probe(
         sample_count=sample_count,
         uniform_mix=uniform_mix,
         sampling_mode=sampling_mode,
+        priority_forced_count=priority_forced_count,
     )
     sampled_mean, sampled_seconds = _mean_root_regret(
         state,
@@ -458,6 +477,7 @@ def run_probe(
         sample_count=sample_count,
         uniform_mix=uniform_mix,
         sampling_mode=sampling_mode,
+        priority_forced_count=priority_forced_count,
     )
     legal_mask = get_legal_mask(state) > 0.0
     bias = sampled_mean - exhaustive_mean
@@ -474,6 +494,7 @@ def run_probe(
         "n_reference_repeats": int(reference_repeats),
         "sample_count": int(sample_count),
         "sampling_mode": sampling_mode,
+        "priority_forced_count": int(priority_forced_count),
         "uniform_mix": float(uniform_mix),
         "hidden_dim": int(hidden_dim),
         "n_layers": int(n_layers),
@@ -508,6 +529,7 @@ def run_probe_grid(
     n_layers: int = 1,
     uniform_mix: float = 0.25,
     sampling_mode: str = "with-replacement",
+    priority_forced_count: int = 0,
     device: str = "cpu",
 ) -> dict[str, Any]:
     cases: list[dict[str, Any]] = []
@@ -523,6 +545,7 @@ def run_probe_grid(
                     n_layers=n_layers,
                     uniform_mix=uniform_mix,
                     sampling_mode=sampling_mode,
+                    priority_forced_count=priority_forced_count,
                     seed=int(seed),
                     device=device,
                 )
@@ -538,6 +561,7 @@ def run_probe_grid(
         "initial_chips_values": [int(value) for value in initial_chips_values],
         "sample_count": int(sample_count),
         "sampling_mode": sampling_mode,
+        "priority_forced_count": int(priority_forced_count),
         "n_repeats": int(n_repeats),
         "n_reference_repeats": int(n_reference_repeats or n_repeats),
         "top_action_match_rate": round(float(np.mean(top_matches)), 6),

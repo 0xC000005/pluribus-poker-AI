@@ -26,6 +26,7 @@ from poker_ai.research.restricted_action_value import (  # noqa: E402
 from poker_ai.research.sampled_action_mccfr import (  # noqa: E402
     full_regret,
     pps_without_replacement_inclusion_probs,
+    priority_sample_without_replacement,
     sample_pps_without_replacement,
     sampled_action_regret_estimate,
     sampled_action_regret_estimate_without_replacement,
@@ -141,6 +142,7 @@ def run_diagnostic(
     max_mean_abs_bias: float | None,
     min_mean_estimate_top_action_match: float | None,
     sampling_mode: str,
+    priority_forced_count: int,
     seed: int,
 ) -> dict:
     random.seed(seed)
@@ -279,6 +281,23 @@ def run_diagnostic(
                         inclusion_probs=inclusion_probs,
                         baseline_values=baseline_values,
                     )
+                elif sampling_mode == "priority-without-replacement":
+                    actions, inclusion = priority_sample_without_replacement(
+                        rng,
+                        sample_probs,
+                        legal_mask,
+                        sample_count=sample_count,
+                        forced_count=priority_forced_count,
+                        priority_scores=strategy,
+                    )
+                    estimates[repeat_idx] = sampled_action_regret_estimate_without_replacement(
+                        action_values,
+                        strategy,
+                        legal_mask,
+                        sampled_actions=actions,
+                        inclusion_probs=inclusion,
+                        baseline_values=baseline_values,
+                    )
                 else:
                     raise ValueError(f"unknown sampling mode: {sampling_mode}")
             mean_estimate = estimates.mean(axis=0).astype(np.float64)
@@ -335,6 +354,7 @@ def run_diagnostic(
         "samples_per_estimate": samples_per_estimate,
         "strategy_mode": strategy_mode,
         "sampling_mode": sampling_mode,
+        "priority_forced_count": int(priority_forced_count),
         "uniform_mix": uniform_mix,
         "baseline_mode": baseline_mode,
         "baseline_noise_scale": float(baseline_noise_scale),
@@ -372,9 +392,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--strategy-mode", choices=("uniform", "dirichlet"), default="dirichlet")
     parser.add_argument(
         "--sampling-mode",
-        choices=("with-replacement", "without-replacement"),
+        choices=("with-replacement", "without-replacement", "priority-without-replacement"),
         default="with-replacement",
     )
+    parser.add_argument("--priority-forced-count", type=int, default=0)
     parser.add_argument("--uniform-mix", type=float, default=0.25)
     parser.add_argument(
         "--baseline-mode",
@@ -403,6 +424,7 @@ def main(argv: list[str] | None = None) -> int:
         max_mean_abs_bias=args.max_mean_abs_bias,
         min_mean_estimate_top_action_match=args.min_mean_estimate_top_match,
         sampling_mode=args.sampling_mode,
+        priority_forced_count=args.priority_forced_count,
         seed=args.seed,
     )
     text = json.dumps(metrics, indent=2, sort_keys=True)

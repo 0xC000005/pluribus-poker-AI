@@ -3,6 +3,7 @@ import numpy as np
 from poker_ai.research.sampled_action_mccfr import (
     full_regret,
     pps_without_replacement_inclusion_probs,
+    priority_sample_without_replacement,
     sample_pps_without_replacement,
     sampled_action_regret_estimate,
     sampled_action_regret_estimate_without_replacement,
@@ -90,6 +91,28 @@ def test_sample_pps_without_replacement_returns_unique_legal_actions():
     assert sampled.shape == (2,)
     assert len(set(sampled.tolist())) == 2
     assert all(legal_mask[action] > 0.0 for action in sampled)
+
+
+def test_priority_sample_without_replacement_forces_top_priority_actions():
+    rng = np.random.default_rng(11)
+    legal_mask = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+    sample_probs = np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
+    priority = np.array([10.0, 1.0, 9.0, 0.0], dtype=np.float32)
+
+    sampled, inclusion = priority_sample_without_replacement(
+        rng,
+        sample_probs,
+        legal_mask,
+        sample_count=3,
+        forced_count=2,
+        priority_scores=priority,
+    )
+
+    assert set([0, 2]).issubset(set(sampled.tolist()))
+    assert len(set(sampled.tolist())) == 3
+    assert inclusion[0] == 1.0
+    assert inclusion[2] == 1.0
+    assert np.isclose(inclusion.sum(), 3.0)
 
 
 def test_without_replacement_regret_estimator_is_unbiased_by_enumeration():
