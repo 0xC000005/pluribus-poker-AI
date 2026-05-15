@@ -68,6 +68,11 @@ _GPU_CACHE_SAFETY_FRACTION = 0.75
 _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS = 1_000_000
 _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL = 500
 _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL = 64
+_DEFAULT_NN_FORWARD_CHUNK = 500_000
+_MIN_NN_FORWARD_CHUNK = 8_192
+_NN_FORWARD_TIGHT_MEMORY_BYTES = 2 * 1024**3
+_NN_FORWARD_MAX_WORK_BYTES = 384 * 1024**2
+_NN_FORWARD_MIN_WORK_BYTES = 64 * 1024**2
 
 
 def _traversal_batch_size(
@@ -86,6 +91,43 @@ def _traversal_batch_size(
     pool_max_slots = max(1, int(pool_max_slots))
     slots_per_traversal = max(1, int(slots_per_traversal))
     return max(1, min(n_traversals, pool_max_slots // slots_per_traversal))
+
+
+def _nn_forward_chunk_size(
+    value_net: torch.nn.Module,
+    device: torch.device,
+    *,
+    free_bytes: int | None = None,
+    max_chunk: int = _DEFAULT_NN_FORWARD_CHUNK,
+) -> int:
+    """Choose a safe NN inference chunk for large CUDA traversal pools.
+
+    The Numba traversal workspace can leave little free GPU memory on 8 GB
+    cards. A fixed 500k forward batch is then too large for 4x512 MLP
+    activations, even under ``no_grad``. Keep the historical chunk when memory
+    is plentiful, but shrink it under tight CUDA memory.
+    """
+    max_chunk = max(1, int(max_chunk))
+    if device.type != "cuda":
+        return max_chunk
+
+    if free_bytes is None:
+        try:
+            free_bytes, _ = torch.cuda.mem_get_info(device)
+        except Exception:
+            return max(_MIN_NN_FORWARD_CHUNK, min(max_chunk, 100_000))
+
+    free_bytes = max(0, int(free_bytes))
+    if free_bytes >= _NN_FORWARD_TIGHT_MEMORY_BYTES:
+        return max_chunk
+
+    hidden_dim = max(1, int(getattr(value_net, "hidden_dim", 256)))
+    work_bytes = max(
+        _NN_FORWARD_MIN_WORK_BYTES,
+        min(_NN_FORWARD_MAX_WORK_BYTES, int(free_bytes * 0.35)),
+    )
+    rows = work_bytes // (hidden_dim * 4)
+    return max(_MIN_NN_FORWARD_CHUNK, min(max_chunk, int(rows)))
 
 
 def _gpu_cache_nbytes(
@@ -716,7 +758,7 @@ def gpu_traverse_for_player(
 
         # 2. NN forward pass — zero-copy, chunked. Only process n_active slots.
         feat_t = torch.as_tensor(d_features, device=device)
-        NN_CHUNK = 500_000
+        NN_CHUNK = _nn_forward_chunk_size(value_net, device)
         if n_active <= NN_CHUNK:
             with torch.no_grad():
                 adv_t = value_net(feat_t[:n_active])

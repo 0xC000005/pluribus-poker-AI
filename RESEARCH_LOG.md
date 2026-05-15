@@ -4355,3 +4355,24 @@
   yet. The next principled engineering step is traversal telemetry and/or an
   adaptive pool design that preserves corrected all-in response coverage
   without globally wasting GPU work on oversized low-occupancy chunks.
+
+## 20260515T064500Z-adaptive-cuda-forward-chunk-and-2m-pool-probe - passed
+
+- Timestamp: 2026-05-15T06:45:00Z
+- Type: trainer_reliability_diagnostic
+- Gate: TDD, exact failed-command rerun, and focused regression tests
+- Hypothesis: The 2M traversal-pool OOM is caused by the fixed 500k value-net
+  forward chunk, not by the value network itself or a CUDA installation issue.
+- Failure class: traversal_memory_pressure
+- Summary: Added an adaptive CUDA value-net inference chunk for GPU traversal.
+  It preserves the historical 500k chunk when memory is plentiful, but shrinks
+  under tight free-memory conditions caused by large Numba traversal
+  workspaces. The exact failed 2M-pool command then completed. This removes a
+  reliability blocker for fidelity probes, but the probe itself stayed
+  negative: throughput matched the 1M/1000 run and pool demand still exceeded
+  allocation by up to several times.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py`; `uv run pytest -q test/unit/test_gpu_cache_budget.py test/unit/test_full_deck_allin_semantics.py test/unit/test_legal_mask_parity.py`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 3 --n-traversals 4000 --n-training-steps 20 --hidden-dim 512 --n-layers 4 --batch-size 8192 --buffer-capacity 2000000 --traversal-pool-max-slots 2000000 --traversal-slots-per-traversal 1000 --save-dir autoresearch-session/corrected_allin_pool_fidelity_1000x2m_retry_20260515 --prefix corrected_pool1000x2m_retry_3x4k --save-every 0 --eval-games 0`
+- Key metrics: `{"focused_tests_passed": 23, "pool1000x2m_iters_per_hour": 179.693, "pool1000x2m_traversals_per_second": 199.647, "pool1000x2m_avg_iter_seconds": 20.034, "pool1000x2m_peak_reported_overflow_pct": 634, "promotion": false}`
+- Decision: Keep the adaptive forward chunk. Do not treat a larger global pool
+  as the answer; the next useful work is explicit traversal-fidelity telemetry
+  and a state-aware sampling/allocation design.

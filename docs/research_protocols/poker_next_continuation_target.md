@@ -979,3 +979,10 @@ fell to `199` traversals/sec and still overflowed later; 2500 slots fell to
 longer run. Add hard traversal-fidelity telemetry and test an adaptive or
 state-aware traversal allocation that preserves all-in response states without
 global slot inflation.
+
+The immediate CUDA OOM from trying a 2M-slot pool is fixed by adaptive
+value-net forward chunking, and the exact failed command now completes. This is
+an engineering reliability improvement, not research evidence for scaling the
+pool. The 2M/1000 probe still runs at only `199.6` traversals/sec and still
+shows several-times-over pool demand, so the active blocker remains traversal
+fidelity and tree-shape control under corrected all-in semantics.

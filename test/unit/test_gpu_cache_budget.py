@@ -7,6 +7,7 @@ from poker_ai.deep_cfr.cuda.gpu_trainer import (
     _MultiBufferView,
     _gpu_cache_budget_allows,
     _gpu_cache_nbytes,
+    _nn_forward_chunk_size,
     _traversal_batch_size,
 )
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
@@ -73,6 +74,30 @@ def test_traversal_batch_size_caps_to_requested_traversals():
         pool_max_slots=1_000_000,
         slots_per_traversal=2_500,
     ) == 200
+
+
+def test_nn_forward_chunk_size_reduces_when_cuda_memory_is_tight():
+    net = torch.nn.Module()
+    net.hidden_dim = 512
+
+    chunk = _nn_forward_chunk_size(
+        net,
+        torch.device("cuda"),
+        free_bytes=900 * 1024**2,
+    )
+
+    assert 8_192 <= chunk < 500_000
+
+
+def test_nn_forward_chunk_size_keeps_fast_default_when_cuda_memory_is_plentiful():
+    net = torch.nn.Module()
+    net.hidden_dim = 512
+
+    assert _nn_forward_chunk_size(
+        net,
+        torch.device("cuda"),
+        free_bytes=3 * 1024**3,
+    ) == 500_000
 
 
 def test_release_workspace_for_training_drops_traversal_workspace():

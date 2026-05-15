@@ -168,6 +168,7 @@
 - One-off and auto-queued candidate comparisons must include `--require-positive-lower95`; finite but negative lower bounds are diagnostic failures, not passed gates.
 - Add persistent knobs only through `add-knob`; each needs one mechanism, one default, one failure class, and a removal criterion. Do not use broad hyperparameter sweeps as research progress.
 - Keep `--traversal-slots-per-traversal` at the fast default unless explicitly running a high-fidelity pool experiment. After corrected all-in semantics, default traversal can overfill the pool; 1000 slots still overflowed later at much lower throughput and 2500 slots was too slow. Prefer adding telemetry or adaptive allocation before scaling global slot counts.
+- The CUDA trainer uses adaptive value-net forward chunking under tight memory; this prevents OOM in large traversal-pool probes but does not solve traversal overflow or low-occupancy warnings.
 - Treat `--solver-backend torch-cuda` as experimental; benchmark it against `cpu` before using it in live Slumbot gates.
 - CUDA traversal kernels require the pip CUDA 13 compiler path: keep `numba>=0.65.1` and `numba-cuda[cu13]>=0.30.2` declared, and verify `scripts.cuda_env.configure_numba_cuda_env()` detects `.venv/.../site-packages/nvidia/cu13`.
 - Local random-opponent gates are mechanical health checks only. Do not mark a checkpoint as promotable without incumbent or Slumbot confidence evidence.
