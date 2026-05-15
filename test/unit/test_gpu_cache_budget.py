@@ -111,6 +111,8 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
             "n_traversals": 10,
             "regret_samples": 800,
             "pool_exhausted_nodes": 4,
+            "pool_exhausted_by_stage": [1, 2, 1, 0],
+            "pool_exhausted_by_depth": [0, 1, 0, 3],
         },
         {
             "requested_slots": 500,
@@ -118,6 +120,8 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
             "n_traversals": 5,
             "regret_samples": 300,
             "pool_exhausted_nodes": 1,
+            "pool_exhausted_by_stage": [0, 0, 0, 1],
+            "pool_exhausted_by_depth": [0, 0, 1, 0],
         },
     ])
 
@@ -129,6 +133,14 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
     assert summary["traversal_max_slots_per_traversal"] == 120.0
     assert summary["traversal_pool_exhausted_nodes"] == 5
     assert summary["traversal_pool_exhausted_per_traversal"] == 0.333333
+    assert summary["traversal_pool_exhausted_stage_preflop"] == 1
+    assert summary["traversal_pool_exhausted_stage_flop"] == 2
+    assert summary["traversal_pool_exhausted_stage_turn"] == 1
+    assert summary["traversal_pool_exhausted_stage_river"] == 1
+    assert summary["traversal_pool_exhausted_first_depth"] == 1
+    assert summary["traversal_pool_exhausted_peak_depth"] == 3
+    assert summary["traversal_pool_exhausted_peak_depth_nodes"] == 3
+    assert summary["traversal_pool_exhausted_last_depth"] == 3
 
 
 def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():

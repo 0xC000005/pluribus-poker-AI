@@ -5062,3 +5062,24 @@
 - Decision: Use fidelity thresholds for unattended training diagnostics when
   the objective is compute quality. Leave thresholds opt-in for exploratory
   training until a zero-demotion or bounded-demotion configuration is found.
+
+## 20260515T164500Z-pool-exhaustion-depth-telemetry - passed
+
+- Timestamp: 2026-05-15T16:45:00Z
+- Type: compute_fidelity_instrumentation
+- Gate: TDD plus CUDA train smoke
+- Hypothesis: Before changing traversal architecture, autoresearch needs to
+  know where pool-exhaustion demotions happen in the wavefront. Stage/depth
+  telemetry should show whether this is an early preflop artifact or a deeper
+  expansion problem.
+- Failure class: none
+- Summary: Added `fork_kernel` counters for pool-exhausted nodes by depth and
+  betting stage, then surfaced first/peak/last exhausted depth and stage
+  counts in traversal summaries, trainer profiles, benchmark output, and
+  training-gate JSON.
+- Commands: `uv run pytest -q test/unit/test_gpu_cache_budget.py::test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure test/unit/test_gpu_cache_budget.py::test_build_iteration_profile_reports_warmup_safe_throughput_metrics`; `uv run python scripts/poker_autoresearch_train.py --n-iterations 1 --n-traversals 50 --n-training-steps 2 --hidden-dim 32 --n-layers 1 --batch-size 64 --buffer-capacity 5000 --save-dir autoresearch-session/gpu_train_depth_telemetry_smoke_20260515 --prefix depth_telemetry_smoke --save-every 0 --eval-games 0 --max-pool-exhausted-per-traversal 0 --max-overflow-chunk-fraction 0`
+- Key metrics: `{"depth_smoke_passed": false, "pool_exhausted_per_traversal": 49.16, "first_depth": 11, "peak_depth": 13, "peak_depth_nodes": 2519, "last_depth": 16, "stage_counts": {"preflop": 426, "flop": 1237, "turn": 1746, "river": 1507}, "promotion": false}`
+- Decision: Treat pool exhaustion as a mid/deep wavefront expansion issue, not
+  a single-street rule issue. The next compute experiment should target active
+  slot reuse/compaction or a principled external-sampling estimator, not a
+  street-specific cap.

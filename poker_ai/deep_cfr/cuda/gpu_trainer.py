@@ -145,6 +145,14 @@ def _summarize_traversal_pool_stats(
             "traversal_regret_sample_fill_ratio": 0.0,
             "traversal_pool_exhausted_nodes": 0,
             "traversal_pool_exhausted_per_traversal": 0.0,
+            "traversal_pool_exhausted_stage_preflop": 0,
+            "traversal_pool_exhausted_stage_flop": 0,
+            "traversal_pool_exhausted_stage_turn": 0,
+            "traversal_pool_exhausted_stage_river": 0,
+            "traversal_pool_exhausted_first_depth": -1,
+            "traversal_pool_exhausted_peak_depth": -1,
+            "traversal_pool_exhausted_peak_depth_nodes": 0,
+            "traversal_pool_exhausted_last_depth": -1,
         }
 
     chunks = len(records)
@@ -162,6 +170,37 @@ def _summarize_traversal_pool_stats(
     total_pool_exhausted = sum(
         int(record.get("pool_exhausted_nodes", 0)) for record in records
     )
+    stage_totals = [0, 0, 0, 0]
+    depth_totals = [0 for _ in range(100)]
+    for record in records:
+        by_stage = record.get("pool_exhausted_by_stage", [])
+        if isinstance(by_stage, (list, tuple)):
+            for idx, count in enumerate(by_stage[:4]):
+                stage_totals[idx] += int(count)
+
+        by_depth = record.get("pool_exhausted_by_depth", [])
+        if isinstance(by_depth, (list, tuple)):
+            if len(by_depth) > len(depth_totals):
+                depth_totals.extend(
+                    [0 for _ in range(len(by_depth) - len(depth_totals))]
+                )
+            for idx, count in enumerate(by_depth):
+                depth_totals[idx] += int(count)
+
+    nonzero_depths = [
+        idx for idx, count in enumerate(depth_totals)
+        if int(count) > 0
+    ]
+    if nonzero_depths:
+        first_depth = int(nonzero_depths[0])
+        last_depth = int(nonzero_depths[-1])
+        peak_depth = int(max(nonzero_depths, key=lambda idx: depth_totals[idx]))
+        peak_depth_nodes = int(depth_totals[peak_depth])
+    else:
+        first_depth = -1
+        last_depth = -1
+        peak_depth = -1
+        peak_depth_nodes = 0
     overflow_chunks = sum(1 for ratio in demand_ratios if ratio > 1.0)
 
     return {
@@ -184,6 +223,14 @@ def _summarize_traversal_pool_stats(
             total_pool_exhausted / max(1, total_traversals),
             6,
         ),
+        "traversal_pool_exhausted_stage_preflop": stage_totals[0],
+        "traversal_pool_exhausted_stage_flop": stage_totals[1],
+        "traversal_pool_exhausted_stage_turn": stage_totals[2],
+        "traversal_pool_exhausted_stage_river": stage_totals[3],
+        "traversal_pool_exhausted_first_depth": first_depth,
+        "traversal_pool_exhausted_peak_depth": peak_depth,
+        "traversal_pool_exhausted_peak_depth_nodes": peak_depth_nodes,
+        "traversal_pool_exhausted_last_depth": last_depth,
     }
 
 
@@ -551,6 +598,8 @@ class _GPUTraverseWorkspace:
         self.d_next_free = cuda.device_array(1, dtype=np.int32)
         self.d_n_collected = cuda.device_array(1, dtype=np.int32)
         self.d_pool_exhausted = cuda.device_array(1, dtype=np.int32)
+        self.d_pool_exhausted_by_depth = cuda.device_array(100, dtype=np.int32)
+        self.d_pool_exhausted_by_stage = cuda.device_array(4, dtype=np.int32)
         self.d_active_count = cuda.device_array(1, dtype=np.int32)
 
         # Collected samples.
@@ -609,6 +658,8 @@ class _GPUTraverseWorkspace:
         self.d_next_free.copy_to_device(np.array([n_traversals], dtype=np.int32))
         self.d_n_collected.copy_to_device(np.array([0], dtype=np.int32))
         self.d_pool_exhausted.copy_to_device(np.array([0], dtype=np.int32))
+        self.d_pool_exhausted_by_depth.copy_to_device(np.zeros(100, dtype=np.int32))
+        self.d_pool_exhausted_by_stage.copy_to_device(np.zeros(4, dtype=np.int32))
         self.d_n_policy_collected.copy_to_device(np.array([0], dtype=np.int32))
 
 
@@ -820,6 +871,8 @@ def gpu_traverse_for_player(
     d_next_free = workspace.d_next_free
     d_n_collected = workspace.d_n_collected
     d_pool_exhausted = workspace.d_pool_exhausted
+    d_pool_exhausted_by_depth = workspace.d_pool_exhausted_by_depth
+    d_pool_exhausted_by_stage = workspace.d_pool_exhausted_by_stage
     d_collected_features = workspace.d_collected_features
     d_collected_regrets = workspace.d_collected_regrets
     d_policy_features = workspace.d_policy_features
@@ -930,8 +983,10 @@ def gpu_traverse_for_player(
             d_parent_idx, d_parent_action,
             d_is_traverser_node, d_traverser_features, d_slot_strategy,
             d_n_children_expected, d_child_values, d_n_children_done,
-            d_next_free, d_pool_exhausted, max_pool,
-            d_actions_gpu, rng_states, n_active,
+            d_next_free, d_pool_exhausted,
+            d_pool_exhausted_by_depth, d_pool_exhausted_by_stage,
+            max_pool,
+            d_actions_gpu, rng_states, np.int32(depth), n_active,
         )
         cuda.synchronize()
 
@@ -1021,6 +1076,12 @@ def gpu_traverse_for_player(
 
     final_next_free = int(d_next_free.copy_to_host()[0])
     pool_exhausted_nodes = int(d_pool_exhausted.copy_to_host()[0])
+    pool_exhausted_by_depth = [
+        int(value) for value in d_pool_exhausted_by_depth.copy_to_host().tolist()
+    ]
+    pool_exhausted_by_stage = [
+        int(value) for value in d_pool_exhausted_by_stage.copy_to_host().tolist()
+    ]
     n_policy_seen = 0
     if n_traversals >= 1000:
         print(f"    [pool] used {final_next_free}/{max_pool} slots "
@@ -1040,6 +1101,8 @@ def gpu_traverse_for_player(
         "n_traversals": n_traversals,
         "regret_samples": n_collected,
         "pool_exhausted_nodes": pool_exhausted_nodes,
+        "pool_exhausted_by_depth": pool_exhausted_by_depth,
+        "pool_exhausted_by_stage": pool_exhausted_by_stage,
         "policy_samples": min(n_policy_seen, workspace.policy_capacity),
         "policy_capacity": workspace.policy_capacity,
     }

@@ -268,9 +268,12 @@ def fork_kernel(
     n_children_done,      # (max_pool,) int32
     next_free,            # (1,) int32 — atomic counter
     pool_exhausted_count, # (1,) int32 — traverser nodes demoted by pool exhaustion
+    pool_exhausted_by_depth, # (100,) int32
+    pool_exhausted_by_stage, # (4,) int32
     max_pool,             # int32
     actions_out,          # (max_pool,) int8
     rng_states,
+    depth,                # int32
     n_active,             # int32
 ):
     """Allocate child slots for traverser nodes. One thread per slot."""
@@ -293,6 +296,11 @@ def fork_kernel(
     if start >= max_pool or start + n_legal > max_pool:
         # Pool exhausted — demote to opponent, sample action.
         cuda.atomic.add(pool_exhausted_count, 0, int32(1))
+        if depth >= 0 and depth < 100:
+            cuda.atomic.add(pool_exhausted_by_depth, depth, int32(1))
+        stage_i = int32(stages[gid])
+        if stage_i >= 0 and stage_i < 4:
+            cuda.atomic.add(pool_exhausted_by_stage, stage_i, int32(1))
         is_traverser_flag[gid] = int8(0)
         u = xoroshiro128p_uniform_float32(rng_states, gid)
         cumsum_f = float32(0.0)
