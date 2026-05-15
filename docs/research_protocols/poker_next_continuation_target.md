@@ -1017,3 +1017,9 @@ matches exhaustive expectation. Synthetic variance falls as sampled actions
 increase. The next gate must move from toy traversal to a restricted full-deck
 state: compare exhaustive external-sampling regret against sampled-action
 regret on deterministic poker states before any CUDA trainer integration.
+
+The restricted full-deck gate is now partial. The estimator works, but payoff
+scale makes low sample counts too noisy: one sampled action has unacceptable
+variance, while 16-32 sampled actions are tolerable in the restricted root
+diagnostic. The next target should therefore be variance reduction at the
+estimator level, not immediate CUDA integration.

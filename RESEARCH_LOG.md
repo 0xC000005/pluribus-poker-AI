@@ -4469,3 +4469,28 @@
 - Decision: Continue to an exhaustive-vs-sampled traversal gate. Do not wire
   the estimator into CUDA Deep CFR until it matches full traversal regret on a
   small full-deck-relevant setting and reports variance/fidelity tradeoffs.
+
+## 20260515T074500Z-full-deck-sampled-action-estimator-gate - partial
+
+- Timestamp: 2026-05-15T07:45:00Z
+- Type: full_deck_estimator_diagnostic
+- Gate: restricted full-deck root action-value estimator bias/variance
+- Hypothesis: The sampled-action regret estimator remains usable when action
+  values come from deterministic full-deck root states instead of synthetic
+  unit-scale payoffs.
+- Failure class: estimator_variance
+- Summary: Added `scripts/eval_sampled_action_full_deck_estimator.py`, which
+  builds deterministic full-deck preflop roots, scores legal actions with the
+  existing restricted showdown action-value diagnostic, and compares
+  sampled-action regret estimates against exact immediate regret. The estimator
+  remains directionally valid, but full-deck payoff scale makes low sample
+  counts too noisy. A `1,2,4,8` run failed because one sampled action had
+  `4.89` mean absolute bias and `190.8` mean estimator std. A larger
+  `8,16,32` run passed the diagnostic threshold, with 32 samples reaching
+  `0.98` mean absolute bias and `35.84` mean std.
+- Commands: `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 16 --n-repeats 1000 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --output-json autoresearch-session/sampled_action_full_deck_estimator_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 16 --n-repeats 1000 --n-equity-samples 128 --samples-per-estimate 8,16,32 --output-json autoresearch-session/sampled_action_full_deck_estimator_8_32_20260515.json`
+- Key metrics: `{"sample1_abs_bias": 4.885735, "sample1_std": 190.787911, "sample8_abs_bias_first_run": 1.701625, "sample16_abs_bias": 1.263903, "sample32_abs_bias": 0.981301, "sample32_std": 35.836778, "promotion": false}`
+- Decision: Unbiasedness is not enough. Before any CUDA traversal integration,
+  test variance reduction: baselines/control variates, better sampling
+  distributions, or a small action subset plus correction that keeps variance
+  within a useful range at 2-8 sampled actions.
