@@ -191,3 +191,16 @@ def test_solver_budget_profile_summary_reports_drift_and_latency():
     assert metrics["live_mean_latency_ms"] == 650.0
     assert metrics["fast_live_mean_latency_ms"] == 375.0
     assert metrics["fast_live_latency_ratio_to_live"] == 0.57692308
+    assert metrics["n_action_disagreements"] == 1
+    assert metrics["action_disagreements"] == [
+        {
+            "label": "",
+            "reference_action": 8,
+            "candidate_action": 1,
+            "reference_increment": "",
+            "candidate_increment": "",
+            "reference_iterations": 250,
+            "candidate_iterations": 150,
+            "l1_to_reference": 2.0,
+        }
+    ]

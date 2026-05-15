@@ -311,6 +311,14 @@ continuation target should inspect those disagreement states and decide whether
 a bounded live confidence comparison is worth the variance. Do not add a second
 budget knob before that falsifier.
 
+The disagreement inspection now argues against immediate confidence spend.
+One disagreement root becomes progressively closer to a CFR500 teacher as
+budget rises, but the other is non-monotonic: CFR150 and CFR350 match the
+teacher while CFR250 does not. The next target should therefore be a
+teacher-aligned boundary detector or disagreement filter for live budget
+selection, evaluated on root-disjoint states. Keep it as a diagnostic gate; do
+not turn it into a Slumbot-specific budget sweep.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other

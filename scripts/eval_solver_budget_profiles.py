@@ -100,14 +100,30 @@ def summarize_profile_records(
     candidate_latencies: list[float] = []
     live_iterations: list[float] = []
     candidate_iterations: list[float] = []
+    action_disagreements: list[dict[str, Any]] = []
     for record in evaluated:
         reference = record["profiles"][reference_profile]
         candidate = record["profiles"][candidate_profile]
         reference_strategy = np.asarray(reference["strategy"], dtype=np.float64)
         candidate_strategy = np.asarray(candidate["strategy"], dtype=np.float64)
-        l1_values.append(float(np.abs(candidate_strategy - reference_strategy).sum()))
+        l1 = float(np.abs(candidate_strategy - reference_strategy).sum())
+        l1_values.append(l1)
         kl_values.append(_kl_to_reference(candidate_strategy, reference_strategy))
-        action_matches.append(int(candidate["action"]) == int(reference["action"]))
+        actions_match = int(candidate["action"]) == int(reference["action"])
+        action_matches.append(actions_match)
+        if not actions_match:
+            action_disagreements.append(
+                {
+                    "label": str(record.get("label", "")),
+                    "reference_action": int(reference["action"]),
+                    "candidate_action": int(candidate["action"]),
+                    "reference_increment": str(reference.get("increment", "")),
+                    "candidate_increment": str(candidate.get("increment", "")),
+                    "reference_iterations": int(reference["iterations"]),
+                    "candidate_iterations": int(candidate["iterations"]),
+                    "l1_to_reference": round(float(l1), 8),
+                }
+            )
         illegal_masses.extend([
             float(reference.get("illegal_mass", 0.0)),
             float(candidate.get("illegal_mass", 0.0)),
@@ -128,6 +144,8 @@ def summarize_profile_records(
         "fast_live_mean_l1_to_live": _mean(l1_values),
         "fast_live_mean_kl_to_live": _mean(kl_values),
         "fast_live_action_agreement": _rate(action_matches),
+        "n_action_disagreements": int(len(action_disagreements)),
+        "action_disagreements": action_disagreements,
         "live_mean_iterations": _mean(live_iterations),
         "fast_live_mean_iterations": _mean(candidate_iterations),
         "live_mean_latency_ms": live_latency,

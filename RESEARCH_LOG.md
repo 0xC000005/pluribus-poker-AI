@@ -201,7 +201,8 @@
 - Summary: Added `scripts/eval_solver_budget_profiles.py` to evaluate named
   live budget profiles on identical public states, ranges, and backend. Added
   the evaluator to protected-surface policy and unit tests for profile
-  iteration mapping, summary semantics, and protected-surface initialization.
+  iteration mapping, summary semantics, structured action-disagreement output,
+  and protected-surface initialization.
 - Evidence:
   - Review: `autoresearch-session/poker_reviews/20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate`
   - Manifest: `docs/research_protocols/poker_review_manifests/20260515T013258Z-live-versus-fast-live-solver-budget-profile-gate.json`
@@ -216,9 +217,18 @@
   The two action disagreements were `blueprint_self_play-0155-street2`
   (`live=k`, `fast-live=b4872`) and `blueprint_self_play-0178-street2`
   (`live=k`, `fast-live=b19300`).
+- Disagreement probes: CFR150/250/350 were compared against a CFR500 teacher
+  on both disagreement roots. On `0155`, CFR150 and CFR250 both disagreed with
+  the teacher, while L1 improved with budget (`0.7714` -> `0.5886` -> `0.3658`
+  for CFR150/250/350). On `0178`, CFR150 and CFR350 matched the teacher all-in
+  action, while CFR250 flipped to check; L1 was `0.2588`, `0.5432`, and
+  `0.2581`. Artifacts:
+  `autoresearch-session/search_consistency_restored200_100x2k_20260513/disagreement_0155_cfr150_250_350_vs500_seed20260515.json`
+  and
+  `autoresearch-session/search_consistency_restored200_100x2k_20260513/disagreement_0178_cfr150_250_350_vs500_seed20260515.json`.
 - Decision: keep `fast-live` diagnostic-only. The next principled step is to
-  inspect disagreement states or run a bounded live confidence comparison, not
-  to add another budget profile.
+  build a teacher-aligned boundary/disagreement detector or run a bounded live
+  confidence comparison, not to add another budget profile.
 
 ## 20260514T214359Z-cfr-dynamic-trace-diagnostic - passed
 

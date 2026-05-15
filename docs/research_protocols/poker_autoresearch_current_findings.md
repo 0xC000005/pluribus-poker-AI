@@ -277,6 +277,15 @@ matched `live` on `96.875%` of top actions, had mean L1 `0.1276`, mean KL
 to inspect disagreement states or run a bounded confidence comparison; do not
 promote or add more budget knobs.
 
+Disagreement probe status: higher-budget checks on the two disagreement roots
+show budget non-monotonicity. On `0155`, neither CFR150 nor CFR250 matched a
+CFR500 teacher action, though CFR250 was closer in L1 than CFR150 and CFR350
+was closer still. On `0178`, CFR150 and CFR350 matched the CFR500 all-in
+action while CFR250 flipped to check. This means the blocker is convergence
+near action-boundary states, not a simple "more or fewer iterations" rule. A
+confidence run should be preceded by either disagreement filtering or a
+teacher-aligned boundary detector, not another fixed budget profile.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
