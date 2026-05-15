@@ -204,6 +204,28 @@ def _target_diagnostics(targets: np.ndarray, legal_masks: np.ndarray) -> dict[st
     }
 
 
+def _per_street_target_diagnostics(
+    targets: np.ndarray,
+    legal_masks: np.ndarray,
+    features: np.ndarray,
+) -> dict[str, Any]:
+    street_one_hot = np.asarray(features, dtype=np.float32)[:, 104:108]
+    valid = np.max(street_one_hot, axis=1) > 0
+    streets = np.argmax(street_one_hot, axis=1).astype(np.int64)
+    diagnostics: dict[str, Any] = {}
+    for street in sorted(np.unique(streets[valid]).tolist()):
+        mask = valid & (streets == int(street))
+        if not np.any(mask):
+            continue
+        street_targets = targets[mask]
+        street_masks = legal_masks[mask]
+        diagnostics[str(int(street))] = {
+            **_target_diagnostics(street_targets, street_masks),
+            **_target_summary(street_targets),
+        }
+    return diagnostics
+
+
 def _case_target_diagnostics(
     records: list[dict[str, Any]],
     targets: np.ndarray,
@@ -370,6 +392,11 @@ def sample_policy_calibration_targets(
         "attempted_hands": int(attempted_hands),
         "targets_per_hand": round(float(n_targets) / max(float(attempted_hands), 1.0), 6),
         "street_counts": street_counts,
+        "per_street_target_diagnostics": _per_street_target_diagnostics(
+            buffer.target_probs,
+            buffer.legal_masks,
+            buffer.features,
+        ),
         **_target_summary(buffer.target_probs),
     }
     if stats is not None:

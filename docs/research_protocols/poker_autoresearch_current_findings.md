@@ -435,6 +435,15 @@ decisions had `0` all-ins (`20` turn solves, `8` river solves). The current
 failure is therefore early-street blueprint/action calibration before the
 resolver gets involved, not a live CUDA budget issue.
 
+Early-street local calibration status: policy-calibration target metadata now
+reports per-street target/action diagnostics. On 4,096 learned self-play
+targets, `iter1000` already shows a large early all-in footprint
+(`17.33%` preflop top-action all-in and `30.80%` flop), while `iter900` shows a
+severe local warning before live play (`58.09%` preflop and `65.00%` flop,
+though the flop sample was only `20` targets). This means the live
+over-all-in failure is locally detectable; future Slumbot spend should be gated
+by early-street distribution diagnostics before larger confidence runs.
+
 ## Incumbent
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`

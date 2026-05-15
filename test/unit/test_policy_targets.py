@@ -513,6 +513,9 @@ def test_sample_policy_calibration_targets_collects_masked_strategy(tmp_path, mo
     assert metadata["checkpoint_iteration"] == 7
     np.testing.assert_allclose(buffer.target_probs.sum(axis=1), np.ones(8))
     assert np.all(buffer.legal_masks.sum(axis=1) > 0)
+    per_street = metadata["per_street_target_diagnostics"]
+    assert sum(item["n_targets"] for item in per_street.values()) == 8
+    assert set(per_street).issubset({"0", "1", "2", "3"})
 
 
 def test_public_state_hand_sweep_targets_expand_private_hands(tmp_path, monkeypatch):

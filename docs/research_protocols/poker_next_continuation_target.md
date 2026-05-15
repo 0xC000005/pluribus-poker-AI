@@ -446,6 +446,16 @@ targets on reachable preflop/flop states. Do not patch this with a manual
 no-all-in rule; the goal is to make the learned policy/search interface assign
 reasonable probability mass before live Slumbot spend.
 
+The first local version of that gate is already informative: the existing
+policy-calibration target sampler now emits `per_street_target_diagnostics`.
+It flags `iter900` as pathological before API play (`58.09%` preflop top-action
+all-in), consistent with the later `836/999` live all-in mix. It also flags the
+incumbent `iter1000` as still too aggressive (`17.33%` preflop and `30.80%`
+flop top-action all-in). The next research task should turn this diagnostic
+into a falsifiable candidate gate: train or select a checkpoint whose
+early-street top-action all-in and mean all-in probability fall materially while
+preserving duplicate-swapped H2H and fixed-state resolver behavior.
+
 Related work supports this boundary choice. Kim's 2024 GPU-CFR paper frames
 CFR as dense/sparse matrix and vector operations and reports speedups that grow
 with game size (`https://arxiv.org/abs/2408.14778`). DeepStack shows the other
