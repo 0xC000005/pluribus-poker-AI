@@ -4778,3 +4778,25 @@
 - Decision: Initial sampled-traversal prototypes should use at least four
   sampled traverser actions per infoset and keep reporting one/two-action
   diagnostics as variance warnings, not as accepted integration budgets.
+
+## 20260515T104000Z-stronger-baseline-sampling-budget-check - partial
+
+- Timestamp: 2026-05-15T10:40:00Z
+- Type: control_variate_capacity_check
+- Gate: stronger restricted-value baseline against hard sampled-regret seed
+- Hypothesis: A broader learned control-variate baseline might rescue the
+  one- and two-action sampled-regret budgets that failed under the XL baseline.
+- Failure class: action_order_variance
+- Summary: Trained a broader 4-layer 512-hidden restricted-value baseline on
+  `8192` train roots and `2048` holdout roots with CUDA optimization. Holdout
+  correlation improved, and bias dropped slightly on the hard seed, but the
+  one-action and two-action averaged top-match thresholds still failed.
+  Four- and eight-action budgets passed. This suggests the cheap 1/2-action
+  path is variance-limited under skewed Dirichlet/regret-like strategies, not
+  merely blocked by the current baseline capacity.
+- Commands: `uv run python scripts/train_restricted_value_probe.py --train-roots 8192 --holdout-roots 2048 --n-equity-samples 512 --hidden-dim 512 --n-layers 4 --epochs 240 --batch-size 512 --device cuda --seed 20260524 --output-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 1,2,4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260516 --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xxl_gate_seed20260516_20260515.json`; `uv run python scripts/eval_sampled_action_full_deck_estimator.py --n-roots 256 --n-repeats 500 --n-equity-samples 128 --samples-per-estimate 4,8 --baseline-checkpoint autoresearch-session/restricted_value_baseline_xxl_seed20260524.pt --max-mean-abs-bias 3.0 --min-mean-estimate-top-match 0.95 --seed 20260516 --output-json autoresearch-session/sampled_action_full_deck_estimator_learned_xxl_gate_seed20260516_4_8_20260515.json`
+- Key metrics: `{"xxl_holdout_corr": 0.947004, "xxl_holdout_top_match": 0.931641, "sample1_mean_top_match": 0.914062, "sample2_mean_top_match": 0.949219, "sample4_mean_top_match": 0.964844, "sample8_mean_top_match": 0.96875, "promotion": false}`
+- Decision: Do not spend more cycles trying to make one-sample traversal work
+  with this restricted baseline. The next prototype should start at four
+  sampled traverser actions and measure whether the reduced branch factor
+  actually improves traversal throughput without failing regret quality gates.

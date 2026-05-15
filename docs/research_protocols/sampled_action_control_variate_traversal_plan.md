@@ -18,7 +18,7 @@ or Slumbot-specific patch.
 - Use a learned/search-derived baseline for action-value control variates.
 - Start with at least four sampled traverser actions per infoset; one- and
   two-action estimates failed the first different-seed Dirichlet robustness
-  gate even with the XL baseline.
+  gate even with stronger restricted-value baselines.
 - Write stochastic regret samples to replay; do not use sampled estimates as
   direct one-shot action decisions.
 
