@@ -31,4 +31,6 @@ dependencies = [
     "pygame>=2.6.1",
     "numba>=0.65.1",
     "numba-cuda[cu13]>=0.30.2",
+    "jax[cuda13]>=0.10.1",
+    "open-spiel>=1.6.15",
 ]

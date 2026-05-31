@@ -251,9 +251,12 @@ def apply_action_kernel(
     if stage[i] >= SHOWDOWN:
         return  # Game already finished.
 
+    action = actions[i]
+    if action < 0:
+        return
+
     pi = _current_player(player_i_index[i], stage[i], n_players,
                          preflop_order, postflop_order)
-    action = actions[i]
 
     if action == 0:  # Fold.
         active[i, pi] = 0
@@ -314,6 +317,105 @@ def apply_action_kernel(
     n_actions[i] += 1
 
     # Advance.
+    g = _advance(
+        (stage[i], n_raises[i], player_i_index[i], n_actions[i],
+         pot_total[i], deck_cursor[i], n_players_started_round[i]),
+        chips[i], bets[i], active[i], community[i], deck[i], history[i],
+        n_players, preflop_order, postflop_order,
+    )
+    stage[i] = int8(g[0])
+    n_raises[i] = int8(g[1])
+    player_i_index[i] = int8(g[2])
+    n_actions[i] = int16(g[3])
+    pot_total[i] = int32(g[4])
+    deck_cursor[i] = int32(g[5])
+    n_players_started_round[i] = int8(g[6])
+
+
+@cuda.jit
+def apply_action_mapped_kernel(
+    # Game state arrays (from GameBatch).
+    chips, bets, active, hole_cards, community, deck,
+    deck_cursor, stage, n_raises, player_i_index,
+    n_actions, pot_total, history, n_players_started_round,
+    # Inputs.
+    actions,  # (max_pool,) int8: per-slot actions.
+    frontier_indices,  # (N,) int32: stable slot ids to process.
+    n_frontier, n_players,
+    preflop_order, postflop_order,
+    raise_fractions,  # (6,) float32 device array
+):
+    """Apply actions to a compact frontier without moving tree slots."""
+    gid = cuda.grid(1)
+    if gid >= n_frontier:
+        return
+    i = frontier_indices[gid]
+    if stage[i] >= SHOWDOWN:
+        return
+
+    action = actions[i]
+    if action < 0:
+        return
+
+    pi = _current_player(player_i_index[i], stage[i], n_players,
+                         preflop_order, postflop_order)
+
+    if action == 0:  # Fold.
+        active[i, pi] = 0
+    elif action == 1:  # Call.
+        if chips[i, pi] > 0:
+            biggest = int32(0)
+            for p in range(n_players):
+                if bets[i, p] > biggest:
+                    biggest = bets[i, p]
+            to_call = biggest - bets[i, pi]
+            if to_call > chips[i, pi]:
+                to_call = chips[i, pi]
+            chips[i, pi] -= to_call
+            bets[i, pi] += to_call
+            pot_total[i] += to_call
+    elif action >= 2 and action <= 7:  # Fractional raise.
+        frac = raise_fractions[action - 2]
+        biggest = int32(0)
+        for p in range(n_players):
+            if bets[i, p] > biggest:
+                biggest = bets[i, p]
+        to_call = biggest - bets[i, pi]
+        raise_chips = int32(frac * float32(pot_total[i])) + to_call
+        if to_call > 0:
+            min_raise_by = to_call
+            if min_raise_by < BIG_BLIND:
+                min_raise_by = int32(BIG_BLIND)
+            min_raise = to_call + min_raise_by
+        else:
+            min_raise = int32(BIG_BLIND)
+        if raise_chips < min_raise:
+            raise_chips = min_raise
+        if raise_chips > chips[i, pi]:
+            raise_chips = chips[i, pi]
+        chips[i, pi] -= raise_chips
+        bets[i, pi] += raise_chips
+        pot_total[i] += raise_chips
+        n_raises[i] += 1
+    elif action == 8:  # All-in.
+        all_in = chips[i, pi]
+        chips[i, pi] = int32(0)
+        bets[i, pi] += all_in
+        pot_total[i] += all_in
+        n_raises[i] += 1
+
+    rd = stage[i]
+    if rd > 3:
+        rd = 3
+    if action == 1:
+        history[i, rd, 0] += 1
+    elif action >= 2:
+        history[i, rd, 1] += 1
+    elif action == 0:
+        history[i, rd, 2] += 1
+
+    n_actions[i] += 1
+
     g = _advance(
         (stage[i], n_raises[i], player_i_index[i], n_actions[i],
          pot_total[i], deck_cursor[i], n_players_started_round[i]),
@@ -545,6 +647,70 @@ def get_features_kernel(
         out_features[i, offset + 2] = float32(history[i, r, 2]) / np_denom
 
 
+@cuda.jit
+def get_features_mapped_kernel(
+    chips, bets, active, hole_cards, community,
+    stage, n_raises, player_i_index, pot_total, history,
+    n_players, preflop_order, postflop_order,
+    frontier_indices,  # (N,) int32: stable source slot ids.
+    out_features,  # (N, 126) float32: compact output rows.
+    n_frontier, initial_chips,
+):
+    """Compute compact feature rows from stable frontier slot ids."""
+    row = cuda.grid(1)
+    if row >= n_frontier:
+        return
+    i = frontier_indices[row]
+
+    pi = _current_player(player_i_index[i], stage[i], n_players,
+                         preflop_order, postflop_order)
+
+    for f in range(N_FEATURES):
+        out_features[row, f] = 0.0
+
+    for c in range(2):
+        card = hole_cards[i, pi, c]
+        if card >= 0:
+            out_features[row, card] = 1.0
+
+    for c in range(5):
+        card = community[i, c]
+        if card >= 0:
+            out_features[row, 52 + card] = 1.0
+
+    round_idx = stage[i]
+    if round_idx > 3:
+        round_idx = 3
+    if stage[i] < 4:
+        out_features[row, 104 + round_idx] = 1.0
+
+    total_chips = float32(initial_chips * n_players)
+    out_features[row, 108] = float32(pot_total[i]) / total_chips
+    out_features[row, 109] = float32(chips[i, pi]) / float32(initial_chips)
+    out_features[row, 110] = float32(bets[i, pi]) / float32(initial_chips)
+
+    active_count = float32(0)
+    for p in range(n_players):
+        if active[i, p]:
+            active_count += 1.0
+    out_features[row, 111] = active_count / float32(n_players)
+
+    denom = float32(n_players - 1)
+    if denom < 1.0:
+        denom = 1.0
+    out_features[row, 112] = float32(pi) / denom
+    out_features[row, 113] = float32(n_raises[i]) / 3.0
+
+    for r in range(4):
+        offset = 114 + r * 3
+        np_denom = float32(n_players)
+        if np_denom < 1.0:
+            np_denom = 1.0
+        out_features[row, offset] = float32(history[i, r, 0]) / np_denom
+        out_features[row, offset + 1] = float32(history[i, r, 1]) / 3.0
+        out_features[row, offset + 2] = float32(history[i, r, 2]) / np_denom
+
+
 # ---------------------------------------------------------------------------
 # Kernel: get legal masks
 # ---------------------------------------------------------------------------
@@ -597,3 +763,53 @@ def get_legal_mask_kernel(
             # All-in (action 8).
             if player_chips > 0:
                 out_masks[i, 8] = float32(1.0)
+
+
+@cuda.jit
+def get_legal_mask_mapped_kernel(
+    active, chips, bets, n_raises, stage, pot_total,
+    player_i_index, n_players,
+    preflop_order, postflop_order,
+    raise_fractions,  # (6,) float32 device array
+    frontier_indices,  # (N,) int32: stable source slot ids.
+    out_masks,  # (N, 9) float32: compact output rows.
+    n_frontier,
+):
+    """Compute compact legal-mask rows from stable frontier slot ids."""
+    row = cuda.grid(1)
+    if row >= n_frontier:
+        return
+    i = frontier_indices[row]
+
+    for a in range(N_ACTIONS):
+        out_masks[row, a] = float32(0.0)
+
+    if stage[i] >= SHOWDOWN:
+        return
+
+    pi = _current_player(player_i_index[i], stage[i], n_players,
+                         preflop_order, postflop_order)
+
+    if active[i, pi] and chips[i, pi] > 0:
+        out_masks[row, 0] = float32(1.0)
+        out_masks[row, 1] = float32(1.0)
+        if n_raises[i] < 3:
+            biggest = int32(0)
+            for p in range(n_players):
+                if bets[i, p] > biggest:
+                    biggest = bets[i, p]
+            to_call = biggest - bets[i, pi]
+            player_chips = chips[i, pi]
+            if to_call > 0:
+                min_raise_by = to_call
+                if min_raise_by < BIG_BLIND:
+                    min_raise_by = int32(BIG_BLIND)
+                min_raise = to_call + min_raise_by
+            else:
+                min_raise = int32(BIG_BLIND)
+            for fi in range(6):
+                raise_amount = int32(raise_fractions[fi] * float32(pot_total[i])) + to_call
+                if raise_amount >= min_raise and raise_amount <= player_chips:
+                    out_masks[row, 2 + fi] = float32(1.0)
+            if player_chips > 0:
+                out_masks[row, 8] = float32(1.0)

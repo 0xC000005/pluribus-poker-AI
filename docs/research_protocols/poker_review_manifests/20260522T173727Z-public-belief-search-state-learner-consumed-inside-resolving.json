@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1683,
+      "path": "benchmark_audit.md",
+      "sha256": "dd734b2a6344018b75437c7e191110a571a788f78fabb13312e81d0c70b1df4e"
+    },
+    {
+      "bytes": 960,
+      "path": "decision.json",
+      "sha256": "76db689219bd017f131e4fa1cb86ae20de3fcbe0af2b1410cb4c9eeca96025ea"
+    },
+    {
+      "bytes": 1928,
+      "path": "mechanism_review.md",
+      "sha256": "bf81afa1b8b32ebb00a3606bbef09d67170aea2354106c91ea73e0274652d408"
+    },
+    {
+      "bytes": 2283,
+      "path": "related_work.md",
+      "sha256": "494fb8f310b2f69bc9c3f121a4ec886863ac3c4d14df912bb13dc00335d06f13"
+    },
+    {
+      "bytes": 1568,
+      "path": "review.md",
+      "sha256": "898ce53e31ca4aea170a8bfe41f1df3ab6c8c99f36a4001f94101abe41cdbc5d"
+    },
+    {
+      "bytes": 1233,
+      "path": "review_scope.json",
+      "sha256": "73367188cc3b93ddf087c7857ce9d0dc4ca4326911b7a494b0362dfcdaca886d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with a bounded public-belief/search-state learner review path, not immediate Slumbot or PPO scaling. The mechanism is aligned with Student-of-Games/ReBeL public-belief search, and local failures show that detached value/policy targets and per-root segmented backend work are insufficient. The first executable step must be a root-disjoint decision-impact gate against exact CUDA budget baselines.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T173727Z-public-belief-search-state-learner-consumed-inside-resolving",
+  "review_id": "20260522T173727Z-public-belief-search-state-learner-consumed-inside-resolving",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_torch_levelsync_cuda_100_125_vs150_holdout16_start192_seed20260522.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_segmented_cuda_100_125_vs150_holdout16_start192_seed20260522.json"
+  ],
+  "written_at": "2026-05-22T17:39:17Z"
+}

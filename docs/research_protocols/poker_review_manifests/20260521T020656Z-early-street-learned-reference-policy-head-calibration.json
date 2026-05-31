@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1310,
+      "path": "benchmark_audit.md",
+      "sha256": "126ab7aacc7e3cdccc99118a1c9fe5f0b6336f06d27fc54c8959722a7109c51d"
+    },
+    {
+      "bytes": 444,
+      "path": "decision.json",
+      "sha256": "187ab75cb4de94deb3c26fa33ea9d7b069d9a5ba463f98ac7e93b7c6b8a07b32"
+    },
+    {
+      "bytes": 1499,
+      "path": "mechanism_review.md",
+      "sha256": "2327dabe4286e0be384056215794ec266f3c2ea9d5577f43cb54eefb21c420e0"
+    },
+    {
+      "bytes": 2294,
+      "path": "related_work.md",
+      "sha256": "a6707170fb419d095a6e9214bf893e950ca3a3707c8341b7a47414feb366984f"
+    },
+    {
+      "bytes": 2100,
+      "path": "review.md",
+      "sha256": "79573449c3198f89af85bb8452af7c6e7531cd0c64841b7885d47f8dd8b7a80c"
+    },
+    {
+      "bytes": 1223,
+      "path": "review_scope.json",
+      "sha256": "5374b6f484eb717009600217a26e497217bb5fd6176b4ace637d6293e13d4915"
+    },
+    {
+      "bytes": 683,
+      "path": "team_review.md",
+      "sha256": "a64ae18146c19423e128fc342e3d026ef5b13df2c04ef23a203ddd619774ca72"
+    }
+  ],
+  "reason": "The next bounded test is learned policy-head calibration, not a manual action rule. It directly targets the locally observed early-street distribution drift and has a clear fixed-state failure gate.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T020656Z-early-street-learned-reference-policy-head-calibration",
+  "review_id": "20260521T020656Z-early-street-learned-reference-policy-head-calibration",
+  "sources": [
+    "https://arxiv.org/abs/1511.06295",
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-21T02:10:51Z"
+}

@@ -1,0 +1,23 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 482,
+      "path": "decision.json",
+      "sha256": "da621b57bb27f728350340fc97208199bf580c1c9628e9616be0e533ea1298ef"
+    },
+    {
+      "bytes": 1649,
+      "path": "synthesis.md",
+      "sha256": "889dcea482cc676e76c6888be5ef49535d961fd0387e027dfbe17d759f42f553"
+    }
+  ],
+  "reason": "The current learned-hook family is falsified at smoke scale; continue only through a paradigm pivot review, not another residual or field-prediction tune.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T181325Z-learned-hook-family-after-bounded-residual-failure-synthesis",
+  "review_id": "20260525T181325Z-learned-hook-family-after-bounded-residual-failure-synthesis",
+  "sources": [
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_iteration_warm_start_hook_eval_holdout4_seed20260525.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/bounded_residual_hook_eval_holdout4_seed20260525.json"
+  ],
+  "written_at": "2026-05-25T18:15:12Z"
+}

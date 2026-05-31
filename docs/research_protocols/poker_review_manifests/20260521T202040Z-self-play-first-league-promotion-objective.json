@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1947,
+      "path": "benchmark_audit.md",
+      "sha256": "6f38969e88406877e27ac88338331f239e8e28faaba43b30fd2affb795414f58"
+    },
+    {
+      "bytes": 433,
+      "path": "decision.json",
+      "sha256": "7a60131ea0e953bff7e5ae0d1bc345ece6dd4e7366f2b0d8413e229e18d0921c"
+    },
+    {
+      "bytes": 2008,
+      "path": "mechanism_review.md",
+      "sha256": "5603b50ba7ec50364053efdd0079afc20f222e2e7a534a3b04bf604935d3eb28"
+    },
+    {
+      "bytes": 2660,
+      "path": "related_work.md",
+      "sha256": "9e93ce3a184f11315ea0c1a810831322a840c0e3d7635bd192e10539b82b8f7c"
+    },
+    {
+      "bytes": 2258,
+      "path": "review.md",
+      "sha256": "e77493eacd39a502eb2d1b980830151172e04004d8be946b3a6a66d436a7c198"
+    },
+    {
+      "bytes": 3461,
+      "path": "review_scope.json",
+      "sha256": "fe667f4dd7855941c709c5c0feda2d94c7481eb5892356d7b09f810bf4378812"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The objective change reduces Slumbot benchmark-hacking risk by making duplicate-swapped self-play checkpoint-league progress the primary promotion gate before held-out Slumbot validation.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T202040Z-self-play-first-league-promotion-objective",
+  "review_id": "20260521T202040Z-self-play-first-league-promotion-objective",
+  "sources": [
+    "https://arxiv.org/abs/1712.01815",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-22T15:08:11Z"
+}

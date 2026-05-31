@@ -10,6 +10,7 @@ import argparse
 import json
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,11 @@ N_ACTIONS = 9
 RAISE_FRACTIONS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
+from poker_ai.research.solver_budget_policy import (
+    load_selective_policy,
+    score_selective_policy,
+    solver_native_vector,
+)
 from solver import resolve_solver_backend, solve_street, solver_action_to_slumbot
 from range_tracker import (
     RangeTracker,
@@ -565,6 +571,46 @@ def network_strategy(value_net, features, legal_mask, device, strategy_source="r
     return advantages, regret_match(advantages, legal_mask)
 
 
+def _solver_strategy_array(strategy):
+    if isinstance(strategy, dict):
+        return np.asarray([float(strategy.get(idx, 0.0)) for idx in range(N_ACTIONS)], dtype=np.float64)
+    arr = np.asarray(strategy, dtype=np.float64).reshape(-1)
+    if arr.shape[0] == N_ACTIONS:
+        return arr
+    padded = np.zeros((N_ACTIONS,), dtype=np.float64)
+    padded[: min(arr.shape[0], N_ACTIONS)] = arr[:N_ACTIONS]
+    return padded
+
+
+def _selective_budget_decision(policy, *, strategy, solver_action):
+    if policy is None:
+        raise ValueError("selective-fast-live requires --solver-budget-policy")
+    feature_dim = int(policy.get("feature_dim", N_ACTIONS + 8))
+    width = feature_dim - 8
+    if width <= 0:
+        raise ValueError(f"Invalid selective budget feature_dim: {feature_dim}")
+    strategy_arr = _solver_strategy_array(strategy)
+    feature = solver_native_vector(strategy_arr, action=int(solver_action), width=width)
+    score = score_selective_policy(policy, feature)
+    threshold = float(policy["score_threshold"])
+    return bool(score >= threshold), float(score), threshold
+
+
+def _suppress_solver_allin_action(solver_action, strategy, *, no_allin=False):
+    if not no_allin or int(solver_action) != N_ACTIONS - 1:
+        return int(solver_action)
+    if not isinstance(strategy, dict):
+        strategy = {idx: float(prob) for idx, prob in enumerate(np.asarray(strategy).reshape(-1))}
+    candidates = [
+        (float(prob), int(action))
+        for action, prob in strategy.items()
+        if int(action) != N_ACTIONS - 1
+    ]
+    if not candidates:
+        return int(solver_action)
+    return max(candidates, key=lambda item: (item[0], -item[1]))[1]
+
+
 # ---------------------------------------------------------------------------
 # Slumbot API
 # ---------------------------------------------------------------------------
@@ -614,6 +660,63 @@ ACTION_NAMES = [
 STREET_NAMES = ["preflop", "flop", "turn", "river"]
 
 
+@dataclass(frozen=True)
+class SlumbotModelChoice:
+    """One checkpoint selected for a Slumbot hand."""
+
+    value_net: torch.nn.Module
+    metadata: dict
+    mixture_index: int | None = None
+    mixture_weight: float | None = None
+    mixture_size: int = 1
+
+    @property
+    def trace_context(self):
+        context = {
+            "checkpoint": self.metadata.get("checkpoint"),
+            "checkpoint_iteration": self.metadata.get("checkpoint_iteration"),
+        }
+        if self.mixture_index is not None:
+            context.update(
+                {
+                    "mixture_index": int(self.mixture_index),
+                    "mixture_weight": float(self.mixture_weight or 0.0),
+                    "mixture_size": int(self.mixture_size),
+                }
+            )
+        return context
+
+
+class PerHandCheckpointSelector:
+    """Sample one checkpoint per hand and keep it fixed for that hand."""
+
+    def __init__(self, choices, *, weights=None, seed=20260521):
+        if not choices:
+            raise ValueError("at least one checkpoint choice is required")
+        self.choices = tuple(choices)
+        raw_weights = (
+            np.ones(len(self.choices), dtype=np.float64)
+            if weights is None
+            else np.asarray(weights, dtype=np.float64)
+        )
+        if raw_weights.shape != (len(self.choices),):
+            raise ValueError("weights must match checkpoint choices")
+        total = float(raw_weights.sum())
+        if total <= 0.0:
+            raise ValueError("checkpoint mixture weights must have positive mass")
+        self.weights = raw_weights / total
+        self.rng = np.random.default_rng(seed)
+
+    @property
+    def size(self):
+        return len(self.choices)
+
+    def select_for_hand(self, hand_index=None):
+        del hand_index
+        idx = int(self.rng.choice(len(self.choices), p=self.weights))
+        return self.choices[idx]
+
+
 class ActionDiagnostics:
     """Track cheap live-play diagnostics for Slumbot distribution shift."""
 
@@ -644,14 +747,17 @@ class ActionDiagnostics:
         self._current_hand_index = None
         self._current_client_pos = None
         self._current_hole_cards = []
+        self._current_model_context = {}
         self._current_terminal_board = []
         self._current_bot_hole_cards = []
 
-    def begin_hand(self, hand_index=None, client_pos=None, hole_cards=None):
+    def begin_hand(self, hand_index=None, client_pos=None, hole_cards=None,
+                   model_context=None):
         self._current_first_policy_action = None
         self._current_hand_index = hand_index
         self._current_client_pos = client_pos
         self._current_hole_cards = list(hole_cards or [])
+        self._current_model_context = dict(model_context or {})
         self._current_terminal_board = []
         self._current_bot_hole_cards = []
 
@@ -681,6 +787,7 @@ class ActionDiagnostics:
             "hand_index": self._current_hand_index,
             "client_pos": self._current_client_pos,
             "hole_cards": self._current_hole_cards,
+            **self._current_model_context,
             **record,
         }
         with self.trace_path.open("a", encoding="utf-8") as handle:
@@ -776,7 +883,9 @@ class ActionDiagnostics:
     def record_solver_action(self, incr, *, latency_ms=None, n_hands=None,
                              full_n_hands=None, cached=False, street=None,
                              board=None, action_str=None, solver_action_idx=None,
-                             strategy=None, full_action_str=None):
+                             strategy=None, full_action_str=None,
+                             solver_budget_profile=None, budget_score=None,
+                             budget_threshold=None, budget_escalated=None):
         self.decision_solver += 1
         self.action_mix["solver"] += 1
         street_name = self._street_name(street)
@@ -809,6 +918,14 @@ class ActionDiagnostics:
             "solver_latency_ms": float(latency_ms) if latency_ms is not None else None,
             "solver_n_hands": int(n_hands) if n_hands is not None else None,
             "solver_full_n_hands": int(full_n_hands) if full_n_hands is not None else None,
+            "solver_budget_profile": solver_budget_profile,
+            "solver_budget_score": float(budget_score) if budget_score is not None else None,
+            "solver_budget_threshold": (
+                float(budget_threshold) if budget_threshold is not None else None
+            ),
+            "solver_budget_escalated": (
+                bool(budget_escalated) if budget_escalated is not None else None
+            ),
         })
 
     def record_fallback(self, incr):
@@ -989,7 +1106,8 @@ def _base_policy_action(hole_cards, board, action_str, client_pos, parsed,
 
 def _solver_action(hole_cards, board, action_str, client_pos, parsed,
                     verbose, tracker=None, diagnostics=None,
-                    solver_backend='auto', solver_budget_profile='live'):
+                    solver_backend='auto', solver_budget_profile='live',
+                    solver_budget_policy=None, no_allin=False):
     """Select action using real-time CFR+ solver (turn or river)."""
     import itertools
 
@@ -1028,6 +1146,11 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         int(pot), int(hero_stack), int(villain_stack),
         bool(hero_first),
         solver_budget_profile,
+        (
+            solver_budget_policy.get("score_threshold")
+            if isinstance(solver_budget_policy, dict)
+            else None
+        ),
     )
 
     incr_cached = _SOLVER_CACHE.get(cache_key)
@@ -1052,8 +1175,10 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
     current_street = streets[-1] if streets else ''
     our_street_bet = _get_our_street_bet(current_street, client_pos, parsed['st'])
     to_call = parsed['street_last_bet_to'] - our_street_bet
+    selective_budget = solver_budget_profile == "selective-fast-live"
+    initial_profile = "fast-live" if selective_budget else solver_budget_profile
     iters = _solver_iterations_for_profile(
-        solver_budget_profile,
+        initial_profile,
         to_call=to_call,
         pot=pot,
         hero_stack=hero_stack,
@@ -1070,8 +1195,44 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         range_prune_threshold=1e-4,
     )
     solve_latency_ms = (time.perf_counter() - solve_started) * 1000.0
+    budget_score = None
+    budget_threshold = None
+    budget_escalated = False
+    selected_budget_profile = initial_profile
+
+    if selective_budget and node is not None and not node.is_terminal:
+        budget_escalated, budget_score, budget_threshold = _selective_budget_decision(
+            solver_budget_policy,
+            strategy=strategy,
+            solver_action=solver_action,
+        )
+        if budget_escalated:
+            live_iters = _solver_iterations_for_profile(
+                "live",
+                to_call=to_call,
+                pot=pot,
+                hero_stack=hero_stack,
+                villain_stack=villain_stack,
+            )
+            if int(live_iters) != int(iters):
+                live_started = time.perf_counter()
+                solver_action, strategy, solver, node = solve_street(
+                    our_cards_idx, board_idx, pot, hero_stack, villain_stack, hero_first,
+                    action_str=street_str, n_iterations=live_iters,
+                    hero_range=hero_range,
+                    villain_range=villain_range,
+                    backend=solver_backend,
+                    range_prune_threshold=1e-4,
+                )
+                solve_latency_ms += (time.perf_counter() - live_started) * 1000.0
+            selected_budget_profile = "live"
 
     # Convert solver action to Slumbot format.
+    solver_action = _suppress_solver_allin_action(
+        solver_action,
+        strategy,
+        no_allin=no_allin,
+    )
     if node is None or node.is_terminal:
         incr = 'k' if parsed['last_bet_size'] == 0 else 'c'
     else:
@@ -1085,6 +1246,14 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
         backend_label = backend_device or backend_name
         if solver_budget_profile != "live":
             backend_label = f"{backend_label}:{solver_budget_profile}"
+        if selective_budget:
+            if budget_score is None or budget_threshold is None:
+                backend_label = f"{backend_label}:{selected_budget_profile}"
+            else:
+                backend_label = (
+                    f"{backend_label}:{selected_budget_profile}:"
+                    f"{budget_score:.3f}/{budget_threshold:.3f}"
+                )
         print(f" [{label}:{backend_label}:{SOLVER_ACTION_NAMES[solver_action]}>{incr} ({strat_str})]",
               end="", flush=True)
 
@@ -1102,6 +1271,10 @@ def _solver_action(hole_cards, board, action_str, client_pos, parsed,
             full_action_str=action_str,
             solver_action_idx=solver_action,
             strategy=strategy,
+            solver_budget_profile=solver_budget_profile,
+            budget_score=budget_score,
+            budget_threshold=budget_threshold,
+            budget_escalated=budget_escalated,
         )
     return incr
 
@@ -1110,6 +1283,11 @@ def _solver_iterations_for_profile(profile, *, to_call, pot, hero_stack, villain
     """Return the live resolver CFR+ iteration budget for an opt-in profile."""
     if profile == "live":
         iters = 150
+        deep_stack_floor = 250
+        medium_pressure_iters = 250
+        high_pressure_iters = 350
+    elif profile == "frontier-live":
+        iters = 125
         deep_stack_floor = 250
         medium_pressure_iters = 250
         high_pressure_iters = 350
@@ -1136,7 +1314,8 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
               no_allin=False, use_solver=True, diagnostics=None,
               strategy_source="regret", solver_backend='auto',
               solver_budget_profile='live', hand_index=None,
-              api_timeout_seconds=API_TIMEOUT_SECONDS):
+              api_timeout_seconds=API_TIMEOUT_SECONDS, model_context=None,
+              solver_budget_policy=None):
     """Play one hand against Slumbot. Returns (token, winnings)."""
     r = api_new_hand(token, timeout_seconds=api_timeout_seconds)
     token = r.get('token', token)
@@ -1148,6 +1327,7 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
             hand_index=hand_index,
             client_pos=client_pos,
             hole_cards=hole_cards,
+            model_context=model_context,
         )
 
     if verbose:
@@ -1197,6 +1377,8 @@ def play_hand(value_net, token, device, verbose=False, greedy=False,
                 tracker=tracker, diagnostics=diagnostics,
                 solver_backend=solver_backend,
                 solver_budget_profile=solver_budget_profile,
+                solver_budget_policy=solver_budget_policy,
+                no_allin=no_allin,
             )
         else:
             # ----- Preflop/Flop: use base policy (trained model) -----
@@ -1249,9 +1431,81 @@ def _remap_legacy_state_dict(state: dict) -> dict:
     return remapped
 
 
+def _load_single_model_choice(path, device, *, strategy_source):
+    """Load one checkpoint through the shared evaluation loader."""
+    from poker_ai.research.evaluation import (
+        assert_strategy_source_supported,
+        load_value_network_checkpoint,
+    )
+
+    loaded = load_value_network_checkpoint(path, device)
+    assert_strategy_source_supported(loaded, strategy_source)
+    loaded.value_net.eval()
+    return SlumbotModelChoice(value_net=loaded.value_net, metadata=loaded.metadata)
+
+
+def _load_model_selector(args, device):
+    """Build a per-hand model selector for either single-checkpoint or SD-CFR mixture play."""
+    patterns = [*args.model_glob, *args.model_checkpoint]
+    if patterns:
+        from poker_ai.research.sd_cfr_mixture import (
+            discover_checkpoint_paths,
+            load_checkpoint_policy_set,
+        )
+
+        paths = discover_checkpoint_paths(patterns)
+        policy_set = load_checkpoint_policy_set(
+            paths,
+            device,
+            strategy_source=args.strategy_source,
+        )
+        choices = [
+            SlumbotModelChoice(
+                value_net=loaded.value_net,
+                metadata=loaded.metadata,
+                mixture_index=index,
+                mixture_weight=float(policy_set.weights[index]),
+                mixture_size=policy_set.size,
+            )
+            for index, loaded in enumerate(policy_set.checkpoints)
+        ]
+        return PerHandCheckpointSelector(
+            choices,
+            weights=policy_set.weights,
+            seed=args.mixture_seed,
+        )
+
+    if not args.model:
+        raise ValueError("either --model or --model-glob/--model-checkpoint is required")
+    choice = _load_single_model_choice(
+        args.model,
+        device,
+        strategy_source=args.strategy_source,
+    )
+    return PerHandCheckpointSelector([choice], weights=[1.0], seed=args.mixture_seed)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Play against Slumbot')
-    parser.add_argument('--model', type=str, required=True, help='Model checkpoint path')
+    parser.add_argument('--model', type=str, help='Model checkpoint path')
+    parser.add_argument(
+        '--model-glob',
+        action='append',
+        default=[],
+        help='Opt-in SD-CFR mixture checkpoint glob. Samples one matched checkpoint per hand.',
+    )
+    parser.add_argument(
+        '--model-checkpoint',
+        action='append',
+        default=[],
+        help='Opt-in explicit SD-CFR mixture checkpoint path. Repeat for multiple checkpoints.',
+    )
+    parser.add_argument(
+        '--mixture-seed',
+        type=int,
+        default=20260521,
+        help='Seed for per-hand SD-CFR checkpoint mixture sampling.',
+    )
     parser.add_argument('--hands', type=int, default=200, help='Number of hands to play')
     parser.add_argument('--verbose', action='store_true', help='Print each hand')
     parser.add_argument('--greedy', action='store_true', help='Deterministic (argmax) action selection')
@@ -1266,15 +1520,22 @@ def main():
             'torch-cpu',
             'torch-levelsync-cuda',
             'torch-levelsync-cpu',
+            'segmented-cuda',
+            'segmented-cpu',
         ),
         default='auto',
-        help='Turn/river CFR+ backend. auto uses the stable reference CPU path.',
+        help='Turn/river CFR+ backend. auto uses CUDA when available and CPU otherwise.',
     )
     parser.add_argument(
         '--solver-budget-profile',
-        choices=('live', 'fast-live'),
+        choices=('live', 'frontier-live', 'fast-live', 'selective-fast-live'),
         default='live',
-        help='Turn/river CFR+ iteration profile. live preserves the default budget.',
+        help='Turn/river CFR+ iteration profile. selective-fast-live needs --solver-budget-policy.',
+    )
+    parser.add_argument(
+        '--solver-budget-policy',
+        type=str,
+        help='Opt-in JSON selector policy for selective-fast-live budget escalation.',
     )
     parser.add_argument(
         '--strategy-source',
@@ -1305,52 +1566,44 @@ def main():
             mode_str += f"+budget-{args.solver_budget_profile}"
     if args.strategy_source != "regret":
         mode_str += f"+{args.strategy_source}"
+    has_mixture = bool(args.model_glob or args.model_checkpoint)
+    if has_mixture:
+        mode_str += "+sd-cfr-mixture"
     print("=" * 60)
     print(f"Playing {args.hands} hands vs Slumbot ({mode_str})")
-    print(f"Model: {args.model}")
+    if has_mixture:
+        for pattern in [*args.model_glob, *args.model_checkpoint]:
+            print(f"Model pattern: {pattern}")
+    else:
+        print(f"Model: {args.model}")
     print("=" * 60)
 
-    # Load model.
+    if not args.model and not has_mixture:
+        parser.error("either --model or --model-glob/--model-checkpoint is required")
+    if args.solver_budget_profile == "selective-fast-live" and not args.solver_budget_policy:
+        parser.error("--solver-budget-profile selective-fast-live requires --solver-budget-policy")
+    solver_budget_policy = load_selective_policy(args.solver_budget_policy)
+
+    # Load model or checkpoint mixture.
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint = torch.load(args.model, map_location=device, weights_only=False)
-    hidden_dim = checkpoint.get('hidden_dim', 256)
-    n_layers = checkpoint.get('n_layers', 2)
-    uses_betting_history = bool(checkpoint.get('uses_betting_history', False))
-    value_net = ValueNetwork(
-        N_FEATURES,
-        hidden_dim,
-        N_ACTIONS,
-        n_layers=n_layers,
-        use_betting_history=uses_betting_history,
-    ).to(device)
-    state = _remap_legacy_state_dict(checkpoint['value_net'])
-    missing, unexpected = value_net.load_state_dict(state, strict=False)
-    if unexpected:
-        raise RuntimeError(f"Unexpected keys in checkpoint: {unexpected}")
-    policy_calibration = checkpoint.get('policy_calibration')
-    value_net.policy_calibration = (
-        dict(policy_calibration) if isinstance(policy_calibration, dict) else {}
-    )
-    # policy_head/seq_proj absent in legacy checkpoints; they are unused at
-    # inference time (forward() returns only adv from trunk+adv_head).
-    if checkpoint.get('average_policy_net') is not None:
-        average_policy_net = PolicyNetwork(
-            N_FEATURES,
-            hidden_dim,
-            N_ACTIONS,
-            n_layers=n_layers,
-            use_betting_history=uses_betting_history,
-        ).to(device)
-        average_policy_net.load_state_dict(checkpoint['average_policy_net'])
-        average_policy_net.eval()
-        value_net.average_policy_net = average_policy_net
-    elif args.strategy_source == "average-policy":
-        raise RuntimeError(
-            "Checkpoint does not contain average_policy_net; use --strategy-source regret "
-            "or train with average-strategy collection."
+    model_selector = _load_model_selector(args, device)
+    if model_selector.size == 1:
+        meta = model_selector.choices[0].metadata
+        print(
+            "Loaded model "
+            f"(iter {meta.get('checkpoint_iteration')}, "
+            f"hidden={meta.get('hidden_dim')}, layers={meta.get('n_layers')})"
         )
-    value_net.eval()
-    print(f"Loaded model (iter {checkpoint['iteration']}, hidden={hidden_dim}, layers={n_layers})")
+    else:
+        print(f"Loaded SD-CFR mixture with {model_selector.size} checkpoints")
+        for choice in model_selector.choices:
+            print(
+                "  "
+                f"idx={choice.mixture_index} "
+                f"iter={choice.metadata.get('checkpoint_iteration')} "
+                f"weight={choice.mixture_weight:.4f} "
+                f"path={choice.metadata.get('checkpoint')}"
+            )
     print()
 
     token = None
@@ -1362,15 +1615,18 @@ def main():
         if args.verbose:
             print(f"Hand {h+1:3d}:", end="")
 
-        token, w = play_hand(value_net, token, device, verbose=args.verbose,
+        model_choice = model_selector.select_for_hand(hand_index=h + 1)
+        token, w = play_hand(model_choice.value_net, token, device, verbose=args.verbose,
                              greedy=args.greedy, no_allin=args.no_allin,
                              use_solver=not args.no_solver,
                              diagnostics=diagnostics,
                              strategy_source=args.strategy_source,
                              solver_backend=args.solver_backend,
                              solver_budget_profile=args.solver_budget_profile,
+                             solver_budget_policy=solver_budget_policy,
                              hand_index=h + 1,
-                             api_timeout_seconds=args.api_timeout_seconds)
+                             api_timeout_seconds=args.api_timeout_seconds,
+                             model_context=model_choice.trace_context)
         diagnostics.end_hand(w)
         total_winnings += w
         results.append(w)

@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1079,
+      "path": "benchmark_audit.md",
+      "sha256": "cc59f1cd06f7aad7f9d2b9c601ac58a0aa1b2ae590b1cbcc95c391dfab9fb9af"
+    },
+    {
+      "bytes": 467,
+      "path": "decision.json",
+      "sha256": "142c62f3871db0221348dc058cdc8841d9cee482fe9b3183f9212e617a120c42"
+    },
+    {
+      "bytes": 1304,
+      "path": "mechanism_review.md",
+      "sha256": "6b4f04e2064e90b6670959e39b6d5706d88c92614a7e5df0c450238e4026f66f"
+    },
+    {
+      "bytes": 2440,
+      "path": "related_work.md",
+      "sha256": "22847ac708707c82e91c8f94dd2a12480af7b7dfba287110bb0afb63460f881f"
+    },
+    {
+      "bytes": 824,
+      "path": "review.md",
+      "sha256": "a898bc6d5f8d09c0b8e4eead8e8ceaa5b79556da47cebaecb8d00b928314809f"
+    },
+    {
+      "bytes": 2364,
+      "path": "review_scope.json",
+      "sha256": "fed28687a76fa20ba6f94a9132ea65c69f3559d0dbab1cde1b482bfef8b45474"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The change tightens workflow guardrails without weakening evaluation surfaces and is backed by unit tests plus objective-drift audit.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T154254Z-agent-goal-contract-and-mechanism-brief-guard",
+  "review_id": "20260525T154254Z-agent-goal-contract-and-mechanism-brief-guard",
+  "sources": [
+    "https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/",
+    "https://www.anthropic.com/engineering/building-effective-agents",
+    "https://arxiv.org/abs/2604.11088",
+    "https://arxiv.org/abs/2408.06292"
+  ],
+  "written_at": "2026-05-25T15:44:33Z"
+}

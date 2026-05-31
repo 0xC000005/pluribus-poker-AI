@@ -1,0 +1,62 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1364,
+      "path": "benchmark_audit.md",
+      "sha256": "c342fefe0e4cc9153e16145c628e0035dacef8e301c7871be9e10d5d5007720c"
+    },
+    {
+      "bytes": 1352,
+      "path": "decision.json",
+      "sha256": "6302d6f2b05746451e8d8affa138d6c9902b8a9a4abdb1e6385c6d6da029e833"
+    },
+    {
+      "bytes": 1130,
+      "path": "mechanism_review.md",
+      "sha256": "b55ba832a2c084caa7a5dfa97553f34bd5e68d38f7a6ab08819228ab109f1d1c"
+    },
+    {
+      "bytes": 1761,
+      "path": "related_work.md",
+      "sha256": "f364daca38fbeb6ca81cf96f19460acb0af08f60e7d39705f082ed4b2c088386"
+    },
+    {
+      "bytes": 1270,
+      "path": "review.md",
+      "sha256": "534ead78e47f544f4db5930a68d4c638abac64fd95aa41b0f9e8317775034067"
+    },
+    {
+      "bytes": 1574,
+      "path": "review_scope.json",
+      "sha256": "f68f99c2ac5da5791951c48f83d7fd490e0ad0373720e33cecc41fca4da18ed0"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only to fixed-state integration validation. The opt-in wrapper is mechanically safe and default-preserving, but strength and default promotion remain blocked.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T195734Z-selective-fast-live-opt-in-slumbot-budget-profile",
+  "review_id": "20260521T195734Z-selective-fast-live-opt-in-slumbot-budget-profile",
+  "sources": [
+    "poker_ai/research/solver_budget_policy.py",
+    "scripts/eval_solver_budget_policy_integration.py",
+    "scripts/play_slumbot.py",
+    "scripts/poker_autoresearch_slumbot.py",
+    "scripts/eval_solver_budget_selective_profile.py",
+    "test/unit/test_slumbot_diagnostics.py",
+    "test/unit/test_solver_budget_policy_integration.py",
+    "test/unit/test_solver_budget_selective_profile.py",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_solver_native_profile_l1_train128_255_holdout64_127_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_fast_live_policy_integration_fresh64_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_fast_live_policy_integration_holdout128_seed20260521.json",
+    "autoresearch-session/slumbot_traces/selective_fast_live_solver_native_smoke_20260521.jsonl",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/1603.08983",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-21T20:01:52Z"
+}

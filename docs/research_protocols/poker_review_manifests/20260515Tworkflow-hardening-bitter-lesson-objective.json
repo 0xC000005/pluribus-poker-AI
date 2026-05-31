@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 999,
+      "path": "benchmark_audit.md",
+      "sha256": "6df0d7ddfecd901f776461309442e106b1ffddc468c8f4e167296e14c6bbfe22"
+    },
+    {
+      "bytes": 393,
+      "path": "decision.json",
+      "sha256": "e7662542c6cd316268d55949576f7358c285eef1cb95a0b997520c27296ef4d1"
+    },
+    {
+      "bytes": 1349,
+      "path": "mechanism_review.md",
+      "sha256": "56cd3b3b40ef120b5cf29ecb90c18e136635251400990ada8e6c020b9daef834"
+    },
+    {
+      "bytes": 2413,
+      "path": "related_work.md",
+      "sha256": "7219dc1eeacf7b78af4dd3dccdcc5839d67b9dd64d07bc41d8d7225577757d7e"
+    },
+    {
+      "bytes": 1911,
+      "path": "review.md",
+      "sha256": "7d5c5ea6e05e73e5ea53ecaee5c2b4a5441f46c4b4e8dc82a165bab06c87c42a"
+    },
+    {
+      "bytes": 1371,
+      "path": "review_scope.json",
+      "sha256": "e5e0704065347e409cc72610e64727cba667c60f9ac179558e8e760210b01431"
+    },
+    {
+      "bytes": 539,
+      "path": "team_review.md",
+      "sha256": "1d2d3c099518cf25dce05b4e3953e7c1c6bc4d6ceecc9d6f44c3337e4fb5465a"
+    }
+  ],
+  "reason": "The batch tightens objective alignment and protected-surface governance without changing poker strategy, Slumbot adapters, or promotion thresholds.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515Tworkflow-hardening-bitter-lesson-objective",
+  "review_id": "20260515Tworkflow-hardening-bitter-lesson-objective",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1811.00164"
+  ],
+  "written_at": "2026-05-15T15:33:30Z"
+}

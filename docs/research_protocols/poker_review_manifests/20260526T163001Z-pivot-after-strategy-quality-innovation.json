@@ -1,0 +1,34 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 514,
+      "path": "decision.json",
+      "sha256": "64ea6f3cd685e7552455fbfe6a571808bf785addc19430f8ffab77e40d4e5def"
+    },
+    {
+      "bytes": 2103,
+      "path": "innovation.md",
+      "sha256": "6b1942bdc638ebf8be614d67b146ad409556913118c1571bcdab32d8ce00232b"
+    },
+    {
+      "bytes": 1393,
+      "path": "related_work.md",
+      "sha256": "13e1746ea2b7343614173bbb34514355727d493eb2e9e82683387aa90e9aebc6"
+    },
+    {
+      "bytes": 769,
+      "path": "thought_experiments.md",
+      "sha256": "28f871988b7321dd58aa6334f31d8157e25dd6d3857170134b790fc20fc7ff86"
+    }
+  ],
+  "reason": "Proceed with a bounded incumbent-continuation self-play test; it directly checks whether the local loop improves from the current best policy before adding new mechanisms or using Slumbot.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T163001Z-pivot-after-strategy-quality-innovation",
+  "review_id": "20260526T163001Z-pivot-after-strategy-quality-innovation",
+  "sources": [
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/2112.03178",
+    "autoresearch-session/poker_runs/20260526T162958Z-candidate-checkpoint-selfplay-reset-baseline-25x2k-seed20260526-iter/metrics.json"
+  ],
+  "written_at": "2026-05-26T16:46:54Z"
+}

@@ -7,6 +7,7 @@ Uses the same 9-action abstraction as training for consistency:
 """
 import itertools
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -23,11 +24,22 @@ from fast_cfr import (
     solve_cfr_levelsync_torch,
     solve_cfr_torch,
 )
+from poker_ai.research.segmented_cfr_layout import (
+    build_segmented_cfr_layout,
+    edge_tensors_from_node_action,
+    materialize_segmented_cfr_tensors,
+    scatter_edge_tensors_to_node_action,
+    segmented_cfr_iterations,
+)
 
 BIG_BLIND = 100
 # Use full training RAISE_FRACTIONS mapping for action indices 2..7.
 BET_FRACS = {2: 0.25, 3: 0.5, 4: 0.75, 5: 1.0, 6: 1.5, 7: 2.0}
 ALLIN_ACTION = 8
+_MAX_TERMINAL_MATRIX_CACHE = 2
+_TERMINAL_MATRIX_CACHE = OrderedDict()
+_TERMINAL_MATRIX_CACHE_HITS = 0
+_TERMINAL_MATRIX_CACHE_MISSES = 0
 
 _EVALUATOR = Evaluator()
 _SUIT_CHARS = ['c', 'd', 'h', 's']
@@ -38,6 +50,49 @@ for _ci in range(52):
         _RANK_CHARS[_ci // 4] + _SUIT_CHARS[_ci % 4])
 _FLUSH_LOOKUP = _EVALUATOR.table.flush_lookup
 _UNSUITED_LOOKUP = _EVALUATOR.table.unsuited_lookup
+
+
+def clear_terminal_matrix_cache():
+    """Clear cached board terminal matrices used by repeated street solves."""
+    global _TERMINAL_MATRIX_CACHE_HITS, _TERMINAL_MATRIX_CACHE_MISSES
+    _TERMINAL_MATRIX_CACHE.clear()
+    _TERMINAL_MATRIX_CACHE_HITS = 0
+    _TERMINAL_MATRIX_CACHE_MISSES = 0
+
+
+def terminal_matrix_cache_info():
+    """Return small diagnostics for terminal matrix cache behavior."""
+    return {
+        "entries": len(_TERMINAL_MATRIX_CACHE),
+        "max_entries": _MAX_TERMINAL_MATRIX_CACHE,
+        "hits": _TERMINAL_MATRIX_CACHE_HITS,
+        "misses": _TERMINAL_MATRIX_CACHE_MISSES,
+    }
+
+
+def _terminal_matrix_cache_key(board, active_indices):
+    active_key = None
+    if active_indices is not None:
+        active_key = tuple(int(i) for i in active_indices)
+    return tuple(sorted(int(card) for card in board)), active_key
+
+
+def _get_terminal_matrix_cache(key):
+    global _TERMINAL_MATRIX_CACHE_HITS, _TERMINAL_MATRIX_CACHE_MISSES
+    cached = _TERMINAL_MATRIX_CACHE.get(key)
+    if cached is None:
+        _TERMINAL_MATRIX_CACHE_MISSES += 1
+        return None
+    _TERMINAL_MATRIX_CACHE_HITS += 1
+    _TERMINAL_MATRIX_CACHE.move_to_end(key)
+    return cached
+
+
+def _store_terminal_matrix_cache(key, entry):
+    _TERMINAL_MATRIX_CACHE[key] = entry
+    _TERMINAL_MATRIX_CACHE.move_to_end(key)
+    while len(_TERMINAL_MATRIX_CACHE) > _MAX_TERMINAL_MATRIX_CACHE:
+        _TERMINAL_MATRIX_CACHE.popitem(last=False)
 
 
 def _evaluate_five_eval_cards(c0, c1, c2, c3, c4):
@@ -208,9 +263,8 @@ def _min_raise_contribution(to_call, big_blind=BIG_BLIND):
 def resolve_solver_backend(backend='auto', device=None):
     """Resolve public backend names to the concrete CFR implementation."""
     if backend == 'auto':
-        # The current torch-CUDA backend is experimental and often slower than
-        # NumPy because the CFR tree recurrence is still Python-driven. Keep
-        # auto on the measured-fast reference backend until the solver is fused.
+        if torch.cuda.is_available():
+            return 'torch-levelsync', 'cuda'
         return 'cpu', None
     if backend == 'cpu-levelsync':
         return 'cpu-levelsync', None
@@ -226,11 +280,117 @@ def resolve_solver_backend(backend='auto', device=None):
         return 'torch-levelsync', 'cuda'
     if backend == 'torch-levelsync-cpu':
         return 'torch-levelsync', 'cpu'
+    if backend == 'segmented-cuda':
+        if not torch.cuda.is_available():
+            raise RuntimeError("segmented-cuda solver backend requested but CUDA is unavailable.")
+        return 'segmented', 'cuda'
+    if backend == 'segmented-cpu':
+        return 'segmented', 'cpu'
+    if backend == 'segmented':
+        return backend, device
     if backend == 'torch-levelsync':
         return backend, device
     if backend in ('cpu', 'torch'):
         return backend, device
     raise ValueError(f"Unknown solver backend: {backend}")
+
+
+def solve_cfr_segmented_torch(
+    tree,
+    n_hands,
+    win_m,
+    lose_m,
+    tie_m,
+    valid_m,
+    pot_start,
+    hero_stack_start,
+    villain_stack_start,
+    n_iterations=100,
+    hero_range=None,
+    villain_range=None,
+    device='cpu',
+    initial_regret_sum=None,
+    initial_strategy_sum=None,
+    solver_update='cfr_plus',
+):
+    """Opt-in segmented CFR+ executor adapter for one StreetSolver tree."""
+    if solver_update != 'cfr_plus':
+        raise ValueError("segmented backend currently supports solver_update='cfr_plus' only")
+
+    n_actions = int(tree['n_actions'])
+    layout = build_segmented_cfr_layout([tree])
+    layout_tensors = materialize_segmented_cfr_tensors(layout, device=device or 'cpu')
+
+    if initial_regret_sum is None:
+        edge_regrets = [
+            torch.zeros(
+                (int(segment['parent_global'].numel()), int(n_hands)),
+                dtype=torch.float32,
+                device=torch.device(layout_tensors['device']),
+            )
+            for segment in layout_tensors['level_segments']
+        ]
+    else:
+        edge_regrets = edge_tensors_from_node_action(
+            layout_tensors,
+            initial_regret_sum,
+            n_hands=int(n_hands),
+        )
+
+    if initial_strategy_sum is None:
+        edge_strategy_sums = [
+            torch.zeros_like(edge_regret)
+            for edge_regret in edge_regrets
+        ]
+    else:
+        edge_strategy_sums = edge_tensors_from_node_action(
+            layout_tensors,
+            initial_strategy_sum,
+            n_hands=int(n_hands),
+        )
+
+    if hero_range is None:
+        hero_ranges = None
+    else:
+        hero_ranges = np.asarray(hero_range, dtype=np.float32).reshape(1, int(n_hands))
+    if villain_range is None:
+        villain_ranges = None
+    else:
+        villain_ranges = np.asarray(villain_range, dtype=np.float32).reshape(1, int(n_hands))
+
+    result = segmented_cfr_iterations(
+        layout_tensors,
+        edge_regrets,
+        edge_strategy_sums,
+        [win_m],
+        [lose_m],
+        [tie_m],
+        [valid_m],
+        pot_start=[float(pot_start)],
+        hero_stack_start=[float(hero_stack_start)],
+        villain_stack_start=[float(villain_stack_start)],
+        n_hands=int(n_hands),
+        n_iterations=int(n_iterations),
+        hero_ranges=hero_ranges,
+        villain_ranges=villain_ranges,
+    )
+    dense_regrets = scatter_edge_tensors_to_node_action(
+        layout_tensors,
+        result['edge_regret_sums'],
+        n_actions=n_actions,
+        n_hands=int(n_hands),
+    )
+    dense_strategy_sums = scatter_edge_tensors_to_node_action(
+        layout_tensors,
+        result['edge_strategy_sums'],
+        n_actions=n_actions,
+        n_hands=int(n_hands),
+    )
+    n_nodes = int(tree['n_nodes'])
+    return (
+        dense_regrets[:n_nodes].detach().cpu().numpy(),
+        dense_strategy_sums[:n_nodes].detach().cpu().numpy(),
+    )
 
 
 @dataclass
@@ -270,20 +430,30 @@ class StreetSolver:
         self.n = len(self.hands)
         self.hand_to_idx = {h: i for i, h in enumerate(self.hands)}
 
-        # Card conflict matrix.
-        ha = np.array(self.hands, dtype=np.int32)
-        c0 = ha[:, np.newaxis, :]
-        c1 = ha[np.newaxis, :, :]
-        conflict = (c0[:, :, :, np.newaxis] == c1[:, :, np.newaxis, :]).any(axis=(2, 3))
-        self.valid = (~conflict).astype(np.float32)
-
-        # Compute terminal evaluation matrices based on street.
-        if len(board) == 5:
-            self._compute_showdown_matrices(board)
-        elif len(board) == 4:
-            self._compute_equity_matrices(board)
-        else:
+        if len(board) not in (4, 5):
             raise ValueError(f"Expected 4 or 5 board cards, got {len(board)}")
+
+        matrix_cache_key = _terminal_matrix_cache_key(board, active_indices)
+        cached_matrices = _get_terminal_matrix_cache(matrix_cache_key)
+        if cached_matrices is None:
+            # Card conflict matrix.
+            ha = np.array(self.hands, dtype=np.int32)
+            c0 = ha[:, np.newaxis, :]
+            c1 = ha[np.newaxis, :, :]
+            conflict = (c0[:, :, :, np.newaxis] == c1[:, :, np.newaxis, :]).any(axis=(2, 3))
+            self.valid = (~conflict).astype(np.float32)
+
+            # Compute terminal evaluation matrices based on street.
+            if len(board) == 5:
+                self._compute_showdown_matrices(board)
+            else:
+                self._compute_equity_matrices(board)
+            _store_terminal_matrix_cache(
+                matrix_cache_key,
+                (self.valid, self.win_m, self.lose_m, self.tie_m),
+            )
+        else:
+            self.valid, self.win_m, self.lose_m, self.tie_m = cached_matrices
 
         # Build tree.
         first = 0 if hero_first else 1
@@ -439,6 +609,7 @@ class StreetSolver:
               cut_node_indices=None, cut_node_fn=None,
               initial_regret_sum=None, initial_strategy_sum=None,
               trace_node_indices=None, trace_node_fn=None,
+              iteration_update_fn=None,
               solver_update='cfr_plus'):
         hr = hero_range.astype(np.float32) if hero_range is not None else None
         vr = villain_range.astype(np.float32) if villain_range is not None else None
@@ -453,6 +624,7 @@ class StreetSolver:
                 'initial_strategy_sum': initial_strategy_sum,
                 'trace_node_indices': trace_node_indices,
                 'trace_node_fn': trace_node_fn,
+                'iteration_update_fn': iteration_update_fn,
                 'solver_update': solver_update,
             }
         elif backend == 'cpu-levelsync':
@@ -460,10 +632,11 @@ class StreetSolver:
                 showdown_leaf_fn is not None
                 or cut_node_fn is not None
                 or trace_node_fn is not None
+                or iteration_update_fn is not None
             ):
-                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
             if cut_node_indices is not None or trace_node_indices is not None:
-                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
             if solver_update != 'cfr_plus':
                 raise ValueError("cpu-levelsync currently supports solver_update='cfr_plus' only")
             solver_fn = solve_cfr_levelsync
@@ -476,8 +649,9 @@ class StreetSolver:
                 showdown_leaf_fn is not None
                 or cut_node_fn is not None
                 or trace_node_fn is not None
+                or iteration_update_fn is not None
             ):
-                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
             solver_fn = solve_cfr_torch
             kwargs = {
                 'device': device or 'cuda',
@@ -490,10 +664,11 @@ class StreetSolver:
                 showdown_leaf_fn is not None
                 or cut_node_fn is not None
                 or trace_node_fn is not None
+                or iteration_update_fn is not None
             ):
-                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
             if cut_node_indices is not None or trace_node_indices is not None:
-                raise ValueError("diagnostic leaf/cut callbacks are only supported by the CPU CFR backend")
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
             if solver_update != 'cfr_plus':
                 raise ValueError("torch-levelsync currently supports solver_update='cfr_plus' only")
             solver_fn = solve_cfr_levelsync_torch
@@ -501,6 +676,25 @@ class StreetSolver:
                 'device': device or 'cuda',
                 'initial_regret_sum': initial_regret_sum,
                 'initial_strategy_sum': initial_strategy_sum,
+            }
+        elif backend == 'segmented':
+            if (
+                showdown_leaf_fn is not None
+                or cut_node_fn is not None
+                or trace_node_fn is not None
+                or iteration_update_fn is not None
+            ):
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
+            if cut_node_indices is not None or trace_node_indices is not None:
+                raise ValueError("iteration_update_fn and other diagnostic callbacks are only supported by the CPU CFR backend")
+            if solver_update != 'cfr_plus':
+                raise ValueError("segmented currently supports solver_update='cfr_plus' only")
+            solver_fn = solve_cfr_segmented_torch
+            kwargs = {
+                'device': device or 'cpu',
+                'initial_regret_sum': initial_regret_sum,
+                'initial_strategy_sum': initial_strategy_sum,
+                'solver_update': solver_update,
             }
         else:
             raise ValueError(f"Unknown solver backend: {backend}")

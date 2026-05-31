@@ -193,6 +193,60 @@ def classify_and_sample_kernel(
 
 
 @cuda.jit
+def classify_and_sample_mapped_kernel(
+    strategies,         # (N, 9) float32 compact frontier rows
+    legal_masks,        # (N, 9) float32 compact frontier rows
+    stages,             # (max_pool,) int8
+    player_i_indices,   # (max_pool,) int8
+    frontier_indices,   # (N,) int32 stable slot ids
+    n_players,          # int32
+    traverser,          # int32
+    preflop_order,      # (n_players,) int8
+    postflop_order,     # (n_players,) int8
+    rng_states,         # xoroshiro128p states indexed by stable slot id
+    out_actions,        # (max_pool,) int8 per-slot actions
+    out_is_traverser,   # (max_pool,) int8 per-slot traverser flags
+    n_frontier,         # int32
+):
+    """Classify/sample compact frontier rows while writing stable slot outputs."""
+    row = cuda.grid(1)
+    if row >= n_frontier:
+        return
+    slot = frontier_indices[row]
+
+    out_actions[slot] = int8(-1)
+    out_is_traverser[slot] = int8(0)
+
+    if stages[slot] >= int8(4):
+        return
+
+    n_legal = float32(0.0)
+    for a in range(N_ACTIONS):
+        n_legal += legal_masks[row, a]
+    if n_legal <= float32(0.0):
+        return
+
+    pi = _current_player_ak(
+        player_i_indices[slot], stages[slot], n_players,
+        preflop_order, postflop_order,
+    )
+
+    if pi == traverser:
+        out_is_traverser[slot] = int8(1)
+        return
+
+    u = xoroshiro128p_uniform_float32(rng_states, slot)
+    cumsum = float32(0.0)
+    chosen = int8(N_ACTIONS - 1)
+    for a in range(N_ACTIONS):
+        cumsum += strategies[row, a]
+        if u < cumsum:
+            chosen = int8(a)
+            break
+    out_actions[slot] = chosen
+
+
+@cuda.jit
 def collect_policy_targets_kernel(
     features,            # (N, 126) float32
     legal_masks,         # (N, 9) float32
@@ -327,6 +381,93 @@ def fork_kernel(
     legal_i = int32(0)
     for a in range(N_ACTIONS):
         if legal_masks[gid, a] > float32(0.0):
+            child = start + legal_i
+            parent_idx[child] = int32(gid)
+            parent_action[child] = int8(a)
+            actions_out[child] = int8(a)
+            is_traverser_node[child] = int8(0)
+            n_children_done[child] = int32(0)
+            n_children_expected[child] = int32(0)
+            legal_i += 1
+
+
+@cuda.jit
+def fork_mapped_kernel(
+    is_traverser_flag,    # (max_pool,) int8 — 1=traverser (IN/OUT)
+    stages,               # (max_pool,) int8
+    features,             # (N, 126) float32 compact frontier rows
+    strategies,           # (N, 9) float32 compact frontier rows
+    legal_masks,          # (N, 9) float32 compact frontier rows
+    frontier_indices,     # (N,) int32 stable slot ids
+    parent_idx,           # (max_pool,) int32
+    parent_action,        # (max_pool,) int8
+    is_traverser_node,    # (max_pool,) int8
+    traverser_features,   # (max_pool, 126) float32
+    slot_strategy,        # (max_pool, 9) float32
+    n_children_expected,  # (max_pool,) int32
+    child_values,         # (max_pool, 9) float32
+    n_children_done,      # (max_pool,) int32
+    next_free,            # (1,) int32
+    pool_exhausted_count, # (1,) int32
+    pool_exhausted_by_depth, # (100,) int32
+    pool_exhausted_by_stage, # (4,) int32
+    max_pool,             # int32
+    actions_out,          # (max_pool,) int8
+    rng_states,
+    depth,                # int32
+    n_frontier,           # int32
+):
+    """Allocate children for compact frontier rows while keeping slot ids stable."""
+    row = cuda.grid(1)
+    if row >= n_frontier:
+        return
+    gid = frontier_indices[row]
+    if stages[gid] >= int8(4):
+        return
+    if is_traverser_flag[gid] != int8(1):
+        return
+    if is_traverser_node[gid] == int8(1) and n_children_expected[gid] > int32(0):
+        return
+
+    n_legal = int32(0)
+    for a in range(N_ACTIONS):
+        if legal_masks[row, a] > float32(0.0):
+            n_legal += 1
+    if n_legal == 0:
+        return
+
+    start = cuda.atomic.add(next_free, 0, n_legal)
+    if start >= max_pool or start + n_legal > max_pool:
+        cuda.atomic.add(pool_exhausted_count, 0, int32(1))
+        if depth >= 0 and depth < 100:
+            cuda.atomic.add(pool_exhausted_by_depth, depth, int32(1))
+        stage_i = int32(stages[gid])
+        if stage_i >= 0 and stage_i < 4:
+            cuda.atomic.add(pool_exhausted_by_stage, stage_i, int32(1))
+        is_traverser_flag[gid] = int8(0)
+        u = xoroshiro128p_uniform_float32(rng_states, gid)
+        cumsum_f = float32(0.0)
+        chosen_f = int8(N_ACTIONS - 1)
+        for a in range(N_ACTIONS):
+            cumsum_f += strategies[row, a]
+            if u < cumsum_f:
+                chosen_f = int8(a)
+                break
+        actions_out[gid] = chosen_f
+        return
+
+    is_traverser_node[gid] = int8(1)
+    n_children_expected[gid] = n_legal
+    n_children_done[gid] = int32(0)
+    for f in range(N_FEATURES):
+        traverser_features[gid, f] = features[row, f]
+    for a in range(N_ACTIONS):
+        slot_strategy[gid, a] = strategies[row, a]
+        child_values[gid, a] = float32(0.0)
+
+    legal_i = int32(0)
+    for a in range(N_ACTIONS):
+        if legal_masks[row, a] > float32(0.0):
             child = start + legal_i
             parent_idx[child] = int32(gid)
             parent_action[child] = int8(a)

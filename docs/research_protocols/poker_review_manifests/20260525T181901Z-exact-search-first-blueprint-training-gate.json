@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1191,
+      "path": "benchmark_audit.md",
+      "sha256": "5ff2cdd21dcad8a6ad0ee202c4745f9a575daca206d9e20f9ab57290abe35d92"
+    },
+    {
+      "bytes": 453,
+      "path": "decision.json",
+      "sha256": "31d8ac3634e56ba041ae9d6af9426a8bffea6ce08d7064ce2a67beba292865e9"
+    },
+    {
+      "bytes": 1804,
+      "path": "mechanism_review.md",
+      "sha256": "a1fc5c4d7cbafd476500bf3b6d9d8c108b46eb31013b391f6030bf2e213f8fb9"
+    },
+    {
+      "bytes": 2853,
+      "path": "related_work.md",
+      "sha256": "b1d66f139b2df6c4cd9d4c7e304b8788d93509767f41e7ec08490bc493a8c8eb"
+    },
+    {
+      "bytes": 1961,
+      "path": "review.md",
+      "sha256": "9d55ad1ec850110eb7724818bdf614c1915bccc8711adf279ad3fc3e4576ed17"
+    },
+    {
+      "bytes": 2024,
+      "path": "review_scope.json",
+      "sha256": "80980bba738c8c6139e7f039b62f923565ceb6a84ad8ba851d250f088b775ba5"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Exact CUDA CFR has positive held-out decision-impact evidence and the failed learned-hook family is retired; proceed only with matched root-decision and same-budget self-play controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T181901Z-exact-search-first-blueprint-training-gate",
+  "review_id": "20260525T181901Z-exact-search-first-blueprint-training-gate",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://poker.cs.ualberta.ca/publications/17science.pdf",
+    "https://arxiv.org/abs/2006.00283"
+  ],
+  "written_at": "2026-05-25T18:22:04Z"
+}

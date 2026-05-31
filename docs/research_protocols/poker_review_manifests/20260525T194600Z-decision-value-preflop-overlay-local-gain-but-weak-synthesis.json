@@ -1,0 +1,25 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 764,
+      "path": "decision.json",
+      "sha256": "6948f99690ea10648aa462c9307589a353cf22568979bcc8fcb393ad70fd727b"
+    },
+    {
+      "bytes": 1976,
+      "path": "synthesis.md",
+      "sha256": "d1dce52966b9ab54c87cf9e69cc4f6c4086bbbd431c144e2c295500a3b5f2421"
+    }
+  ],
+  "reason": "Decision-value updating is promising, but the preflop fixed-continuation overlay is too brittle and all-in-heavy to promote. The next test must collect value-aware targets from the actor's own multi-street self-play/search distribution.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T194600Z-decision-value-preflop-overlay-local-gain-but-weak-synthesis",
+  "review_id": "20260525T194600Z-decision-value-preflop-overlay-local-gain-but-weak-synthesis",
+  "sources": [
+    "autoresearch-session/decision_value_actor/mixed_decision_value_actor_vs_no_target_h2h_seed20260522_24.json",
+    "autoresearch-session/decision_value_actor/mixed_decision_value_actor_vs_restored_history_h2h_seed20260522_24.json",
+    "autoresearch-session/decision_value_actor/restored_decision_value_policy_head_64x32_seed20260525.json",
+    "autoresearch-session/decision_value_actor/restored_decision_value_policy_head_vs_restored_h2h_seed20260522_24.json"
+  ],
+  "written_at": "2026-05-25T19:48:07Z"
+}

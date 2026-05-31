@@ -308,4 +308,13 @@ def evaluate_checkpoint_mixture_across_seeds(
         )
         for seed in seeds
     ]
-    return aggregate_seed_runs(runs)
+    metrics = aggregate_seed_runs(runs)
+    lower95 = float(metrics.get("lower95_chips_per_hand_across_seeds", 0.0))
+    if lower95 <= 0.0:
+        blockers = list(metrics.get("promotion_blockers") or [])
+        blocker = "local_across_seed_lower95_not_positive"
+        if blocker not in blockers:
+            blockers.append(blocker)
+        metrics["promotion_blockers"] = blockers
+        metrics["passed"] = False
+    return metrics

@@ -1,0 +1,37 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 843,
+      "path": "decision.json",
+      "sha256": "f40b9406bc551eb3e9cafef99dbcc6ede6383dc46cc888f882757aa5cee95aac"
+    },
+    {
+      "bytes": 3232,
+      "path": "innovation.md",
+      "sha256": "ebcbf9dd2276fc45c237aaf59fc54830a2af03c954ef631b4fd29c376fca489b"
+    },
+    {
+      "bytes": 3567,
+      "path": "related_work.md",
+      "sha256": "7e8d3addb4f0341f4e5713f2f06155903cf36139c867b07b780ea2e3bbfea9e1"
+    },
+    {
+      "bytes": 1275,
+      "path": "thought_experiments.md",
+      "sha256": "4f907c2294ec4702d734e00cd88181a1830bff1fc87a4a3a990c5b7fa3667463"
+    }
+  ],
+  "reason": "Proceed only with a mechanism-change test: an in-resolver learned update/search-state object trained and evaluated closed-loop against uniform exact CFR baselines. The old warm-start/selector family is falsified, so another shallow selector or capacity sweep is blocked.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T174848Z-closed-loop-in-resolver-learned-search-update-after-innovation",
+  "review_id": "20260522T174848Z-closed-loop-in-resolver-learned-search-update-after-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2408.14778",
+    "https://ojs.aaai.org/index.php/AAAI/article/download/38736/42698",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_lowstate_holdout64_with_cfr10_after_review_seed20260522.json",
+    "autoresearch-session/poker_reviews/20260522T173727Z-public-belief-search-state-learner-consumed-inside-resolving/decision.json"
+  ],
+  "written_at": "2026-05-22T17:50:34Z"
+}

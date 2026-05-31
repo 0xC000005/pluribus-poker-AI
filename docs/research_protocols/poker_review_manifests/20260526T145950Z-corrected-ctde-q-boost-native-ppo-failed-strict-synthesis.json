@@ -1,0 +1,24 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 535,
+      "path": "decision.json",
+      "sha256": "9fc509c13f68052f1df8f3ab88bf5bb66c24c84c86f300b3d46948795aa9da2a"
+    },
+    {
+      "bytes": 1248,
+      "path": "synthesis.md",
+      "sha256": "761ed3c47106d852e55e6495f04bb7858b0fd3a20a194de92015cc4833697ba3"
+    }
+  ],
+  "reason": "Corrected CTDE+Q-boost PPO improves random eval and beats NFSP10k, but fails the strict native league and does not beat the non-CTDE Q-boost checkpoint.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T145950Z-corrected-ctde-q-boost-native-ppo-failed-strict-synthesis",
+  "review_id": "20260526T145950Z-corrected-ctde-q-boost-native-ppo-failed-strict-synthesis",
+  "sources": [
+    "autoresearch-session/native_ppo/raw_sequence_ctde_qexpected_lambda_frozenq_h512_2k_seed20260595.json",
+    "autoresearch-session/native_ppo/raw_sequence_ctde_qboost_frozenq_h512_2k_seed20260595.json",
+    "autoresearch-session/native_ppo/raw_sequence_ctde_qboost_frozenq_h512_2k_native_league_5k_seed20260596.json"
+  ],
+  "written_at": "2026-05-26T15:01:14Z"
+}

@@ -1,0 +1,54 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1384,
+      "path": "benchmark_audit.md",
+      "sha256": "7b21b50f24ee249a8f0c7387cfba74431faa2efe201bfb012f27098b4d719c31"
+    },
+    {
+      "bytes": 710,
+      "path": "decision.json",
+      "sha256": "91bd5734712ea8a3b48467fe2932dbc660491c3298168eef8312e7de6e385532"
+    },
+    {
+      "bytes": 1634,
+      "path": "mechanism_review.md",
+      "sha256": "fbc93dd8f405cd7b28ad353ccdce4b6c6c041b168973fbb5218c045aa362a999"
+    },
+    {
+      "bytes": 4259,
+      "path": "related_work.md",
+      "sha256": "ed59e7a54956d7f52124f6293c6804dd5166f151d6669fc28c68761498ea0a48"
+    },
+    {
+      "bytes": 2084,
+      "path": "review.md",
+      "sha256": "fcf3323612d6018609898005954eec3a647ec4bde8f718a68db7e2a9ab05b430"
+    },
+    {
+      "bytes": 2390,
+      "path": "review_scope.json",
+      "sha256": "855b8c683c8408ce1294373993d6567253e3c0f9c07cb511ab650cf5e8d0c3bf"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with the self-play-first reset: local self-play policy improvement is the mainline, optional search must be general and consumed in the same loop, and Slumbot-derived traces/targets/checkpoint selection remain blocked.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T161716Z-self-play-first-continuation-after-slumbot-trace-quarantine",
+  "review_id": "20260526T161716Z-self-play-first-continuation-after-slumbot-trace-quarantine",
+  "sources": [
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2605.14379",
+    "https://arxiv.org/abs/2201.11580",
+    "docs/research_protocols/poker_autoresearch_current_findings.md",
+    "docs/research_protocols/poker_autoresearch_workflow.md",
+    "autoresearch-session/poker_goal.json"
+  ],
+  "written_at": "2026-05-26T16:19:07Z"
+}

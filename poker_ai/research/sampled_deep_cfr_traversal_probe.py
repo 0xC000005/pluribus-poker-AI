@@ -33,11 +33,64 @@ from poker_ai.research.sampled_action_mccfr import (
     sample_pps_without_replacement,
 )
 
+_RANDOMIZATION_CONTRACTS = ("action-keyed", "legacy-sequential")
+
 
 @dataclass(frozen=True)
 class _TraversalResult:
     value: float
     root_regret: np.ndarray | None = None
+
+
+def _rng_for_path(seed: int, path: tuple[int, ...]) -> np.random.Generator:
+    """Build a deterministic RNG for one public action path.
+
+    This lets sampled and exhaustive probes evaluate a shared action branch
+    against the same opponent/chance rollout instead of comparing two different
+    random continuations.
+    """
+    return np.random.default_rng([int(seed), *[int(item) for item in path]])
+
+
+def _seed_for_path(seed: int, path: tuple[int, ...]) -> int:
+    return int(np.random.SeedSequence([int(seed), *[int(item) for item in path]]).generate_state(1)[0])
+
+
+def _apply_action_with_contract(
+    state: PokerState,
+    action: str | None,
+    *,
+    seed: int,
+    path: tuple[int, ...],
+    randomization_contract: str,
+) -> PokerState:
+    if randomization_contract != "action-keyed":
+        return state.apply_action(action)
+    np_state = np.random.get_state()
+    py_state = random.getstate()
+    try:
+        branch_seed = _seed_for_path(seed, path)
+        np.random.seed(branch_seed)
+        random.seed(branch_seed)
+        return state.apply_action(action)
+    finally:
+        np.random.set_state(np_state)
+        random.setstate(py_state)
+
+
+def _validate_randomization_contract(value: str) -> str:
+    if value not in _RANDOMIZATION_CONTRACTS:
+        raise ValueError(
+            "randomization_contract must be one of: "
+            + ", ".join(_RANDOMIZATION_CONTRACTS)
+        )
+    return value
+
+
+def _child_path(path: tuple[int, ...], marker: int, action_idx: int | None = None) -> tuple[int, ...]:
+    if action_idx is None:
+        return (*path, int(marker))
+    return (*path, int(marker), int(action_idx))
 
 
 def _strategy(
@@ -228,17 +281,29 @@ def _exhaustive_traverse(
     value_net: ValueNetwork,
     device: torch.device,
     opponent_rng: np.random.Generator,
+    opponent_seed: int,
+    rng_path: tuple[int, ...],
+    randomization_contract: str,
     depth: int,
 ) -> _TraversalResult:
     if state.is_terminal:
         return _TraversalResult(value=float(state.payout[traverser]))
     if not state.current_player.is_active:
         return _exhaustive_traverse(
-            state.apply_action(None),
+            _apply_action_with_contract(
+                state,
+                None,
+                seed=opponent_seed,
+                path=_child_path(rng_path, 7),
+                randomization_contract=randomization_contract,
+            ),
             traverser=traverser,
             value_net=value_net,
             device=device,
             opponent_rng=opponent_rng,
+            opponent_seed=opponent_seed,
+            rng_path=_child_path(rng_path, 7),
+            randomization_contract=randomization_contract,
             depth=depth + 1,
         )
 
@@ -250,6 +315,9 @@ def _exhaustive_traverse(
             value_net=value_net,
             device=device,
             opponent_rng=opponent_rng,
+            opponent_seed=opponent_seed,
+            rng_path=rng_path,
+            randomization_contract=randomization_contract,
             depth=depth,
             legal_actions=legal_actions,
         )
@@ -262,13 +330,27 @@ def _exhaustive_traverse(
 
     probs = np.array([strategy[ACTION_TO_INDEX[action]] for action in legal_actions])
     probs = probs / float(probs.sum())
-    action = str(opponent_rng.choice(legal_actions, p=probs))
+    rng = (
+        _rng_for_path(opponent_seed, _child_path(rng_path, 13))
+        if randomization_contract == "action-keyed"
+        else opponent_rng
+    )
+    action = str(rng.choice(legal_actions, p=probs))
     return _exhaustive_traverse(
-        state.apply_action(action),
+        _apply_action_with_contract(
+            state,
+            action,
+            seed=opponent_seed,
+            path=_child_path(rng_path, 17, ACTION_TO_INDEX[action]),
+            randomization_contract=randomization_contract,
+        ),
         traverser=traverser,
         value_net=value_net,
         device=device,
         opponent_rng=opponent_rng,
+        opponent_seed=opponent_seed,
+        rng_path=_child_path(rng_path, 17, ACTION_TO_INDEX[action]),
+        randomization_contract=randomization_contract,
         depth=depth + 1,
     )
 
@@ -280,6 +362,9 @@ def _exhaustive_traverser_action_values(
     value_net: ValueNetwork,
     device: torch.device,
     opponent_rng: np.random.Generator,
+    opponent_seed: int,
+    rng_path: tuple[int, ...],
+    randomization_contract: str,
     depth: int,
     legal_actions: list[str] | None = None,
 ) -> np.ndarray:
@@ -287,12 +372,24 @@ def _exhaustive_traverser_action_values(
         legal_actions = [str(action) for action in state.legal_actions if action is not None]
     action_values = np.zeros(N_ACTIONS, dtype=np.float32)
     for action in legal_actions:
+        # Keep branch evaluation isolated. Some engine sub-objects carry mutable
+        # deck/round state, so defensive copying prevents action-order leakage in
+        # this diagnostic's exhaustive reference.
         child = _exhaustive_traverse(
-            state.apply_action(action),
+            _apply_action_with_contract(
+                copy.deepcopy(state),
+                action,
+                seed=opponent_seed,
+                path=_child_path(rng_path, 23, ACTION_TO_INDEX[action]),
+                randomization_contract=randomization_contract,
+            ),
             traverser=traverser,
             value_net=value_net,
             device=device,
             opponent_rng=opponent_rng,
+            opponent_seed=opponent_seed,
+            rng_path=_child_path(rng_path, 23, ACTION_TO_INDEX[action]),
+            randomization_contract=randomization_contract,
             depth=depth + 1,
         )
         action_values[ACTION_TO_INDEX[action]] = float(child.value)
@@ -307,6 +404,9 @@ def _sampled_traverse(
     device: torch.device,
     opponent_rng: np.random.Generator,
     traverser_rng: np.random.Generator,
+    opponent_seed: int,
+    rng_path: tuple[int, ...],
+    randomization_contract: str,
     depth: int,
     sample_count: int,
     uniform_mix: float,
@@ -321,12 +421,21 @@ def _sampled_traverse(
         return _TraversalResult(value=float(state.payout[traverser]))
     if not state.current_player.is_active:
         return _sampled_traverse(
-            state.apply_action(None),
+            _apply_action_with_contract(
+                state,
+                None,
+                seed=opponent_seed,
+                path=_child_path(rng_path, 7),
+                randomization_contract=randomization_contract,
+            ),
             traverser=traverser,
             value_net=value_net,
             device=device,
             opponent_rng=opponent_rng,
             traverser_rng=traverser_rng,
+            opponent_seed=opponent_seed,
+            rng_path=_child_path(rng_path, 7),
+            randomization_contract=randomization_contract,
             depth=depth + 1,
             sample_count=sample_count,
             uniform_mix=uniform_mix,
@@ -393,6 +502,9 @@ def _sampled_traverse(
                     value_net=value_net,
                     device=device,
                     opponent_rng=copy.deepcopy(opponent_rng),
+                    opponent_seed=opponent_seed,
+                    rng_path=rng_path,
+                    randomization_contract=randomization_contract,
                     depth=depth,
                     legal_actions=legal_actions,
                 )
@@ -423,23 +535,47 @@ def _sampled_traverse(
         sampled_values = np.zeros(sampled.shape[0], dtype=np.float32)
         for idx, action_idx in enumerate(sampled):
             action = INDEX_TO_ACTION[int(action_idx)]
-            child = _sampled_traverse(
-                state.apply_action(action),
-                traverser=traverser,
-                value_net=value_net,
-                device=device,
-                opponent_rng=opponent_rng,
-                traverser_rng=traverser_rng,
-                depth=depth + 1,
-                sample_count=sample_count,
-                uniform_mix=uniform_mix,
-                sampling_mode=sampling_mode,
-                priority_forced_count=priority_forced_count,
-                priority_source=priority_source,
-                priority_model=priority_model,
-                priority_scale=priority_scale,
-                use_priority_baseline=use_priority_baseline,
+            child_path = _child_path(rng_path, 23, int(action_idx))
+            child_state = _apply_action_with_contract(
+                copy.deepcopy(state),
+                action,
+                seed=opponent_seed,
+                path=child_path,
+                randomization_contract=randomization_contract,
             )
+            if sampled_all_legal:
+                child = _exhaustive_traverse(
+                    child_state,
+                    traverser=traverser,
+                    value_net=value_net,
+                    device=device,
+                    opponent_rng=opponent_rng,
+                    opponent_seed=opponent_seed,
+                    rng_path=child_path,
+                    randomization_contract=randomization_contract,
+                    depth=depth + 1,
+                )
+            else:
+                child = _sampled_traverse(
+                    child_state,
+                    traverser=traverser,
+                    value_net=value_net,
+                    device=device,
+                    opponent_rng=opponent_rng,
+                    traverser_rng=traverser_rng,
+                    opponent_seed=opponent_seed,
+                    rng_path=child_path,
+                    randomization_contract=randomization_contract,
+                    depth=depth + 1,
+                    sample_count=sample_count,
+                    uniform_mix=uniform_mix,
+                    sampling_mode=sampling_mode,
+                    priority_forced_count=priority_forced_count,
+                    priority_source=priority_source,
+                    priority_model=priority_model,
+                    priority_scale=priority_scale,
+                    use_priority_baseline=use_priority_baseline,
+                )
             sampled_values[idx] = float(child.value)
         if sampled_all_legal:
             action_values = np.zeros(N_ACTIONS, dtype=np.float32)
@@ -473,14 +609,28 @@ def _sampled_traverse(
 
     probs = np.array([strategy[ACTION_TO_INDEX[action]] for action in legal_actions])
     probs = probs / float(probs.sum())
-    action = str(opponent_rng.choice(legal_actions, p=probs))
+    rng = (
+        _rng_for_path(opponent_seed, _child_path(rng_path, 13))
+        if randomization_contract == "action-keyed"
+        else opponent_rng
+    )
+    action = str(rng.choice(legal_actions, p=probs))
     return _sampled_traverse(
-        state.apply_action(action),
+        _apply_action_with_contract(
+            state,
+            action,
+            seed=opponent_seed,
+            path=_child_path(rng_path, 17, ACTION_TO_INDEX[action]),
+            randomization_contract=randomization_contract,
+        ),
         traverser=traverser,
         value_net=value_net,
         device=device,
         opponent_rng=opponent_rng,
         traverser_rng=traverser_rng,
+        opponent_seed=opponent_seed,
+        rng_path=_child_path(rng_path, 17, ACTION_TO_INDEX[action]),
+        randomization_contract=randomization_contract,
         depth=depth + 1,
         sample_count=sample_count,
         uniform_mix=uniform_mix,
@@ -510,9 +660,11 @@ def _mean_root_regret(
     priority_model: ValueNetwork | None,
     priority_scale: float,
     use_priority_baseline: bool,
+    randomization_contract: str,
 ) -> tuple[np.ndarray, float]:
     regrets = []
     started = time.perf_counter()
+    randomization_contract = _validate_randomization_contract(randomization_contract)
     for repeat in range(max(1, int(n_repeats))):
         opponent_rng = np.random.default_rng([int(seed), repeat, 0])
         traverser_rng = np.random.default_rng([int(seed), repeat, 1])
@@ -525,6 +677,9 @@ def _mean_root_regret(
                 device=device,
                 opponent_rng=opponent_rng,
                 traverser_rng=traverser_rng,
+                opponent_seed=int(seed),
+                rng_path=(int(repeat), 0),
+                randomization_contract=randomization_contract,
                 depth=0,
                 sample_count=sample_count,
                 uniform_mix=uniform_mix,
@@ -542,6 +697,9 @@ def _mean_root_regret(
                 value_net=value_net,
                 device=device,
                 opponent_rng=opponent_rng,
+                opponent_seed=int(seed),
+                rng_path=(int(repeat), 0),
+                randomization_contract=randomization_contract,
                 depth=0,
             )
         if result.root_regret is None:
@@ -572,14 +730,23 @@ def run_probe(
     priority_source: str = "strategy",
     priority_checkpoint: str | None = None,
     use_priority_baseline: bool = False,
+    randomization_contract: str = "action-keyed",
     seed: int = 20260525,
     device: str = "cpu",
 ) -> dict[str, Any]:
+    randomization_contract = _validate_randomization_contract(randomization_contract)
     random.seed(int(seed))
     np.random.seed(int(seed))
     torch.manual_seed(int(seed))
     resolved_device = torch.device("cuda" if device == "auto" and torch.cuda.is_available() else device)
-    state = new_game(2, initial_chips=int(initial_chips))
+    reference_state = new_game(2, initial_chips=int(initial_chips))
+    random.seed(int(seed))
+    np.random.seed(int(seed))
+    sampled_state = new_game(2, initial_chips=int(initial_chips))
+    random.seed(int(seed))
+    np.random.seed(int(seed))
+    legal_state = new_game(2, initial_chips=int(initial_chips))
+    torch.manual_seed(int(seed))
     value_net = ValueNetwork(
         N_FEATURES,
         hidden_dim=int(hidden_dim),
@@ -591,7 +758,7 @@ def run_probe(
 
     reference_repeats = int(n_reference_repeats or n_repeats)
     exhaustive_mean, exhaustive_seconds = _mean_root_regret(
-        state,
+        reference_state,
         traverser=0,
         value_net=value_net,
         device=resolved_device,
@@ -606,9 +773,10 @@ def run_probe(
         priority_model=priority_model,
         priority_scale=priority_scale,
         use_priority_baseline=use_priority_baseline,
+        randomization_contract=randomization_contract,
     )
     sampled_mean, sampled_seconds = _mean_root_regret(
-        state,
+        sampled_state,
         traverser=0,
         value_net=value_net,
         device=resolved_device,
@@ -623,8 +791,9 @@ def run_probe(
         priority_model=priority_model,
         priority_scale=priority_scale,
         use_priority_baseline=use_priority_baseline,
+        randomization_contract=randomization_contract,
     )
-    legal_mask = get_legal_mask(state) > 0.0
+    legal_mask = get_legal_mask(legal_state) > 0.0
     bias = sampled_mean - exhaustive_mean
     legal_bias = bias[legal_mask]
     exhaustive_top = int(np.argmax(np.where(legal_mask, exhaustive_mean, -1e9)))
@@ -643,6 +812,7 @@ def run_probe(
         "priority_source": priority_source,
         "priority_checkpoint": str(Path(priority_checkpoint)) if priority_checkpoint else "",
         "use_priority_baseline": bool(use_priority_baseline),
+        "randomization_contract": randomization_contract,
         "seed": int(seed),
         "uniform_mix": float(uniform_mix),
         "hidden_dim": int(hidden_dim),
@@ -682,8 +852,10 @@ def run_probe_grid(
     priority_source: str = "strategy",
     priority_checkpoint: str | None = None,
     use_priority_baseline: bool = False,
+    randomization_contract: str = "action-keyed",
     device: str = "cpu",
 ) -> dict[str, Any]:
+    randomization_contract = _validate_randomization_contract(randomization_contract)
     cases: list[dict[str, Any]] = []
     for initial_chips in initial_chips_values:
         for seed in seeds:
@@ -701,6 +873,7 @@ def run_probe_grid(
                     priority_source=priority_source,
                     priority_checkpoint=priority_checkpoint,
                     use_priority_baseline=use_priority_baseline,
+                    randomization_contract=randomization_contract,
                     seed=int(seed),
                     device=device,
                 )
@@ -720,6 +893,7 @@ def run_probe_grid(
         "priority_source": priority_source,
         "priority_checkpoint": str(Path(priority_checkpoint)) if priority_checkpoint else "",
         "use_priority_baseline": bool(use_priority_baseline),
+        "randomization_contract": randomization_contract,
         "n_repeats": int(n_repeats),
         "n_reference_repeats": int(n_reference_repeats or n_repeats),
         "top_action_match_rate": round(float(np.mean(top_matches)), 6),

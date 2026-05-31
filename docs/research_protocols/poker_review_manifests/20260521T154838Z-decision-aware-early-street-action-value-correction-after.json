@@ -1,0 +1,50 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1491,
+      "path": "benchmark_audit.md",
+      "sha256": "17f21fbf4ea57d519c16c8a4f5b07b8ce28602938c98dc51f1afeb5fad12529f"
+    },
+    {
+      "bytes": 623,
+      "path": "decision.json",
+      "sha256": "0b7e535582a5084c98990c642e1610e6fb79442a9f2fdc90b214903140cd6f1f"
+    },
+    {
+      "bytes": 1803,
+      "path": "mechanism_review.md",
+      "sha256": "8790413b6226e76252dad57b34f54a1eb5e64c84ceb4cbdc32efa335104d0e32"
+    },
+    {
+      "bytes": 2723,
+      "path": "related_work.md",
+      "sha256": "a9581668b9271c8bbe94583f04ec6495e839b5069ea4b245bb244f20b7006158"
+    },
+    {
+      "bytes": 2666,
+      "path": "review.md",
+      "sha256": "7c3a6e27d5ad9e07c5a3087e2de1e9af8e94525b2f693397ce2b7dd6e385880b"
+    },
+    {
+      "bytes": 1298,
+      "path": "review_scope.json",
+      "sha256": "2f9e0916e86602269f1e8b925eeb3126c8dda74c7b40ab58871455ac6e7d255d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Artifacts support moving away from dense SD-CFR scaling and policy-head cloning, but the current early-street value diagnostic is only a restricted abstraction and the BR prototype lacks a positive control. The next action should build or validate a stronger early-street action-value/counterfactual teacher before training a new correction.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T154838Z-decision-aware-early-street-action-value-correction-after",
+  "review_id": "20260521T154838Z-decision-aware-early-street-action-value-correction-after",
+  "sources": [
+    "https://arxiv.org/abs/1901.07621",
+    "https://poker.cs.ualberta.ca/publications/17science.pdf",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178"
+  ],
+  "written_at": "2026-05-21T16:11:34Z"
+}

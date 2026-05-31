@@ -2,6 +2,470 @@
 
 Date: 2026-05-13
 
+## 2026-05-26 Simplification Reset
+
+The active continuation target is reset to **local self-play first**. The
+mainline is now a minimal policy-improvement loop: local self-play experience,
+neural policy/value learning, optional general search improvement, and
+promotion through a self-play checkpoint league. Slumbot remains a held-out
+external benchmark and integration test only.
+
+Demote the following branches to diagnostic-only evidence: Slumbot traces,
+response-range replacement, action-likelihood fitting, trace-start hard-state
+policy heads, post-hoc policy calibration, detached search-target injection,
+and learned updates that are validated only on fixed trace artifacts. They
+identified real failure modes, but they are too easy to turn into
+benchmark-shaped mechanisms.
+
+The next continuation should either:
+
+- Consolidate the cleanest local self-play league baseline and measure whether
+  it improves monotonically against previous checkpoints; or
+- Add one general search-improvement operator inside that local loop, then
+  falsify it by matched root-decision and league gates before any Slumbot run.
+
+Do not spend Slumbot hands or optimize trace-derived targets until a locally
+trained candidate clears the internal league gate with positive lower-bound
+evidence.
+
+2026-05-27 native rollout update: the queued native substrate spike now has an
+executable gate. `scripts/eval_native_rollout_substrate.py` deterministically
+replays canonical `full_deck/state.py` hands through `FastPokerState`, checks
+legal masks, transitions, payouts, and feature vectors, then compares rollout
+throughput. The first gate passed on 32 replay hands with `106` checked steps,
+zero mismatches, and about `118x` hot-path speedup (`365` to `43325`
+steps/sec). `scripts/run_tianshou_rainbow_native_control.py` now accepts
+`--state-backend fast-state`; a tiny matched Rainbow smoke improved trainer
+collection from about `183` to `848` train steps/sec. This is substrate
+evidence only. The next continuation should run the maintained RL/population
+loop on `fast-state` against population/history opponents and promote only by
+duplicate-swapped H2H lower95 plus empirical-game support.
+
+2026-05-28 batched learner update: the fast-state substrate is now strong
+enough for real neural self-play candidates, but the first local policy update
+families are falsified. A batched shared policy-gradient learner trained 8 x
+2048 games at about `40309` rollout steps/sec and failed the incumbent H2H
+gate (`mean=-0.014598`, lower95 `-0.032620`). Adding frozen history opponents
+and a value head preserved clean parity and high throughput (`25738`
+environment steps/sec) but failed harder (`mean=-0.0389705`, lower95
+`-0.058533`). A first noncentralized Q-boosting/PPO-style variant with
+Expected-SARSA(lambda) trajectory links also failed (`mean=-0.032145`,
+lower95 `-0.051020`) despite clean speed/parity. The centralized-Q version now
+exists too: it uses training-only opponent-card and stack/bet features for the
+critic while preserving the actor observation, but the first smoke still failed
+(`mean=-0.034328`, lower95 `-0.053347`). A 32 x 4096 scale check improved the
+mean but still failed with high confidence (`mean=-0.024449`, lower95
+`-0.035761`). Do not repeat this branch by changing only history capacity,
+value weight, Q lambda, seed, or modest scale. The next continuation should
+change the learning dynamics at a higher level: plug the fast batched substrate
+into a maintained VRPO/PPO-style implementation if available, train a proper
+empirical-game/meta-policy response oracle, or make the batched engine serve a
+stronger population self-play objective. Promotion still requires
+duplicate-swapped H2H lower95 and complete empirical-game support before any
+Slumbot evaluation.
+
+2026-05-28 maintained-response update: switching back to a maintained
+Tianshou Rainbow response oracle on the fast-state backend produced a useful
+parent-H2H pass but failed population robustness. The 131k-step UPC4 response
+from the current local incumbent beat its parent (`mean=+0.008283`, lower95
+`+0.000488`) but lost clearly to the prior 131k Rainbow response
+(`mean=-0.021514`, lower95 `-0.033917`). This confirms the gate discipline:
+parent improvement is not enough. The next continuation should train directly
+against the empirical-game/meta-policy support or a broader population, then
+require both parent H2H and empirical-game insertion before promotion.
+
+2026-05-28 broader-population response update: the same maintained Rainbow
+response-oracle shape trained against four Rainbow-family population members
+did not clear the parent gate (`mean=+0.003301`, lower95 `-0.006336`) despite
+`2254.88` train steps/sec. This rejects another same-budget population-response
+retry as the immediate next move. The active bottleneck is now split: the
+learning objective needs a stronger meta-policy/response target, and the
+environment hot path still prevents much larger local neural population
+training from keeping the GPU busy.
+
+2026-05-28 compiled-transition update: the first compiled-array full-hand
+transition primitive exists in `poker_ai/research/compiled_fast_rollout.py` and
+is exposed via `scripts/eval_native_rollout_substrate.py --include-compiled-transition-benchmark`.
+It uses Numba-compiled 2-player batch legal masks, action transitions, and
+heads-up 7-card showdown/payout handling. The first strict smoke preserved the
+existing canonical `full_deck/state.py` parity gate, passed random full-hand
+terminal payout tests against `FastPokerState`, and measured `699618`
+compiled transition steps/sec versus `102841` Python fast-state loop steps/sec
+(`6.80x`) with zero showdown fallbacks. This clears the substrate integration
+threshold for the transition/evaluator hot path. The next continuation should
+feed this compiled batch into the maintained/local population learner path
+while preserving the duplicate-swapped H2H and empirical-game promotion gates.
+
+2026-05-28 compiled-collector update: the compiled batch now emits 126-feature
+observations, legal masks, actions, player ids, rewards, and payoffs for a
+learner-facing self-play collector. The first CUDA-policy smoke over 4096
+games produced `23821` decisions at `152274` decisions/sec with zero truncated
+games and zero Python showdown fallbacks. This finally attacks the low-GPU
+utilization complaint at the correct layer: the neural actor can batch about
+125 live decisions per forward while the environment transition stays in a
+compiled batch. The next continuation is no longer another substrate-only
+benchmark; route a maintained/local population RL update through this compiled
+collector and judge policy quality with duplicate-swapped H2H and empirical-
+game support.
+
+2026-05-28 compiled-policy-gradient falsifier: the compiled collector now
+feeds the existing history-population policy-gradient pilot through
+`--pg-rollout-backend compiled`. This improved compute materially (`53684`
+end-to-end env steps/sec, mean rollout `117260` env steps/sec, zero showdown
+fallback), but the 8 x 2048 h256 CUDA checkpoint failed 2000-game H2H against
+the local incumbent (`mean=-0.076120`, lower95 `-0.096993`). The interpretation
+is important: low environment throughput was a real bottleneck, but it was not
+the only bottleneck. Do not continue by tuning terminal-return PG, entropy,
+history capacity, or seeds. The next continuation should put a stronger
+off-policy/population response learner or empirical-game/meta-policy objective
+on top of the compiled batch.
+
+2026-05-28 AlphaNLHoldem reference update: the unofficial
+`bupticybee/AlphaNLHoldem` repository is now the concrete public
+AlphaHoldem-style reference surface. It is checked out locally under ignored
+`reference_code/AlphaNLHoldem` at commit `d847dbc`. Its README states that it
+is not the official AlphaHoldem implementation, uses RLCard no-limit hold'em
+with 50bb stacks and 5 actions, and provides a TensorFlow/RLlib historical
+league plus checkpoint data. The next continuation should build an isolated
+reference audit/evaluation bridge, not copy AGPL code into the main tree. The
+new benchmark contract is dual: our method should eventually beat this
+AlphaNLHoldem/RLCard surface and also beat the native 9-action local league
+before held-out Slumbot confidence evaluation. Do not treat RLCard success as
+Slumbot evidence, and do not use Slumbot data to train for either surface.
+
+2026-05-28 AlphaNLHoldem executable-probe update: added
+`scripts/probe_alphanlholdem_reference.py` and
+`poker_ai/research/alphanlholdem_reference.py`. The probe reads the ignored
+checkout without importing AGPL code, verifies the RLCard wrapper, 5-action
+contract, bundled `weights/c_1048.pkl`, TensorFlow/Ray legacy runtime, and
+license boundary, then writes
+`autoresearch-session/alphanlholdem_reference/contract_probe.json`. The current
+checkout passes with `ready_for_rlcard_benchmark=true`, `action_count=5`,
+`direct_native_action_match=false`, and `license_risk=agpl_reference_only`.
+The next continuation is an isolated RLCard H2H evaluator or source-controlled
+reproduction plan; do not use this probe as strength evidence.
+
+2026-05-28 AlphaNLHoldem H2H-smoke update: added
+`poker_ai/research/alphanlholdem_benchmark.py` and
+`scripts/eval_alphanlholdem_rlcard_reference.py`. The evaluator implements the
+AlphaNLHoldem observation contract, loads the bundled checkpoint into a clean
+PyTorch inference path, and plays RLCard no-limit hold'em without importing the
+AGPL reference package. Two 2-games-per-seat smokes succeeded:
+`random` versus `alphanlholdem` and `alphanlholdem` versus `random`, writing
+`autoresearch-session/alphanlholdem_reference/random_vs_reference_smoke.json`
+and `reference_vs_random_smoke.json`. These are evaluator-validation smokes
+only. The next real public-reference gate is our candidate policy versus
+`--baseline alphanlholdem` with a predeclared sample size and confidence
+threshold.
+
+2026-05-28 AlphaNLHoldem source-controlled-candidate update: the RLCard
+reference evaluator now accepts separate `--candidate-weights` and
+`--baseline-weights` paths plus `--min-lower95-candidate-payoff`. This makes the
+public-reference gate usable for a source-controlled AlphaNLHoldem-format
+candidate or reproduction checkpoint. A self-match with the same bundled
+checkpoint on both sides produced mean zero but failed a `0.0` lower95 gate at
+2 games per seat, as it should with such a tiny confidence interval; the same
+smoke passed with a permissive diagnostic threshold. The next missing bridge is
+an exporter/adapter that lets this repo's locally trained candidate enter the
+5-action RLCard reference surface without using AlphaNLHoldem traces or Slumbot
+data.
+
+2026-05-28 AlphaNLHoldem env-native correction: do not project a native
+9-action Slumbot-facing checkpoint into RLCard's 5-action environment for
+promotion. The transferable object is the high-level learning schema
+(self-play/population improvement, legal masking, confidence-gated H2H), not a
+checkpoint or action mapping. The next continuation is therefore an RLCard-
+native training path that follows the same general algorithmic discipline and
+compares its own RLCard-native checkpoint against the AlphaNLHoldem reference;
+the native Slumbot-facing environment separately trains and gates a native
+model. If another card environment is added, repeat this pattern: train a fresh
+model in that environment and transfer only the algorithmic schema.
+
+2026-05-28 RLCard-native PPO bridge update: added a maintained Tianshou PPO
+control for the RLCard public-reference surface. It wraps RLCard no-limit
+hold'em as a legal-masked single-agent Gymnasium environment, trains a PPO
+actor/critic directly in the 5-action RLCard game, saves an env-native
+checkpoint, and lets the AlphaNLHoldem evaluator load that checkpoint as
+`--candidate rlcard-ppo`. A tiny CUDA smoke trained 128 rollout steps in
+`0.43s` and then completed a 2-games-per-seat AlphaNLHoldem H2H smoke. This is
+plumbing evidence only, not strength. The next continuation should scale the
+RLCard-native actor-critic/league learner or move toward an AlphaHoldem/IMPALA-
+style historical league, then require a predeclared positive lower95 gate
+against the AlphaNLHoldem checkpoint.
+
+2026-05-28 RLCard PPO population-hook update: the same maintained PPO runner
+now accepts `--opponent-checkpoint`, allowing a fresh RLCard-native child to
+train against a frozen RLCard PPO parent inside the RLCard environment. The
+first tiny parent/child CUDA smoke completed and the child checkpoint loaded
+into the AlphaNLHoldem evaluator. This remains a plumbing result. The next
+meaningful public-reference experiment should train against a declared
+historical parent pool or AlphaHoldem-style league for enough hands to make the
+AlphaNLHoldem lower95 gate interpretable.
+
+2026-05-28 RLCard PPO 8k falsifier: a first non-tiny maintained PPO
+parent/child loop is falsified. The parent trained 8,192 rollout steps against
+random, the child trained 8,192 steps against the frozen parent, and the child
+failed the 50-games-per-seat AlphaNLHoldem lower95 gate (`mean=-2.81`,
+`lower95=-6.171`, `upper95=+0.551`). Do not respond by tuning seeds or modest
+step counts. The next continuation should change the learning structure toward
+AlphaHoldem/IMPALA-style historical league or another stronger self-play
+objective while preserving the train-per-environment rule.
+
+2026-05-28 RLlib IMPALA bridge update: added an RLCard action-mask observation
+format and `scripts/run_rllib_impala_rlcard_reference_control.py`. The dry-run
+contract and CPU smoke pass with Ray 2.55 IMPALA/V-trace, using RLCard's own
+5-action environment. The CUDA old-API action-mask path is explicitly blocked
+after V-trace tensor-shape failures in the learner thread. The next GPU-capable
+step should not keep patching Ray's old API; it should either implement a
+new-API masked RLModule for IMPALA/APPO or a local GPU V-trace style learner on
+the compiled rollout substrate.
+
+2026-05-28 APPO probe update: Ray's new-API APPO plus the action-mask
+RLModule example completed a one-iteration CPU probe on RLCard, but the GPU
+probe hung and was killed. This keeps APPO as a plausible maintained-library
+direction, but not yet a usable GPU path. The next continuation should first
+make a controlled APPO runner with timeout/fail-closed CUDA validation or
+switch to a local GPU V-trace learner only after documenting why maintained
+APPO cannot be made reliable.
+
+2026-05-28 controlled APPO runner update: the APPO runner now exists with
+dry-run contract tests and a subprocess supervisor for unattended runs. The
+supervised tiny RLCard smoke still timed out (`status=timeout`) before one Ray
+APPO iteration completed, and the guard killed the child process group cleanly.
+This converts APPO from an unsafe hang risk into a documented partial path, but
+it is not a GPU-capable candidate. The next continuation should not tune APPO
+strength. Either find a maintained APPO/IMPALA configuration that completes a
+tiny masked RLCard smoke, or queue methodology review for a minimal local
+GPU V-trace/actor-learner that consumes the compiled rollout substrate.
+
+2026-05-28 local V-trace innovation review: the reviewed pivot now permits a
+narrow local GPU V-trace actor-learner only because maintained Ray IMPALA/APPO
+failed the integration smokes. The boundary is strict: local code may handle
+trajectory packing, legal masks, and the standard V-trace policy/value update;
+it may not add poker action heuristics, Slumbot/reference data, or broad custom
+RL-library scope. The next decisive test is a tiny GPU learner smoke over
+same-environment legal-mask trajectories, then AlphaNLHoldem/RLCard and native
+9-action H2H gates only if reliability and parity pass.
+
+2026-05-28 local V-trace primitive update: `poker_ai/research/local_vtrace.py`
+now contains only the standard masked discrete-action V-trace recurrence and
+policy/value loss helper, with hand-calculated unit tests. This is the first
+local learner-side primitive after the maintained-library failure review. The
+next continuation should connect it to generated RLCard/native trajectory
+batches and require a tiny GPU smoke before any strength experiment.
+
+2026-05-28 tiny V-trace trajectory smoke: `scripts/run_local_vtrace_rlcard_smoke.py`
+now collects real RLCard legal-mask trajectories and runs one local V-trace
+policy/value update. The 2-env x 4-step CUDA smoke passed with zero illegal
+probability and finite loss. A larger direct-RLCard collection was CPU-bound,
+so this validates the learner interface but not scale; the next step is to
+feed the same loss from the compiled rollout collector rather than Python
+RLCard stepping.
+
+2026-05-28 compiled native V-trace smoke: `scripts/run_local_vtrace_compiled_native_smoke.py`
+now consumes the compiled 9-action full-deck self-play collector, packs learner
+decision chains into padded trajectory tensors, and applies the local V-trace
+loss in one vectorized learner call. The 512-game CUDA scale smoke passed with
+`3125` samples, zero illegal mass, zero Python showdown fallback, and about
+`6790` samples/sec end-to-end. This is still plumbing, not strength. The next
+continuation can turn this smoke into a checkpoint-producing learner and judge
+it only by native duplicate-swapped H2H plus empirical-game gates.
+9-action candidate.
+
+2026-05-28 AlphaNLHoldem RLCard-native NFSP smoke: the public-reference gate
+now accepts `--candidate rlcard-nfsp` checkpoints produced by
+`scripts/run_rlcard_nfsp_pilot.py --checkpoint-out`. A tiny CUDA NFSP run in
+RLCard's own 5-action environment wrote
+`rlcard_nfsp_env_native_smoke.pt` with `trained_environment_native=true` and
+`native_action_projection=false`. The same-environment AlphaNLHoldem H2H smoke
+loaded that checkpoint as an RLCard agent and completed against the bundled
+reference checkpoint. This validates the corrected plumbing path. It is not
+strength evidence: the sample was only 1 game per seat and the NFSP run was
+ only 20 episodes. The next continuation should scale an RLCard-native learner
+or reproduction candidate under a predeclared budget, then gate it against
+AlphaNLHoldem with confidence while preserving the separate native 9-action
+league path.
+
+2026-05-28 RLCard-native NFSP 1k gate result: a bounded 1,000-episode
+RLCard-native NFSP candidate trained on CUDA and wrote
+`rlcard_nfsp_env_native_1k_seed20260534.pt`. It failed the first
+AlphaNLHoldem public-reference gate over 50 games per seat:
+`mean=-4.63`, `lower95=-9.90`, `upper95=+0.64`, `passed=false`. This is not a
+philosophy failure; it is an expected scale/objective failure for a tiny NFSP
+baseline against a week-trained reference checkpoint. The next public-reference
+continuation should either scale the RLCard-native learner by orders of
+magnitude under a predeclared budget or build a stronger RLCard-native
+AlphaNLHoldem-style league learner, not adapt native 9-action checkpoints.
+
+2026-05-28 RLCard-native NFSP self-play 5k result: added
+`--opponent-kind nfsp-self-play` to the RLCard NFSP pilot so both seats train
+with maintained RLCard NFSP agents. The first bounded 5,000-episode CUDA
+self-play checkpoint failed the same AlphaNLHoldem gate over 50 games per seat:
+`mean=-4.04`, `lower95=-10.09`, `upper95=+2.01`, `passed=false`. This is more
+philosophically aligned than the random-opponent baseline, but it is still not
+competitive at this scale. The next public-reference move should be a stronger
+RLCard-native league/training recipe, likely closer to AlphaNLHoldem's
+historical-league IMPALA/VTrace setup or a maintained population learner, not
+more small NFSP reruns.
+
+2026-05-28 RLCard-native NFSP self-play 50k scale control: one predeclared
+scale check trained the maintained RLCard NFSP self-play path for 50,000
+episodes on CUDA. Training took `356.16s` at `140.46` episodes/sec and
+`259.05` train steps/sec. The 200-game AlphaNLHoldem H2H gate improved the
+mean versus 5k but still failed: `mean=-2.915`, `lower95=-8.249`,
+`upper95=+2.419`, `passed=false`. This suggests scale helps but does not
+justify continuing small NFSP unchanged as the main public-reference route.
+The next continuation should implement or plug in a stronger RLCard-native
+actor-critic/historical-league learner, using AlphaHoldem/IMPALA/VTrace as
+related-work guidance, and keep NFSP as a control.
+
+2026-05-29 stuck-learner innovation review (no GPU): resolved the three queued
+reviews and corrected the reframing after a codebase check. Both methodology
+reviews PROCEED (held-out AlphaNLHoldem benchmark contract; RLCard-native league
+learner with the no-cross-projection boundary). The local GPU V-trace innovation
+is now ABANDON: its own falsifier triggered (fresh `-1.36`, continue-from-ppo65k
+`-4.37`, population-mix `-5.97`; all negative lower95). PREMISE CORRECTION: an
+earlier draft claimed "we are not compute-bound, the GPU is idle, so build a
+vectorized pipeline" — that is wrong on native. The native 9-action surface
+ALREADY has a compiled self-play collector at `117-152K` decisions/sec, and a
+compiled native V-trace/PG learner already consumed it and failed at TINY budgets
+(compiled-PG `8x2048` -> mean `-0.076`; compiled native V-trace `4x512` ->
+`+0.0066` vs parent / `-0.169` vs NFSP), with the log's own verdict "throughput
+was a real bottleneck, but it was not the only bottleneck." The `~900-2600`
+samples/sec figure is RLCARD-maintained-library only (direct rlcard is `31.7`/s,
+CPU-bound) — a separate, harder surface (the native collector cannot serve its
+5-action space). So the tiny prior native runs CANNOT decide scale vs objective
+vs representation. The next experiment (NEW innovation review
+`20260529T003000Z-gpu-throughput-vectorization-before-scaling-innovation`,
+PROCEED, gated on explicit user GPU approval; directory slug predates the
+correction): run the EXISTING fast native compiled self-play learner at a real
+BUDGET x MODEL frontier — `>= ~10^6-10^7` steps at a GPU-saturating model/batch
+(never done; all native runs were 2K-16K games) — as a scaling curve gated by
+duplicate-swapped native 9-action H2H lower95 + empirical-game support, with
+measured GPU utilization. NO new infra (the fast path exists), NO objective
+change, NO c_1048 bar change. Falsifier: a flat/negative H2H curve at high
+utilization and `>= ~10^6-10^7` steps isolates the limiter as objective/
+representation and the next review MUST be a new-objective review, not more
+budget. Honest tension: this is at core a "use more compute" move (vs the goal's
+"not scale tweaks"), proposed because the user judges the compute unspent; veto
+in favor of a new-objective review if preferred. Deep CFR is a
+native-9-action-only contender for a later matched-budget bake-off (no
+cross-projection). Slumbot stays held-out.
+
+2026-05-29 (later) method-first reframe + decision memo (SUPERSEDES the
+budget-frontier-only framing above): under the corrected METHOD-FIRST north star
+(the contribution is a general bitter-lesson self-play-from-scratch mechanism
+demonstrated on HU NLHE; AlphaNLHoldem/Slumbot are EVIDENCE, not the win
+condition), a 27-agent mechanism-discovery workflow + live online related-work +
+advisor produced `autoresearch-session/DECISION_MEMO.md`. Survivors (all PUBLISHED,
+not novel -- which is fine and bitter-lesson-aligned): MMD/regularized-PG (Sokota
+ICLR'23), ESCHER (McAleer ICLR'23), ReBeL (Brown NeurIPS'20). DECISIVE new
+evidence: arXiv:2502.08938 (2025) shows tuned PG (PPO/PPG/MMD) match or beat
+NFSP/PSRO/R-NaD/ESCHER on imperfect-info games, and that prior PG failures are
+explained by (a) head-to-head being the WRONG metric (use exact exploitability)
+and (b) an entropy-regularization regime far higher than single-agent defaults.
+Our promotion ladder is duplicate-swapped H2H lower95 -- the indicted metric.
+RUN-FIRST (reframed): high-entropy regularized PG / MMD evaluated by EXACT
+EXPLOITABILITY on Kuhn/Leduc (CPU-only); the untried levers are the regime + the
+metric, NOT the "moving magnet". Verifies regime+metric+implementation, NOT NLHE
+scale (tiny-budget confound unbroken). The native budget-frontier is RECLASSIFIED
+from "novel mechanism" to the scale-frontier CONTROL/measurement (no full-loop
+throughput is even measured yet, so no NLHE budget is trustworthy). HEADLINE FORK
+for the user: CPU exploitability gate runs regardless; the GPU slot is (A)
+scale-frontier control vs (B) mechanism NLHE run -- lean (A)/parallel, user's
+call. METHODOLOGY FLAG: H2H-vs-exploitability is a protected eval-surface change
+-> route to methodology review + objective-drift audit, do not swap unilaterally.
+No GPU run, no commit; awaiting the user's GPU go/no-go.
+
+2026-05-26 update: the first executable neural self-play policy-iteration
+contract smoke is now in place. `scripts/run_neural_policy_iteration_pilot.py`
+uses a stochastic neural actor to collect local full-deck self-play states,
+trains policy/value networks on legal mixed policy-improvement targets, and
+exports checkpoint/metrics metadata that explicitly marks Slumbot-free training
+and non-promotion status. Its current teacher is a legal mixed-target test
+double, not CFR. The immediate continuation is therefore to replace that test
+double with public-belief CFR/resolving targets on the same self-play state
+distribution, then judge only by root-disjoint exact-CFR gates and self-play
+league lower bounds.
+
+2026-05-26 follow-up: public-belief CFR mode now skips ineligible states rather
+than training on fallback labels, exposes `dropped_ineligible_self_play_states`,
+and supports `--min-resolver-targets` as a hard gate. CUDA teacher routing works
+with `--cfr-backend torch-levelsync --cfr-device cuda`, but the first 64-hand
+smoke produced only `2` eligible resolver targets from `190` self-play states.
+The next continuation should improve native target coverage/batching, not
+switch to PettingZoo or optimize a different 5-action game.
+
+2026-05-26 compute update: native batched policy inference is now available via
+`--parallel-self-play-hands`. A 256-hand same-seed smoke improved collection
+time only modestly (`2.586s` serial to `2.401s` with 32 parallel hands). With
+the real public-belief CFR teacher, the 32-parallel smoke spent `2.431s` in
+self-play collection, `3.929s` in one-state-at-a-time teacher target
+generation, and `0.449s` in neural training. This explains low GPU utilization:
+there are too few eligible CFR states and target generation is not batched. The
+next continuation should attack batched/denser teacher targets, not neural
+model size or external environment wrappers.
+
+2026-05-26 coverage update: public-belief CFR mode now supports
+`--min-searchable-self-play-states` with `--max-self-play-hands`. The collector
+keeps native stochastic self-play running until enough eligible turn/river
+street-root states are found or the cap is reached, then trains only on real
+resolver targets. The 32-target CUDA smoke passed without fallback labels but
+spent `9.500s` collecting states and `11.181s` solving teacher targets versus
+`0.379s` training the network. Next continuation: batch teacher generation or
+add dense early-street search targets, not PettingZoo or bigger networks.
+
+2026-05-26 batching diagnostic: the first 16-target coverage run had
+`legal_mask_pattern_groups=4` but `public_shape_groups=15`, with largest exact
+public-shape group only `2`. This weakens the near-term case for a narrow
+same-public-shape CFR batcher. The next reviewed pivot should prefer dense
+early-street policy-improvement targets from local public belief/search, because
+those cover the states the neural actor actually visits and give the GPU more
+training signal per generated hand.
+
+2026-05-26 scaled NPI update: the aligned CFR5 neural policy-iteration branch
+does learn versus weak controls, but simply scaling from 32 to 96 real CFR5
+targets and h64 to h128 did not beat the prior 32-target CFR5 checkpoint. The
+96-target candidate beat random and the older CFR1 checkpoint in 1000-game
+duplicate-swapped internal H2H, but was neutral against the prior CFR5 candidate
+(`mean=-0.000465`, `lower95=-0.008744`) and slightly worse on the matched
+32-root exact-CFR L1/KL gate (`0.2159/0.0795` versus `0.2107/0.0680`). It also
+selected all-in as the top action on every held-out root. The next continuation
+should not scale model size or target count blindly. Improve dense/batched
+policy-improvement target generation under the same local self-play contract,
+or batch the exact-CFR teacher itself, then rerun the same matched gate and
+prior-candidate H2H.
+
+2026-05-26 GPU-utilization note: low instantaneous `nvidia-smi` usage is
+expected for the current NPI teacher path. The 96-target run spent `19.84s`
+collecting self-play states and `33.49s` generating one-state-at-a-time CFR
+targets, but only `0.77s` training the neural network. The GPU is available and
+used, but the workload arrives as many small solver/inference bursts separated
+by CPU poker simulation and Python orchestration. Higher utilization requires
+batched teacher/resolver generation or a denser training-target pipeline, not
+just a larger policy network.
+
+2026-05-26 batched-CFR-teacher update: opt-in same-topology batching is now
+wired into the NPI public-belief CFR teacher and validated on a real 16-target
+CUDA smoke, but it is not the next scaling solution by itself. The batch path
+solved `11/16` roots in one CUDA batch with no batch failures, yet total teacher
+time was essentially unchanged (`5.623s` batched versus `5.683s` instrumented
+serial). The new timing counters show why: solver context and terminal-matrix
+construction consumed about `5.41s`, while CFR solving consumed only
+`0.21-0.28s`. The next continuation should attack solver-context construction,
+terminal matrix generation, ragged/fused terminal evaluation, or denser targets
+that avoid one full street solver per label.
+
+2026-05-26 continuation note: compact GPU Deep CFR checkpoints are model-only
+for resume purposes. They preserve `buffer_sizes` metadata but not replay
+reservoir contents, so `--resume` is a warm start unless
+`resume_restored_replay_buffers=true` appears in training metrics. Do not treat
+bufferless resumed children as true parent-child continuation evidence.
+`scripts/poker_autoresearch_train.py --save-replay-buffers` now creates an
+opt-in full replay checkpoint, and `--require-replay-buffer-resume` hard-fails
+if a continuation run accidentally uses a compact checkpoint. Use those flags
+for any experiment whose hypothesis depends on true Deep CFR continuation.
+
 ## Decision
 
 Stop scaling hard learned leaf/successor value substitution and direct policy
@@ -11,6 +475,387 @@ behavior gates. The next target is **publication-grade game-theoretic RL /
 learned search**: prefer pure self-play/equilibrium-learning methods where
 possible, and use CFR+/resolving as a principled imperfect-information
 evaluator, teacher, or correction operator when necessary.
+
+2026-05-16 update: the aligned callback-leaf branch produced the best local
+learned-search signal so far, but it does not change the decision. Matching
+label collection and inference at the exact CFR leaf-callback distribution
+fixed one important mismatch, and the no-projection learned leaf passed some
+root-disjoint behavior gates. The matched CFR10 `128x32` checkpoint remains
+marginal on the full successor-pool holdout (`0.59375` action agreement,
+`0.75097` mean L1) and only loosely positive on an external repeat-64 holdout
+(`0.625` agreement, `0.6767` mean L1). It is also slower than exact terminal
+leaf evaluation and can flip high-margin decisions. Leaf MAE, structural
+abstention, linear public-belief drift prediction, and a small neural drift
+predictor all fail as deployable safety mechanisms; the neural predictor fails
+external transfer. The next continuation target is therefore not another
+single-EV MSE scale run. It should be a safe or multi-valued depth-limit target,
+or a search-impact correction target, validated by root-disjoint decision
+behavior at a useful earlier cut boundary.
+
+The first range-diversity smoke supports that direction but does not solve it.
+On the eight worst high-margin action-flip roots, generic opponent-range
+perturbation averaging improved mean L1 from `1.3715` to `1.0787` and restored
+`3/8` top actions; an oracle over the same perturbation set reached `0.5733`
+mean L1 and `5/8` agreement. This means range diversity contains signal, but
+plain averaging is too weak. The next exact positive control should let the
+solver reason over a value set or opponent choice at the depth limit, rather
+than averaging strategies after the fact.
+
+2026-05-19 update: the range-diversity smoke is now a reusable
+diagnostic-only script with unit coverage:
+`scripts/eval_callback_leaf_diverse_range_probe.py`. The script-backed run
+reproduced the same eight-root signal and emits explicit promotion blockers.
+Use it as a positive-control probe for value-set mechanisms, not as a gameplay
+policy or Slumbot-tuned action selector.
+
+The first integrated value-set smoke is partial but not sufficient. Feeding
+aggregated diverse-range leaf values into CFR on the four worst high-margin
+flips showed that naive `mean` aggregation is worse than post-hoc averaging,
+while `hero_pessimistic` improves L1 (`1.1951` versus original `1.6180` and
+post-hoc range average `1.2934`) but still only matches the exact top action on
+`1/4` roots and costs about `3.5s` per learned solve. The next step should not
+be a wider perturbation sweep. It should formulate the opponent-choice/value-set
+gadget more correctly, or move the value-set boundary earlier so prediction can
+be batched and amortized.
+
+The first naive opponent-choice variant is now falsified. Choosing a single
+variant per terminal leaf by villain range-weighted value produced `0/4`
+agreement and `1.5653` mean L1 on the same high-margin roots, worse than
+post-hoc averaging. This means the real next target is not "pick a variant at
+each callback leaf"; it is to implement a faithful depth-limit gadget or an
+earlier public-belief boundary where opponent continuation choices are part of
+the resolved subgame state.
+
+The current philosophically aligned target is now explicit: **ReBeL /
+Student-of-Games style public-belief learning plus search**, with CFR/resolving
+used as the game-theoretic improvement operator and verifier. This is the most
+deep-learning-native direction that still respects imperfect-information game
+theory. The immediate step is not another terminal callback heuristic. Build an
+exact public-belief depth-limit gadget teacher on fixed states first; only if
+that teacher improves root-disjoint resolver decisions should we train a neural
+public-belief model to approximate it.
+
+The first exact-teacher smokes passed their positive-control contract. On the
+high-margin callback-leaf failure cases, the diagnostic found six eligible
+successor-cut roots in the larger run and per-iteration replay of exact cut CFVs
+preserved the full resolver exactly (`1.0` action agreement, `0.0` mean L1).
+Static final-CFV replay was weaker (`0.6667` agreement, `0.4594` mean L1), so
+the next neural target must approximate a dynamic public-belief/search state,
+not only a terminal final-value table.
+
+The first direct neural continuation probe failed that stronger target. A
+root-disjoint `512/512` dynamic successor-cut dataset was exported, but the
+small joint-PBS continuation model with DeepSet cards and GRU action encoding
+missed even the constant value baseline (`0.2804` holdout MAE versus `0.1609`
+train-mean constant MAE). This does not invalidate the exact boundary; it
+invalidates detached per-hand CFV regression as the next scale-up. The next
+test should learn a paired low-to-final dynamic correction or a resolver
+warm-start/search-state field and evaluate it by decision behavior.
+
+The paired low-to-final dense-value correction is now falsified too. Exact
+`fixed_5` replay preserved all six eligible high-margin actions with `0.1968`
+mean L1, but training the same joint-PBS continuation model on iteration-5
+absolute values and iteration-5-to-final residuals failed badly. The residual
+model reached `0.9444` holdout MAE versus a `0.1082` zero-delta baseline. The
+next target should therefore leave dense per-hand CFV regression and move to a
+search-state warm-start or learned update field that is consumed inside CFR.
+
+The first uniform-baseline check of that old learned warm-start is negative.
+Adding a CFR10 baseline to `scripts/eval_regret_policy_warm_start.py` rejects
+the current low-state regret/policy field even on a 16-root smoke: the warm
+start improved over CFR5 in L1 (`0.4814` vs `0.5729`) but lost to uniform CFR10
+(`0.3114` L1, `0.0945` KL, `0.875` top-action agreement) and cost `2.76x` the
+CFR5 latency. Future learned search-state candidates must beat CFR10, not just
+CFR5.
+
+The pure policy-gradient escape hatch was re-tested with better local mechanics
+and remains negative. Batched high-entropy PPO now supports 32-hand rollouts per
+update and trained on CUDA, but the 2k checkpoint lost to the 10k NFSP reservoir
+control (`mean=-0.011995`, `lower95=-0.029515` over 1k duplicate-swapped
+games). A minimal VRPO-inspired `q_expected_mc` advantage mode trained faster
+but also lost (`mean=-0.013249`, `lower95=-0.031672`). This does not reject the
+policy-gradient literature; it rejects local terminal-return PPO and the simple
+MC Q-baseline. The next philosophically clean RL branch should implement a real
+Expected-SARSA(lambda)/Q-boosted PPO target or use search-derived
+counterfactual advantages, not merely scale this PPO pilot.
+
+A same-player Expected-SARSA(lambda)-style PPO target is now implemented and is
+the best policy-gradient control so far, but it still fails the local gate. The
+2k `q_expected_lambda` checkpoint scored `mean=-0.008408`, `lower95=-0.022051`
+versus NFSP10k over 1k duplicate-swapped games. This is a weak positive
+mechanism signal, not a strength result. A matched-budget 10k run is defensible
+only as a bounded scale check of this specific estimator; broad PPO knob sweeps
+remain blocked.
+
+The matched-budget 10k scale check has now been run. It reached statistical
+near-parity with NFSP10k (`mean=0.000085`, `lower95=-0.010230`, `upper95=0.010399`
+over 5k duplicate-swapped games) but still failed the positive-confidence gate.
+This changes the next pure-RL target from "does PPO work at all?" to "can a
+better variance-reduced/game-theoretic advantage make the near-tie decisively
+positive?" The next action should not be a blind episode-count scale-up; it
+should implement a fuller Expected-SARSA(lambda)/Q-boosting target, add a
+population/average-policy opponent control, or use search-derived
+counterfactual advantages while retaining the same H2H gate.
+
+The CTDE Q-boosting follow-up has also been run. Giving the Q critic
+training-only full-state features while keeping the actor observation-only did
+not improve the matched gate: the 10k checkpoint scored `mean=-0.003581`,
+`lower95=-0.013593` versus NFSP10k over 5k games. This rules out "just add
+opponent cards to the critic" as the next pure-RL fix. Further pure-RL work
+needs a materially different estimator or opponent-population/equilibrium
+mechanism, not another PPO feature or episode-count scale.
+
+Two of those pure-RL follow-ups are now falsified in their simple form. A
+target-network Expected-SARSA(lambda) smoke lost to NFSP10k and was worse than
+the online-Q lambda smoke. The reviewed average-policy/fictitious-play PPO
+control trained the actor against a lagged average-policy opponent and exported
+the average policy, but the average export failed badly (`mean=-0.030775`,
+`lower95=-0.051581` over 1k duplicate-swapped games). The same checkpoint's
+actor export was only mildly negative (`mean=-0.008752`, `lower95=-0.025487`),
+so the simple supervised average-policy layer is not yet a useful equilibrium
+object. The next pure-RL continuation should not scale this implementation; it
+should either debug average-policy fit directly, implement a more faithful
+RM-FSP/VRPO-style update, or return to search-derived counterfactual advantages
+with the CFR10 baseline intact.
+
+The average-policy fit diagnostic is now complete and does not point to a
+simple fit/export bug: actor-vs-average top-action agreement is around
+`0.76-0.79` with mean KL around `0.028`. The policy is being copied moderately
+well, but the averaged policy is weaker than the actor at this early budget.
+This retires "increase average-policy supervised fit" as the immediate fix.
+The next principled branch should use search-derived counterfactual advantages
+or a materially different RM-FSP/VRPO update rule.
+
+The latest Slumbot-facing diagnostics refine that branch. Exact CUDA resolving
+is now fast enough for bounded live diagnostics, but a 300-hand fast-live run
+still lost and the no-all-in control only reduced variance. The persistent
+failure is calibration under Slumbot's response distribution: blueprint
+opponent-action likelihood is far below uniform on both traces, while a small
+learned response probe transfers across the all-in-enabled and no-all-in traces
+with double-digit log-lift gains. The next continuation target should therefore
+learn a latent opponent-response/public-belief conditioning signal and consume
+it inside search or policy improvement, with a counterfactual-EV replay gate.
+Do not convert this into a manual Slumbot range heuristic; the learned signal
+must survive cross-trace validation and improve decision EV.
+
+That direct EV requirement has now rejected explicit cross-trace range
+replacement. The response signal improved true-hand likelihood across traces,
+but response-conditioned strategies failed beat-rate and selected-action EV
+gates in both directions. The next version should not pass a hand range straight
+to the resolver. It should train a decision-aware latent conditioner or
+auxiliary representation that is consumed by the policy/search network and
+validated by the same EV replay gate.
+
+A shallow learned trust gate is now rejected as well. Observable range-shape
+and solver-drift features contain modest signal, but a ridge selector trained
+on one trace and evaluated on the other did not improve selected-action EV or
+beat rate. The next continuation target should therefore be a representation
+learning task, for example an auxiliary opponent-response head or latent
+conditioner trained jointly with policy/search targets, followed by the same
+cross-trace EV replay gate. Avoid another post-hoc switch unless it is embedded
+in the learned policy/search objective.
+
+The dense SD-CFR window decomposition is negative too. A predeclared late
+checkpoint band from the clean 200x2000 GPU run reached only near parity under
+a higher-confidence local H2H, so the next self-play path should not search for
+a lucky checkpoint band. It should fix the training/deployment contract:
+explicit average-policy semantics, a stronger game-theoretic RL objective, or a
+search-state target whose deployment matches training.
+
+The smallest explicit average-policy Deep CFR deployment test has now failed
+after the workflow compare contract was repaired. The GPU run itself was clean
+(`1M` average-strategy targets, zero rejected traversal chunks, about `403`
+iterations/hour), but corrected candidate-average-policy versus
+incumbent-regret H2H was negative/inconclusive rather than confidence-positive.
+Do not scale the same 50x1000 setup or treat the earlier auto-compare error as
+the explanation. Future average-policy work needs a materially stronger
+self-play objective, larger justified scale, or a different equilibrium-learning
+update; otherwise prefer search-state/public-belief targets with root-disjoint
+decision gates.
+
+The direct search-derived counterfactual-advantage branch has now had its
+smallest fair test and failed. A trust-region update selected eta on train
+traces and evaluated the same eta on holdout. It improved over CFR5 but did not
+beat CFR10, so it is not a useful learned-search primitive by the current
+standard. The next branch should stop trying to reuse one-row policies or
+one-step advantage directions. Prefer a richer dynamic search-state object:
+predict where additional CFR iterations matter, learn a multi-iteration update
+operator, or return to public-belief/search-state fields that can beat CFR10.
+
+The post-PPO exact CUDA frontier improved local resolving fidelity but did not
+solve Slumbot transfer. CFR125 is close to the CFR150 teacher on held-out fixed
+roots, and the `frontier-live` profile is now available, but a 100-hand
+no-all-in Slumbot smoke was negative with stack-scale risk losses. A follow-up
+trace response/range EV replay improved revealed-hand likelihood but worsened
+selected-action and strategy EV. This rejects "better explicit Slumbot range"
+as the immediate deployable fix.
+
+The next continuation target is therefore a **trace-start / hard-state
+self-play contract**, not another response-range patch or Slumbot chip sample.
+Use failed live trace states as data-augmented game starts or search-state
+training contexts, with an explicit source/context flag so the learner can
+distinguish normal self-play from hard states. Before training, build the
+smallest verified contract that reconstructs observation features, legal masks,
+street/action context, and provenance from Slumbot trace cases. Only after that
+contract is tested should native RL or search-guided updates consume it. The
+gate remains decision impact first: held-out root value/action improvement and
+native league transfer before any larger Slumbot run.
+
+That smallest contract now exists and passed on the failed frontier-live trace:
+39 observation-only hard states with exact Slumbot feature and legal-mask
+parity, plus one explicit source flag. It also shows why naive native
+environment restarts are risky: 21 of 118 observed Slumbot bet actions are
+soft-mapped below a 0.95 top-weight threshold into the local 9-action
+abstraction. The next decision is architectural, not a knob choice. A full
+DAGS-style environment restart requires reconstructing local `PokerState`
+transitions from Slumbot continuous bet strings, which is nontrivial and may
+introduce a new abstraction mismatch. A safer immediate step is a feature-level
+hard-state update: consume the verified hard-state observations in a
+variance-reduced search/RL objective, require held-out decision-impact
+improvement, and keep the contract marked non-deployable until it proves
+transfer.
+
+The first feature-level hard-state policy probe failed this gate. It could fit
+source records but did not generalize to held-out hard states, and the
+multi-trace leave-frontier-out version was worse despite positive held-out
+oracle EV. This means the issue is not absence of signal; it is a mismatch
+between detached feature-policy fitting and the decision/search process. The
+next continuation should not scale this policy head. Prefer either (1) a
+continuous-bet trace-state reconstructor so DAGS-style self-play can truly
+restart from those states, or (2) an in-resolver/variance-reduced update that
+uses hard states as search queries while staying inside the solver's decision
+loop.
+
+The realized-trajectory-return search-guided actor bridge has now had its
+smallest fair smoke and failed. It fixed the previous "local scorer only" issue
+by assigning complete-hand returns to the behavior actions actually taken, but
+both the matched base and search-improved policy-head actors regressed held-out
+fixed-root selected-action value, policy EV, and oracle gap. This points to
+variance and counterfactual credit assignment as the active bottleneck. The next
+continuation should not tune return temperature. It should implement or test a
+variance-reduced search-guided RL update, such as VRPO/Q-boosted
+Expected-SARSA(lambda) under search-guided behavior, or a search-derived
+counterfactual advantage update with the same matched decision-impact gate.
+
+The first VRPO-style behavior-only Q-boosting smoke is also not enough. Adding
+`--behavior-mode q_boosted` to raw-sequence q-lambda PPO changed the sampling
+policy and used CUDA correctly. A review fixed the Q-mode PPO contract so
+expected-Q baselines are frozen at rollout time. After that fix, the matched 1k
+duplicate-swapped H2H versus policy behavior was weakly positive but still
+negative-lower95 (`mean=+0.002858`, lower95 `-0.008387`). The native league
+check against stronger controls failed (`best_worst_lower95=-0.037461`). Do not
+run Slumbot from the 1k checkpoint. Because the correction changes the training
+contract used by older q-lambda checkpoints, the next continuation should run
+one matched corrected h512/2k policy-vs-Q-boost A/B. If that fails native
+controls, move Q/search information into the policy-improvement target itself
+or pivot back to learned public-belief/search updates consumed inside
+resolving.
+
+The matched corrected h512/2k A/B did not fail. Q-boosted behavior beat the
+corrected policy-behavior twin with positive 5k lower95 and beat NFSP10k plus
+flat q-lambda 10k, but it tied raw-sequence q-lambda 10k and lost to CTDE
+q-lambda 10k in 20k confirmations. The next continuation should not be Slumbot
+yet. Run exactly one corrected CTDE + Q-boost h512/2k test, because it combines
+the two locally useful ingredients under the same self-play/RL philosophy. If
+that still fails CTDE/native controls, stop PPO-family scaling and pivot back
+to learned public-belief/search-state updates consumed inside resolving.
+
+The CTDE + Q-boost test has now failed the strict native league. It improves
+random-eval payoff and beats NFSP10k, but it does not beat the non-CTDE
+Q-boost checkpoint or the CTDE/raw-sequence controls with positive confidence.
+Therefore the next continuation is no longer another PPO variant. The workflow
+should pivot back to a resolver-consumed learned object: public-belief/search-
+state updates trained on root-disjoint traces, or exact GPU resolving frontier
+work that directly improves root decisions under the same budget.
+
+The refreshed exact CUDA frontier says the next concrete baseline is CFR125
+versus CFR150 on held-out public roots: CFR125 reached `1.0` top-action
+agreement, `0.060359` L1, and zero illegal mass at about `432 ms/root`. The
+next continuation should use this as the teacher/baseline. Either integrate
+this exact search budget into a controlled live/self-play path, or train a
+learned resolver update that beats the CFR100/125 frontier by quality per
+millisecond on root-disjoint states.
+
+2026-05-22 update: the old low-state warm-start interface is rejected, but the
+solver-consumed update interface has a valid positive control. A CPU diagnostic
+`iteration_update_fn` now lets CFR inspect reach/value/regret/strategy state
+between iterations and replace regret or strategy sums consumed by the next
+iteration. On 8 root-disjoint turn states, an oracle that copied the CFR25
+selected-node regret and strategy state into a CFR5 solve exactly matched the
+CFR25 root policy (`0.0` L1/KL, `1.0` top-action agreement) with mean latency
+`2180 ms` versus `9202 ms` for CFR25. This is not a strength result because it
+uses teacher state at inference time. The next continuation target is a learned
+in-resolver update diagnostic trained on disjoint traces and judged against
+uniform CFR10/CFR25 by root policy L1/KL, top-action agreement, and latency.
+Do not return to external eta selectors, final-policy imitation, or Slumbot
+confidence runs until this learned update object either passes or is falsified.
+
+The first learned update through that hook is falsified in the shallow
+aggregate-policy form. A trace-delta MLP trained on root trace summaries and
+consumed by the hook improved vanilla CFR5 only marginally (`0.5767` vs
+`0.5951` mean L1) and lost to uniform CFR10 (`0.4148` mean L1, `0.875`
+top-action agreement). This preserves the hook direction but rejects root
+policy-vector injection. The next attempt must predict/update a richer
+per-hand regret/strategy field or improve exact CFR runtime; it should not
+add another scalar selector or policy-target fit metric.
+
+The existing low-state per-hand regret/strategy checkpoint also failed when
+reused as a closed-loop hook update. It had zero illegal mass and was
+root-disjoint, but hook-CFR5 reached only `0.6961` mean L1 and `0.375`
+top-action agreement versus CFR25, while uniform CFR10 reached `0.3847` and
+`0.875`. This rejects both current learned hook surfaces: aggregate root-policy
+injection and static per-hand field prediction. The next principled move is
+not a small architecture or epoch tweak. Either train a model specifically on
+closed-loop hook trajectories with a direct CFR10/CFR25 decision loss, or shift
+to decision-preserving exact search acceleration so the runtime search budget
+can increase without adding learned miscalibration.
+
+The exact-search acceleration check keeps the existing CUDA path but rejects
+the newer segmented path for the active shape. `torch-levelsync-cuda` matched
+CPU top actions on 8/8 root-disjoint turn states and was about `55x` faster,
+though dense policies differ slightly because of float32 recurrence drift
+(`0.00836` mean L1). `segmented-cuda` matched `torch-levelsync-cuda` top
+actions but was slower (`1.38x` candidate/reference latency ratio), so it is
+not the next lever. The next experiment should use `torch-levelsync-cuda` as
+the exact evaluator and either spend the saved budget on stronger CFR teachers
+or train a genuinely closed-loop update learner against those teachers.
+
+The first post-synthesis exact-budget frontier supports that choice. On 16
+root-disjoint turn states, `torch-levelsync-cuda` improves smoothly against a
+CFR100 teacher as budget rises: CFR5 `0.8671` mean L1 and `0.50` action
+agreement, CFR25 `0.4323` and `0.6875`, CFR50 `0.2273` and `0.875`, with CFR50
+mean latency `173.5 ms`. The next continuation should treat CFR50/CFR100 exact
+search as the current teacher/runtime improvement source. Before another neural
+update model, verify whether this stronger exact budget improves fixed-state
+or live-profile decisions under the actual runtime budget; if learning is used,
+the target must be the closed-loop CFR5-to-CFR50/CFR100 improvement.
+
+The higher CFR200 frontier narrows the blocker further. On 8 roots, CFR50,
+CFR100, and CFR150 all matched the CFR200 top action, while dense L1 improved
+from `0.3118` to `0.1451` to `0.0657`. Live-scale exact search is therefore
+not the most suspicious failure source for these turn/river shapes. The next
+mainline should shift one level up: improve the self-play blueprint/range
+object that feeds the resolver, preferably with search-improved self-play or a
+public-belief policy/value training contract where the deployed resolver and
+training target share the same distribution.
+
+The first recurrent dynamic search-state version is also falsified at the
+current data scale. A GRU over the ordered CFR trace from iterations `0..5`
+fit the 32 train roots but failed the root-disjoint 32-root holdout:
+predicted-policy L1 was `0.6631`, worse than low CFR5 `0.5102` and uniform
+CFR10 `0.3288`, and top-action agreement was `0.5625` versus uniform `0.84375`.
+This retires small-data recurrent trace tuning. A future update-model attempt
+must first collect a substantially larger root-disjoint trace corpus or change
+the supervision target; otherwise prefer fused uniform GPU search and early
+street blueprint calibration.
+
+The 96-root follow-up does not justify collecting a larger corpus for the same
+sequence-to-policy target. The learning curve is weak and remains below low
+CFR5 and uniform CFR10. The next target should now change the learned object or
+the compute frontier: exact GPU search acceleration, a learned multi-iteration
+update operator validated inside the resolver, or a decision-aware
+public-belief value/search state. Do not run another plain GRU trace-policy
+scale check without a methodology review explaining the new mechanism.
 
 The required first gate is not Slumbot. It is a root-disjoint resolver A/B:
 compare low-budget vanilla CFR+ against low-budget neural-warm-start CFR+, both
@@ -403,6 +1248,23 @@ cheap through a fused/batched GPU solver path, or learn a recurrent
 solver-dynamics/update model trained on a larger root-disjoint trace corpus and
 judged by the same uniform-budget baseline.
 
+The recurrent model branch has now been tested before collecting more data and
+failed for exactly that reason: train fit did not transfer across the 32/32
+root split. Do not treat this as an architecture-only failure. It is evidence
+that the current trace corpus is too small and heterogeneous for learned
+solver-dynamics generalization. The immediate continuation should therefore
+favor larger trace data collection only if it is paired with a clear gate, or
+return to uniform CUDA CFR and blueprint/search calibration work that already
+has stronger local evidence.
+
+The next calibration work has started with the right kind of gate. The new
+fixed-state early-street diagnostic compares candidate and reference policies on
+identical preflop/flop states and failed the current `iter1000` checkpoint:
+`22.06%` preflop and `33.33%` flop top-action all-in, with `1.1537` mean L1 to
+the reference. The continuation target is now blueprint calibration that changes
+the learned policy distribution itself, not a manual action filter and not more
+Slumbot spend.
+
 The immediate evidence now favors the fused GPU search path. On 128 fixed
 roots, `torch-levelsync-cuda` CFR100/125 remained close to a CFR150 teacher,
 with CFR125 reaching `99.21875%` action agreement at lower latency than CFR150.
@@ -471,6 +1333,94 @@ compare candidate and incumbent decisions on sampled reachable preflop/flop
 states using duplicate-swapped rollouts or a stronger local teacher, then only
 spend Slumbot hands on candidates that pass both distribution sanity and value
 transfer.
+
+A learned-reference policy-head calibration has now solved the first half of
+that gate locally. Fitting only the `iter1000` policy head to the
+`restored_history_200x2k_4x512_final` learned reference on fixed early states
+passed the local distribution screen: top-action all-in dropped to `0%` on
+preflop/flop and mean L1 to the reference fell to `0.6106`. The next step should
+not be Slumbot promotion yet. It should ask whether this calibrated head
+improves early-street action value/transfer on duplicate-swapped local rollouts
+or a validated adversarial evaluator, because the reference itself did not beat
+Slumbot.
+
+The lightweight value proxy now supports continuing this branch. On the existing
+restricted showdown first-action diagnostic, the calibrated policy head beat
+both source and reference on selected payoff, oracle gap, and oracle-match rate.
+Because this proxy assumes called actions go to showdown, it should not be the
+promotion gate. The next unit should be a duplicate-swapped local self-play
+comparison using the calibrated `policy-head` strategy source, with action-mix
+and early first-action attribution recorded.
+
+That duplicate-swapped comparison is now negative. The calibrated policy head
+lost to both its source regret policy and the learned reference despite passing
+distribution and one-step value screens. The next continuation target should not
+be stronger behavior cloning from a fixed reference. It should diagnose what the
+policy-head calibration changes during full-hand play: action mix by street,
+early first-action buckets, and whether the policy-head-only deployment is
+breaking later-street regret/search coupling.
+
+The attribution result points away from fixed-reference cloning. The calibrated
+head repaired fixed-state argmax all-ins but, in stochastic full-hand rollout,
+still samples risky actions and makes common call/raise buckets lose against the
+reference. The next continuation target should be rollout-aligned: either train
+the policy object on its own induced trajectory distribution, or avoid deploying
+a separate cloned head and return to SD-CFR/ReBeL-style regret/value rollout
+selection where the played policy and the learned object remain coupled.
+
+The obvious covered-head variant has been falsified too. Falling back to regret
+outside calibrated streets still loses locally, so the next step should not be
+another deployment-source toggle. It should be a rollout-aligned learner or a
+checkpoint/value-network deployment path whose objective is trained and
+evaluated on the same induced full-hand distribution.
+
+The student-induced version has now failed that bar. It moved the target
+distribution in the intended direction but still lost local H2H. The next
+continuation target should retire reference policy-head cloning and use an
+objective where rollout return or regret/value updates are part of training:
+for example SD-CFR-style sampled value-net deployment, NFSP/FSP average-policy
+self-play with H2H gates, or a ReBeL-like search/value loop. Do not continue by
+tuning target size, target temperature, or calibration learning rate.
+
+The first SD-CFR-style deployment check is now the live continuation target.
+The restored-history iteration-checkpoint mixture beat `iter1000` regret by
+`+29.09 +/- 1.69` chips/hand over three 2k-game duplicate-swapped runs and was
+near-tied with restored final (`-0.53 +/- 1.05`). This is the first result after
+the policy-head failures that keeps value/regret deployment coupled and still
+improves a local H2H gate. The next work should not tune mixture weights by
+benchmark outcome. It should add a reviewed, Slumbot-compatible SD-CFR mixture
+strategy source that samples a fixed iteration checkpoint per hand, preserves
+existing action mapping and solver hooks, and then runs a tiny API smoke before
+any confidence spend.
+
+That adapter now exists and passed its integration smokes. The next continuation
+target is therefore a bounded falsification ladder for the exact same fixed
+mixture semantics: first local duplicate-swapped and trace/mapping gates, then
+only a small predeclared Slumbot confidence check if the local gates remain
+positive. Do not alter mixture weights, checkpoint glob, solver profile, or
+Slumbot deployment flags in response to tiny smoke chip outcomes.
+
+The queue can now represent that local mixture falsification directly via
+`enqueue-sd-cfr-mixture-falsification`, which runs the objective audit and
+`eval_sd_cfr_mixture.py` for fixed candidate globs/checkpoints. Use this before
+any larger Slumbot check so the continuous workflow does not silently collapse a
+checkpoint mixture into one selected model.
+
+After the first queued holdout run, the ladder must be hardened: the mean was
+positive but the across-seed lower95 was negative. The gate now treats that as
+failed. The next continuation target is a mechanism diagnosis of mixture
+instability, not live API spend: inspect per-seed action/outcome attribution,
+single-checkpoint contribution, and whether the local duplicate-swapped
+baseline is too noisy or the mixture is genuinely brittle.
+
+The single-checkpoint contribution check narrows the next step further. The
+late `iter200` snapshot is weak while `iter100` is strong, so the sparse
+four-checkpoint linear mixture is not a faithful enough SD-CFR average. The next
+reviewed objective should be "proper SD-CFR snapshot semantics": save or restore
+a denser sequence of value networks, define the averaging weights before
+evaluation from the training iteration contract, and rerun the strict lower95
+gate. Do not promote `iter100` directly; that would be checkpoint selection on
+the diagnostic set.
 
 The first-action outcome diagnostic reinforces that direction. In a fresh
 300-hand restored-history attribution run, the largest first-action bucket was
@@ -1070,3 +2020,1197 @@ The integration contract is now captured in
 `docs/research_protocols/sampled_action_control_variate_traversal_plan.md`.
 Keep all implementation opt-in and research-only until exhaustive-vs-sampled
 regret comparisons pass on deterministic small states.
+
+## 2026-05-21 Dense SD-CFR Update
+
+The dense SD-CFR average-strategy path is not the next scale target. A clean
+GPU-bound every-iteration `200x2000` run had zero rejected traversal chunks and
+used the GPU correctly, but the predeclared average lost the local falsification
+gate and its individual checkpoints did not reveal a robust competent region.
+Early-street diagnostics show the important distinction: the dense run can
+reduce visible all-in pathology while still selecting poorly aligned early
+actions. The next continuation target should therefore change the training or
+search target itself: learn a decision-aware early-street action-value /
+counterfactual correction, or return to the ReBeL / Student-of-Games shaped
+public-belief search-state objective with a root-disjoint decision gate. Do not
+treat more SD-CFR iterations, post-hoc snapshot weights, or policy-head cloning
+as principled progress without a new methodology review.
+
+The first public-information rollout diagnostic is now available as
+`scripts/eval_public_action_rollout_values.py`. It samples opponent hole cards
+and future deck order from the public root, scores every legal first action on
+the same sampled worlds, and rolls out with a continuation policy. This rejects
+the unsafe copied-hidden-state rollout shortcut and gives a stronger positive
+control than the showdown-only restricted value diagnostic. It also exposed an
+important evaluation-contract detail: live Slumbot greedy play for regret
+sources selects by masked raw advantage, not by regret-matched policy
+probability. The diagnostic now matches that deployment contract.
+
+Corrected 64-root/32-world CUDA results still do not promote dense SD-CFR. The
+incumbent had selected value `81.32`, oracle gap `21.00`, and top-action match
+`0.50`; dense iter100 had selected value `75.17`, gap `35.17`, and match `0.25`;
+dense final had selected value `53.17`, gap `57.26`, and match `0.03125`. This
+is diagnostic-only evidence because the rollout continuation can still inherit
+the model's own all-in/fold biases. The next principled step is to turn this
+into a candidate teacher only after adding a fixed continuation/opponent
+population or resolver-derived public-belief target, then validating on a
+root-disjoint decision gate.
+
+The fixed-continuation variant is now implemented. Using `iter1000` as the
+predeclared continuation checkpoint makes the dense weakness clearer: dense
+iter100 selected value falls to `31.73` with gap `70.58` and match `0.078`;
+dense final selected value is `28.33` with gap `73.98` and match `0.125`. This
+does not make `iter1000` a teacher by itself because it is all-in heavy. It
+does show that the next useful target is an opponent population or
+resolver-derived public-belief teacher, not more self-continuation rollout or
+more dense SD-CFR scale.
+
+The restored-history continuation falsifies the "incumbent continuation caused
+the dense failure" explanation. Under `restored_history_200x2k_4x512_final` as
+fixed continuation, dense iter100 scores `-9.20` selected value with gap
+`132.25`, and dense final scores `-18.52` with gap `141.57`. The next step
+should leave checkpoint-continuation diagnostics and build a resolver-derived
+public-belief teacher or a predeclared checkpoint-population teacher with
+root-disjoint gates.
+
+The predeclared checkpoint-population continuation was also negative. Averaging
+continuation strategies from `iter1000`, restored-history final, and the
+corrected-all-in smoke produced incumbent selected value `75.76` with gap
+`24.93`, while dense iter100 scored `4.75` with gap `95.94` and dense final
+scored `5.92` with gap `94.77`. This retires checkpoint-continuation teachers
+as the next mainline. The next continuation target is now specifically a
+resolver-derived public-belief/action-value teacher.
+
+The exact public-belief boundary was rechecked after the checkpoint-continuation
+failures. Dynamic per-iteration cut replay still preserves the teacher exactly
+on the restored200 successor pool (`1.0` action agreement, `0.0` mean L1 on 28
+eligible roots), but static fixed-iteration-5 replay fails badly (`0.3929`
+agreement, `0.9112` mean L1). This sharpens the target: the next learned object
+must represent dynamic search state or update behavior consumed inside the
+resolver. A static leaf-value table, fixed checkpoint continuation, or
+single-iteration value distillation is not the mainline.
+
+A larger root-disjoint CFR-trace scale check did not rescue the existing
+dynamic predictor. The 96-root/64-root recurrent trace model trained on CUDA but
+was worse than both CFR5 and uniform CFR10 on holdout root decisions. A linear
+selective-budget predictor found weak signal, but selective CFR10 escalation on
+the top 20% predicted roots still lost to simply running CFR10 everywhere. The
+next branch should therefore emphasize exact search acceleration, better
+amortized search-state interfaces, or richer game-theoretic update targets
+rather than another small trace-policy predictor.
+
+The CUDA level-synchronous exact-search frontier strengthens that conclusion.
+On the same restored200 holdout, CFR25 against a CFR50 teacher reached `0.2715`
+mean L1 with zero illegal mass at about `108 ms` per root, while CFR10 was
+`0.5371` L1 at `56 ms`. The current practical baseline is therefore not a weak
+learned replacement for search; it is GPU-backed exact resolving with a clear
+quality/latency frontier. Learned components must either improve this frontier
+or amortize a richer search-state update without degrading root decisions.
+
+The opponent-reach EV-factor dual-CFV target is a useful reviewed control but
+not the next mainline by itself. On the cached river 384x128 split it passed
+the reconstructed-CFV constant-baseline gate, yet was worse than the direct raw
+dual-CFV probe (`0.3970` vs `0.3844` MAE; `0.5252` vs `0.5093` RMSE). Do not
+scale this factorization without a stronger decision-consumption argument.
+
+The amortized mirror search-update branch sharpens the next target. A learned
+eta selector failed the 96/64 root-disjoint gate (`0.5257` L1, worse than CFR5
+and CFR10), but the per-root eta oracle beat CFR10 on a 32-root holdout
+(`0.2291` L1, `0.9375` top match). The next update-operator attempt must learn
+a richer selector from dynamic search-state features, or the project should
+spend the next engineering cycle on exact GPU search acceleration instead.
+
+The oracle-eta selector follow-up failed the same way after adding the full
+early trace trajectory and direct per-eta decision-loss labels. It fit train
+roots perfectly but selected damaging etas on root-disjoint holdout (`0.5827`
+L1 on the 96/64 split versus CFR10 `0.3251`; `0.5016` on the 32/32 split
+versus CFR10 `0.3288`). This rules out another shallow selector as the next
+mainline. The next continuation target should either make exact
+level-synchronous GPU resolving cheaper at the same quality, or learn a
+stateful solver-dynamics object that is trained and consumed inside the
+resolver rather than picked by an external static feature row.
+
+The existing non-CFR+ update-rule gate does not change that conclusion.
+`dcfr_plus` at five iterations improved mean L1 over CFR5 but worsened KL and
+all-in probability calibration; `pdcfr_plus` failed outright. Both are CPU-only
+in the current live-relevant path. The next exact-search branch should focus on
+CFR+ budget/latency engineering, batch/caching, or an actually learned update
+rule with a closed-loop gate, not manual selection among these update variants.
+
+Before another variant of that branch is expanded, use the executable paradigm
+innovation gate. The next mechanism must be chosen by first-principles anomaly
+value, not by convenience: either an exact GPU CFR+ quality/latency primitive
+that raises the search frontier, or a stateful learned solver-dynamics object
+trained and consumed inside the resolver. The innovation review must name the
+cross-paradigm analogy, thought experiments, related work, and one root-disjoint
+decisive test before any new training or selector run.
+
+The first reviewed closed-loop proxy failed. A one-step delta model over real
+CFR trace states learned under teacher forcing, but its own held-out rollout
+drifted worse than CFR5 and CFR10 even with a training-derived trust-region
+cap. This retires semi-closed-loop policy-delta rollouts as the next mainline.
+The next continuation should be one of two stronger branches: exact GPU CFR+
+search acceleration/caching, or a true in-resolver learned update that modifies
+regret/search state while exact CFR+ recomputes the next state. Do not add more
+standalone trace-policy predictors before a fresh innovation review.
+
+The first exact-GPU continuation step is now complete: `auto` uses
+`torch-levelsync-cuda` when CUDA is available, with a reviewed CPU-vs-auto
+fixed-state smoke showing about `5.36x` CFR50 latency improvement. Static
+tensor caching was added for reused solver trees, but its measured gain is
+minor. The next continuation should not be another backend-selection tweak; it
+should measure whether the cheaper GPU default lets us raise live solver budget
+or add a teacher-aligned boundary policy that improves root decision quality per
+millisecond without weakening Slumbot or local promotion gates.
+
+The live wrapper smoke passed after the default flip, so integration is no
+longer the immediate blocker. The next continuation should be a decision-quality
+experiment: either a same-state live-budget frontier judged by root distribution
+quality per millisecond, or a reviewed boundary/disagreement policy that spends
+extra exact GPU CFR only when the cheap solver is likely to cross an action
+boundary. Do not interpret tiny Slumbot chip swings as progress.
+
+The same-state budget-profile diagnostic now favors the second option. Fast-live
+saved about 35% latency but still disagreed with live on four of 32 roots. The
+next continuation target is a selective exact-search escalation gate: train or
+derive a cheap boundary score from public state, low-budget strategy geometry,
+or early trace features, then spend live/high budget only on the predicted
+boundary roots. The pass condition should be root-disjoint improvement in
+latency at fixed action/distribution agreement, not a new Slumbot score.
+
+The first selective-escalation gate shows that public-state features alone are
+too weak. Keep the selective-escalation framing, but move the next attempt to a
+solver-native boundary signal: margin between top actions, entropy, fast/live
+low-budget trace deltas, or other cheap quantities available from the exact
+resolver before deciding whether to escalate. Do not train another CFV-only
+ridge selector unless it is a negative control.
+
+The first solver-native boundary signal is positive enough to continue, but
+not enough to deploy. A ridge selector over only fast-live strategy geometry
+passed both 64/64 root-disjoint directions for profile-L1 reduction while
+staying below live latency, whereas action-disagreement classification remained
+noisy. This is philosophically cleaner than a public-state heuristic: the
+resolver spends more computation when its own cheap distribution indicates a
+boundary. The next continuation should validate the same signal on a larger
+fresh auto-CUDA profile and then wire it only as an opt-in budget policy with a
+same-state live-profile gate. Do not promote it from the current 128-root
+diagnostic or tune thresholds as the main research result.
+
+The larger fresh holdout now supports a guarded opt-in path. Training on the
+older 128 roots and holding out on fresh roots `64..127` passed with better L1
+and top-action agreement below live latency, and `selective-fast-live` now runs
+through the Slumbot wrapper with traceable score/threshold fields. The next
+continuation target is a controlled same-state integration check: compare
+`fast-live`, `selective-fast-live`, and `live` on fixed roots using the exported
+policy. Only after that should we spend on a larger Slumbot run. If the fixed
+root gate fails, retire the live wrapper path and return to exact GPU search
+amortization or richer trace dynamics.
+
+That controlled fixed-root integration check now passes under true online
+latency accounting: escalated roots pay for both the cheap fast-live solve and
+the live rerun. The next continuation target is therefore an opt-in Slumbot
+confidence run for integration and transfer, not a default change. Keep `live`
+as the default, collect traces with selector score/threshold/escalation, and
+judge the run by API/parse health, solver latency, escalation rate, and chips
+only with enough hands to avoid tiny-sample noise. If Slumbot transfer is bad
+despite fixed-state gains, diagnose distribution shift in the selected roots
+rather than tuning the selector threshold.
+
+The first 100-hand no-all-in Slumbot triangle is only an integration/latency
+smoke. It confirmed no API/parse regressions and showed selective latency close
+to fast-live, but the chip intervals are much too wide and the runs are
+unpaired. The next continuation should either run a larger all-in-enabled
+confidence check or, more efficiently, analyze the selective trace roots:
+compare selector scores, escalation decisions, action likelihood, and Slumbot
+outcomes against the fixed-state profile distribution to see whether the
+selector is firing on the right live states.
+
+2026-05-21 objective clarification: do not let that Slumbot trace analysis
+become the primary promotion path. The workflow now requires a self-play
+checkpoint league as the first strength signal: candidate versus previous
+checkpoint, candidate versus incumbent, and candidate versus native self-play
+controls where available. Slumbot remains held-out external validation after
+the internal league ladder passes. The immediate continuation target is to
+validate the league evaluator, then use it to build a checkpoint-progress plot
+for the current family before spending more Slumbot confidence hands.
+
+The first self-play-first pass found a real internal checkpoint peak but not
+Slumbot transfer. In the restored-history 200x2000 4x512 family, `iter100`
+beats the old incumbent and neighboring checkpoints under duplicate-swapped
+league gates, while the final checkpoint is worse than `iter100`. Promoting
+the internal peak to local incumbent was therefore correct. Held-out Slumbot
+validation then failed cleanly: `iter100` lost `-393 +/- 268` chips/hand over
+1000 hands with no API/parse errors, no all-in actions, and acceptable
+fast-live latency. Action/range diagnostics localize this to calibration:
+Slumbot action log-lift is `-9.237` for the model but `+1.042` for a
+leave-one-out street baseline, and true hand range log-lift worsens on
+turn/river and large pots. The next continuation target should not be more
+Slumbot chip trials. It should use the existing latent-response-conditioner
+review: keep Slumbot traces as held-out diagnostics, train/validate a
+decision-aware learned public-belief/response representation, and require
+cross-trace selected-action EV improvement before any resolver integration.
+
+The latest `iter100` cross-trace replay strengthens but does not solve that
+branch. Calibrated response probes trained on one trace beat the model and
+uniform on the other trace in both directions (`+0.630` and `+1.382` external
+log-lift), confirming a real learned opponent-response signal. Direct
+response-range replacement failed the executable gate on both a 64-case smoke
+and a larger 192-case replay. The larger replay is decisive: mean strategy EV
+was `-3.04`, only `32.3%` of states beat baseline, and promotion stayed
+blocked even though true-hand likelihood improved by `+4.44` log-lift. A
+shallow selector could rescue a small positive mean EV but had near-zero
+cross-trace prediction correlation and weak beat rate. Continue with latent or
+jointly trained conditioning inside policy/search; do not spend the next cycle
+on threshold tuning or a manual range switch.
+
+The first bounded "latent" selector over the same observable response-range
+and solver features is also negative as a mainline. It passed the loose
+diagnostic gate by improving over direct range replacement on mean EV, but it
+overfit the small train artifact, had negative external prediction
+correlations, and underperformed the simpler shallow selector on selected-action
+EV. This retires post-hoc nonlinear selectors over the current summary
+features. The next continuation should either integrate an auxiliary
+response/public-belief head into the self-play/search network so the learned
+state is consumed during policy improvement, or leave Slumbot-response modeling
+as a diagnostic branch and return to self-play public-belief/search-state
+targets.
+
+Online related-work refresh after these failures favors that shift over more
+Slumbot-response tooling. AlphaHoldem is the most relevant PC-oriented
+precedent: end-to-end self-play RL, structured card/action tensors, historical
+model opponents, multitask losses, and model selection, with reported wins
+against SlumBot and DeepStack and millisecond inference. TurboReBeL and recent
+policy-gradient theory support the other principled branch: accelerate
+public-belief/search-state learning rather than hand-patching opponent ranges.
+Therefore the next continuation target should be one of two reviewed tracks:
+an AlphaHoldem-style self-play actor-critic league baseline inside this repo's
+full-deck action contract, or a public-belief/search-state target that produces
+root-disjoint decision improvement. Do not continue the direct SlumBot
+opponent-response branch except as a diagnostic.
+
+The AlphaHoldem-style branch now has its first bounded mechanism: native PPO
+can opt into `--feature-mode raw_sequence`, which keeps raw card one-hots and
+continuous game scalars while encoding betting history as ordered action tokens
+and bet amounts instead of per-street action-count summaries. This is not a
+strength claim and not a Deep CFR feature-contract change. The immediate
+continuation target is a small GPU self-play pilot against the flat PPO control
+and the native NFSP/q-lambda controls, judged by duplicate-swapped H2H league
+gates before any SlumBot run.
+
+That first league smoke found a real local signal but also a best-iterate
+problem. Raw-sequence q-lambda PPO beats several native controls with positive
+lower95 bounds, including NFSP10k and flat q-lambda PPO 10k, but it does not
+yet confidence-beat the CTDE q-lambda 10k control and the 10k raw checkpoint
+does not confidence-beat raw 2k. Continue with seed replication and checkpoint
+league selection inside the self-play workflow. Do not move to SlumBot until
+the raw-sequence branch clears a replicated local-control gate.
+
+Seed replication supports the raw-sequence representation but does not close
+the CTDE-control gap. The next continuation target is a larger native-policy
+league run using `scripts/eval_native_policy_league.py` over the two raw 2k
+seeds, raw 10k, and the native controls. Promote only if the best checkpoint
+has positive worst-case lower95 against NFSP10k, flat q-lambda 10k, and CTDE
+q-lambda 10k. Otherwise, keep raw-sequence q-lambda as a promising control and
+return to a reviewed mechanism such as historical-opponent population training
+or multitask actor/value/policy losses.
+
+That larger summary gate failed promotion while selecting raw-sequence
+q-lambda 10k as the current native best iterate. The bottleneck is now the
+self-play training distribution: current-policy self-play and one-step
+q-lambda improvement produce useful policies, but not robust monotonic league
+progress. The next continuation target is a historical-opponent population
+pilot with the same raw-sequence observation and q-lambda PPO objective, using
+fixed snapshot scheduling and duplicate-swapped league gates. Keep SlumBot
+held out.
+
+The historical-opponent path is now implemented and smoke-tested. Continue
+with a bounded 2k CUDA pilot using raw-sequence q-lambda PPO plus frozen
+self-play snapshots, then gate it against raw q-lambda 2k/10k, NFSP10k, flat
+q-lambda 10k, and CTDE q-lambda 10k. If it does not improve worst-case
+lower95, retire this simple population schedule and review a more faithful
+AlphaHoldem-style multitask/policy-selection objective.
+
+The simple historical-opponent schedule failed that gate. Keep the code as an
+opt-in control, but do not tune snapshot interval or capacity. The next
+continuation should do an online related-work refresh focused on AlphaHoldem's
+multitask/self-play objective and then queue a methodology review for the
+smallest faithful next mechanism. The current best local checkpoint remains
+raw-sequence q-lambda 10k, but it is not promoted because CTDE q-lambda 10k is
+not cleared with positive worst-case lower95.
+
+The K-best approximation also failed, so the workflow should stop spending
+cycles on historical-pool schedules. The next continuation target is a reviewed
+Trinal-Clip/multitask-loss pilot: keep raw-sequence observations and q-lambda
+PPO, modify only the learning objective, and gate against the same native
+control league. If that fails, the AlphaHoldem-lite path should pause and the
+project should return to public-belief/search-state learning.
+
+The Trinal-Clip pilot failed. Keep the raw-sequence representation as useful
+native-policy evidence, but stop the AlphaHoldem-lite PPO line here unless a
+more substantial architecture review is opened. The active next target should
+return to public-belief/search-state learning: root-disjoint decision
+improvement, learned search-state updates, or exact GPU search acceleration,
+with native raw-sequence q-lambda 10k retained only as a local control.
+
+2026-05-22 continuation update: the reviewed public-belief/search-state
+warm-start gate has now rejected the current low-state regret/policy field
+under the stricter uniform-budget baseline. On 64 root-disjoint holdout roots,
+the learned warm start moved some roots in the right direction, but it lost to
+uniform CFR10 on L1, KL, top-action agreement, and latency. Do not rerun this
+same warm-start checkpoint, train another shallow selector, or scale a hidden
+size/epoch sweep around it.
+
+The next continuation target should be a mechanism-change review and gate:
+learn a stateful search-update object that is consumed inside the resolver, or
+raise the exact GPU CFR frontier. The pass condition must be root-disjoint
+decision quality per millisecond against the same uniform CFR10/CFR25-style
+baseline. A useful first hypothesis is that a learned update must modify
+regret/search state inside the iterative solver with closed-loop loss, rather
+than predict a final policy, choose an external eta, or seed one node with
+per-hand supervised fields.
+
+The first infrastructure step for that target is now in place. The CPU CFR
+solver accepts an opt-in `iteration_update_fn` that can inspect the current
+reach/value/regret/strategy state after each iteration and return replacement
+regret or strategy sums for the next iteration. This is diagnostic-only:
+`torch-levelsync` and segmented backends reject the hook until a separate GPU
+contract is reviewed. The next research action should use this hook for a
+small root-disjoint in-resolver update diagnostic, with uniform CFR10/CFR25 as
+the baseline. Do not treat the hook itself as progress in model strength.
+
+The in-resolver learned-hook diagnostics have now served their purpose. The
+oracle hook proves the update surface is live, but both shallow aggregate-policy
+injection and the old low-state per-hand regret/policy checkpoint lose to simply
+spending a uniform CFR10 budget. Exact `torch-levelsync-cuda` search is the
+current positive decision-impact lever: CFR50/CFR100/CFR150 move monotonically
+toward CFR100/CFR200 teachers with strong root-action agreement at live-scale
+latencies. Therefore the active continuation target is upstream
+search-improved self-play/blueprint distillation, not another static hook.
+
+The first search-improved blueprint target artifact is available at
+`autoresearch-session/search_targets/search_improved_blueprint_turnriver_cfr100_incumbent_seed20260522.npz`.
+It contains 64 belief-conditioned turn/river CFR100 targets sampled from the
+current incumbent's own self-play distribution. Treat it as diagnostic until it
+passes a target-sanity gate: the metadata shows high all-in pressure
+(`0.5469` target top-action all-in rate, `0.4424` mean all-in probability).
+The next action is to compare incumbent regret/policy behavior against these
+targets and decide whether the target set is a useful teacher, needs a
+train/holdout split, or is exposing a blueprint/range pathology.
+
+That 64-target smoke has now failed as a deployable post-hoc policy patch.
+Policy-head calibration improved held-out fit to the CFR100 targets, but it
+over-generalized to all-in on covered turn/river streets and lost heavily to
+the incumbent in duplicate-swapped self-play. Do not promote or Slumbot-test
+this checkpoint. The next principled continuation is either larger
+self-play-distribution target coverage or in-training search distillation, with
+the pass/fail gate still based on self-play decision impact. A reasonable next
+step is a larger CFR100 target set from the same incumbent distribution to test
+whether the failure is small-sample oversteer or a deeper policy-interface
+problem.
+
+The larger 512-target version also failed as a post-hoc policy-head patch. It
+reduced but did not remove all-in oversteer, and duplicate-swapped self-play
+remained strongly negative. This narrows the next target: do not keep
+calibrating tiny policy heads after training. Instead, run one in-training
+search-distillation candidate using the 384-target train split, now that
+search-target checkpoints record covered streets for `policy-head-covered`
+evaluation. If that still loses to the incumbent, treat the current
+action-policy interface as the bottleneck and open a review for richer
+range/belief-conditioned policy inputs rather than increasing target count or
+tuning loss weights.
+
+That in-training search-distillation candidate is also not promotable. The
+25x2k CUDA run was clean and fast, but the resulting checkpoint is far weaker
+than the incumbent at this budget, and the covered policy head only gives a
+noisy within-checkpoint gain versus its own regret source. Because this result
+is confounded by the short training budget, the next continuation target is a
+matched no-target 25x2k control with the same seed/settings. Compare
+search-target versus no-target checkpoints directly and against the incumbent.
+If the search-target loss does not improve same-budget self-play strength or
+held-out root decisions, retire this simple action-policy distillation branch
+and open a reviewed richer-interface mechanism instead of tuning loss weights.
+
+The matched no-target control has now been run cleanly after increasing
+traversal pool capacity to eliminate one rejected chunk. Against the control,
+the search-target checkpoint is only weakly positive: `+65.2` chips/hand by
+regret source and `+46.1` by `policy-head-covered`, with negative lower95
+bounds in both cases. Treat simple action-policy search-target distillation as
+non-promotable and stop tuning target counts or weights. The next continuation
+should queue a methodology/innovation review for a richer mechanism: a
+range/belief-conditioned policy or search-state update object consumed by the
+resolver, with pass conditions based on root-disjoint decision quality and
+same-budget self-play league strength.
+
+2026-05-25 update: the first richer target-export bridge is implemented but
+negative at smoke scale. The new per-iteration warm-start exporter aligns data
+collection better with the resolver hook by exporting current selected-node CFR
+state across iterations, but the first 8-root/4-root low-state-aware field
+model made held-out in-resolver decisions worse than low CFR5 and uniform
+CFR10. This rules out treating "more rows from the same field predictor" as the
+next mainline. The continuation target remains learned search, but the next
+step must be a substantial mechanism change: a bounded regret/advantage
+residual consumed by the hook, a more structured public-belief/search-state
+model with direct decision loss, or a deliberate pivot to exact CUDA CFR
+budget/blueprint quality if no learned update beats the uniform search
+baseline.
+
+2026-05-25 second update: the bounded regret/advantage residual option has now
+failed its smoke gate. The hook stayed legal and capped, but still made
+root-disjoint decisions worse than low CFR5 and uniform CFR10. This retires the
+current learned-hook family, but it must not complete the outer autoresearch
+goal. Do not continue with residual-cap, loss-weight, or hidden-size tuning.
+The next continuation requires an explicit pivot review. The two admissible
+pivots are: exact CUDA search plus stronger blueprint/self-play quality as the
+near-term mainline, or a materially different learned search object trained
+with direct closed-loop root-decision loss rather than field
+replacement/residual prediction. Continuous autoresearch should treat this as a
+soft mechanism failure: document, synthesize, run related-work innovation
+review, choose the next principled mechanism, and continue.
+
+2026-05-25 third update: the soft-pivot workflow is implemented and the pivot
+review has selected exact-search-first blueprint/self-play improvement. A
+root-disjoint `torch-levelsync-cuda` budget frontier passed on 16 held-out
+roots: CFR100 is substantially closer to CFR150 than CFR50 while staying legal.
+The next continuation is therefore not another learned hook. It is to connect
+the exact CUDA improvement operator to training: build or reuse a
+self-play-distribution target set where exact search changes decisions, then
+run a matched same-budget search-improved blueprint/control comparison before
+any Slumbot confidence run.
+
+2026-05-25 fourth update: the static disagreement-weighted version of that
+bridge is now negative for promotion. It trained cleanly and used CUDA, but it
+only produced a noisy `+43.4` chips/hand against the matched no-target 25x2k
+control and remained far behind the restored-history incumbent. Do not tune the
+same static target loss again. The next continuation is a reviewed
+search-as-actor/expert-iteration pilot: exact CUDA CFR should generate improved
+behavior on high-disagreement self-play roots, the deployed policy source must
+consume that signal, and success must be judged first by held-out root decision
+impact and then by same-budget self-play.
+
+2026-05-25 fifth update: the first search-as-actor average-policy pilot passed
+the root-fit side of that bridge but failed transfer. It learned the held-out
+turn/river CFR100 target distribution better than the no-target control, yet it
+lost badly in duplicate-swapped whole-game play against both the restored
+history incumbent and the same-budget no-target control. The continuation is no
+longer another static target replay. Diagnose the decision-transfer break:
+measure where the average-policy actor is out of distribution by street,
+coverage, legal action mass, and all-in/raise-frequency shift, then only queue a
+new mechanism if it couples search improvement to the policy's own whole-game
+state distribution.
+
+2026-05-25 sixth update: the mixed external-plus-traversal search-as-actor
+pilot completed that diagnostic repair but still failed transfer. Whole-game
+coverage fixed the early all-in collapse, so the remaining blocker is not
+primarily compute, legality, or target coverage. The candidate still chose
+lower-value actions under fixed continuation and lost to the same-budget
+no-target control. The next continuation must be decision-value-aware:
+construct a reviewed policy-improvement test where exact search or public
+rollout values produce an advantage/mirror-descent actor update on the policy's
+own sampled states, then compare against the same no-target control. Do not
+spend the next cycle on more static target mixtures, memory caps, or loss-weight
+sweeps.
+
+2026-05-25 seventh update: the first decision-value-aware actor pilot passed
+the local and matched-control gates but not the stronger incumbent gate. This
+validates the pivot from target imitation to value-aware policy improvement:
+selected-action value improved on held-out public-rollout roots and H2H versus
+the matched no-target 25x2k control became positive with lower95 above zero.
+It is still weaker than the restored-history 200x2k incumbent. The next
+continuation should not tune `eta` or root counts as knobs. It should integrate
+the same value-aware actor update into a stronger self-play/average-policy
+training path or produce a reviewed stronger-base variant, then require the
+same held-out value gate plus restored-history H2H before any Slumbot run.
+
+2026-05-25 eighth update: the stronger-base variant has now been tested as a
+covered policy-head overlay on the restored-history checkpoint. It passed the
+local public-rollout gate but failed promotion-quality H2H confidence and
+became too all-in-heavy. Treat this as a useful positive signal, not a solved
+method. The next continuation should move the value-aware actor update from
+offline preflop rollout labels into the training distribution: collect
+search/value-improved targets from the actor's own self-play states across
+streets, or run an on-policy expert-iteration-style loop where the search actor
+generates the next distribution. A new cycle must gate against restored-history
+H2H and all-in/action-distribution drift before any Slumbot confidence run.
+
+2026-05-25 ninth update: the on-policy collector path is now mechanically safer.
+The first on-policy smoke exposed a workflow bug: it claimed multi-street
+training while collecting only preflop targets. Required-street coverage is now
+part of the collector/CLI contract, and the gated smoke produced actual
+flop/turn/river rows. However, the resulting policy-head update is still weak
+and degenerate: it chooses one raise size on every fixed-root eval state while
+policy EV drops. The next continuation should add a decision/action-collapse
+gate for value-aware actor updates, then rerun a small same-budget decision
+gate. Do not launch a large H2H or Slumbot run from this smoke until the update
+improves selected-action value without collapsing the action distribution.
+
+2026-05-25 tenth update: the KL-anchored expected-Q version of the same
+post-hoc actor path has now failed the stricter decision gate too. It is a
+better objective than cross-entropy in-sample, but it still overgeneralizes
+through the covered policy head and collapses fixed-root behavior. This points
+away from more post-hoc policy-head calibration. The next continuation should
+either make exact search the acting policy-improvement operator inside
+self-play/training, or train an actor whose distribution is generated by the
+same value-aware update loop it will later use. Treat one-off policy-head
+patches as controls unless a new review explains why their train/eval
+distribution mismatch is resolved.
+
+2026-05-25 eleventh update: the first search-improved behavior collector has
+now been tested. Greedy search-improved behavior improves top-action root
+metrics but still fails policy-EV transfer; sampled search-improved behavior is
+worse. This narrows the issue further: search must affect data generation, but
+the current covered policy-head patch is still too weak a deployed actor
+surface. The next continuation should stop adding post-hoc policy-head variants
+and either integrate search-improved behavior into GPU Deep CFR average-policy
+training, or run exact-search-as-actor self-play as the behavior policy and
+train a real average actor from that distribution under matched no-search
+controls.
+
+2026-05-25 twelfth update: the real average-policy actor-surface smoke passed
+the fixed-root decision gate and outperformed the no-search replay control on
+that gate, but failed direct H2H transfer. This is the strongest signal so far,
+but still not SOTA or Slumbot-ready. The next continuation should diagnose the
+transfer gap: compare action/street distribution drift and run a slightly larger
+same-mechanism fixed-root/H2H check only if it keeps the same matched no-search
+control. If the gap persists, integrate search-improved behavior into GPU Deep
+CFR training rather than standalone one-shot replay.
+
+2026-05-25 thirteenth update: the bounded two-iteration replay diagnostic
+failed for the search-improved branch while the no-search control passed. This
+retire standalone replay as a mainline. The next continuation should move the
+search-improved behavior signal into GPU Deep CFR average-policy training, where
+the policy is updated during self-play/traversal rather than by isolated
+calibration, or pivot to exact-search deployment/blueprint quality if that path
+is too invasive for the next bounded sprint.
+
+2026-05-25 fourteenth update: the first GPU Deep CFR average-policy injection
+sprint fixed the missing artifact boundary and a control-contamination bug.
+`scripts/build_decision_value_average_strategy_targets.py` now emits
+on-policy decision-value target files that can be consumed by
+`--average-strategy-targets`. `--average-strategy-memory-capacity 0` now
+preserves an external-only average-policy run instead of silently collecting
+additional traversal strategy memory. The tiny CUDA smoke proved mechanics
+only: both matched branches trained with zero collected average-policy memory
+and zero rejected traversal chunks, but the 200-pair H2H diagnostic for
+search-improved external targets was negative. The next continuation should run
+a non-tiny matched gate: build multi-street search-improved and base-behavior
+target artifacts with required street coverage, train same-budget GPU Deep CFR
+branches with external-only average-policy targets, then require a held-out
+root decision gate and duplicate-swapped H2H before any Slumbot validation.
+
+2026-05-25 fifteenth update: the non-tiny multi-street external-injection gate
+failed the held-out root decision test. The failure is sharper than H2H noise:
+both matched branches selected exactly `raise_1.0` on every held-out root, and
+the search-improved branch had lower policy EV than the base-behavior control.
+This retires detached external average-strategy target files as the mainline.
+The next continuation should implement a closed-loop search-behavior
+average-policy memory collector inside training: the search-improved actor must
+generate trajectories and reservoir entries that train the deployed average
+policy. Add a collapse gate on selected-action concentration before running
+H2H. If that also fails, pivot away from average-policy target fitting toward
+exact-search deployment or native policy-gradient self-play controls.
+
+2026-05-25 sixteenth update: the action-collapse failure mode now has an
+executable gate. Future fixed-root rollout checks should immediately run
+`scripts/eval_policy_action_collapse_gate.py` and block H2H/Slumbot if the
+candidate selects one action on most roots. This keeps the workflow focused on
+decision surfaces, not noisy chip outcomes. The next mechanism remains
+closed-loop search-behavior average-policy memory, but it must pass this gate
+before any game-level comparison.
+
+2026-05-25 seventeenth update: the mutable average-policy memory path now
+exists and passed a mechanics smoke. `--seed-average-strategy-memory-from-targets`
+routes decision-value targets into the real reservoir instead of using detached
+external-only targets; the smoke ran on CUDA, seeded `34` search-improved rows,
+kept `average_strategy_external_target_size=0`, and passed a small
+selected-action collapse check. This is only infrastructure. The next
+continuation should run the matched same-budget base-behavior versus
+search-improved memory-seeded gate, then require fixed-root value improvement
+and action-collapse pass before H2H.
+
+2026-05-25 eighteenth update: the first matched memory-seeded root smoke failed
+to beat the base-behavior control. Both branches passed the collapse guard, but
+the search-improved branch had worse policy EV and oracle gap at 1x64. The next
+continuation should either run a modest but still cheap same-budget gate
+(`3x256` or similar, with both branches using memory seeding and zero rejected
+chunks) or pivot if the same failure repeats. Do not launch H2H or Slumbot from
+the 1x64 smoke.
+
+2026-05-25 nineteenth update: the clean 3x128 memory-seeded gate repeated the
+same collapse pattern. Both branches used real average-policy memory and zero
+rejected chunks, but both selected `call` on `28/32` held-out roots. The
+synthesis and innovation review now pivot the next continuation away from
+supervised target fitting and toward search-as-behavior data generation: collect
+matched trajectories where search-improved action selection actually acts, train
+the average policy from that memory, and require root-decision plus collapse
+gates before H2H.
+
+2026-05-25 twentieth update: the bounded one-hot search-as-behavior memory gate
+failed. `--target-mode behavior` now records the action actually chosen by the
+behavior actor, and matched 3x128 CUDA runs were admissible, but both base and
+search-improved average policies selected `fold` on all `32` fixed roots. This
+means the failure is no longer just soft-target smoothing; small replay/memory
+injection is not producing a robust deployed decision surface. The next
+continuation should run a pivot review before more target variants. Prefer a
+mechanism that makes search the acting policy in the live decision loop or a
+native self-play RL control, with the same fixed-root and action-collapse gates.
+
+2026-05-25 twenty-first update: the pivot review is complete and validated.
+The next continuation should run the smallest forked test available in the
+codebase: exact search-as-actor/root-decision diagnostics versus a native
+self-play RL control. Use related-work framing from AlphaHoldem and Student of
+Games. Treat a fixed-root collapse/value failure as decisive; do not spend
+Slumbot or H2H time until a branch passes that gate.
+
+2026-05-25 twenty-second update: exact search-as-actor passed the fixed-root
+gate and action-collapse guard. This validates the decision-level mechanism
+that target replay failed to preserve. The next continuation should wire this
+actor into a local duplicate-swapped game path or Slumbot smoke with explicit
+latency instrumentation. The gate for continuing is simple: same public-search
+policy, no hidden-card leakage beyond sampled public worlds, bounded latency,
+and positive local transfer versus the deployed average-policy baseline.
+
+2026-05-25 twenty-third update: exact search-as-actor H2H transfer failed to
+clear. The direct search actor improves isolated public roots, but sequential
+play against the same checkpoint baseline is near-zero or negative within
+confidence. The next continuation should diagnose transfer, not tune `eta` or
+world count blindly: log search-vs-deployed action disagreements by street and
+payoff delta, then decide whether the flaw is myopic per-decision search,
+continuation-policy calibration, or lack of search-guided self-play training.
+No Slumbot run from this branch until that diagnostic is positive.
+
+2026-05-25 twenty-fourth update: the transfer attribution diagnostic is now in
+place and points to sequential calibration, not simple action collapse. Search
+disagreed with deployment on `28.64%` of recorded decisions and looked locally
+better by `+146.81` chips/decision under the public-search scorer, yet the
+duplicate-swapped H2H lower bound stayed negative. The next continuation should
+test the scorer itself on disagreement states: compare the local search value
+claim against realized duplicate-swapped continuation value, then either make
+search a sequential self-play improvement operator or retire this exact
+per-decision actor at the current budget. Avoid another scalar sweep until that
+causal gap is resolved.
+
+2026-05-25 twenty-fifth update: the local-scorer consistency check failed. The
+sum of local search-minus-deployed values over a duplicate pair was essentially
+uncorrelated with realized H2H delta (`pearson=-0.0439`, and `-0.1014` on
+disagreements only). This turns the next target from "deploy exact search at
+the root" into "make search sequentially calibrated." The next continuation
+should either use search inside self-play trajectory generation as the policy
+improvement operator, or learn a continuation-calibrated search/value update
+whose predicted gain passes this pair-level transfer analyzer before any
+Slumbot run.
+
+2026-05-26 update: a self-consistent search-guided scorer diagnostic did not
+close the calibration gap. The new `--scorer-continuation search-guided` mode
+uses cheap inner one-step search for future rollout decisions and passed
+mechanics, but its pair-level local-gain correlation with duplicate-swapped H2H
+was still negative (`-0.3066` all decisions, `-0.3953` on disagreements). Treat
+this as evidence that the blocker is trajectory-level coupling, not just the
+rollout continuation policy inside the scorer. The next continuation should
+make search generate sequential self-play data or learn from trajectory-level
+outcomes before considering Slumbot.
+
+2026-05-26 second update: the trajectory-level calibration gate and the
+available on-policy KL-Q actor smoke both failed. A ridge calibrator over
+recorded search decision traces could not beat a train-mean baseline on the
+100-pair trace, and the on-policy search-improved KL-Q policy-head checkpoint
+worsened fixed-root rollout values despite improving its local training
+objective. The next continuation should stop trying to rescue the current
+local-score actor target. Prefer either direct search-guided self-play
+trajectory generation with realized returns, or a VRPO/RM-FSP-style
+trajectory-level policy-gradient/fictitious-play branch.
+
+2026-05-26 third update: after corrected native PPO controls failed strict
+league promotion, the exact CUDA CFR frontier was refreshed and exposed as an
+opt-in `frontier-live` resolver profile. This gives Slumbot/autoresearch
+entrypoints a direct way to spend CFR125-quality search when intentionally
+testing exact resolving. It remains non-default. The next principled research
+step is still to beat the CFR100/125 quality-latency frontier with a learned
+resolver-consumed update, or prove that exact resolving transfer justifies the
+latency.
+
+2026-05-26 fourth update: true replay-buffer continuation is implemented and
+mechanically validated, but it did not produce a better local policy in the
+first strategic gates. A small parent-child test lost to the parent, and the
+follow-up checkpoint curve plus SD-CFR-style mixture also failed: the parent
+beat iter9 with lower95 `+89.57` chips/hand and beat the iter6/iter9 mixture
+with lower95 `+2242.51` chips/hand. This means the next continuation should not
+be another short continuation, snapshot-density, or mixture-weight attempt. The
+active target should be a reviewed self-play policy-improvement mechanism that
+uses search or value estimates in the trajectory-generating loop and is judged
+by held-out root decisions plus local checkpoint-league lower bounds before any
+Slumbot evaluation.
+
+2026-05-26 fifth update: the reviewed restored-checkpoint exact search-as-actor
+gate passed fixed-root decision impact but again failed confidence-clean
+whole-game transfer. The root result is useful (`+223.00` selected-action value
+and no action collapse), but H2H was only `+1.625` chips/hand with lower95
+`-60.30`, and local search gains weakly predicted realized duplicate-pair
+deltas. The next continuation should be failure synthesis, not more
+`eta/worlds` tuning. The synthesis should choose between two mechanism pivots:
+a NeuRD/RM-FSP-style regularized self-play update with better game-theoretic
+dynamics, or a resolver-consumed learned search object that improves decisions
+inside the solver rather than acting myopically at each state.
+
+2026-05-26 sixth update: the smallest NeuRD-style actor-update branch was
+implemented and falsified as a sufficient next mechanism. The legal-logit
+update passed tests and exported clean checkpoint metadata, but the matched
+raw-sequence CTDE q-lambda h512/2k A/B tied PPO in local H2H (`+0.00005`
+mean, lower95 `-0.001836`) despite better random eval. The next continuation
+must not sweep NeuRD/PPO scalar knobs. Run a reviewed paradigm choice between
+two larger mechanisms: a faithful population/regularized-Nash self-play update
+that treats average strategy as part of the learning dynamics, or a
+resolver-consumed learned search-state update judged inside resolving.
+
+2026-05-26 seventh update: the one allowed population-coupled NeuRD+FSP test
+also failed. NeuRD+FSP trained cleanly and had better random eval, but its
+average-policy source did not beat matched PPO+FSP in 5000-game local H2H
+(`-0.000258` mean, lower95 `-0.007451`). Treat this as the stop point for the
+native PPO/NeuRD/FSP family as mainline. The next continuation should open a
+reviewed public-belief guided-search learning sprint: learn from search queries
+or a resolver-consumed search-state object on local self-play states, and judge
+it inside held-out root decisions plus local league transfer before Slumbot.
+
+2026-05-26 eighth update: the public-belief CUDA search frontier refresh
+passed and should become the next baseline. On 64 root-disjoint local
+successor-pool states, CFR25 was much closer to CFR50 than CFR5/10/15
+(`0.2715` L1, `0.0622` KL, `0.78125` action agreement, `105.38 ms` mean
+latency, zero illegal mass). The next continuation is not to train an arbitrary
+policy head. Open a methodology review for a distribution-matched search-query
+learner or resolver-consumed update object, and require it to beat simply
+spending more exact CUDA CFR budget at matched latency.
+
+2026-05-26 ninth update: the first search-query learner is not promoted but
+points to the correct next interface. The summary-feature budget selector
+failed the strict matched gate, but it did lower L1 versus uniform CFR10 and a
+same-latency oracle selector was much stronger (`0.3811` L1 at `58.64 ms`).
+This says selective search is real, while action/all-in/latency summaries are
+too weak. The next continuation should export richer low-budget search-state
+features from the frontier, especially the full legal strategy vector and
+derived margins, then rerun the selector against the same exact-CFR controls.
+
+2026-05-26 tenth update: the richer low-budget search-state interface passed
+the local gate. Frontier records can now export strategy vectors, and the
+selector uses a solver-native strategy/margin feature vector when available.
+On the same 32/32 split, it beat uniform CFR10 in L1, action agreement to
+CFR25, and latency while preserving zero illegal mass. The next continuation
+should not celebrate this as strength; it should use this as the minimal proof
+that the learned object must be search-state-native. Replace the ridge selector
+with a small learned resolver-consumed search-state policy/update on the same
+contract, then demand root-disjoint exact-CFR gates and local self-play league
+evidence before any Slumbot confidence run.
+
+2026-05-26 eleventh update: tighten the philosophy around neural self-play.
+The preferred target is not "online CFR chooses every move" and not "generic
+PPO/Rainbow benchmark tuning." It is AlphaZero-like policy iteration for poker:
+a stochastic neural policy/value network plays full self-play games; public-
+belief CFR improves selected states into stronger mixed strategies; the network
+learns those improved strategies and returns to self-play. CFR is allowed as
+the improvement operator because imperfect-information poker needs
+equilibrium-aware pressure, but the neural network should become the main
+player and should eventually need less live search. The next continuation
+should design the smallest loop that proves this contract end to end: neural
+self-play trajectories, CFR-improved mixed-policy targets, policy/value update,
+root-disjoint exact-CFR gate, and self-play league lower-bound check.
+
+2026-05-26 twelfth update: the workflow and goal now enforce that philosophy.
+The active goal names AlphaZero-style neural self-play policy iteration, the
+default goal template has the same north star, and methodology review
+`mechanism_brief` fields now require `neural_policy_role`, `cfr_role`, and
+`stochastic_policy_contract`. Future method changes must say whether the
+neural net is the main stochastic actor, whether CFR is only the
+policy-improvement teacher/control, and how mixed-strategy play is preserved.
+The next continuation is implementation, not more prose: build the smallest
+end-to-end loop that validates this contract locally.
+
+2026-05-26 thirteenth update: dense preflop public-world rollout teacher is now
+the next compute-aligned diagnostic. The public-belief CFR teacher is too sparse
+for high GPU utilization because most local self-play states are not turn/river
+street roots and solver calls are one state at a time. The new
+`public_world_rollout` teacher stays inside local 9-action self-play and
+produces legal mixed targets at every preflop root without using Slumbot data.
+The first 512-hand CUDA smoke produced 256 rollout targets with no fallback,
+but timings still show the blocker clearly: `self_play_collection_sec=4.7405`,
+`teacher_target_sec=2.0527`, and `training_sec=0.4504`. Low `nvidia-smi`
+utilization is therefore expected: the GPU is visible, but the current work is
+dominated by CPU/Python environment stepping and rollout scoring. The next
+principled target is vectorized/GPU-native self-play and batched rollout/search
+scoring, not a larger network by itself.
+
+2026-05-26 fourteenth update: a first CPU hot-path cleanup reduced public-world
+teacher time without changing the algorithm. `score_first_actions_across_worlds`
+now builds one root state per sampled public world and copies it for each legal
+first action, instead of rebuilding the same world for every action-world pair.
+The targeted red/green test showed the old 4-world case made 29 state builds;
+the new contract permits only `n_worlds + 1`. On the same 512-hand CUDA smoke,
+teacher generation improved from `2.0527s` to `1.5512s`, but the new internal
+profile shows the deeper bottleneck is still self-play simulation:
+`self_play_env_step_sec=3.4101`, `self_play_policy_inference_sec=0.0936`, and
+`training_sec=0.4543`. The next material step is therefore not another small
+state-construction cleanup; it is a vectorized/GPU-native environment stepper
+or batched rollout/search evaluator that keeps the neural actor and search
+teacher supplied with larger continuous batches.
+
+2026-05-26 fifteenth update: the self-play half now has an opt-in fast-state
+backend for `public_world_rollout`. This is not a new poker abstraction: it uses
+the existing parity-tested `FastPokerState` 9-action full-deck simulator and
+keeps the slow object-state backend as default for public-belief CFR, whose
+solver input extraction still needs full-deck `PokerState` objects. On the same
+512-hand CUDA dense-teacher smoke, fast state reduced
+`self_play_collection_sec` from `4.7278` to `0.1896` and
+`self_play_env_step_sec` from `3.4101` to `0.0170`; total elapsed dropped from
+`6.9358` to `2.3976`. The remaining bottleneck is now teacher rollout/search
+scoring (`teacher_target_sec=1.5407`) plus intentionally small neural training
+(`training_sec=0.4570`). The next material target is therefore batched or
+GPU-native public-world/search target scoring, not more self-play Python object
+cleanup.
+
+2026-05-26 sixteenth update: the remaining dense-teacher CPU path was reduced,
+and a held-out root gate exposed the next learning blocker. A built-in
+`call_policy` specialization removes repeated legal-mask checks during
+public-world scoring; on the same 512-hand fast-state smoke,
+`teacher_target_sec` fell from `1.5407` to `0.9537` and total elapsed from
+`2.3976` to `1.8038`. The new
+`eval_neural_policy_iteration_public_world_gate.py` diagnostic then compared an
+untrained h128 policy to the 256-target trained checkpoint on the same 64
+held-out roots. The trained checkpoint barely improved mixed policy EV
+(`-14.7155` to `-14.0424`) and worsened selected-action EV (`-4.9688` to
+`-7.0312`), selecting mostly call while oracle actions were split across fold,
+call, and all-in. This is not a promotion failure for the main goal because the
+gate is public-world, not exact CFR, but it is a warning: the dense preflop
+teacher branch needs a stronger target/training interface before scaling. The
+next principled step should be to connect this root-disjoint gate to exact-CFR
+turn/river targets or add a non-collapsing mixed-policy training objective,
+rather than only increasing hands or steps.
+
+2026-05-26 seventeenth update: the neural policy-iteration branch now has a
+root-disjoint exact-CFR gate with matched state-source control. The evaluator
+can load one checkpoint as the candidate policy and a separate fixed checkpoint
+as the self-play state source, so A/B comparisons see the same held-out public
+roots instead of each policy generating its own easier or harder roots. A tiny
+4-root CPU exact-CFR smoke is not promotion evidence, but it falsified one
+methodology risk: training on public-belief CFR targets really can move the
+neural policy toward resolver mixed targets on held-out matched roots. The
+random h64 checkpoint measured `0.4218` mean L1 and `0.2444` target-to-policy
+KL; the 4-target public-belief-CFR checkpoint measured `0.1508` L1 and
+`0.0663` KL on the same roots. Top-action agreement remained tied at `0.5`,
+with zero illegal mass and no fallback targets. The next continuation should
+scale this exact-CFR gate modestly and improve the mixed-policy objective before
+any Slumbot evaluation. If GPU utilization is low, treat that as a batching
+problem in teacher/search generation, not as a reason to use Slumbot as data.
+
+2026-05-26 eighteenth update: a modest 16-root CUDA exact-CFR gate preserved
+the useful signal but exposed a sharper blocker. Against the same fixed
+state-source roots and a CFR5 CUDA teacher, the random h64 checkpoint scored
+`1.0571` L1, `0.7431` KL, and `0.0625` top-action agreement. The tiny 4-target
+CFR checkpoint improved distribution fit (`0.8390` L1, `0.4715` KL) but still
+had `0.0625` top-action agreement. The older 32-target checkpoint improved
+top-action agreement to `0.875`, but only because its policy top action was
+all-in on all 16 roots while the teacher's top action was all-in on 14/16.
+That is not a clean strength signal. It means the gate must track mixed-policy
+fit and action-collapse metrics together. The next mainline step is a
+non-collapsing mixed-policy objective or state-balanced target set for the
+neural actor, judged by exact-CFR L1/KL, top-action agreement, and maximum
+policy top-action fraction before any league or Slumbot evaluation.
+
+2026-05-26 nineteenth update: the apparent action-collapse blocker was partly
+a teacher-budget mismatch. The older 32-target checkpoint had been trained on
+CFR1 targets whose top action was all `1`, then judged against a CFR5 exact
+gate whose top action was mostly `8`. This is precisely the kind of
+train/eval search inconsistency the workflow is meant to catch. The training
+metrics now record `cfr_iterations`, `cfr_backend`, and `cfr_device`, and the
+pilot has an opt-in `policy_sample_weighting=inverse_target_top` diagnostic
+for generic class imbalance. In this run, inverse-top weighting had no effect
+because the CFR1 training targets all had the same top action. Matching the
+teacher budget to CFR5 and giving the small network enough fit steps was much
+more important: the CFR5/train128 h64 checkpoint reached `0.3133` mean L1,
+`0.1300` KL, and `0.9375` top-action agreement on the same 16-root CFR5 CUDA
+gate, versus `1.0571`/`0.7431`/`0.0625` for random and
+`0.9637`/`0.6229`/`0.875` for the CFR1/train4 checkpoint. This is still a
+small gate, but it is a coherent AlphaZero-style result: self-play state,
+search-improved mixed target, neural fit, held-out exact-search agreement.
+
+2026-05-26 twentieth update: the branch now has a minimal internal self-play
+league gate for neural policy-iteration checkpoints. `eval_neural_policy_iteration_h2h.py`
+loads two NPI checkpoints and runs duplicate-swapped policy-only games with no
+resolver and no Slumbot data. The CFR5/train128 checkpoint cleared a first
+1000-game lower-bound smoke against two local baselines: versus random h64,
+mean payoff was `0.1102` with lower95 `0.0786`; versus the older
+CFR1/train4 32-target checkpoint, mean payoff was `0.0898` with lower95
+`0.0592`. This is internal lower-bound evidence, not SOTA. The next step is to
+repeat the same pattern at a less toy scale: more root-disjoint CFR5/CFR10
+teacher states, same-budget exact-CFR gates, and a small checkpoint league
+before any Slumbot run.
+
+2026-05-26 twenty-first update: the AlphaZero-style loop is now repeatable
+across generations. `run_neural_policy_iteration_pilot.py` accepts
+`--checkpoint-in`, initializes both policy and value nets from the parent
+checkpoint, and records parent metadata. `run_neural_policy_iteration_loop.py`
+now runs generation `N`, feeds it into generation `N+1`, and evaluates
+`N+1` versus `N` with the duplicate-swapped internal league. The first tiny
+dense public-world rollout smoke validated the contract but did not show
+strength: gen1 used gen0 as its actor, generated 16 new targets, and got
+`0.0` mean/lower95 in the 20-game H2H smoke. On the fixed 8-root public-world
+diagnostic, mixed policy EV moved only from `115.4537` to `115.7927`, while
+selected-action EV worsened from `131.25` to `37.5` because gen1 selected call
+on all roots. The current bottleneck is therefore not whether the loop exists;
+it is the non-collapsing policy/value training signal and a stronger
+root-disjoint gate for repeated self-play improvement.
+
+2026-05-27 native-substrate update: the `FastPokerState` rollout substrate now
+has deterministic replay parity against `poker_ai/games/full_deck/state.py` and
+cleared the 5x throughput gate by a wide margin. Integrated into the maintained
+Tianshou Rainbow control, a matched tiny smoke improved end-to-end collection
+from `182.53` to `847.89` train steps/sec. A real 131k-transition fast-state
+population/history run collected at `2227.51` train steps/sec, but failed the
+5000-game duplicate-swapped H2H gate versus the current local incumbent
+(`mean=-0.00206`, `lower95=-0.01515`). This falsifies "rollout speed plus a
+simple checkpoint-history mixture is enough" for the current Rainbow recipe.
+The next continuation should either improve the population objective/learner
+interface, or move more of the maintained RL loop's collection and opponent
+inference into a truly batched/vectorized engine; it should not treat this
+failed candidate as promotion evidence or use Slumbot for tuning.
+
+2026-05-27 self-play continuation update: the fast-state backend is now wired
+into the native PettingZoo AEC adapter and the maintained Tianshou MARL Rainbow
+self-play script. A clean sequential smoke improved shared-policy MARL
+collection from `241.86` to `1092.11` train steps/sec. Continuing the current
+local incumbent as a shared two-seat policy for 65k fast-state self-play steps
+ran at `4007.47` train steps/sec and cleared the local promotion ladder: 20k
+parent H2H `mean=+0.003705`, `lower95=+0.000561`; complete 5-policy empirical
+game solved to pure support on the new checkpoint. This is the first positive
+fast-state self-play continuation result after the goal revision. The next
+continuation should treat it as the local incumbent and test repeatability:
+another self-play generation must beat this parent and stay in empirical-game
+support before any sparse Slumbot evaluation.
+
+2026-05-27 repeatability update: the first repeatability checks did not support
+monotonic iteration. Two same-budget fast-state shared-MARL gen2 attempts from
+the new local incumbent failed parent H2H (`mean=-0.006014`, `upper95=-0.002500`
+and `mean=-0.000487`, `lower95=-0.004023`). A synthesis review passed with
+`Verdict: revise`, identifying that the fast-state substrate is useful but the
+current update operator is not reliably monotonic. Training-time
+`--checkpoint-in` was then added to the single-agent Rainbow population wrapper
+so population/history responses can initialize from the parent instead of
+random weights. The first parent-initialized frozen-population continuation also
+failed 20k parent H2H (`mean=-0.006490`, `upper95=-0.001783`). The next
+continuation should not repeat these two recipes unchanged. The most concrete
+engineering bottleneck is now the slow sequential H2H evaluator; the most
+concrete research bottleneck is a stable population-improvement objective.
+
+2026-05-27 fast-H2H update: checkpoint H2H evaluation now has an explicit
+`--eval-state-backend fast-state` switch for Rainbow-compatible checkpoints.
+The default remains canonical `full-deck`. On a matched 5k candidate-vs-parent
+pair, canonical evaluation ran at `55.45` games/sec with `mean=+0.000746`,
+while fast-state evaluation ran at `619.25` games/sec with `mean=+0.000529`.
+The confidence intervals overlapped closely. Treat fast-state H2H as an
+iteration accelerator for local research; keep canonical confirmation for
+promotion-critical claims until more parity artifacts accumulate.
+
+2026-05-27 n-step credit-assignment update: a standard Rainbow `n_step=5`
+shared-MARL continuation from the local incumbent trained correctly on CUDA at
+`3926.17` transitions/sec and passed a fast-state 5k H2H screen
+(`mean=+0.014929`, `lower95=+0.006312`). Canonical full-deck confirmation did
+not pass: 5k was inconclusive (`mean=+0.002613`, `lower95=-0.006009`) and 20k
+remained inconclusive (`mean=+0.001050`, `lower95=-0.003229`). This keeps the
+incumbent unchanged and falsifies "multi-step credit assignment alone fixes the
+repeatability failure." The next research step should change the population or
+objective structure, not keep sweeping small Rainbow knobs. The next engineering
+step should make canonical H2H closer to the fast-state throughput without
+weakening the promotion boundary.
+
+2026-05-27 common-random H2H update: the engineering step is now partly done.
+The native substrate gate includes policy-driven replay parity in addition to
+random-action parity. Rainbow checkpoint H2H also has
+`--eval-state-backend fast-state-canonical-deal`, which starts from canonical
+full-deck deals, preserves the future random board-card sequence, and then uses
+fast-state transitions. A root-cause bug was fixed in
+`fast_state_from_full_deck_state`: it no longer constructs throwaway fast games
+for player-order arrays, so conversion has no NumPy RNG side effect. On the
+n-step candidate/parent pair, the common-random backend exactly matched the
+full-deck 5k and 20k metrics while raising the strict 20k gate throughput from
+`66.41` to `266.11` games/sec. Use this backend for local Rainbow H2H screening
+and promotion gates; keep pure `fast-state` H2H as a speed diagnostic only.
+
+2026-05-27 independent-MARL update: H2H evaluation now consumes seat-specific
+Rainbow policies for independent multi-agent checkpoints instead of collapsing
+all checkpoint formats to `player_0`. This enabled a clean test of non-shared
+two-seat Rainbow continuation from the local incumbent. The candidate trained
+quickly (`3893.28` transitions/sec) but failed hard against the shared-policy
+incumbent over 20k common-random canonical games (`mean=-0.034453`,
+`upper95=-0.028379`). This retires the simple "non-shared heads fix
+repeatability" hypothesis at this budget. The next live hypothesis should alter
+the population/objective update, such as explicit average-policy/fictitious-play
+structure or response-oracle population support, rather than only changing the
+head sharing topology.
+
+2026-05-27 FSP-average-policy update: mixed-format H2H can now load native
+PPO/FSP checkpoints and use either `full-deck` or `fast-state-canonical-deal`
+where the checkpoint observation contract permits it. The CLI now exits
+nonzero when an explicit lower95 gate fails. A direct test of the existing
+raw-sequence CTDE/Q-lambda actor-PPO FSP checkpoint against the current Rainbow
+incumbent failed decisively over 5k full-deck duplicate-swapped games
+(`mean=-0.031976`, `upper95=-0.020008`). Because that checkpoint uses ordered
+action-record observations, it cannot be evaluated through current fast-state
+without changing the observation contract. Do not promote or spend Slumbot
+hands on it. The next useful FSP/NFSP step is not to reuse this checkpoint; it
+is to train an average-policy method directly on the native fast substrate or
+use a maintained-library population/FSP implementation behind the native
+9-action adapter.
+
+2026-05-27 native-NFSP fast-state update: the native NFSP/FSP pilot now has
+`--state-backend full-deck|fast-state`. A matched CUDA A/B at 1000 episodes
+improved training environment-step throughput from `266.22` to `1359.54`
+steps/sec (`5.11x`), although episode throughput was `4.19x`. This clears the
+strict env-step substrate target for average-policy experiments, but not a
+strength gate. The resulting 1000-episode fast-state NFSP checkpoint failed
+1000 common-random canonical fast H2H games versus the local Rainbow incumbent
+(`mean=-0.035504`, `lower95=-0.062882`). Keep this as infrastructure: average
+policy/FSP is now cheap enough to test on the native substrate, but the current
+small NFSP learner is not a promotable policy. The next step should change the
+population/objective update, not scale this weak checkpoint blindly.
+
+2026-05-27 population-NFSP update: a direct fast-state NFSP/FSP response smoke
+against four frozen local Rainbow-family opponents also failed. The dueling
+h256 learner trained mechanically on CUDA (`1223.08` train steps/sec), sampled
+all four opponents equally, and exercised both learner seats, but lost to the
+current local incumbent in 1000 common-random canonical fast H2H games
+(`mean=-0.060930`, `lower95=-0.090022`). This falsifies the current small
+native NFSP/DQN response operator, not average-policy game dynamics in general.
+The next principled step should either use a maintained stronger average-policy
+or regularized game-dynamics implementation through the native adapter, or move
+to a batched/vectorized actor-critic learner whose promotion gate is complete
+local league improvement. Do not run Slumbot on these NFSP checkpoints.
+
+2026-05-27 batched-inference substrate update: the next concrete acceleration
+target is validated. `scripts/eval_native_rollout_substrate.py` now supports
+`--include-policy-inference-benchmark`, which compares one-state-at-a-time
+neural actor inference against batched inference over many live fast states.
+On CUDA with a hidden-256 masked MLP actor and 2048 fast-state games, sequential
+inference reached `6256.75` steps/sec with 4450 policy forward calls; batched
+inference reached `46196.01` steps/sec with 41 forward calls (`7.38x`). This is
+not strength evidence. It says the next engineering integration should batch
+actor inference inside self-play/population collection before applying actions,
+so larger neural policies can use the GPU without changing poker rules.
+
+2026-05-27 maintained-vectorization check: existing Tianshou vector batching
+does help, but not enough. A matched fast-state shared-MARL Rainbow smoke with
+`num_envs=8` reached `2890.73` train steps/sec; `num_envs=64` reached
+`4879.52` train steps/sec (`1.69x`) with similar update time. This is far below
+the synthetic batched actor ceiling above. The next implementation should not
+be another learner knob; it should be a batched fast-state collection path that
+groups live observations, performs one policy forward, applies actions, and
+hands transitions to a maintained or minimal learner.
+
+2026-05-27 batched-live-collector update: that path now exists as a substrate
+primitive. `collect_batched_fast_self_play` emits arrays for features, legal
+masks, actions, players, game indices, step indices, rewards, and final payoffs.
+The CLI exposes it with `--include-batched-collector-benchmark`. On CUDA with
+4096 games, hidden 256, and batch size 128, batched collection exactly matched
+the sequential action/payoff checksums while improving throughput from
+`7739.34` to `57742.11` steps/sec (`7.46x`) and reducing policy forwards from
+14795 to 117. A current Tianshou vector64 smoke reached `5001.43` train
+steps/sec, so this custom collector shows about `11.55x` collection headroom.
+The next continuation should connect this transition batch to a learner/replay
+interface and evaluate policy quality; do not treat the collector benchmark as
+strength evidence.
+
+2026-05-27 learner-interface update: the first bridge from batched transition
+arrays to GPU training is in place. `run_batched_fast_policy_fit_smoke` and
+`--include-batched-policy-fit-smoke` collect fast-state transition arrays and
+fit a fresh masked policy head to the collected synthetic actor actions. On CUDA
+with 4096 games, hidden 256, train batch 2048, and 200 updates, the loss fell
+from `1.7843` to `0.3273`, with the fit loop processing about `2.22M`
+samples/sec. This is still not strength evidence because the target is behavior
+imitation, not policy improvement. The next useful implementation is to replace
+the imitation label with an RL/game-dynamics target over the same batched data,
+then gate any resulting checkpoint with duplicate-swapped H2H and empirical-game
+support.
+
+2026-05-28 batched-policy-gradient update: the first real RL candidate on the
+batched substrate is implemented and falsified. `run_batched_fast_policy_gradient_pilot`
+collects batched stochastic self-play, trains a shared policy-gradient actor
+from final local returns, and saves a flat native-PPO-compatible checkpoint for
+mixed H2H. The h256 CUDA smoke trained 8 x 2048 games in `1.78s` and collected
+55436 decisions at about `40309.11` rollout steps/sec, but failed the current
+local incumbent over 2000 common-random canonical fast H2H games
+(`mean=-0.014598`, `lower95=-0.032620`). This is the expected falsification
+surface: the substrate works, but naive shared self-play policy gradient is not
+a reliable improvement operator. The next continuation should use the same
+batched substrate with population/history opponents or a stronger game-dynamics
+target before any Slumbot evaluation.
+
+2026-05-28 environment-native V-trace checkpoint bridge: the train-per-
+environment rule is now executable on the native side too. `scripts/run_local_vtrace_compiled_native_learner.py`
+uses the compiled 9-action full-deck collector and the local masked V-trace
+loss to write a native-PPO-compatible checkpoint marked
+`environment=poker_ai:full_deck_hu_nlhe`, `trained_environment_native=true`,
+`native_action_projection=false`, and `rlcard_candidate=false`. A 4 x 512 CUDA
+smoke produced 6183 learner samples in `0.50s` (`12271` samples/sec), zero
+illegal action mass, and zero Python showdown fallback; native self-H2H loaded
+the checkpoint cleanly. A 100-game diagnostic against
+`models/native_nfsp_dqn_reservoir_h512_10k_seed20260517.pt` was weak/noisy
+(`mean=-0.0324`, lower95 `-0.1308`, upper95 `+0.0660`), so this is bridge
+evidence only. Do not adapt this native checkpoint into RLCard. The next
+continuation should scale/improve the native V-trace/population objective in
+the native environment, while any RLCard/AlphaNLHoldem candidate must be
+trained fresh inside RLCard under the same high-level schema.
+
+2026-05-28 RLCard-native V-trace checkpoint bridge: the same schema now has a
+fresh RLCard-side instantiation. `scripts/run_local_vtrace_rlcard_learner.py`
+writes a 5-action `local_vtrace_rlcard` checkpoint that the AlphaNLHoldem
+public-reference evaluator accepts as `--candidate rlcard-vtrace`. The tiny
+CUDA bridge run passed mechanically, but only processed 8 samples at about
+`31.7` samples/sec because direct RLCard stepping is Python/CPU-bound. A
+20-game diagnostic against the AlphaNLHoldem checkpoint was not strength
+evidence (`mean=-6.35`, lower95 `-21.09`, upper95 `+8.39`). The next
+continuation should not scale this exact direct-RLCard learner blindly. Either
+find a maintained historical-league/V-trace path that can run RLCard faster, or
+keep RLCard as the public reference evaluator while advancing the scalable
+native compiled learner and only translating the high-level schema back to
+RLCard for benchmark runs.
+
+2026-05-28 pre-Slumbot promotion-gate update: the dual-surface rule is now
+executable. `scripts/eval_candidate_promotion_gate.py` combines an RLCard
+AlphaNLHoldem H2H artifact, a native 9-action H2H artifact, and a native
+empirical-game artifact; it rejects candidates unless all required surfaces
+show positive lower-bound evidence, no leakage, and no cross-environment action
+projection. `enqueue_slumbot_smoke(... hands > smoke_cap)` now requires both
+the older self-play league pass and this promotion gate before spending
+held-out Slumbot confidence hands. Running the gate on the current V-trace
+bridge artifacts failed as intended with blockers
+`rlcard_reference_lower95_below_threshold`, `native_h2h_lower95_below_threshold`,
+and `empirical_game_missing`. The next continuation should generate stronger
+native/RLCard candidates and fill empirical-game support before any Slumbot
+confidence attempt.
+
+2026-05-28 queued promotion-gate update: the same check is now a first-class
+autoresearch queue action via `python scripts/poker_autoresearch.py enqueue-promotion-gate`.
+It records the dual-surface command under `poker_goal.json`, emits output under
+`autoresearch-session/candidate_promotion/`, and can be run by the normal gate
+runner. A live queued run on the current weak V-trace bridge artifacts failed
+as intended. Future Slumbot confidence work should point to a passed queued
+promotion gate, not an ad hoc standalone check.
+
+2026-05-28 native V-trace parent-population update: the compiled native V-trace
+learner now accepts `--opponent-checkpoint` for frozen native-PPO-compatible
+parent policies. This is the minimal historical-league hook on the compiled
+native substrate. The first child trained 4 x 512 games against the previous
+native V-trace checkpoint, processed 3198 learner samples in `0.50s`, and kept
+zero illegal action mass and zero showdown fallback. It did not clear quality
+gates: 200-game H2H versus parent had `mean=+0.00656` but lower95 `-0.02280`,
+and 200-game H2H versus native NFSP failed clearly (`mean=-0.16943`, lower95
+`-0.25467`). Do not scale this exact recipe by seed/budget alone; the next
+candidate-side continuation needs a stronger objective or broader population
+support before filling empirical-game gates.
+
+2026-05-31 truth-ledger reset: the latest valid exact-small-game result is
+`20260531T160000Z-corrected-registered-go-no-go-ppo-fixed`, superseding the
+invalid/fabricated `064621Z` and `142119Z` closes. The corrected registered
+small-NLHE OpenSpiel GO/NO-GO measured R-NaD `0.639 +/- 0.0212` exact NashConv
+versus PPO+FIFO `2.2547 +/- 0.6477`; PPO did not become lead. The immediate
+continuation is not full-HUNL or Slumbot. First harden the exact-small-game
+baseline by comparing R-NaD against a literature-faithful PPO control
+(`K`-best or equivalent historical league plus conservative learning-rate
+check) and/or an MMD/FoReL-style regularized policy-gradient control under the
+same exact NashConv, matched-compute, multi-seed protocol. Only after this gate
+identifies a learner family worth scaling should full-HUNL GPU work resume.

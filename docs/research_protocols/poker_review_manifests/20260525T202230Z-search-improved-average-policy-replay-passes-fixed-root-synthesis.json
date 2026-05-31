@@ -1,0 +1,25 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 534,
+      "path": "decision.json",
+      "sha256": "d99bb8e706102b36309616442380d0fb3b86a9c4cc2bdce30c164fac9b2783a2"
+    },
+    {
+      "bytes": 1352,
+      "path": "synthesis.md",
+      "sha256": "ec9a70e9beef9f5f49d6e596d7a4d8d81135f25ae1e85552d61b33d5bd647a29"
+    }
+  ],
+  "reason": "Fixed-root search-improved average-policy replay is positive but not sufficient for whole-game transfer. Diagnose action/street drift and then integrate into ongoing training if the gap persists.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T202230Z-search-improved-average-policy-replay-passes-fixed-root-synthesis",
+  "review_id": "20260525T202230Z-search-improved-average-policy-replay-passes-fixed-root-synthesis",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-25T20:23:43Z"
+}

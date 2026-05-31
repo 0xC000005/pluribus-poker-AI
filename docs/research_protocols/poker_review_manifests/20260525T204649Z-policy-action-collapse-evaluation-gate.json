@@ -1,0 +1,49 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1046,
+      "path": "benchmark_audit.md",
+      "sha256": "b54e6b777fe48b74e4964e67fab2e75cb65c9b6d93049bbe99606f4afe2d6cd6"
+    },
+    {
+      "bytes": 535,
+      "path": "decision.json",
+      "sha256": "5a34844a85e2969d402ac4de90dd6c1bd47a6a44c91ff8e6a4c4f3bfaf58d591"
+    },
+    {
+      "bytes": 1176,
+      "path": "mechanism_review.md",
+      "sha256": "613e011974db4b7192f0bbb517252173085faba9e251c1ca5014a6e8bc4341a2"
+    },
+    {
+      "bytes": 2214,
+      "path": "related_work.md",
+      "sha256": "db0b4cca37ecf2da5310568f48c78890dc8883d43902e2ad2e911aff3038b982"
+    },
+    {
+      "bytes": 1683,
+      "path": "review.md",
+      "sha256": "d46722352378dc5bc6c81b60d80cfff6193ca12dedca2ecbbde7cb4ef048e4d7"
+    },
+    {
+      "bytes": 1937,
+      "path": "review_scope.json",
+      "sha256": "5b7568e0f004d0b1da09e3bba8f9a222865f8be5ec106922216d30590f97e5ca"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The action-collapse gate is a stricter diagnostic guard for held-out root decisions. It does not promote strength, but it correctly blocks a concrete collapsed-policy failure before expensive transfer evaluation.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T204649Z-policy-action-collapse-evaluation-gate",
+  "review_id": "20260525T204649Z-policy-action-collapse-evaluation-gate",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439"
+  ],
+  "written_at": "2026-05-25T20:50:54Z"
+}

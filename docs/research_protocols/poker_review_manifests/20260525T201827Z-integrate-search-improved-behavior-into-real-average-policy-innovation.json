@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 529,
+      "path": "decision.json",
+      "sha256": "10e96e4a974a72dee9946b55e065be55147b5d46c3d4771e25d04e24d7becc9d"
+    },
+    {
+      "bytes": 2396,
+      "path": "innovation.md",
+      "sha256": "c6341eb9944095e9274dc53a66dfab1e75487ffccac3f481e9e9db62f7127f10"
+    },
+    {
+      "bytes": 1107,
+      "path": "related_work.md",
+      "sha256": "9ba866aba1df47ec887d1733785efbe1eb1e3bbe95ac9c1d9145864951ede96e"
+    },
+    {
+      "bytes": 882,
+      "path": "thought_experiments.md",
+      "sha256": "ce99f83bbeaf6a63649c1e97b54a1a63053ed2da4f71a27cd3c8bb0db48a4d65"
+    }
+  ],
+  "reason": "The next test should move search-improved behavior from a covered policy-head patch into a real average-policy/deployed actor surface with matched no-search controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T201827Z-integrate-search-improved-behavior-into-real-average-policy-innovation",
+  "review_id": "20260525T201827Z-integrate-search-improved-behavior-into-real-average-policy-innovation",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-25T20:19:47Z"
+}

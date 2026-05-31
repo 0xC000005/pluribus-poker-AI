@@ -1,0 +1,51 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1303,
+      "path": "benchmark_audit.md",
+      "sha256": "117325fec062f3ea1bdeec44731b21c853e411d9e037c37da6d43d27eed4ec67"
+    },
+    {
+      "bytes": 749,
+      "path": "decision.json",
+      "sha256": "50f6f3236a9a4484907e6c103d0a0f3e1e31281538b8cfe6321b71ca62e66f2d"
+    },
+    {
+      "bytes": 1277,
+      "path": "mechanism_review.md",
+      "sha256": "11f444bb57303b0d3419f8bd9417dcae9ae343c9547a4a8d81debbddecfcba5e"
+    },
+    {
+      "bytes": 1697,
+      "path": "related_work.md",
+      "sha256": "0c81f4de575d3d525337c7506ca9b1722febb4f8f8bcbb4ca43e12d659f92193"
+    },
+    {
+      "bytes": 1095,
+      "path": "review.md",
+      "sha256": "06ac05631227db1d430583121aa893f64d0c99e73fd83447ed74c4a32f42ee2a"
+    },
+    {
+      "bytes": 2386,
+      "path": "review_scope.json",
+      "sha256": "a6a08220615603893e2f58bbd94c3b6293c6b032d4b1e8bd40ef9f29a1ee5dbe"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The all-street teacher was a valid falsifier and covered the intended mechanism, but the 5k H2H failed. Treat this as negative evidence for NPI target imitation, not promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T154457Z-all-street-policy-continuation-public-state-npi-teacher",
+  "review_id": "20260527T154457Z-all-street-policy-continuation-public-state-npi-teacher",
+  "sources": [
+    "autoresearch-session/neural_policy_iteration/all_street_policy_continuation_20260527/npi_all_street_policy_continuation_vs_tianshou_incumbent.json",
+    "autoresearch-session/neural_policy_iteration/all_street_policy_continuation_20260527/npi_all_street_policy_continuation_vs_tianshou_incumbent_5k_seed20260697.json",
+    "https://www.nature.com/articles/nature24270",
+    "https://arxiv.org/abs/2007.13544",
+    "https://www.science.org/doi/10.1126/science.aam6960"
+  ],
+  "written_at": "2026-05-27T15:46:20Z"
+}

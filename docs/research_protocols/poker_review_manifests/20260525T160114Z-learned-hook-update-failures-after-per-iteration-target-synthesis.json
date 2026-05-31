@@ -1,0 +1,24 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 768,
+      "path": "decision.json",
+      "sha256": "613ade544b848fae36fa5c96fa65f3cbb4a9b560bbef4ff8092f1abfb7a79e20"
+    },
+    {
+      "bytes": 2032,
+      "path": "synthesis.md",
+      "sha256": "8687734834d8ec33d92582646410347693d32f573ad7ee022681b795c9292c09"
+    }
+  ],
+  "reason": "Repeated learned-hook failures share the same cause: unconstrained policy/field replacement does not preserve CFR update geometry and loses to uniform CFR10. The next falsifier should test one bounded regret/advantage residual update; if that fails, pivot away from learned hooks.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T160114Z-learned-hook-update-failures-after-per-iteration-target-synthesis",
+  "review_id": "20260525T160114Z-learned-hook-update-failures-after-per-iteration-target-synthesis",
+  "sources": [
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_policy_hook_update_train128_holdout192_limit8_seed20260522.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_iteration_hook_lowstate_holdout8_seed20260522.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_iteration_warm_start_hook_eval_holdout4_seed20260525.json"
+  ],
+  "written_at": "2026-05-25T16:02:01Z"
+}

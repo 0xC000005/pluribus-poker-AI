@@ -1,0 +1,36 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 672,
+      "path": "decision.json",
+      "sha256": "651e960e2c27c554aff12988e40acd0eefc44aecd24d0d6135ec518be77986eb"
+    },
+    {
+      "bytes": 3036,
+      "path": "innovation.md",
+      "sha256": "d195d8d570f2ff80036313d6ba61f476bb0ec364bc067fc725594e38d3511d6d"
+    },
+    {
+      "bytes": 3134,
+      "path": "related_work.md",
+      "sha256": "c28e5548a64fb1bd0b7d79ccb1a15107193deea61fec742adb56072ad229107a"
+    },
+    {
+      "bytes": 1193,
+      "path": "thought_experiments.md",
+      "sha256": "9ddaef10836dbb2e7134f3657080e8376cdd735b2dc255739c27b6388ae83f25"
+    }
+  ],
+  "reason": "Proceed with a bounded self-consistent search-continuation diagnostic. The failed scorer evaluated one-step actions under a different continuation policy than the deployed search actor induces, and related work supports coupling search, self-play trajectories, and value targets before using search as policy improvement.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T133135Z-sequentially-calibrated-search-policy-improvement-after-scorer-failure-innovation",
+  "review_id": "20260526T133135Z-sequentially-calibrated-search-policy-improvement-after-scorer-failure-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2006.00283",
+    "https://arxiv.org/abs/2605.19235",
+    "autoresearch-session/search_as_actor/exact_search_actor_transfer_analysis_100x8_seed20260535.json"
+  ],
+  "written_at": "2026-05-26T13:34:20Z"
+}

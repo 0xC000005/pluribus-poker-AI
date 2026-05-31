@@ -1,0 +1,54 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1594,
+      "path": "benchmark_audit.md",
+      "sha256": "302600ed8ecacb7ee2d614443ede1dd59728793665a54d7aebe3cd6967b07fc6"
+    },
+    {
+      "bytes": 986,
+      "path": "decision.json",
+      "sha256": "fb26785948fb463d070d84e7db472446c0cb89d9d927a7811559d8edff0e0125"
+    },
+    {
+      "bytes": 1921,
+      "path": "mechanism_review.md",
+      "sha256": "b1a99e97c0a89bfd2c264625fb1cd98b1e6e3721dd9dbefd931c37a8d4fd0e58"
+    },
+    {
+      "bytes": 1875,
+      "path": "related_work.md",
+      "sha256": "6b5f08bfe42cc0938d259ea266713e6f7cbc586f957ec7417c3063654c2605e1"
+    },
+    {
+      "bytes": 2477,
+      "path": "review.md",
+      "sha256": "9b8eb2e74c9e30c17f5719c510aa809e0a707c3cf121cf485fd57cb8bcd0a50d"
+    },
+    {
+      "bytes": 1297,
+      "path": "review_scope.json",
+      "sha256": "70590fcd20524f00f76697fcc30b544610267c0fe58bf2a34217d3aa4ac757c0"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only as a narrow closed-loop solver-state update gate. Existing policy-delta, eta-selector, and warm-start artifacts do not satisfy the mechanism; the next implementation must put the learned update inside the CFR recurrence or remain a CPU diagnostic, and it must beat uniform CFR10/CFR25 on root-disjoint decision quality per millisecond.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T175034Z-closed-loop-in-resolver-learned-search-update-gate",
+  "review_id": "20260522T175034Z-closed-loop-in-resolver-learned-search-update-gate",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2408.14778",
+    "scripts/fast_cfr.py",
+    "scripts/solver.py",
+    "scripts/train_cfr_trace_closed_loop_update_operator.py",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/regret_policy_warm_start_lowstate_holdout64_with_cfr10_after_review_seed20260522.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_closed_loop_update_operator_trust95_train96_holdout64_seed20260521.json"
+  ],
+  "written_at": "2026-05-22T17:52:35Z"
+}

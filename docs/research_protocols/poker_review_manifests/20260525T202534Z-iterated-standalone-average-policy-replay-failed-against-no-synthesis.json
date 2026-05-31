@@ -1,0 +1,25 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 481,
+      "path": "decision.json",
+      "sha256": "b248fcf380609c294c0e727542b32a7130b664d6da57ffb0220ea7c66342d4fa"
+    },
+    {
+      "bytes": 1152,
+      "path": "synthesis.md",
+      "sha256": "d89bde6b374ea57f406fea494ba6b77a9c63f6a9aea05754bd1581dc8a1862f5"
+    }
+  ],
+  "reason": "Standalone replay did not compound. Move the search-improved behavior signal into GPU Deep CFR average-policy training under matched controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T202534Z-iterated-standalone-average-policy-replay-failed-against-no-synthesis",
+  "review_id": "20260525T202534Z-iterated-standalone-average-policy-replay-failed-against-no-synthesis",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-25T20:26:44Z"
+}

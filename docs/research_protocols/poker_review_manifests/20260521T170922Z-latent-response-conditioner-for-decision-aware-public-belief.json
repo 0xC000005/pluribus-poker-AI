@@ -1,0 +1,52 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 2212,
+      "path": "benchmark_audit.md",
+      "sha256": "9ea61fa2be9e499661c83524d81294ab015a131de2ced0e5df65a51355ec22d5"
+    },
+    {
+      "bytes": 715,
+      "path": "decision.json",
+      "sha256": "5ace91e76b1d9f133b67b2cb7539b8240c15bbe05bedf2a287392ea6e55fba6e"
+    },
+    {
+      "bytes": 1585,
+      "path": "mechanism_review.md",
+      "sha256": "d6f65a8488a27d69f70b020fa83bc4a074d2de7a5025d4e4f5984657cd675e8f"
+    },
+    {
+      "bytes": 2687,
+      "path": "related_work.md",
+      "sha256": "27855027df4267d6a58771927522797db083d9c560b6701070d3ffdb9ecbdd7a"
+    },
+    {
+      "bytes": 2881,
+      "path": "review.md",
+      "sha256": "2bda3f91f85a636d9d369354adbcea8389e75377a1d7a1f5311f51a5648b2a65"
+    },
+    {
+      "bytes": 1446,
+      "path": "review_scope.json",
+      "sha256": "6fbc800e7289333915e0619973958fe58f70c2b2b8add5d096c10bc12fb59005"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The cross-trace response signal is real, but direct range replacement and shallow trust gating both fail decision EV. The next work may test a latent conditioner, but only as a bounded falsifier with no revealed-hand leakage and selected-action EV as the gate.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T170922Z-latent-response-conditioner-for-decision-aware-public-belief",
+  "review_id": "20260521T170922Z-latent-response-conditioner-for-decision-aware-public-belief",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1805.08195",
+    "autoresearch-session/slumbot_trace_cases/decision_gate_confidence_to_noallin_20260521.json",
+    "autoresearch-session/slumbot_trace_cases/decision_gate_noallin_to_confidence_20260521.json"
+  ],
+  "written_at": "2026-05-21T21:23:26Z"
+}

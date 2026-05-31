@@ -1,0 +1,37 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 655,
+      "path": "decision.json",
+      "sha256": "a70bc5507f74d1c88b4f28dfa78c264b7f8ff1d643d5500490b2ddccfa7c884d"
+    },
+    {
+      "bytes": 3272,
+      "path": "innovation.md",
+      "sha256": "ad4788801e536dd75defdef6cf94671f1298f05b90e923a8e9cf8f199323d77e"
+    },
+    {
+      "bytes": 3201,
+      "path": "related_work.md",
+      "sha256": "0f27e23a700be328073d6dd17408d9eddcc1c12d9b73ed844aacda919cb6527d"
+    },
+    {
+      "bytes": 1152,
+      "path": "thought_experiments.md",
+      "sha256": "6984d57150f1b07b0ec37b49f08f54a28ea778a67d81f3ac19553cdb69ee3eb7"
+    }
+  ],
+  "reason": "Exact turn/river search now has positive budget evidence, while learned hook patches failed. The next mechanism-level sprint should move search into self-play blueprint/range training rather than patching isolated resolver states.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T182511Z-search-improved-self-play-blueprint-after-exact-cfr-innovation",
+  "review_id": "20260522T182511Z-search-improved-self-play-blueprint-after-exact-cfr-innovation",
+  "sources": [
+    "RESEARCH_LOG.md#20260522T182315Z-exact-gpu-cfr200-budget-frontier",
+    "RESEARCH_LOG.md#20260522T181500Z-learned-regret-policy-iteration-hook",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://www.science.org/doi/10.1126/science.aam6960",
+    "https://openreview.net/forum?id=yMo7Z670f6"
+  ],
+  "written_at": "2026-05-22T18:26:28Z"
+}

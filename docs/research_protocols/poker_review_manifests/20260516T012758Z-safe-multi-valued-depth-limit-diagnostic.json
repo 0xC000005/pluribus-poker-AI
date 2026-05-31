@@ -1,0 +1,56 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 2915,
+      "path": "benchmark_audit.md",
+      "sha256": "39f7da3fd5b29dca9f6a7e202abd37d855c04cdc2d030e163104f692ca8679c6"
+    },
+    {
+      "bytes": 1154,
+      "path": "decision.json",
+      "sha256": "06ec2600e9f861c6679203cace9a3979ed253eee706f407d16944ea9912dd87e"
+    },
+    {
+      "bytes": 1700,
+      "path": "mechanism_review.md",
+      "sha256": "3e01fec52401b101b0750201c888047780a8373f947455a8c0f1e879c547b8b1"
+    },
+    {
+      "bytes": 3654,
+      "path": "related_work.md",
+      "sha256": "257c6fd50d10ae097495e4215fd21573d6997932b537c630a0e290188461e72c"
+    },
+    {
+      "bytes": 2953,
+      "path": "review.md",
+      "sha256": "0598caea17864fc834a9cd62cdaca17530d12eaaf7920160695ae7e67e603559"
+    },
+    {
+      "bytes": 1772,
+      "path": "review_scope.json",
+      "sha256": "9cbebfa91e5b3cffc2c925736f9e334ad75ef8241997f68ded1b50787ae263b8"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Local evidence retires post-hoc learned-leaf abstention, while primary related work supports multi-valued depth states, diverse opponent ranges, and safe subgame-solving constraints. Proceed only to a bounded exact positive-control diagnostic before training another neural value model.",
+  "review_dir": "autoresearch-session/poker_reviews/20260516T012758Z-safe-multi-valued-depth-limit-diagnostic",
+  "review_id": "20260516T012758Z-safe-multi-valued-depth-limit-diagnostic",
+  "sources": [
+    "RESEARCH_LOG.md#20260516T014000Z-callback-leaf-cfr10-full-holdout-map",
+    "RESEARCH_LOG.md#20260516T015200Z-callback-leaf-decision-margin-audit",
+    "RESEARCH_LOG.md#20260516T021000Z-callback-leaf-external-repeat-holdout",
+    "RESEARCH_LOG.md#20260516T021600Z-callback-leaf-neural-drift-external-transfer",
+    "autoresearch-session/depth_limited_contract_20260516/callback_leaf_aligned_iter10_decision_margin_audit.json",
+    "autoresearch-session/depth_limited_contract_20260516/callback_leaf_aligned_iter10_neural_drift_predictor_external_repeat64.json",
+    "https://papers.nips.cc/paper/7993-depth-limited-solving-for-imperfect-information-games",
+    "https://arxiv.org/abs/2201.11580",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-19T21:11:27Z"
+}

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import random
 import time
+from typing import Any, Sequence
 
 import numpy as np
 import torch
@@ -25,6 +26,7 @@ from poker_ai.games.full_deck.state import (
     PokerState,
     new_game,
 )
+from poker_ai.deep_cfr.fast_state import new_fast_game
 from poker_ai.research.game_theoretic_rl import (
     epsilon_greedy_distribution,
     legal_softmax,
@@ -36,6 +38,7 @@ class NativeNFSPConfig:
     train_episodes: int = 100
     eval_games: int = 100
     hidden_dim: int = 64
+    q_network_arch: str = "mlp"
     batch_size: int = 128
     min_buffer_size_to_learn: int = 32
     anticipatory_param: float = 0.1
@@ -48,6 +51,10 @@ class NativeNFSPConfig:
     seed: int = 20260514
     device: str = "auto"
     checkpoint_path: str | None = None
+    opponent_kind: str = "self"
+    opponent_checkpoint: str | Sequence[str] | None = None
+    opponent_device: str = "same"
+    state_backend: str = "full-deck"
 
 
 @dataclass(frozen=True)
@@ -76,6 +83,58 @@ class _MLP(nn.Module):
         if x.dim() == 1:
             x = x.unsqueeze(0)
         return self.net(x)
+
+
+class _DuelingQNetwork(nn.Module):
+    def __init__(self, hidden_dim: int):
+        super().__init__()
+        self.trunk = nn.Sequential(
+            nn.Linear(N_FEATURES, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+        )
+        self.value_head = nn.Linear(hidden_dim, 1)
+        self.advantage_head = nn.Linear(hidden_dim, N_ACTIONS)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        hidden = self.trunk(x)
+        value = self.value_head(hidden)
+        advantage = self.advantage_head(hidden)
+        return value + advantage - advantage.mean(dim=1, keepdim=True)
+
+
+def _normalize_q_network_arch(q_network_arch: str) -> str:
+    arch = str(q_network_arch).strip().lower()
+    if arch not in {"mlp", "dueling"}:
+        raise ValueError("q_network_arch must be one of: mlp, dueling")
+    return arch
+
+
+def _build_q_network(hidden_dim: int, q_network_arch: str) -> nn.Module:
+    arch = _normalize_q_network_arch(q_network_arch)
+    if arch == "dueling":
+        return _DuelingQNetwork(hidden_dim)
+    return _MLP(hidden_dim)
+
+
+def _native_nfsp_algorithm_name(q_network_arch: str) -> str:
+    arch = _normalize_q_network_arch(q_network_arch)
+    if arch == "dueling":
+        return "native_nfsp_dueling_ddqn"
+    return "native_nfsp_dqn"
+
+
+def _normalize_opponent_checkpoints(
+    opponent_checkpoint: str | Path | Sequence[str | Path] | None,
+) -> list[str]:
+    if opponent_checkpoint is None:
+        return []
+    if isinstance(opponent_checkpoint, (str, Path)):
+        return [str(opponent_checkpoint)]
+    return [str(path) for path in opponent_checkpoint if str(path)]
 
 
 class ReservoirPolicyBuffer:
@@ -169,6 +228,42 @@ def get_legal_mask(state: PokerState) -> np.ndarray:
     if mask.sum() <= 0:
         raise ValueError("state has no legal indexed actions")
     return mask
+
+
+def _normalize_state_backend(state_backend: str) -> str:
+    backend = str(state_backend).strip().lower()
+    if backend not in {"full-deck", "fast-state"}:
+        raise ValueError("state_backend must be one of: full-deck, fast-state")
+    return backend
+
+
+def _new_training_state(cfg: NativeNFSPConfig):
+    if _normalize_state_backend(cfg.state_backend) == "fast-state":
+        return new_fast_game(2, initial_chips=cfg.initial_chips)
+    return new_game(2, initial_chips=cfg.initial_chips)
+
+
+def _state_player_i(state) -> int:
+    return int(getattr(state, "player_i", getattr(state, "current_player_i", 0)))
+
+
+def _state_n_players(state) -> int:
+    if hasattr(state, "players"):
+        return len(state.players)
+    return int(getattr(state, "n_players", 2))
+
+
+def _state_legal_mask(state) -> np.ndarray:
+    if hasattr(state, "get_legal_mask"):
+        return state.get_legal_mask().astype(np.float32, copy=False)
+    return get_legal_mask(state)
+
+
+def _state_apply_action(state, action_idx: int):
+    if hasattr(state, "get_legal_mask"):
+        state.apply_action(int(action_idx))
+        return state
+    return state.apply_action(INDEX_TO_ACTION[int(action_idx)])
 
 
 def masked_uniform(legal_mask: np.ndarray) -> np.ndarray:
@@ -316,22 +411,37 @@ def _play_hand(
     *,
     training: bool,
     opponent_random: bool = False,
+    opponent_adapter: Any | None = None,
+    opponent_device: torch.device | None = None,
+    learner_seat: int | None = None,
 ) -> tuple[list[tuple[int, np.ndarray, np.ndarray, int, bool]], list[float], int]:
-    state = new_game(2, initial_chips=cfg.initial_chips)
+    state = _new_training_state(cfg)
     records: list[tuple[int, np.ndarray, np.ndarray, int, bool]] = []
     episode_best_response_modes = sample_episode_policy_modes(
-        n_players=len(state.players),
+        n_players=_state_n_players(state),
         anticipatory_param=cfg.anticipatory_param,
         rng=rng,
     )
     n_steps = 0
     while not state.is_terminal and n_steps < cfg.max_steps_per_hand:
-        player = state.player_i
+        player = _state_player_i(state)
         features = state.to_feature_vector()
-        legal_mask = get_legal_mask(state)
-        if opponent_random and player == 1:
+        legal_mask = _state_legal_mask(state)
+        if opponent_adapter is not None and learner_seat is not None and player != learner_seat:
+            action_idx = int(
+                opponent_adapter.select_action(
+                    state=state,
+                    features=features,
+                    legal_mask=legal_mask,
+                    device=opponent_device or device,
+                    rng=rng,
+                )
+            )
+            best_response_mode = False
+        elif opponent_random and player == 1:
             probs = masked_uniform(legal_mask)
             best_response_mode = False
+            action_idx = select_action(probs, legal_mask, rng=rng)
         else:
             avg_probs = _network_probs(avg_net, features, legal_mask, device)
             if training:
@@ -346,9 +456,9 @@ def _play_hand(
             else:
                 best_response_mode = False
                 probs = avg_probs
-        action_idx = select_action(probs, legal_mask, rng=rng)
+            action_idx = select_action(probs, legal_mask, rng=rng)
         records.append((player, features, legal_mask, action_idx, best_response_mode))
-        state = state.apply_action(INDEX_TO_ACTION[action_idx])
+        state = _state_apply_action(state, action_idx)
         n_steps += 1
     payouts = [float(state.payout.get(i, 0)) / float(cfg.initial_chips) for i in range(2)]
     return records, payouts, n_steps
@@ -356,15 +466,47 @@ def _play_hand(
 
 def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     cfg = cfg or NativeNFSPConfig()
+    state_backend = _normalize_state_backend(cfg.state_backend)
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)
     rng = np.random.default_rng(cfg.seed)
     device_info = resolve_device(cfg.device)
     device = torch.device(device_info["resolved_device"])
+    opponent_kind = str(cfg.opponent_kind).strip().lower()
+    opponent_adapter = None
+    opponent_adapters: list[Any] = []
+    opponent_device_info: dict | None = None
+    opponent_device = device
+    opponent_checkpoints = _normalize_opponent_checkpoints(cfg.opponent_checkpoint)
+    if opponent_kind not in {"self", "self-play", "self_play"}:
+        if opponent_kind == "random":
+            pass
+        else:
+            if not opponent_checkpoints:
+                raise ValueError("opponent_checkpoint is required for learned fixed opponents")
+            opponent_device_request = (
+                device_info["resolved_device"]
+                if str(cfg.opponent_device).strip().lower() == "same"
+                else str(cfg.opponent_device)
+            )
+            opponent_device_info = resolve_device(opponent_device_request)
+            opponent_device = torch.device(opponent_device_info["resolved_device"])
+            from poker_ai.research.mixed_policy_h2h import load_policy_adapter  # noqa: PLC0415
 
-    q_net = _MLP(cfg.hidden_dim).to(device)
-    q_target_net = _MLP(cfg.hidden_dim).to(device)
+            opponent_adapters = [
+                load_policy_adapter(
+                    checkpoint,
+                    kind=opponent_kind,
+                    device=opponent_device,
+                )
+                for checkpoint in opponent_checkpoints
+            ]
+            opponent_adapter = opponent_adapters[0]
+
+    q_network_arch = _normalize_q_network_arch(cfg.q_network_arch)
+    q_net = _build_q_network(cfg.hidden_dim, q_network_arch).to(device)
+    q_target_net = _build_q_network(cfg.hidden_dim, q_network_arch).to(device)
     q_target_net.load_state_dict(q_net.state_dict())
     q_target_net.eval()
     avg_net = _MLP(cfg.hidden_dim).to(device)
@@ -380,7 +522,19 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     q_updates = 0
     q_target_syncs = 0
     payoffs: list[float] = []
-    for _ in range(int(cfg.train_episodes)):
+    fixed_opponent_learning_seats: set[int] = set()
+    fixed_opponent_training = opponent_adapter is not None
+    opponent_sample_counts: dict[str, int] = {checkpoint: 0 for checkpoint in opponent_checkpoints}
+    for episode_idx in range(int(cfg.train_episodes)):
+        learner_seat = None
+        hand_opponent_adapter = opponent_adapter
+        if fixed_opponent_training:
+            learner_seat = int(episode_idx % 2)
+            fixed_opponent_learning_seats.add(learner_seat)
+            if opponent_adapters:
+                opponent_i = int(episode_idx % len(opponent_adapters))
+                hand_opponent_adapter = opponent_adapters[opponent_i]
+                opponent_sample_counts[opponent_checkpoints[opponent_i]] += 1
         records, payouts, steps = _play_hand(
             q_net,
             avg_net,
@@ -388,12 +542,20 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
             rng,
             device,
             training=True,
+            opponent_adapter=hand_opponent_adapter,
+            opponent_device=opponent_device,
+            learner_seat=learner_seat,
+        )
+        learner_records = (
+            records
+            if learner_seat is None
+            else [record for record in records if int(record[0]) == int(learner_seat)]
         )
         total_steps += steps
-        payoffs.append(payouts[0])
-        for transition in build_player_transitions(records, payouts):
+        payoffs.append(payouts[0 if learner_seat is None else learner_seat])
+        for transition in build_player_transitions(learner_records, payouts):
             q_buffer.add(transition)
-        for _player, features, legal_mask, action_idx, best_response_mode in records:
+        for _player, features, legal_mask, action_idx, best_response_mode in learner_records:
             if best_response_mode:
                 sl_buffer.add(features, legal_mask, action_idx, rng=rng)
         if len(q_buffer) >= cfg.min_buffer_size_to_learn:
@@ -420,7 +582,11 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
     eval_start = time.perf_counter()
     eval_payoffs = []
     eval_steps = 0
-    for _ in range(int(cfg.eval_games)):
+    for game_idx in range(int(cfg.eval_games)):
+        eval_learner_seat = int(game_idx % 2) if fixed_opponent_training else None
+        eval_opponent_adapter = opponent_adapter
+        if fixed_opponent_training and opponent_adapters:
+            eval_opponent_adapter = opponent_adapters[int(game_idx % len(opponent_adapters))]
         _, payouts, steps = _play_hand(
             q_net,
             avg_net,
@@ -428,31 +594,58 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
             rng,
             device,
             training=False,
-            opponent_random=True,
+            opponent_random=not fixed_opponent_training,
+            opponent_adapter=eval_opponent_adapter,
+            opponent_device=opponent_device,
+            learner_seat=eval_learner_seat,
         )
-        eval_payoffs.append(payouts[0])
+        eval_payoffs.append(payouts[0 if eval_learner_seat is None else eval_learner_seat])
         eval_steps += steps
     if device.type == "cuda":
         torch.cuda.synchronize()
     eval_seconds = time.perf_counter() - eval_start
 
     metrics = {
-        "algorithm": "native_nfsp_dqn",
+        "algorithm": _native_nfsp_algorithm_name(q_network_arch),
         "role": "native_game_theoretic_rl_pilot",
         "environment": "poker_ai:full_deck_hu_nlhe",
         "warning": "DQN-style NFSP pilot for plumbing and compute diagnostics; not a promoted poker agent.",
+        "uses_slumbot_training_data": False,
         **device_info,
         "num_actions": N_ACTIONS,
+        "state_backend": state_backend,
         "train_episodes": int(cfg.train_episodes),
         "eval_games": int(cfg.eval_games),
+        "q_network_arch": q_network_arch,
+        "q_learning_target": "double_dqn",
         "train_steps": int(total_steps),
         "eval_steps": int(eval_steps),
+        "train_opponent_mode": (
+            "fixed_policy_population"
+            if len(opponent_checkpoints) > 1
+            else "fixed_policy"
+            if fixed_opponent_training
+            else "self_play"
+        ),
+        "opponent_kind": opponent_kind,
+        "opponent_checkpoint": opponent_checkpoints[0] if len(opponent_checkpoints) == 1 else None,
+        "opponent_checkpoints": opponent_checkpoints,
+        "opponent_device": str(opponent_device),
+        "opponent_algorithm": (
+            getattr(opponent_adapter, "algorithm", None) if opponent_adapter is not None else None
+        ),
+        "fixed_opponent_population_size": len(opponent_checkpoints),
+        "opponent_sample_counts": opponent_sample_counts,
+        "fixed_opponent_learning_seats": sorted(fixed_opponent_learning_seats),
         "train_seconds": float(train_seconds),
         "eval_seconds": float(eval_seconds),
         "episodes_per_second": float(cfg.train_episodes / max(train_seconds, 1e-9)),
         "train_steps_per_second": float(total_steps / max(train_seconds, 1e-9)),
         "mean_train_payoff_p0": float(np.mean(payoffs)) if payoffs else 0.0,
         "mean_eval_payoff_p0_vs_random": float(np.mean(eval_payoffs)) if eval_payoffs else 0.0,
+        "mean_eval_payoff_learner_vs_opponent": (
+            float(np.mean(eval_payoffs)) if fixed_opponent_training and eval_payoffs else None
+        ),
         "q_buffer_size": len(q_buffer),
         "sl_buffer_size": len(sl_buffer),
         "q_updates": int(q_updates),
@@ -475,12 +668,14 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
                 "num_actions": N_ACTIONS,
                 "num_features": N_FEATURES,
                 "hidden_dim": int(cfg.hidden_dim),
+                "q_network_arch": q_network_arch,
                 "q_net_state_dict": q_net.state_dict(),
                 "avg_net_state_dict": avg_net.state_dict(),
                 "config": {
                     "train_episodes": int(cfg.train_episodes),
                     "eval_games": int(cfg.eval_games),
                     "hidden_dim": int(cfg.hidden_dim),
+                    "q_network_arch": q_network_arch,
                     "batch_size": int(cfg.batch_size),
                     "min_buffer_size_to_learn": int(cfg.min_buffer_size_to_learn),
                     "anticipatory_param": float(cfg.anticipatory_param),
@@ -492,6 +687,11 @@ def run_native_nfsp_pilot(cfg: NativeNFSPConfig | None = None) -> dict:
                     "max_steps_per_hand": int(cfg.max_steps_per_hand),
                     "seed": int(cfg.seed),
                     "device": str(cfg.device),
+                    "opponent_kind": opponent_kind,
+                    "opponent_checkpoint": opponent_checkpoints[0] if len(opponent_checkpoints) == 1 else None,
+                    "opponent_checkpoints": opponent_checkpoints,
+                    "opponent_device": str(cfg.opponent_device),
+                    "state_backend": state_backend,
                 },
                 "metrics": metrics,
             },
@@ -512,7 +712,10 @@ def _load_native_checkpoint_networks(
 
     config_payload = payload.get("config", {})
     hidden_dim = int(payload.get("hidden_dim", config_payload.get("hidden_dim", 64)))
-    q_net = _MLP(hidden_dim).to(resolved_device)
+    q_network_arch = _normalize_q_network_arch(
+        payload.get("q_network_arch", config_payload.get("q_network_arch", "mlp"))
+    )
+    q_net = _build_q_network(hidden_dim, q_network_arch).to(resolved_device)
     avg_net = _MLP(hidden_dim).to(resolved_device)
     q_net.load_state_dict(payload["q_net_state_dict"])
     avg_net.load_state_dict(payload["avg_net_state_dict"])
@@ -573,6 +776,9 @@ def evaluate_native_nfsp_checkpoint(
         "source_checkpoint": str(checkpoint_path),
         **device_info,
         "num_actions": N_ACTIONS,
+        "q_network_arch": _normalize_q_network_arch(
+            payload.get("q_network_arch", config_payload.get("q_network_arch", "mlp"))
+        ),
         "eval_games": int(eval_games),
         "eval_steps": int(eval_steps),
         "eval_seconds": float(eval_seconds),
@@ -657,6 +863,18 @@ def evaluate_native_nfsp_head_to_head(
         "candidate_checkpoint": str(candidate_checkpoint),
         "baseline_checkpoint": str(baseline_checkpoint),
         "baseline_algorithm": str(baseline_payload.get("algorithm", "")),
+        "candidate_q_network_arch": _normalize_q_network_arch(
+            candidate_payload.get(
+                "q_network_arch",
+                candidate_payload.get("config", {}).get("q_network_arch", "mlp"),
+            )
+        ),
+        "baseline_q_network_arch": _normalize_q_network_arch(
+            baseline_payload.get(
+                "q_network_arch",
+                baseline_payload.get("config", {}).get("q_network_arch", "mlp"),
+            )
+        ),
         **device_info,
         "num_actions": N_ACTIONS,
         "n_games": int(n_games),

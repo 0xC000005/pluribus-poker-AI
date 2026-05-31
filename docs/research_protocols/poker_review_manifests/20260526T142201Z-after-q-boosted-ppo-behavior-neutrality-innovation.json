@@ -1,0 +1,36 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 592,
+      "path": "decision.json",
+      "sha256": "698f00d35de57c48e419128c018d7087dfacc08c1dc5a89de1f8ee6c7d35beb6"
+    },
+    {
+      "bytes": 2458,
+      "path": "innovation.md",
+      "sha256": "c00d6611449cdec879577b422097c9411ea2275ea502ef6a58c2e9d51d8b5d6d"
+    },
+    {
+      "bytes": 2546,
+      "path": "related_work.md",
+      "sha256": "9ece6998671892056c45a2de39e4119a2e18df3e124418dd4242ff4482f7f0b9"
+    },
+    {
+      "bytes": 907,
+      "path": "thought_experiments.md",
+      "sha256": "ab6ec1668d5980b909bc18f58688e4fa8242fe6b164ee57080f180bc1b4ec3d0"
+    }
+  ],
+  "reason": "Behavior-only Q boosting is weakly positive only after a correctness fix and still lacks positive confidence, so it needs a native-league control check or a fuller expected-trace/search-counterfactual advantage mechanism before Slumbot.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T142201Z-after-q-boosted-ppo-behavior-neutrality-innovation",
+  "review_id": "20260526T142201Z-after-q-boosted-ppo-behavior-neutrality-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2605.19235",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1603.01121",
+    "autoresearch-session/native_ppo/q_lambda_q_boosted_vs_policy_behavior_frozenq_h2h_1k_seed20260531.json"
+  ],
+  "written_at": "2026-05-26T14:33:26Z"
+}

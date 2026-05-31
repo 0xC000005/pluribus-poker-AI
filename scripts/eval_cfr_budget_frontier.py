@@ -154,6 +154,7 @@ def _solve_case_budget_frontier(
     solver_backend: str,
     solver_update: str,
     solver_factory: Any = StreetSolver,
+    include_strategies: bool = False,
 ) -> dict[str, Any]:
     street = int(parsed["st"])
     if street not in (2, 3):
@@ -211,7 +212,11 @@ def _solve_case_budget_frontier(
             "illegal_mass": _illegal_mass(decision.strategy, current_node),
             "latency_ms": round(float(decision.latency_ms), 3),
         }
-    return {
+        if include_strategies:
+            budget_metrics[str(budget)]["strategy"] = [
+                round(float(value), 10) for value in decision.strategy.tolist()
+            ]
+    record = {
         "label": case.label,
         "passed": True,
         "reference_action": int(np.argmax(reference.strategy)),
@@ -221,6 +226,11 @@ def _solve_case_budget_frontier(
         "reference_latency_ms": round(float(reference.latency_ms), 3),
         "budgets": budget_metrics,
     }
+    if include_strategies:
+        record["reference_strategy"] = [
+            round(float(value), 10) for value in reference.strategy.tolist()
+        ]
+    return record
 
 
 def eval_cfr_budget_frontier(
@@ -234,6 +244,7 @@ def eval_cfr_budget_frontier(
     solver_backend: str = "cpu",
     solver_update: str = "cfr_plus",
     min_evaluated: int = 1,
+    include_strategies: bool = False,
 ) -> dict[str, Any]:
     budgets = _unique_budgets(budgets)
     cases = load_cases_json(cases_json)
@@ -257,6 +268,7 @@ def eval_cfr_budget_frontier(
                 reference_iterations=reference_iterations,
                 solver_backend=solver_backend,
                 solver_update=solver_update,
+                include_strategies=include_strategies,
             )
         )
     summary = summarize_budget_frontier_records(
@@ -274,6 +286,7 @@ def eval_cfr_budget_frontier(
         "reference_iterations": int(reference_iterations),
         "solver_backend": solver_backend,
         "solver_update": solver_update,
+        "include_strategies": bool(include_strategies),
         "n_cases": int(len(records)),
         "promotion": False,
         **summary,
@@ -305,6 +318,8 @@ def main(argv: list[str] | None = None) -> int:
             "torch-cpu",
             "torch-levelsync-cuda",
             "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
         ),
         default="cpu",
     )
@@ -314,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         default="cfr_plus",
     )
     parser.add_argument("--min-evaluated", type=int, default=1)
+    parser.add_argument("--include-strategies", action="store_true")
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
     metrics = eval_cfr_budget_frontier(
@@ -326,6 +342,7 @@ def main(argv: list[str] | None = None) -> int:
         solver_backend=args.solver_backend,
         solver_update=args.solver_update,
         min_evaluated=args.min_evaluated,
+        include_strategies=args.include_strategies,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

@@ -1,0 +1,38 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 813,
+      "path": "decision.json",
+      "sha256": "e4f0ba9bc876bfba43b7c7187d3269f71ed27ad4d8c25c6ddac0ac55fe7a764d"
+    },
+    {
+      "bytes": 2312,
+      "path": "innovation.md",
+      "sha256": "f2c277d1516594f3fa080938c6e364d1c824050af030afa18966baa9184d3b84"
+    },
+    {
+      "bytes": 2653,
+      "path": "related_work.md",
+      "sha256": "c6f9420f9fbf565554eacc44517ee7209c86a9ab66da8755df5d4a454d5f20e3"
+    },
+    {
+      "bytes": 943,
+      "path": "thought_experiments.md",
+      "sha256": "25b34a36a9be8dc2aaf12c5ba277b157ab0ef9f48e82a189aa2fb76787fb2a7c"
+    }
+  ],
+  "reason": "The next mechanism should replace terminal-return behavior cloning with variance-reduced search-guided RL or search-derived counterfactual advantages, and must pass matched fixed-root decision-impact gates before H2H or Slumbot.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T140727Z-after-trajectory-return-actor-regression-innovation",
+  "review_id": "20260526T140727Z-after-trajectory-return-actor-regression-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2605.19235",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2502.08938",
+    "autoresearch-session/decision_value_actor/trajectory_return_baseline_eval_32x8_seed20260529.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_search_improved_policy_head_eval_32x8_seed20260529.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_base_policy_head_eval_32x8_seed20260529.json"
+  ],
+  "written_at": "2026-05-26T14:11:09Z"
+}

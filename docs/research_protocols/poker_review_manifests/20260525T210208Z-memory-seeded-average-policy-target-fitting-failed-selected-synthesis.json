@@ -1,0 +1,22 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 371,
+      "path": "decision.json",
+      "sha256": "503a46abc372b4fe9f0c805f8a8fb48930ba5fd0392b06819a2ac52a06ffa1ed"
+    },
+    {
+      "bytes": 1583,
+      "path": "synthesis.md",
+      "sha256": "834017cefea71760b6917fdca5ee6eb00774662c8e081211f0e6bd896b9d751f"
+    }
+  ],
+  "reason": "Memory seeding fixed the artifact boundary but did not fix root decision collapse. The next test must make search the behavior/data-generation operator rather than only a supervised target source.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T210208Z-memory-seeded-average-policy-target-fitting-failed-selected-synthesis",
+  "review_id": "20260525T210208Z-memory-seeded-average-policy-target-fitting-failed-selected-synthesis",
+  "sources": [
+    "autoresearch-session/gpu_average_strategy_injection/root_gate_memory_seed_3x128_summary_seed20260529.json"
+  ],
+  "written_at": "2026-05-25T21:03:43Z"
+}

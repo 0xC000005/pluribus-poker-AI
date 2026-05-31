@@ -1,0 +1,44 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 994,
+      "path": "benchmark_audit.md",
+      "sha256": "92dcc61e323d8f3ca3c9c9782106a110ca1a682249a61fb9334b8a37d4ad54ba"
+    },
+    {
+      "bytes": 416,
+      "path": "decision.json",
+      "sha256": "afe86f4f33c2020769d49655c5ed13b9d08559d82757d69bff4a87d19588297e"
+    },
+    {
+      "bytes": 1272,
+      "path": "mechanism_review.md",
+      "sha256": "ff3bf0ffa66e945513f5a491ee3fc3b182c8f2fb86c0105e48d134e7fbcc8eb2"
+    },
+    {
+      "bytes": 1481,
+      "path": "related_work.md",
+      "sha256": "31450ae511aa4ef6588896a8f4085e67deaab78ed75701f4d8660176357f6705"
+    },
+    {
+      "bytes": 1303,
+      "path": "review.md",
+      "sha256": "df89e7d190f2f631f9d33eb3400fc999459c6532dfd4edf89f93b5ecc5049bc0"
+    },
+    {
+      "bytes": 2442,
+      "path": "review_scope.json",
+      "sha256": "1d57077c8c408b2fda57bda1541b2d78dbe8088aaa84ead4881ed8b212388492"
+    }
+  ],
+  "reason": "The callback-leaf pilot implements the aligned train/inference contract supported by depth-limited resolving literature and produced a small but positive resolver-behavior smoke while remaining non-promotional.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T191100Z-depth-limited-resolving-contract",
+  "review_id": "20260515T191100Z-depth-limited-resolving-contract",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1705.02955"
+  ],
+  "written_at": "2026-05-15T19:13:51Z"
+}

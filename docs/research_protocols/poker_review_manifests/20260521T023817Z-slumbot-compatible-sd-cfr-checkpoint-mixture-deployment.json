@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 2106,
+      "path": "benchmark_audit.md",
+      "sha256": "87dd080519a215b4f2941a963b1ccb21a1578fc3241d1dee414c557cf8a9dab6"
+    },
+    {
+      "bytes": 706,
+      "path": "decision.json",
+      "sha256": "6d8ea36f547bcd201e4fcfe6b03b94c50456c7867adbbacc3c4ded74d0c023cd"
+    },
+    {
+      "bytes": 1839,
+      "path": "mechanism_review.md",
+      "sha256": "054131b94ec81d087c293b9b76abdbb5e2d0f21e408357293f8761135679a362"
+    },
+    {
+      "bytes": 3100,
+      "path": "related_work.md",
+      "sha256": "e2f8bfe99d0174359dfd47054591a62bff09d787cc314fda2224a3ea0970469a"
+    },
+    {
+      "bytes": 2958,
+      "path": "review.md",
+      "sha256": "44cf4b6ea2a10e0e6534c06cd29bb0ea2c0ba8834ee91a48856fd11aae350299"
+    },
+    {
+      "bytes": 1771,
+      "path": "review_scope.json",
+      "sha256": "f0a3244b6ad38589a3db53224ec2e511b555e85fe44396f93dd1cf1307dfbfc1"
+    },
+    {
+      "bytes": 994,
+      "path": "team_review.md",
+      "sha256": "cedc53eff0fbf56bbb44bf2e65ac66d0b2f758cafe3e732e04716cabdab7c319"
+    }
+  ],
+  "reason": "The local SD-CFR-style mixture evidence is positive and the mechanism is better aligned than separate policy-head cloning, but implementation must be opt-in, hand-level sampled, and protected by Slumbot adapter tests plus promotion blockers.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T023817Z-slumbot-compatible-sd-cfr-checkpoint-mixture-deployment",
+  "review_id": "20260521T023817Z-slumbot-compatible-sd-cfr-checkpoint-mixture-deployment",
+  "sources": [
+    "https://arxiv.org/abs/1901.07621",
+    "https://proceedings.mlr.press/v97/brown19b",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2112.03178",
+    "autoresearch-session/sd_cfr_mixture/restored_history_iter_mixture_vs_iter1000_seed20260522_24.json",
+    "autoresearch-session/sd_cfr_mixture/restored_history_iter_mixture_vs_final_seed20260522_24.json"
+  ],
+  "written_at": "2026-05-21T03:07:23Z"
+}

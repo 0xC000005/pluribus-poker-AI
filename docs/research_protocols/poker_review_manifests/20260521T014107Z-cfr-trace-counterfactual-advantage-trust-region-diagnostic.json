@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 808,
+      "path": "benchmark_audit.md",
+      "sha256": "f263f39f7611228aec5d2c1277b8aae973cac28ad4eb76e03d5676bf83b14682"
+    },
+    {
+      "bytes": 787,
+      "path": "decision.json",
+      "sha256": "d2e99d4b628023874cc5852239139bbdcf3dab81b2fff4da998f457b84160c63"
+    },
+    {
+      "bytes": 1338,
+      "path": "mechanism_review.md",
+      "sha256": "b0494d1d9db027283ea99475d49977b6e594ecae940f9fad02f713817edf3b96"
+    },
+    {
+      "bytes": 2342,
+      "path": "related_work.md",
+      "sha256": "46c3a4dfa2014fded427413d709993bb5a5b53413be5eb9005456854c270ec38"
+    },
+    {
+      "bytes": 1525,
+      "path": "review.md",
+      "sha256": "980af6033b5d2a6d17f1ff65eb511c523d173e82567c78356a08cf353ba26114"
+    },
+    {
+      "bytes": 974,
+      "path": "review_scope.json",
+      "sha256": "2bfd09c6d1c8ac495d80b8a1bddd4850fa5b7d0d9bbddc7cef827d41a91a9368"
+    },
+    {
+      "bytes": 529,
+      "path": "team_review.md",
+      "sha256": "97dc6bcc3d6f9a60c43c3a83b682b26d69e8fb0ce13b5032538b3ef3b044fee6"
+    }
+  ],
+  "reason": "The diagnostic tests whether counterfactual advantages are useful as small calibrated policy-gradient-like search updates without adding Slumbot heuristics or tuning on holdout. It directly follows the PPO/FSP and raw-advantage failures.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T014107Z-cfr-trace-counterfactual-advantage-trust-region-diagnostic",
+  "review_id": "20260521T014107Z-cfr-trace-counterfactual-advantage-trust-region-diagnostic",
+  "sources": [
+    "https://papers.nips.cc/paper/3306-regret-minimization-in-games-with-incomplete-information",
+    "https://arxiv.org/abs/2502.08938",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1811.00164",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_advantage_signal_holdout32_seed20260665.json",
+    "autoresearch-session/native_policy_only/fsp_qexpected_lambda_ppo_h512_2k_vs_nfsp10k_h2h_1k_seed20260534.json"
+  ],
+  "written_at": "2026-05-21T01:45:25Z"
+}

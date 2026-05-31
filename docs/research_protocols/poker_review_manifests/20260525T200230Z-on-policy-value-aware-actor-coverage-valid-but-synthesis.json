@@ -1,0 +1,26 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 490,
+      "path": "decision.json",
+      "sha256": "4a1dc9121297382062a461f6df2f90587f54e4506e48e76b5c7fc62805885543"
+    },
+    {
+      "bytes": 2008,
+      "path": "synthesis.md",
+      "sha256": "a443a2d57dc843c60281a23e7acb08b00fc36472d9c80796fa4bd55cb6958d0d"
+    }
+  ],
+  "reason": "Coverage is fixed, but supervised mirror-target fitting still fails the decision-impact gate. Continue with a KL-anchored expected-Q actor update rather than scaling the same cross-entropy calibration.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T200230Z-on-policy-value-aware-actor-coverage-valid-but-synthesis",
+  "review_id": "20260525T200230Z-on-policy-value-aware-actor-coverage-valid-but-synthesis",
+  "sources": [
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2007.12509",
+    "https://arxiv.org/abs/2112.03178",
+    "https://www.ifaamas.org/Proceedings/aamas2020/pdfs/p492.pdf",
+    "https://arxiv.org/abs/2408.00751"
+  ],
+  "written_at": "2026-05-25T20:04:55Z"
+}

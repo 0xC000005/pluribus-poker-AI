@@ -1,0 +1,25 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 554,
+      "path": "decision.json",
+      "sha256": "46a915b4f65842f7335b79e3bfdca3551d41b163f37baccd89097f96a4a437e1"
+    },
+    {
+      "bytes": 1342,
+      "path": "synthesis.md",
+      "sha256": "93296458aba71b7b9f42d24744bd7f979e578ac2277706a71a0d74d6a6e10319"
+    }
+  ],
+  "reason": "Search-improved behavior helped top-action metrics, but covered policy-head deployment still failed policy-EV transfer. Continue only by integrating the behavior improvement into a real average-policy/training loop.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T201827Z-search-improved-behavior-collection-improves-top-action-metrics-synthesis",
+  "review_id": "20260525T201827Z-search-improved-behavior-collection-improves-top-action-metrics-synthesis",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-25T20:19:47Z"
+}

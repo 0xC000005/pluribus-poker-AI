@@ -1,0 +1,57 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 2311,
+      "path": "benchmark_audit.md",
+      "sha256": "a6f5684dd1831256227af827547676486ad97cc9c7a0b3fd21b380387afbe7b0"
+    },
+    {
+      "bytes": 1798,
+      "path": "decision.json",
+      "sha256": "a1d6352a3b198e6f75ebdc9c15fe2e600b78616e478853df3b9867ffe58764b4"
+    },
+    {
+      "bytes": 1522,
+      "path": "mechanism_review.md",
+      "sha256": "0571026511cecd4f69ddfba4a546c685988977b2495ae861a738e200a3cb7ebd"
+    },
+    {
+      "bytes": 2364,
+      "path": "related_work.md",
+      "sha256": "6bc6e55f7a1be10167dc715677f405f1b4ac07bf69605a8dfa2c49a8fdb7fafd"
+    },
+    {
+      "bytes": 2135,
+      "path": "review.md",
+      "sha256": "c4f17bdaf591d59df1908f5baff1acef3603e737d7ad34f73cd9644a7f938b85"
+    },
+    {
+      "bytes": 2901,
+      "path": "review_scope.json",
+      "sha256": "dfc35f5188ab38535fb1a3e75bfc2ba563a3bdeef1d8cbfbb9297f4bbe28692b"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The new gates are diagnostic-only, reviewed against artifacts, and separate root impact from whole-game transfer. Root impact passed, but H2H transfer and attribution are not promotable: local search scores look better while duplicate-swapped confidence remains negative, and the pair-level consistency analyzer shows local gains do not predict H2H deltas. The search-guided scorer-continuation smoke also failed correlation, so the next action is trajectory-level search-as-policy improvement or continuation-calibrated search/value learning, not Slumbot.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T212029Z-exact-search-as-actor-root-gate",
+  "review_id": "20260525T212029Z-exact-search-as-actor-root-gate",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://deep.ai/publication/manipulating-the-distributions-of-experience-used-for-self-play-learning-in-expert-iteration",
+    "autoresearch-session/search_as_actor/exact_search_actor_root_gate_32x8_seed20260531.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_action_collapse_32x8_seed20260531.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_h2h_200x2_seed20260533.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_h2h_100x8_seed20260534.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_h2h_attribution_100x8_seed20260535.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_transfer_analysis_100x8_seed20260535.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_h2h_search_guided_scorer_20x2_inner1_seed20260536.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_transfer_analysis_search_guided_20x2_inner1_seed20260536.json"
+  ],
+  "written_at": "2026-05-26T13:40:00Z"
+}

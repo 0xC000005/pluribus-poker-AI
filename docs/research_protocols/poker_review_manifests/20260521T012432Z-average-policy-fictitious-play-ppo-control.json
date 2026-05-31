@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1053,
+      "path": "benchmark_audit.md",
+      "sha256": "5e19775e9d0cba89aad46a9d5529529d37f940e41d967d7d43f539cff40da3d5"
+    },
+    {
+      "bytes": 769,
+      "path": "decision.json",
+      "sha256": "178f128f88efb7a1668149ab3af8c62c24e4095d43c3384a35b023bbbb71a110"
+    },
+    {
+      "bytes": 1622,
+      "path": "mechanism_review.md",
+      "sha256": "8acef1b7586d48506be749c83c13b7b444a596d9675a90a6614ddde9e0f81610"
+    },
+    {
+      "bytes": 2926,
+      "path": "related_work.md",
+      "sha256": "c28444d127a9e79e9586fb9812f38dcd2de5da2e680905e041f07470c777f6e8"
+    },
+    {
+      "bytes": 1626,
+      "path": "review.md",
+      "sha256": "26938b44510ea6033ce050fea5a5cc59702b27a4456b4f559f13f4a1798b59be"
+    },
+    {
+      "bytes": 1190,
+      "path": "review_scope.json",
+      "sha256": "532834c6f96b2a0b207dcdd6e272bf543832e79fa4065387f5761cc02813a250"
+    },
+    {
+      "bytes": 525,
+      "path": "team_review.md",
+      "sha256": "39853186d55a1d95ca211523c20cc238eb7e3a0245f8eccfa7202834386391e5"
+    }
+  ],
+  "reason": "Related work and local failures support testing equilibrium averaging before more PPO estimator knobs. The branch is bounded to one diagnostic 2k smoke and H2H gate, exports the average policy, and does not add Slumbot-specific heuristics.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T012432Z-average-policy-fictitious-play-ppo-control",
+  "review_id": "20260521T012432Z-average-policy-fictitious-play-ppo-control",
+  "sources": [
+    "https://arxiv.org/abs/1603.01121",
+    "https://proceedings.mlr.press/v37/heinrich15.html",
+    "https://www.sciencedirect.com/science/article/pii/S0925231223005945",
+    "https://arxiv.org/abs/2502.08938",
+    "autoresearch-session/native_policy_only/qexpected_lambda_ppo_h512_10k_vs_nfsp10k_h2h_5k_seed20260529.json",
+    "autoresearch-session/native_policy_only/qexpected_lambda_target_ppo_h512_2k_vs_nfsp10k_h2h_1k_seed20260532.json"
+  ],
+  "written_at": "2026-05-21T01:39:16Z"
+}

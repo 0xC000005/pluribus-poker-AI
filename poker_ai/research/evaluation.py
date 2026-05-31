@@ -52,6 +52,17 @@ def remap_legacy_state_dict(state: dict[str, torch.Tensor]) -> dict[str, torch.T
     return remapped
 
 
+def _strip_nested_average_policy_state(
+    state: dict[str, torch.Tensor],
+) -> dict[str, torch.Tensor]:
+    """Drop accidentally registered average-policy weights from value_net state."""
+    return {
+        key: value
+        for key, value in state.items()
+        if not key.startswith("average_policy_net.")
+    }
+
+
 def load_value_network_checkpoint(
     checkpoint_path: str | Path,
     device: torch.device,
@@ -71,7 +82,9 @@ def load_value_network_checkpoint(
         n_layers=n_layers,
         use_betting_history=uses_betting_history,
     ).to(device)
-    state = remap_legacy_state_dict(checkpoint["value_net"])
+    state = _strip_nested_average_policy_state(
+        remap_legacy_state_dict(checkpoint["value_net"])
+    )
     missing, unexpected = value_net.load_state_dict(state, strict=False)
     allowed_missing = {
         "policy_head.weight",
@@ -100,7 +113,7 @@ def load_value_network_checkpoint(
         ).to(device)
         average_policy_net.load_state_dict(checkpoint["average_policy_net"])
         average_policy_net.eval()
-        value_net.average_policy_net = average_policy_net
+        object.__setattr__(value_net, "average_policy_net", average_policy_net)
     policy_calibration = checkpoint.get("policy_calibration")
     if not isinstance(policy_calibration, dict):
         policy_calibration = {}

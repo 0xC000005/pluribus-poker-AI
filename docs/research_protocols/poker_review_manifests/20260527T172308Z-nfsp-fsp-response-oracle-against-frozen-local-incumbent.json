@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1531,
+      "path": "benchmark_audit.md",
+      "sha256": "a57d0b87d4b1e0967875e15c002fcfb88c8559f3bf17395884b358dc66d38038"
+    },
+    {
+      "bytes": 819,
+      "path": "decision.json",
+      "sha256": "d144ca74d043bdf5210e78d8b949e37ca6a9199ef20c1fd96b89beaf922549fd"
+    },
+    {
+      "bytes": 2045,
+      "path": "mechanism_review.md",
+      "sha256": "1faf990bfa40d5b3ba15e3c337aed6aa1f0649169b7e4576176576cc794a5b88"
+    },
+    {
+      "bytes": 3191,
+      "path": "related_work.md",
+      "sha256": "2344ad9dcb1bd17a1cc29958eb6047bfa994306e44d1dabf0ac7bfce5b5b2607"
+    },
+    {
+      "bytes": 2253,
+      "path": "review.md",
+      "sha256": "8731ec15b9380deca1d7caec0c9b53cfd6a482097344d58361d8177332f2754c"
+    },
+    {
+      "bytes": 3533,
+      "path": "review_scope.json",
+      "sha256": "3670a7705ec0d1efe8aa60e8f5448bd8eece1b99e253115e0a04bdd1046b8ed2"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only with a bounded NFSP/FSP response-oracle contract audit. Existing native NFSP has the right 9-action best-response plus average-policy ingredients but lacks a frozen-incumbent/meta-policy response mode, so implementation must be TDD-gated and judged by parent H2H before population or Slumbot use.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T172308Z-nfsp-fsp-response-oracle-against-frozen-local-incumbent",
+  "review_id": "20260527T172308Z-nfsp-fsp-response-oracle-against-frozen-local-incumbent",
+  "sources": [
+    "https://arxiv.org/abs/1603.01121",
+    "https://proceedings.mlr.press/v37/heinrich15.pdf",
+    "https://arxiv.org/abs/2403.02227",
+    "https://arxiv.org/abs/2103.06426",
+    "autoresearch-session/tianshou_ppo/ppo_response_to_incumbent_parent_h2h_1000_stochastic_seed20260537.json",
+    "autoresearch-session/poker_reviews/20260527T172015Z-online-ppo-best-response-failed-after-behavior-replay-synthesis/synthesis.md"
+  ],
+  "written_at": "2026-05-27T17:27:19Z"
+}

@@ -1,0 +1,27 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 793,
+      "path": "decision.json",
+      "sha256": "d245f93380735b698ff35e9c9d2442acf8fa966259acf42e712cdf5d5471f93e"
+    },
+    {
+      "bytes": 2077,
+      "path": "synthesis.md",
+      "sha256": "fb76ddd86ae43e592b55dc50b59fb382baf44fd47ca2a1bbbd82725c2a99e1bf"
+    }
+  ],
+  "reason": "Search-guided scorer continuation passed mechanics but worsened local-value-to-H2H correlation, so the causal gap is trajectory-level credit assignment rather than the rollout continuation policy alone. Revise toward trajectory-calibrated search/value learning or search-guided self-play data generation before any Slumbot work.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T134253Z-search-guided-scorer-continuation-failed-transfer-calibration-synthesis",
+  "review_id": "20260526T134253Z-search-guided-scorer-continuation-failed-transfer-calibration-synthesis",
+  "sources": [
+    "autoresearch-session/search_as_actor/exact_search_actor_h2h_search_guided_scorer_20x2_inner1_seed20260536.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_transfer_analysis_search_guided_20x2_inner1_seed20260536.json",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2006.00283",
+    "https://arxiv.org/abs/2605.19235"
+  ],
+  "written_at": "2026-05-26T13:52:54Z"
+}

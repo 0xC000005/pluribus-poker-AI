@@ -16,20 +16,28 @@ if str(REPO_ROOT) not in sys.path:
 from poker_ai.research.autoresearch import (  # noqa: E402
     audit_objective_alignment,
     close_cycle,
+    commit_ready_report,
     continuous,
     enqueue_candidate_comparison,
+    enqueue_candidate_promotion_gate,
     enqueue_callback_calibration_audit,
+    enqueue_cfr_budget_frontier,
+    enqueue_cfr_matrix_footprint,
     enqueue_falsification_ladder,
     enqueue_failure_synthesis,
     enqueue_gpu_training,
     enqueue_methodology_review,
+    enqueue_paradigm_innovation_review,
     enqueue_resolver_benchmark,
+    enqueue_sd_cfr_mixture_falsification,
     enqueue_slumbot_smoke,
     enqueue_cycle,
     enqueue_warm_start_resolver_gate,
     init_state,
+    git_changed_paths,
     new_cycle,
     readiness_report,
+    research_drift_status,
     register_research_knob,
     run_gate,
     set_incumbent,
@@ -58,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true", help="Overwrite existing state files.")
 
     subparsers.add_parser("status", help="Print workflow readiness as JSON.")
+    subparsers.add_parser(
+        "drift-status",
+        help="Review recent research history for objective drift before the next queued cycle.",
+    )
 
     incumbent = subparsers.add_parser("set-incumbent", help="Record incumbent checkpoint.")
     incumbent.add_argument("--checkpoint", required=True)
@@ -106,6 +118,28 @@ def build_parser() -> argparse.ArgumentParser:
         default="regret",
         help="Use advantage regret matching or the trained average-strategy policy head.",
     )
+    compare.add_argument(
+        "--candidate-strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        help="Override --strategy-source for the candidate only.",
+    )
+    compare.add_argument(
+        "--baseline-strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        help="Override --strategy-source for the baseline only.",
+    )
+
+    promotion = subparsers.add_parser(
+        "enqueue-promotion-gate",
+        help="Create and queue the dual-surface pre-Slumbot candidate promotion gate.",
+    )
+    promotion.add_argument("--rlcard-reference-json", required=True)
+    promotion.add_argument("--native-h2h-json", required=True)
+    promotion.add_argument("--empirical-game-json")
+    promotion.add_argument("--native-candidate-checkpoint")
+    promotion.add_argument("--min-lower95", type=float, default=0.0)
+    promotion.add_argument("--min-candidate-support", type=float, default=1.0e-9)
+    promotion.add_argument("--timeout-seconds", type=int, default=300)
 
     slumbot = subparsers.add_parser(
         "enqueue-slumbot",
@@ -125,12 +159,14 @@ def build_parser() -> argparse.ArgumentParser:
             "torch-cpu",
             "torch-levelsync-cuda",
             "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
         ),
         default="auto",
     )
     slumbot.add_argument(
         "--solver-budget-profile",
-        choices=("live", "fast-live"),
+        choices=("live", "frontier-live", "fast-live"),
         default="live",
     )
     slumbot.add_argument(
@@ -155,12 +191,59 @@ def build_parser() -> argparse.ArgumentParser:
             "torch-cpu",
             "torch-levelsync-cuda",
             "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
         ),
         default="auto",
     )
     resolver.add_argument("--max-cases", type=int)
     resolver.add_argument("--device", default="auto")
     resolver.add_argument("--timeout-seconds", type=int, default=1200)
+
+    frontier = subparsers.add_parser(
+        "enqueue-cfr-budget-frontier",
+        help="Create and queue a root-disjoint exact CFR budget frontier gate.",
+    )
+    frontier.add_argument("--cases", required=True)
+    frontier.add_argument("--cfv-cache", required=True)
+    frontier.add_argument("--budgets", required=True)
+    frontier.add_argument("--start-index", type=int, default=128)
+    frontier.add_argument("--limit", type=int, default=64)
+    frontier.add_argument("--reference-iterations", type=int, default=25)
+    frontier.add_argument(
+        "--solver-backend",
+        choices=(
+            "cpu",
+            "cpu-levelsync",
+            "auto",
+            "torch-cuda",
+            "torch-cpu",
+            "torch-levelsync-cuda",
+            "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
+        ),
+        default="torch-levelsync-cuda",
+    )
+    frontier.add_argument(
+        "--solver-update",
+        choices=("cfr_plus", "dcfr_plus", "pdcfr_plus"),
+        default="cfr_plus",
+    )
+    frontier.add_argument("--min-evaluated", type=int, default=1)
+    frontier.add_argument("--output-json")
+    frontier.add_argument("--timeout-seconds", type=int, default=3600)
+
+    footprint = subparsers.add_parser(
+        "enqueue-cfr-matrix-footprint",
+        help="Create and queue a matrix/fused CFR footprint and chunk-plan gate.",
+    )
+    footprint.add_argument("--cases", required=True)
+    footprint.add_argument("--start-index", type=int, default=128)
+    footprint.add_argument("--max-cases", type=int)
+    footprint.add_argument("--chunk-memory-cap-mib", type=float)
+    footprint.add_argument("--output-json")
+    footprint.add_argument("--timeout-seconds", type=int, default=900)
 
     warm_start = subparsers.add_parser(
         "enqueue-warm-start-resolver",
@@ -173,6 +256,11 @@ def build_parser() -> argparse.ArgumentParser:
     warm_start.add_argument("--start-index", type=int, default=128)
     warm_start.add_argument("--limit", type=int, default=64)
     warm_start.add_argument("--low-iterations", type=int, default=5)
+    warm_start.add_argument(
+        "--baseline-iterations",
+        type=int,
+        help="Optional uniform CFR+ budget to compare against regret-policy warm starts.",
+    )
     warm_start.add_argument("--reference-iterations", type=int, default=25)
     warm_start.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     warm_start.add_argument("--device", default="auto")
@@ -204,6 +292,8 @@ def build_parser() -> argparse.ArgumentParser:
             "torch-cpu",
             "torch-levelsync-cuda",
             "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
         ),
         default="auto",
     )
@@ -214,6 +304,26 @@ def build_parser() -> argparse.ArgumentParser:
         default="regret",
     )
     falsify.add_argument("--timeout-seconds", type=int, default=3600)
+
+    mixture_falsify = subparsers.add_parser(
+        "enqueue-sd-cfr-mixture-falsification",
+        help="Create and queue a local falsification gate for a fixed SD-CFR checkpoint mixture.",
+    )
+    mixture_falsify.add_argument("--candidate-glob", action="append", default=[])
+    mixture_falsify.add_argument("--candidate-checkpoint", action="append", default=[])
+    mixture_falsify.add_argument("--mechanism", required=True)
+    mixture_falsify.add_argument("--baseline")
+    mixture_falsify.add_argument("--n-games", type=int, default=500)
+    mixture_falsify.add_argument("--seeds", default="20260511,20260512,20260513")
+    mixture_falsify.add_argument("--device", default="auto")
+    mixture_falsify.add_argument("--changed-path", action="append", default=[])
+    mixture_falsify.add_argument("--review-dir")
+    mixture_falsify.add_argument(
+        "--strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        default="regret",
+    )
+    mixture_falsify.add_argument("--timeout-seconds", type=int, default=3600)
 
     review = subparsers.add_parser(
         "enqueue-review",
@@ -230,6 +340,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     synthesis.add_argument("--subject", required=True)
     synthesis.add_argument("--timeout-seconds", type=int, default=600)
+
+    innovation = subparsers.add_parser(
+        "enqueue-innovation-review",
+        help="Create and queue a paradigm-innovation review gate.",
+    )
+    innovation.add_argument("--subject", required=True)
+    innovation.add_argument("--anomaly", required=True)
+    innovation.add_argument("--timeout-seconds", type=int, default=600)
 
     manifest = subparsers.add_parser(
         "write-review-manifest",
@@ -258,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     knob.add_argument("--mechanism", required=True)
     knob.add_argument("--rationale", required=True)
     knob.add_argument("--removal-criterion", required=True)
+    knob.add_argument("--review-dir", required=True)
 
     audit = subparsers.add_parser(
         "objective-audit",
@@ -270,6 +389,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repository-relative changed path. Repeat for multiple paths.",
     )
     audit.add_argument("--review-dir", help="Completed methodology review bundle.")
+    audit.add_argument("--base-ref", help="Optional git ref to diff against when paths are omitted.")
+    audit.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="Allow an audit with no changed paths. Without this, empty audits fail.",
+    )
+
+    commit_ready = subparsers.add_parser(
+        "commit-ready",
+        help="Report whether the current research batch is ready for a natural commit.",
+    )
+    commit_ready.add_argument("--changed-path", action="append", default=[])
+    commit_ready.add_argument("--base-ref")
+    commit_ready.add_argument("--review-dir")
+    commit_ready.add_argument("--allow-empty", action="store_true")
 
     train = subparsers.add_parser(
         "enqueue-train",
@@ -284,21 +418,27 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--batch-size", type=int, default=4096)
     train.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     train.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
+    train.add_argument("--use-frontier-indexing", action="store_true")
     train.add_argument("--policy-slots-per-traversal", type=int, default=64)
     train.add_argument("--max-pool-exhausted-per-traversal", type=float)
     train.add_argument("--max-overflow-chunk-fraction", type=float)
+    train.add_argument("--max-rejected-traversal-chunks", type=int)
     train.add_argument("--min-traversals-per-second", type=float)
     train.add_argument("--average-strategy-weight", type=float, default=0.0)
     train.add_argument("--average-strategy-memory-capacity", type=int, default=0)
     train.add_argument("--average-strategy-batch-size", type=int, default=0)
+    train.add_argument("--average-strategy-targets")
     train.add_argument("--search-targets")
     train.add_argument("--search-target-weight", type=float, default=0.0)
     train.add_argument("--search-target-batch-size", type=int, default=0)
     train.add_argument("--save-dir")
     train.add_argument("--prefix", default="candidate")
     train.add_argument("--save-every", type=int, default=0)
+    train.add_argument("--save-replay-buffers", action="store_true")
+    train.add_argument("--require-replay-buffer-resume", action="store_true")
     train.add_argument("--resume")
     train.add_argument("--eval-games", type=int, default=0)
+    train.add_argument("--seed", type=int)
     train.add_argument(
         "--auto-compare",
         action="store_true",
@@ -313,6 +453,16 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
         default="regret",
         help="Strategy source to use for auto-queued checkpoint comparisons.",
+    )
+    train.add_argument(
+        "--compare-candidate-strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        help="Override --compare-strategy-source for the trained candidate only.",
+    )
+    train.add_argument(
+        "--compare-baseline-strategy-source",
+        choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
+        help="Override --compare-strategy-source for the incumbent baseline only.",
     )
     train.add_argument("--timeout-seconds", type=int, default=7200)
 
@@ -331,6 +481,14 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Dry-run helper: stop after this many empty-queue checks.",
     )
+    loop.add_argument(
+        "--continue-on-mechanism-fail",
+        action="store_true",
+        help=(
+            "Treat failed mechanism gates as soft failures: document the failed "
+            "cycle, queue synthesis plus innovation review, and continue."
+        ),
+    )
 
     return parser
 
@@ -348,6 +506,16 @@ def main(argv: list[str] | None = None) -> int:
         report = readiness_report(root)
         _emit(report)
         return 0 if report["ready"] else 2
+
+    if args.command == "drift-status":
+        state_path = root / "autoresearch-session" / "poker_state.json"
+        next_cycle = None
+        if state_path.exists():
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            queue = state.get("hypothesis_queue", [])
+            next_cycle = queue[0] if queue else None
+        _emit(research_drift_status(root, next_cycle=next_cycle))
+        return 0
 
     if args.command == "set-incumbent":
         _emit(set_incumbent(root, args.checkpoint, reason=args.reason))
@@ -402,6 +570,23 @@ def main(argv: list[str] | None = None) -> int:
                 timeout_seconds=args.timeout_seconds,
                 head_to_head=args.head_to_head,
                 strategy_source=args.strategy_source,
+                candidate_strategy_source=args.candidate_strategy_source,
+                baseline_strategy_source=args.baseline_strategy_source,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-promotion-gate":
+        _emit(
+            enqueue_candidate_promotion_gate(
+                root,
+                rlcard_reference_json=args.rlcard_reference_json,
+                native_h2h_json=args.native_h2h_json,
+                empirical_game_json=args.empirical_game_json,
+                native_candidate_checkpoint=args.native_candidate_checkpoint,
+                min_lower95=args.min_lower95,
+                min_candidate_support=args.min_candidate_support,
+                timeout_seconds=args.timeout_seconds,
             )
         )
         return 0
@@ -437,6 +622,39 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.command == "enqueue-cfr-budget-frontier":
+        _emit(
+            enqueue_cfr_budget_frontier(
+                root,
+                cases_json=args.cases,
+                cfv_cache=args.cfv_cache,
+                budgets=args.budgets,
+                start_index=args.start_index,
+                limit=args.limit,
+                reference_iterations=args.reference_iterations,
+                solver_backend=args.solver_backend,
+                solver_update=args.solver_update,
+                min_evaluated=args.min_evaluated,
+                output_json=args.output_json,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-cfr-matrix-footprint":
+        _emit(
+            enqueue_cfr_matrix_footprint(
+                root,
+                cases_json=args.cases,
+                start_index=args.start_index,
+                max_cases=args.max_cases,
+                chunk_memory_cap_mib=args.chunk_memory_cap_mib,
+                output_json=args.output_json,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
     if args.command == "enqueue-warm-start-resolver":
         _emit(
             enqueue_warm_start_resolver_gate(
@@ -448,6 +666,7 @@ def main(argv: list[str] | None = None) -> int:
                 start_index=args.start_index,
                 limit=args.limit,
                 low_iterations=args.low_iterations,
+                baseline_iterations=args.baseline_iterations,
                 reference_iterations=args.reference_iterations,
                 solver_backend=args.solver_backend,
                 device=args.device,
@@ -481,6 +700,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
+    if args.command == "enqueue-sd-cfr-mixture-falsification":
+        _emit(
+            enqueue_sd_cfr_mixture_falsification(
+                root,
+                candidate_globs=args.candidate_glob,
+                candidate_checkpoints=args.candidate_checkpoint,
+                mechanism=args.mechanism,
+                baseline_checkpoint=args.baseline,
+                n_games=args.n_games,
+                seeds=args.seeds,
+                device=args.device,
+                changed_paths=args.changed_path,
+                review_dir=args.review_dir,
+                strategy_source=args.strategy_source,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
     if args.command == "enqueue-review":
         _emit(
             enqueue_methodology_review(
@@ -498,6 +736,17 @@ def main(argv: list[str] | None = None) -> int:
             enqueue_failure_synthesis(
                 root,
                 subject=args.subject,
+                timeout_seconds=args.timeout_seconds,
+            )
+        )
+        return 0
+
+    if args.command == "enqueue-innovation-review":
+        _emit(
+            enqueue_paradigm_innovation_review(
+                root,
+                subject=args.subject,
+                anomaly=args.anomaly,
                 timeout_seconds=args.timeout_seconds,
             )
         )
@@ -531,18 +780,39 @@ def main(argv: list[str] | None = None) -> int:
                 mechanism=args.mechanism,
                 rationale=args.rationale,
                 removal_criterion=args.removal_criterion,
+                review_dir=args.review_dir,
             )
         )
         return 0
 
     if args.command == "objective-audit":
+        changed_paths = args.changed_path
+        if not changed_paths:
+            changed_paths = git_changed_paths(root, base_ref=args.base_ref)
+            if not changed_paths and not args.allow_empty:
+                print(
+                    "No changed paths found; pass --allow-empty for an explicit no-op audit.",
+                    file=sys.stderr,
+                )
+                return 2
         result = audit_objective_alignment(
             root,
-            changed_paths=args.changed_path,
+            changed_paths=changed_paths,
             review_dir=args.review_dir,
         )
         _emit(result)
         return 0 if result["passed"] else 1
+
+    if args.command == "commit-ready":
+        result = commit_ready_report(
+            root,
+            changed_paths=args.changed_path or None,
+            base_ref=args.base_ref,
+            review_dir=args.review_dir,
+            allow_empty=args.allow_empty,
+        )
+        _emit(result)
+        return 0 if result["ready"] else 1
 
     if args.command == "enqueue-train":
         _emit(
@@ -557,19 +827,24 @@ def main(argv: list[str] | None = None) -> int:
                 batch_size=args.batch_size,
                 traversal_pool_max_slots=args.traversal_pool_max_slots,
                 traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+                use_frontier_indexing=args.use_frontier_indexing,
                 policy_slots_per_traversal=args.policy_slots_per_traversal,
                 max_pool_exhausted_per_traversal=args.max_pool_exhausted_per_traversal,
                 max_overflow_chunk_fraction=args.max_overflow_chunk_fraction,
+                max_rejected_traversal_chunks=args.max_rejected_traversal_chunks,
                 min_traversals_per_second=args.min_traversals_per_second,
                 average_strategy_weight=args.average_strategy_weight,
                 average_strategy_memory_capacity=args.average_strategy_memory_capacity,
                 average_strategy_batch_size=args.average_strategy_batch_size,
+                average_strategy_targets=args.average_strategy_targets,
                 search_targets=args.search_targets,
                 search_target_weight=args.search_target_weight,
                 search_target_batch_size=args.search_target_batch_size,
                 save_dir=args.save_dir,
                 prefix=args.prefix,
                 save_every=args.save_every,
+                save_replay_buffers=args.save_replay_buffers,
+                require_replay_buffer_resume=args.require_replay_buffer_resume,
                 resume=args.resume,
                 eval_games=args.eval_games,
                 auto_compare=args.auto_compare,
@@ -578,6 +853,9 @@ def main(argv: list[str] | None = None) -> int:
                 compare_device=args.compare_device,
                 compare_timeout_seconds=args.compare_timeout_seconds,
                 compare_strategy_source=args.compare_strategy_source,
+                compare_candidate_strategy_source=args.compare_candidate_strategy_source,
+                compare_baseline_strategy_source=args.compare_baseline_strategy_source,
+                seed=args.seed,
                 timeout_seconds=args.timeout_seconds,
             )
         )
@@ -602,6 +880,7 @@ def main(argv: list[str] | None = None) -> int:
             max_cycles=args.max_cycles,
             sleep_seconds=args.sleep_seconds,
             max_idle_checks=args.max_idle_checks,
+            continue_on_mechanism_fail=args.continue_on_mechanism_fail,
         )
         _emit(result)
         return 1 if result["stopped_reason"] in {"not_ready", "gate_failed"} else 0

@@ -1,0 +1,50 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1362,
+      "path": "benchmark_audit.md",
+      "sha256": "e78f00026ff703e7d0092fa6f0bb68a786edb03788a9c036b0d75c0938555160"
+    },
+    {
+      "bytes": 678,
+      "path": "decision.json",
+      "sha256": "0a27887a8c36fe1eebd9fd9899f1efed324b3a9b24dc0691f13c66a8a110f0d7"
+    },
+    {
+      "bytes": 1547,
+      "path": "mechanism_review.md",
+      "sha256": "2fb261716a8138c461632ef38f6426d10184eff9b9427919b542f844beca18d0"
+    },
+    {
+      "bytes": 2037,
+      "path": "related_work.md",
+      "sha256": "05f6ba69e2ec2f72008ffc0d21b1ab8c5f9765b90944dc0f569c20edc960c10f"
+    },
+    {
+      "bytes": 1606,
+      "path": "review.md",
+      "sha256": "5fcd5d587029ef6ea6aa97c9c41748d5f0b5014869be7b39a51f7cc02823cb5e"
+    },
+    {
+      "bytes": 2011,
+      "path": "review_scope.json",
+      "sha256": "f6262b09ff4fb899945d500340a20e2cf9d58333d7407522ac8f53c4742af177"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The exporter is methodologically valid as a diagnostic and better aligned with the hook distribution than a single static low-state dataset, but the first 8-root/4-root model failed both supervised holdout and in-resolver decision gates. Keep the exporter, record the negative result, and do not promote or tune small scalar knobs.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T155752Z-per-iteration-in-resolver-warm-start-target-exporter",
+  "review_id": "20260525T155752Z-per-iteration-in-resolver-warm-start-target-exporter",
+  "sources": [
+    "https://papers.nips.cc/paper/2020/hash/c61f571dbd2fb949d3fe5ae1608dd48b-Abstract.html",
+    "https://arxiv.org/abs/2112.03178",
+    "https://www.sciencedirect.com/science/article/pii/S0004370224001681",
+    "https://arxiv.org/abs/2511.08174"
+  ],
+  "written_at": "2026-05-25T15:59:07Z"
+}

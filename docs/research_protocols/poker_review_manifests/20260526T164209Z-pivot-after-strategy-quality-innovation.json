@@ -1,0 +1,34 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 412,
+      "path": "decision.json",
+      "sha256": "cf848dab532be733c581c88aa2815713132d037d411653fa72049454f6bd1c93"
+    },
+    {
+      "bytes": 2070,
+      "path": "innovation.md",
+      "sha256": "874692e8174dbee65bae8686c5dcd389facaf989a2401f75d5ddab8e551d56af"
+    },
+    {
+      "bytes": 1390,
+      "path": "related_work.md",
+      "sha256": "0fc09b25915e7289cedde02d755edcf5cec60adeef5e450b04e262d6b7474431"
+    },
+    {
+      "bytes": 644,
+      "path": "thought_experiments.md",
+      "sha256": "cc7d1853638e21a35a6fbb3c2c4b7c1cd7394dc0a874074edb21e3131fcd96a2"
+    }
+  ],
+  "reason": "Proceed with a resume-semantics guard before further continuation claims; the latest parent-child failure is invalid as true continuation because replay buffers were not restored.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T164209Z-pivot-after-strategy-quality-innovation",
+  "review_id": "20260526T164209Z-pivot-after-strategy-quality-innovation",
+  "sources": [
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/2007.13544",
+    "poker_ai/deep_cfr/cuda/gpu_trainer.py"
+  ],
+  "written_at": "2026-05-26T16:46:54Z"
+}

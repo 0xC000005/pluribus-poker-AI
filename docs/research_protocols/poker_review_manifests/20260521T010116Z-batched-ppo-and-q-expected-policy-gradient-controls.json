@@ -1,0 +1,49 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1407,
+      "path": "benchmark_audit.md",
+      "sha256": "65c3d8d8782c7ecb65749db16939b2b3e140ae55350b6873649c8d7df1d61622"
+    },
+    {
+      "bytes": 535,
+      "path": "decision.json",
+      "sha256": "f589ad87c28afe5aef96fbfc992a67b9a64c31fddf37d7719d8106e03e868f09"
+    },
+    {
+      "bytes": 1878,
+      "path": "mechanism_review.md",
+      "sha256": "438d52dfcddc12c18a3192d25c4fc9ac583511a5703f5e315e6ddc0cce8db85b"
+    },
+    {
+      "bytes": 2144,
+      "path": "related_work.md",
+      "sha256": "34aad6139c5c2eb3dc5d2a7c7f74c7c5079f45c4bfe9989e3ed555d2efcb3a95"
+    },
+    {
+      "bytes": 1683,
+      "path": "review.md",
+      "sha256": "2e3e5a4835f94fca4121d10cf556275e2d95c6b1c8df7008f5025f9a36e648b0"
+    },
+    {
+      "bytes": 2084,
+      "path": "review_scope.json",
+      "sha256": "a1597ed93a6e196438e75602d14a2dde4e84b6d0a35f824efc8926bb8f1f2680"
+    },
+    {
+      "bytes": 558,
+      "path": "team_review.md",
+      "sha256": "4ff4f8660d7cb90b82855b71485d5e61f4b28c2d6239761c530d52e429226d7b"
+    }
+  ],
+  "reason": "Batched PPO and q-expected PPO variants are valid diagnostic pure-RL falsifiers grounded in recent policy-gradient imperfect-information work. The matched-budget q_expected_lambda run reached near parity but failed the positive-confidence NFSP10k gate, so further progress requires a stronger estimator rather than blind scaling.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T010116Z-batched-ppo-and-q-expected-policy-gradient-controls",
+  "review_id": "20260521T010116Z-batched-ppo-and-q-expected-policy-gradient-controls",
+  "sources": [
+    "https://arxiv.org/abs/2502.08938",
+    "https://arxiv.org/abs/2605.19235",
+    "https://arxiv.org/abs/2408.00751"
+  ],
+  "written_at": "2026-05-21T01:15:32Z"
+}

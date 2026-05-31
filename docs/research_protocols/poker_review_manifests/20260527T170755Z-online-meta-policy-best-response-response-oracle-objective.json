@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1359,
+      "path": "benchmark_audit.md",
+      "sha256": "534263d8dd7b15d1888bf3f006cc2b3f53a86aaab6009437b082dca089ba3e3f"
+    },
+    {
+      "bytes": 669,
+      "path": "decision.json",
+      "sha256": "0f187981c8591da38084b728842ee7aa66b393bcc881b330b578084e89aaf2f6"
+    },
+    {
+      "bytes": 1556,
+      "path": "mechanism_review.md",
+      "sha256": "4a6ba0cc1ac9d5d3bcc12d6641be0e2cf9274f5a95ee495328f251aded8177d9"
+    },
+    {
+      "bytes": 2240,
+      "path": "related_work.md",
+      "sha256": "59e9c278b7004cf0626cc46405653b90ec4df77dd9f8e9a0f52a5f3d63c9f716"
+    },
+    {
+      "bytes": 1679,
+      "path": "review.md",
+      "sha256": "4ff23f1600fbba877b034b033c9702915a2d8cf60b2d7a7eafc9dfa922df9388"
+    },
+    {
+      "bytes": 2667,
+      "path": "review_scope.json",
+      "sha256": "7d39fee0d069529fc87049508eb923a5260d62d50ac805d75341fe4224e846c7"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed to one bounded local online best-response objective because behavior-replay JBR failed parent gates and PSRO/XDO response oracles should answer the empirical-game meta-policy.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T170755Z-online-meta-policy-best-response-response-oracle-objective",
+  "review_id": "20260527T170755Z-online-meta-policy-best-response-response-oracle-objective",
+  "sources": [
+    "RESEARCH_LOG.md",
+    "docs/research_protocols/poker_autoresearch_current_findings.md",
+    "autoresearch-session/poker_reviews/20260527T170647Z-jbr-behavior-replay-rainbow-response-oracle-failed-parent-synthesis",
+    "https://arxiv.org/abs/2403.02227",
+    "https://arxiv.org/abs/2202.00633",
+    "https://arxiv.org/abs/2103.06426",
+    "https://jmlr.org/papers/volume23/21-1127/21-1127.pdf"
+  ],
+  "written_at": "2026-05-27T17:18:35Z"
+}

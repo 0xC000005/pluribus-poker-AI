@@ -1,0 +1,24 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 634,
+      "path": "decision.json",
+      "sha256": "0cd2dc24ef7ebceed124f9c53799d2b2d2804edc1eb3204361dad2b70180f685"
+    },
+    {
+      "bytes": 1813,
+      "path": "synthesis.md",
+      "sha256": "0c65c87baa3891893dc001542d6b543f1e0bc52090db0d7e2e33f0df4f589aeb"
+    }
+  ],
+  "reason": "The failed pair-level consistency gate shows the current one-step scorer is not calibrated to sequential play. Revise the mechanism so search values are measured under search-guided or trajectory-coupled continuation before treating them as policy-improvement targets.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T132944Z-exact-search-as-actor-local-scorer-failed-sequential-synthesis",
+  "review_id": "20260526T132944Z-exact-search-as-actor-local-scorer-failed-sequential-synthesis",
+  "sources": [
+    "autoresearch-session/search_as_actor/exact_search_actor_root_gate_32x8_seed20260531.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_h2h_attribution_100x8_seed20260535.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_transfer_analysis_100x8_seed20260535.json"
+  ],
+  "written_at": "2026-05-26T13:34:15Z"
+}

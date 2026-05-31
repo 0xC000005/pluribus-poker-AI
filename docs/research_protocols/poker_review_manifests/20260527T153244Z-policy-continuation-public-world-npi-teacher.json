@@ -1,0 +1,50 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1332,
+      "path": "benchmark_audit.md",
+      "sha256": "550dbb45c8ad4447893f65742b0a2ef573ac6f438c501b5accb50ec8bbd8efd8"
+    },
+    {
+      "bytes": 577,
+      "path": "decision.json",
+      "sha256": "89856dfe59d3d018338e4ca7f6a4ebe4876cfa31e77d6d33a88ce9072fc27b5f"
+    },
+    {
+      "bytes": 1520,
+      "path": "mechanism_review.md",
+      "sha256": "50987d31e52726396cba52b5fbd0c7794a757b798696875803d8c72bde07868d"
+    },
+    {
+      "bytes": 2221,
+      "path": "related_work.md",
+      "sha256": "e776be2010cdd21f4dfde085f16da065fbe866490ae5e2b5bf8726008b933a20"
+    },
+    {
+      "bytes": 1117,
+      "path": "review.md",
+      "sha256": "5fcdbcb66ebb8633454c698de89ea82d1b3f00eb1d5ca60477b2ef04f3fe6990"
+    },
+    {
+      "bytes": 2546,
+      "path": "review_scope.json",
+      "sha256": "ebe131bedb2570751414ce9d93471ba94d730f26fa1f83d2d923fb7fa341592a"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The method is philosophically cleaner and fixed target-collapse in the smoke, but it failed mixed-control H2H against the Tianshou incumbent. Keep it as a negative mechanism result, not a promoted path.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T153244Z-policy-continuation-public-world-npi-teacher",
+  "review_id": "20260527T153244Z-policy-continuation-public-world-npi-teacher",
+  "sources": [
+    "autoresearch-session/neural_policy_iteration/policy_continuation_public_world_20260527/npi_policy_continuation_vs_tianshou_incumbent.json",
+    "https://www.nature.com/articles/nature24270",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1603.01121"
+  ],
+  "written_at": "2026-05-27T15:34:24Z"
+}

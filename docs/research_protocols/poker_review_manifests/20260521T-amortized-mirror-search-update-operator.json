@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 582,
+      "path": "benchmark_audit.md",
+      "sha256": "b8c92f88d8c73a35c004f291dd8f7f415d31da715c740551d46f0d910c88822f"
+    },
+    {
+      "bytes": 713,
+      "path": "decision.json",
+      "sha256": "f00237e0f235d4099bab2260ea9abc04e6262d4b64475054892f1bb538c42bb7"
+    },
+    {
+      "bytes": 1961,
+      "path": "mechanism_review.md",
+      "sha256": "636d3a0e34bb7ec66c253dee0379c124de64a44bf28d03d8aebd9190e165b6e7"
+    },
+    {
+      "bytes": 1918,
+      "path": "related_work.md",
+      "sha256": "e447b4832d1aff44f8b32fcffd933d14442ecc4a8262db7ce3b0c69ee6e6db79"
+    },
+    {
+      "bytes": 1186,
+      "path": "review.md",
+      "sha256": "96c3200558bc1a002442a6cfdb363debd97773840c5fffe716beb87bee2fd274"
+    },
+    {
+      "bytes": 747,
+      "path": "review_scope.json",
+      "sha256": "fd05a64d78aeab58746c162cf279c3507348ffbc93fb3fafc0f78ae02e9fea5b"
+    },
+    {
+      "bytes": 363,
+      "path": "team_review.md",
+      "sha256": "d201f36b2775a8ab7143b1d1c4b6b8f4c53625a9d46ffba34f7793aab9cebead"
+    }
+  ],
+  "reason": "The branch is a bounded diagnostic for a constrained learned search-update operator. The first result is not promotable, but the per-root oracle shows useful signal and identifies selector generalization as the next blocker.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T-amortized-mirror-search-update-operator",
+  "review_id": "20260521T-amortized-mirror-search-update-operator",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2110.04961",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_mirror_update_operator_train96_holdout64_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_trace_mirror_update_oracle_eta_holdout192_seed20260515.json"
+  ],
+  "written_at": "2026-05-21T18:16:14Z"
+}

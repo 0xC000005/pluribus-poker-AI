@@ -12,6 +12,7 @@ import sys
 import time
 import warnings
 
+import numpy as np
 import torch
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -96,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     parser.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
     parser.add_argument("--policy-slots-per-traversal", type=int, default=64)
+    parser.add_argument("--use-frontier-indexing", action="store_true")
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--min-mean-traversals-per-second", type=float)
     parser.add_argument("--max-pool-exhausted-per-traversal", type=float)
     parser.add_argument("--max-overflow-chunk-fraction", type=float)
@@ -109,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not torch.cuda.is_available() or not cuda.is_available():
         raise SystemExit("CUDA is not available")
+    if args.seed is not None:
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
 
     trainer = GPUDeepCFRTrainer(
         n_players=args.n_players,
@@ -123,6 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         traversal_pool_max_slots=args.traversal_pool_max_slots,
         traversal_slots_per_traversal=args.traversal_slots_per_traversal,
         policy_slots_per_traversal=args.policy_slots_per_traversal,
+        use_frontier_indexing=args.use_frontier_indexing,
+        traversal_seed=args.seed,
         device=torch.device("cuda"),
     )
 
@@ -151,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
         "traversal_pool_max_slots": int(args.traversal_pool_max_slots),
         "traversal_slots_per_traversal": int(args.traversal_slots_per_traversal),
         "policy_slots_per_traversal": int(args.policy_slots_per_traversal),
+        "use_frontier_indexing": bool(args.use_frontier_indexing),
+        "seed": args.seed,
         "elapsed_seconds": round(float(time.perf_counter() - started), 6),
         "mean_iteration_seconds": round(_mean(measured_profiles, "iteration_seconds"), 6),
         "mean_traverse_seconds": round(_mean(measured_profiles, "traverse_seconds"), 6),

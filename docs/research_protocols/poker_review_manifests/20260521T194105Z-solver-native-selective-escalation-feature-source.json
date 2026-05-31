@@ -1,0 +1,56 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1307,
+      "path": "benchmark_audit.md",
+      "sha256": "1d03e137d74ba7851ebca5a3f77e572492c58f7b1037d66842ef636b7c74bbc8"
+    },
+    {
+      "bytes": 1234,
+      "path": "decision.json",
+      "sha256": "9065ab35ff755a3c6dbca4960c12188a70a15d82064923fcaa41f7de2972d86d"
+    },
+    {
+      "bytes": 1361,
+      "path": "mechanism_review.md",
+      "sha256": "44a45d965933242ee484857a9368998b65539dd9c0e2200b93480d5230552c84"
+    },
+    {
+      "bytes": 2476,
+      "path": "related_work.md",
+      "sha256": "676f9d4aa6372d823d671947852e167d9bee111089cbaccf3bdd01942f7689ff"
+    },
+    {
+      "bytes": 1147,
+      "path": "review.md",
+      "sha256": "f48431e4aca78776a78c5d3297e425b08d58281df5809420b213eeec37c9eed2"
+    },
+    {
+      "bytes": 1142,
+      "path": "review_scope.json",
+      "sha256": "265837c4762256d3e65c63950ddcd2bac981766756c3e7c7ceca63789bc7a107"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed as a diagnostic continuation only. Solver-native profile-L1 selection is better aligned and passed both 64/64 saved-profile split directions, but fresh-profile and live integration gates are still required before any deployment.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T194105Z-solver-native-selective-escalation-feature-source",
+  "review_id": "20260521T194105Z-solver-native-selective-escalation-feature-source",
+  "sources": [
+    "scripts/eval_solver_budget_selective_profile.py",
+    "test/unit/test_solver_budget_selective_profile.py",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_solver_native_profile_l1_train128_holdout192_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_solver_native_profile_l1_train192_holdout128_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_solver_native_profile_l1_fresh32_train192_holdout208_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_solver_native_profile_l1_fresh32_train208_holdout192_seed20260521.json",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/1603.08983",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-21T19:42:24Z"
+}

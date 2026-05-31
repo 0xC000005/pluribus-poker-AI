@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1430,
+      "path": "benchmark_audit.md",
+      "sha256": "47c013034f7d3961fb4b3c44f79b128c64877788a11fa79af5103bcc26b95c74"
+    },
+    {
+      "bytes": 458,
+      "path": "decision.json",
+      "sha256": "d7b1448e9e27493ab6ae48c923ccfa331195149fde9852eeedd8f5f0527ddf53"
+    },
+    {
+      "bytes": 1296,
+      "path": "mechanism_review.md",
+      "sha256": "276e40de65f7c692df2a7c159d11b27370c708aec3ca565a28139838935aacdf"
+    },
+    {
+      "bytes": 2213,
+      "path": "related_work.md",
+      "sha256": "666cc2c997aabaf51c973add0cb2f8f6685f489d143bcb1d22e453b432bfdbaa"
+    },
+    {
+      "bytes": 1537,
+      "path": "review.md",
+      "sha256": "db423029f69651b380180d541ba06e402732415fdf66f37ae649530861db1275"
+    },
+    {
+      "bytes": 798,
+      "path": "review_scope.json",
+      "sha256": "d079d43b52714a74c9625b87d1b693a3fa6da79bd226b80a84d2c748657a0850"
+    },
+    {
+      "bytes": 518,
+      "path": "team_review.md",
+      "sha256": "e480fc0adb93c1c776294993aba3005cd408276d7165285cefbc0f6eccffec4f"
+    }
+  ],
+  "reason": "The next test changes the data-collection distribution without changing evaluator semantics. It directly tests whether fixed-state cloning failed because of covariate shift.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T023016Z-on-policy-early-street-policy-head-calibration",
+  "review_id": "20260521T023016Z-on-policy-early-street-policy-head-calibration",
+  "sources": [
+    "https://arxiv.org/abs/1603.01121",
+    "https://www.cs.cmu.edu/~sross1/publications/Ross-AIStats11-NoRegret.pdf",
+    "https://arxiv.org/abs/1901.07621",
+    "https://arxiv.org/abs/1811.00164"
+  ],
+  "written_at": "2026-05-21T02:31:09Z"
+}

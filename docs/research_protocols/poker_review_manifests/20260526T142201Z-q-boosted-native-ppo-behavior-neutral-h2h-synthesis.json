@@ -1,0 +1,24 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 547,
+      "path": "decision.json",
+      "sha256": "21eaa9fee6af9fa6680d263e33e959cd0e7cb211b01a21f192eadf5e58c8e8b8"
+    },
+    {
+      "bytes": 1313,
+      "path": "synthesis.md",
+      "sha256": "c41024c4ce340632c3b0efe5c5340b40f8c255846f8456fb6448452967995186"
+    }
+  ],
+  "reason": "After freezing the rollout expected-Q baseline, Q-boosted behavior is weakly positive but still has negative lower95 against matched policy behavior, so it is not a promotable mechanism.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T142201Z-q-boosted-native-ppo-behavior-neutral-h2h-synthesis",
+  "review_id": "20260526T142201Z-q-boosted-native-ppo-behavior-neutral-h2h-synthesis",
+  "sources": [
+    "autoresearch-session/native_ppo/q_lambda_policy_behavior_frozenq_1k_seed20260530.json",
+    "autoresearch-session/native_ppo/q_lambda_q_boosted_behavior_frozenq_1k_seed20260530.json",
+    "autoresearch-session/native_ppo/q_lambda_q_boosted_vs_policy_behavior_frozenq_h2h_1k_seed20260531.json"
+  ],
+  "written_at": "2026-05-26T14:33:26Z"
+}

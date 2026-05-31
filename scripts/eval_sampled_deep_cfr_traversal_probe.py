@@ -42,6 +42,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--priority-checkpoint")
     parser.add_argument("--use-priority-baseline", action="store_true")
+    parser.add_argument(
+        "--randomization-contract",
+        choices=("action-keyed", "legacy-sequential"),
+        default="action-keyed",
+        help="How exhaustive and sampled branches share opponent/chance rollouts.",
+    )
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--n-layers", type=int, default=1)
     parser.add_argument("--uniform-mix", type=float, default=0.25)
@@ -60,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         priority_source=args.priority_source,
         priority_checkpoint=args.priority_checkpoint,
         use_priority_baseline=args.use_priority_baseline,
+        randomization_contract=args.randomization_contract,
         hidden_dim=args.hidden_dim,
         n_layers=args.n_layers,
         uniform_mix=args.uniform_mix,

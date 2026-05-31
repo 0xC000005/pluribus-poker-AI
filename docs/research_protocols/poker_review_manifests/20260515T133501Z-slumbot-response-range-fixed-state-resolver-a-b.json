@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1942,
+      "path": "benchmark_audit.md",
+      "sha256": "3265105c186730e4e2adaa9793b66620266b1ddfa5e695b5d2bf3dcc95a8c6ec"
+    },
+    {
+      "bytes": 752,
+      "path": "decision.json",
+      "sha256": "fca31e99ce6742b268b7fcd9b440da80ad99ce76d5185d1bf4a85aed2d5f0c8f"
+    },
+    {
+      "bytes": 1555,
+      "path": "mechanism_review.md",
+      "sha256": "d32c044bef480b288cf502a15e2c67c8b8e6928c1805385a36f9de6784747718"
+    },
+    {
+      "bytes": 2741,
+      "path": "related_work.md",
+      "sha256": "4be182084970e76591b707a55f720fb6bfeb71827f60bd9f5a271c6f6a2ae972"
+    },
+    {
+      "bytes": 2786,
+      "path": "review.md",
+      "sha256": "371483f09e0e72f0ff05ed010f6a35b804c0d8d0ce67486b225469d75389004a"
+    },
+    {
+      "bytes": 922,
+      "path": "review_scope.json",
+      "sha256": "41d0bb8918402b4bdc96dd74102eb8d7711cc2359852b375cae74362c2139fc9"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed to the next gated diagnostic only. Session-disjoint fixed-state evidence supports the mechanism: response ranges improved revealed-hand log-lift on 192 Slumbot resolver states and materially changed legal resolver policies. This is not live EV or exploitability evidence, so do not promote by default.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T133501Z-slumbot-response-range-fixed-state-resolver-a-b",
+  "review_id": "20260515T133501Z-slumbot-response-range-fixed-state-resolver-a-b",
+  "sources": [
+    "autoresearch-session/slumbot_trace_cases/20260515T131500Z-session2-response-range-solver-ab-full192-truth.json",
+    "https://arxiv.org/abs/1207.1411",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2007.10442",
+    "https://arxiv.org/abs/2201.11580"
+  ],
+  "written_at": "2026-05-15T15:29:58Z"
+}

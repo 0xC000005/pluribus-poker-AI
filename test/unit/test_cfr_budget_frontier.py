@@ -125,6 +125,49 @@ def test_case_budget_frontier_reuses_one_solver_for_all_budgets(monkeypatch):
     assert record["budgets"]["10"]["latency_ms"] == 10.0
 
 
+def test_case_budget_frontier_can_export_strategy_vectors(monkeypatch):
+    node = SimpleNamespace(children={0: None, 8: None}, is_terminal=False)
+
+    class FakeSolver:
+        def __init__(self, *args, **kwargs):
+            self.last_iterations = None
+
+        def solve(self, *, n_iterations, **kwargs):
+            self.last_iterations = n_iterations
+
+        def navigate(self, nav):
+            return node
+
+    def fake_decision(case, parsed, solver, current_node, *, latency_ms=None):
+        allin_prob = solver.last_iterations / 100.0
+        strategy = np.array([1.0 - allin_prob, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, allin_prob])
+        return SimpleNamespace(strategy=strategy, latency_ms=float(solver.last_iterations))
+
+    monkeypatch.setattr(
+        frontier,
+        "_solver_context",
+        lambda case, parsed: ([0, 1, 2, 3], [], 100, 1000, 1000, True, "ck/"),
+    )
+    monkeypatch.setattr(frontier, "_local_ranges_from_belief", lambda belief, hands: (None, None))
+    monkeypatch.setattr(frontier, "_strategy_decision", fake_decision)
+    monkeypatch.setattr(frontier, "_parse_nav", lambda action_str, solver: action_str)
+
+    record = frontier._solve_case_budget_frontier(
+        case=SimpleNamespace(label="case-0"),
+        parsed={"st": 2},
+        belief_row=np.ones(1),
+        budgets=[5],
+        reference_iterations=25,
+        solver_backend="cpu",
+        solver_update="cfr_plus",
+        solver_factory=FakeSolver,
+        include_strategies=True,
+    )
+
+    assert record["reference_strategy"] == [0.75, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25]
+    assert record["budgets"]["5"]["strategy"] == [0.95, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05]
+
+
 def test_solver_budget_profile_iterations_match_live_policy():
     case = SimpleNamespace(action_str="ck/kk/", client_pos=0)
     parsed = {"st": 2, "street_last_bet_to": 0}

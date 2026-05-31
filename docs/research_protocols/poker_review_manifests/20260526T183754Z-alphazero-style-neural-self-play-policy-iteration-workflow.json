@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 727,
+      "path": "benchmark_audit.md",
+      "sha256": "3563c65e196600292b2ed943bc28a5c1a46d43425bc87b7c7b64ab0c35850ef8"
+    },
+    {
+      "bytes": 451,
+      "path": "decision.json",
+      "sha256": "2204f0241685f9e0cf66c169d704d70f68e969122a9702b684224c2fa274a9ff"
+    },
+    {
+      "bytes": 926,
+      "path": "mechanism_review.md",
+      "sha256": "73f0f7ada5bb0018e00dead474c1e9b5e8448649031bf25fe476bd02b5799edb"
+    },
+    {
+      "bytes": 1763,
+      "path": "related_work.md",
+      "sha256": "3afad4566010e583f983f1d44b0d60a63ef5d3c4e3bc33cd590c8e36ea75b65d"
+    },
+    {
+      "bytes": 996,
+      "path": "review.md",
+      "sha256": "4a03817db3afe4a429007b357c2be539417723deb42de93609210065b6065033"
+    },
+    {
+      "bytes": 2518,
+      "path": "review_scope.json",
+      "sha256": "3f3efec0545605105df09dc5e03e62243812695be2bf0e98d706aae4936aa3f6"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The revised workflow is more aligned with the stated objective: neural stochastic self-play is the main actor, public-belief CFR is the improvement teacher, and Slumbot remains held-out.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T183754Z-alphazero-style-neural-self-play-policy-iteration-workflow",
+  "review_id": "20260526T183754Z-alphazero-style-neural-self-play-policy-iteration-workflow",
+  "sources": [
+    "https://www.science.org/doi/10.1126/science.aar6404",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1603.01121"
+  ],
+  "written_at": "2026-05-26T18:39:34Z"
+}

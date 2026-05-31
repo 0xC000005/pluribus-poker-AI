@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 514,
+      "path": "decision.json",
+      "sha256": "3bf4190eb457d43a5d0fdb6f4d3c6d7b8e21510be23f5c76db0d6c9330cb6217"
+    },
+    {
+      "bytes": 2155,
+      "path": "innovation.md",
+      "sha256": "7d621aaca1b206e6e8149e3b9816024b009a78ee82f0c63bacc8d22f0e4abe25"
+    },
+    {
+      "bytes": 971,
+      "path": "related_work.md",
+      "sha256": "40e88b0064cd8e2ea67f0fc74696b8168ac78f1dd2964ff039d2ffb9bb8aa266"
+    },
+    {
+      "bytes": 745,
+      "path": "thought_experiments.md",
+      "sha256": "4325761a3648bfc98bad8792ed8620eb715df2bb3718f1d374e64983526fff9d"
+    }
+  ],
+  "reason": "Run a bounded iterative average-policy replay diagnostic to test whether fixed-root gains survive repeated self-play-style updates and transfer to H2H.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T202230Z-close-fixed-root-to-whole-game-transfer-gap-innovation",
+  "review_id": "20260525T202230Z-close-fixed-root-to-whole-game-transfer-gap-innovation",
+  "sources": [
+    "https://arxiv.org/abs/1705.08439",
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-25T20:23:43Z"
+}

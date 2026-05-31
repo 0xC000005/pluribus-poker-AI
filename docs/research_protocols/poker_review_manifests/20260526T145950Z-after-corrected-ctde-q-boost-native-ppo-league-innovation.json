@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 516,
+      "path": "decision.json",
+      "sha256": "cd093304836e3b360bbf2744c2fa135bc0426234fa4f93735a5c3733ff38322a"
+    },
+    {
+      "bytes": 1918,
+      "path": "innovation.md",
+      "sha256": "dd68b8cbc142e0ccc1fe03694f7c5c8c44185eddc755c2f71b59422ba5c9e6eb"
+    },
+    {
+      "bytes": 1741,
+      "path": "related_work.md",
+      "sha256": "ad0a69771ccd3f7a2442ef58b2a49ee6c2d985974a5203017c4eaa3db6a21ab9"
+    },
+    {
+      "bytes": 764,
+      "path": "thought_experiments.md",
+      "sha256": "7892a992dca235313253e22221790002e4a5cd2de5a4e2f99ec80c699b08ad14"
+    }
+  ],
+  "reason": "Corrected PPO/Q-boost produced a useful control but failed the strict native league; the next mechanism should be resolver-consumed learned search or exact GPU resolving, not another PPO variant.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T145950Z-after-corrected-ctde-q-boost-native-ppo-league-innovation",
+  "review_id": "20260526T145950Z-after-corrected-ctde-q-boost-native-ppo-league-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2605.19235",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "autoresearch-session/native_ppo/raw_sequence_ctde_qboost_frozenq_h512_2k_native_league_5k_seed20260596.json"
+  ],
+  "written_at": "2026-05-26T15:01:14Z"
+}

@@ -1,0 +1,36 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 646,
+      "path": "decision.json",
+      "sha256": "46da1d9a2e71e5ebb5caee44b37472730996f662cf3a0031ef5f43d09fa42ce0"
+    },
+    {
+      "bytes": 3315,
+      "path": "innovation.md",
+      "sha256": "03bdb79fb73f8b296a627bc7c12a43c4d424184b1b69b27f9f75d14b2413d631"
+    },
+    {
+      "bytes": 3349,
+      "path": "related_work.md",
+      "sha256": "83ffd0c72f9290ad7e413f3d1a20dc1491b1bc86b71651d5bb299bd83b0092c1"
+    },
+    {
+      "bytes": 1267,
+      "path": "thought_experiments.md",
+      "sha256": "8b2b96b8221a84600976ea1c9afaf224f453c9d5a8ecc4ce65bbac6f6d19188b"
+    }
+  ],
+  "reason": "Online related work and local evidence agree that the next learned-search test should be a resolver-consumed search-state update with root-disjoint decision gates. The review blocks more simple policy-target/loss-weight tuning and requires a same-budget exact CFR control.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T155048Z-belief-conditioned-in-resolver-learned-search-state-update-innovation",
+  "review_id": "20260525T155048Z-belief-conditioned-in-resolver-learned-search-state-update-innovation",
+  "sources": [
+    "https://papers.nips.cc/paper/2020/hash/c61f571dbd2fb949d3fe5ae1608dd48b-Abstract.html",
+    "https://arxiv.org/abs/2112.03178",
+    "https://www.sciencedirect.com/science/article/pii/S0004370224001681",
+    "https://arxiv.org/abs/2511.08174",
+    "https://arxiv.org/abs/2605.19928"
+  ],
+  "written_at": "2026-05-25T15:52:03Z"
+}

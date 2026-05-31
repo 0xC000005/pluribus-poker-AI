@@ -1,0 +1,56 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 1269,
+      "path": "benchmark_audit.md",
+      "sha256": "b612f6a37b191808433bac261a625d7e7f5288a0afc06d0791b7d0ade0e2b895"
+    },
+    {
+      "bytes": 1018,
+      "path": "decision.json",
+      "sha256": "2578a1f597d25d6eda52b0dc52734a91d146110936a820af6c2e064ff53ec805"
+    },
+    {
+      "bytes": 1417,
+      "path": "mechanism_review.md",
+      "sha256": "90f93f8770fd657274a3f2b8b80e0c7357085ab6a605381b39e8180cd4827eeb"
+    },
+    {
+      "bytes": 1312,
+      "path": "related_work.md",
+      "sha256": "6220b59c3caa8f77d794038ac17856b1adbcebc063d37f31052858af10858b5f"
+    },
+    {
+      "bytes": 1472,
+      "path": "review.md",
+      "sha256": "4fec3b3736339e9e5143bcf0d96f486e6e000f39ccf6ea5f4db25490975d2047"
+    },
+    {
+      "bytes": 2087,
+      "path": "review_scope.json",
+      "sha256": "f97bbe51ce3b89ac0abfab53d40f653d6d71052fd8c87a679f10a1c956e49ce7"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The code path is mechanically valid and the negative result is supported, but terminal-return behavior cloning regressed held-out fixed-root decisions and must remain diagnostic-only.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T141241Z-trajectory-return-behavior-target-mode-and-fixed-root",
+  "review_id": "20260526T141241Z-trajectory-return-behavior-target-mode-and-fixed-root",
+  "sources": [
+    "poker_ai/research/decision_value_actor.py",
+    "scripts/build_decision_value_average_strategy_targets.py",
+    "test/unit/test_decision_value_actor.py",
+    "test/unit/test_build_decision_value_average_strategy_targets_cli.py",
+    "autoresearch-session/average_strategy_targets/trajectory_return_search_improved_64x4_seed20260527.json",
+    "autoresearch-session/average_strategy_targets/trajectory_return_base_64x4_seed20260527.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_baseline_eval_32x8_seed20260529.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_search_improved_policy_head_eval_32x8_seed20260529.json",
+    "https://arxiv.org/abs/2605.19235",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-26T14:13:59Z"
+}

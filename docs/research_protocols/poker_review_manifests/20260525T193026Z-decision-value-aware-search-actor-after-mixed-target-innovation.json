@@ -1,0 +1,38 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 780,
+      "path": "decision.json",
+      "sha256": "30123a903718393384cace23e761bf64791d55ac29bd758dabd367d689fb4b5d"
+    },
+    {
+      "bytes": 2752,
+      "path": "innovation.md",
+      "sha256": "8756cbd3bdb006ecb25fa91d863f03f730bacf19ebaf5ae9f990733d56b6091f"
+    },
+    {
+      "bytes": 3758,
+      "path": "related_work.md",
+      "sha256": "11f9c3571fc9bd30f470f5b61ab8a946b0c0f36c2cec35d7fa6298396d30394c"
+    },
+    {
+      "bytes": 1081,
+      "path": "thought_experiments.md",
+      "sha256": "d88964b4bf87ad257ab066d614c4087680517524fe5360dc01b7434a3718283d"
+    }
+  ],
+  "reason": "Proceed to a bounded decision-value-aware actor update pilot. The mixed actor repaired coverage/all-in collapse but failed H2H, so the next mechanism must optimize action value under continuation before any larger training or Slumbot claim.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T193026Z-decision-value-aware-search-actor-after-mixed-target-innovation",
+  "review_id": "20260525T193026Z-decision-value-aware-search-actor-after-mixed-target-innovation",
+  "sources": [
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://www.ifaamas.org/Proceedings/aamas2020/pdfs/p492.pdf",
+    "https://arxiv.org/abs/2007.12509",
+    "autoresearch-session/policy_calibration/mixed_search_actor_vs_no_target_h2h_attribution_seed20260522_24.json",
+    "autoresearch-session/policy_calibration/mixed_search_actor_fixed_continuation_rollout_seed20260525.json"
+  ],
+  "written_at": "2026-05-25T19:32:03Z"
+}

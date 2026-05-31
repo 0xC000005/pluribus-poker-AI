@@ -31,6 +31,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--train-episodes", type=int, default=100)
     parser.add_argument("--eval-games", type=int, default=100)
     parser.add_argument("--hidden-dim", type=int, default=64)
+    parser.add_argument("--q-network-arch", choices=("mlp", "dueling"), default="mlp")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--min-buffer-size-to-learn", type=int, default=32)
     parser.add_argument("--anticipatory-param", type=float, default=0.1)
@@ -46,6 +47,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint-in")
     parser.add_argument("--baseline-checkpoint")
     parser.add_argument("--checkpoint-out")
+    parser.add_argument("--opponent-kind", default="self")
+    parser.add_argument("--opponent-checkpoint", action="append")
+    parser.add_argument("--opponent-device", default="same", choices=("same", "auto", "cpu", "cuda"))
+    parser.add_argument("--state-backend", choices=("full-deck", "fast-state"), default="full-deck")
     return parser
 
 
@@ -55,6 +60,7 @@ def build_config(argv: list[str] | None = None) -> NativeNFSPConfig:
         train_episodes=args.train_episodes,
         eval_games=args.eval_games,
         hidden_dim=args.hidden_dim,
+        q_network_arch=args.q_network_arch,
         batch_size=args.batch_size,
         min_buffer_size_to_learn=args.min_buffer_size_to_learn,
         anticipatory_param=args.anticipatory_param,
@@ -67,6 +73,10 @@ def build_config(argv: list[str] | None = None) -> NativeNFSPConfig:
         seed=args.seed,
         device=args.device,
         checkpoint_path=args.checkpoint_out,
+        opponent_kind=args.opponent_kind,
+        opponent_checkpoint=args.opponent_checkpoint,
+        opponent_device=args.opponent_device,
+        state_backend=args.state_backend,
     )
 
 

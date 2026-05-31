@@ -1,0 +1,38 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 772,
+      "path": "decision.json",
+      "sha256": "53122bdc7017e5b6383e9c9d5d55cbbd728746187d852a3b6006e989484d39bd"
+    },
+    {
+      "bytes": 2471,
+      "path": "innovation.md",
+      "sha256": "72b0a62a23c371fad8de988aefe0c0f77d528b923b5e71d360396c5f88715766"
+    },
+    {
+      "bytes": 3607,
+      "path": "related_work.md",
+      "sha256": "e8cd8bd56e83c3057479018348d7aa5e46795400e1b03ec977d2af9c0dac4c56"
+    },
+    {
+      "bytes": 814,
+      "path": "thought_experiments.md",
+      "sha256": "38948a14578c213a99b7f21f09b04c39b539256d958bd6477d9c25df935adadb"
+    }
+  ],
+  "reason": "The clean Deep CFR rerun failed both incumbent and within-run ladder gates, so the next smallest philosophically aligned falsifier is a regularized self-play policy-dynamics pilot rather than another same-recipe scale-up.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T171716Z-post-clean-run-self-play-sample-efficiency-failure-innovation",
+  "review_id": "20260522T171716Z-post-clean-run-self-play-sample-efficiency-failure-innovation",
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1901.07621",
+    "https://proceedings.mlr.press/v37/heinrich15.html",
+    "https://arxiv.org/abs/2502.08938",
+    "https://proceedings.mlr.press/v139/perolat21a.html",
+    "autoresearch-session/poker_runs/20260522T163745Z-gpu-deep-cfr-training-should-produce-selfplay-clean/metrics.json",
+    "autoresearch-session/poker_runs/20260522T171402Z-candidate-checkpoint-selfplay-clean-slots13k-after-ladder-iter/metrics.json"
+  ],
+  "written_at": "2026-05-22T17:20:08Z"
+}

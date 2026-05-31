@@ -1,0 +1,54 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1838,
+      "path": "benchmark_audit.md",
+      "sha256": "fe1cbb9d1592740116fb3cedbcd0ac81d8729f1d209e4382585915ffe2b8cd91"
+    },
+    {
+      "bytes": 856,
+      "path": "decision.json",
+      "sha256": "de0e95670e234315a55afa15a2ff07c7d5daaa7def3e59f25f5cee6039ca0cf4"
+    },
+    {
+      "bytes": 1928,
+      "path": "mechanism_review.md",
+      "sha256": "ed7088262c00e47f9c04870ea334f923cac91bcee2230c7c871fde7e75a94131"
+    },
+    {
+      "bytes": 4150,
+      "path": "related_work.md",
+      "sha256": "5c45876b3ed8db7ca139397be614e9af0e54331ac6e1080af2c2d778cd38bbbb"
+    },
+    {
+      "bytes": 1847,
+      "path": "review.md",
+      "sha256": "e3469f7059ef8e4ef6f51559d9c3a875140a2042bf56d2671b1742c858e0348b"
+    },
+    {
+      "bytes": 1769,
+      "path": "review_scope.json",
+      "sha256": "d3d0784f322a5cdff3364a4b0edd2c0c88cd113909048ccd99094bb82b5be898"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The most philosophically aligned path is ReBeL/Student-of-Games-style public-belief learning plus search. Local evidence shows terminal callback value-set hacks are mis-specified, so the next bounded step is an exact public-belief depth-limit gadget teacher before training another neural approximation.",
+  "review_dir": "autoresearch-session/poker_reviews/20260519T211620Z-public-belief-depth-limit-gadget-as-neural-search",
+  "review_id": "20260519T211620Z-public-belief-depth-limit-gadget-as-neural-search",
+  "sources": [
+    "RESEARCH_LOG.md#20260519T211000Z-integrated-diverse-value-set-smoke",
+    "RESEARCH_LOG.md#20260519T211300Z-opponent-choice-value-set-smoke",
+    "docs/research_protocols/poker_next_continuation_target.md",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1906.06412",
+    "https://papers.nips.cc/paper/7993-depth-limited-solving-for-imperfect-information-games",
+    "https://arxiv.org/abs/2002.08456"
+  ],
+  "written_at": "2026-05-19T21:42:26Z"
+}

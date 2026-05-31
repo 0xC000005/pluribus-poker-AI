@@ -5,6 +5,7 @@ Uses GPU trainer for fast wavefront traversal (~1s/iter vs ~15s on CPU).
 import argparse
 import logging
 import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ logging.getLogger('numba').setLevel(logging.WARNING)
 logging.getLogger('numba.cuda').setLevel(logging.WARNING)
 
 import torch
+import numpy as np
 
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -39,11 +41,13 @@ def build_parser():
     parser.add_argument('--batch-size', type=int, default=4096)
     parser.add_argument('--average-strategy-weight', type=float, default=0.0)
     parser.add_argument('--traversal-slots-per-traversal', type=int, default=7000)
+    parser.add_argument('--use-frontier-indexing', action='store_true')
     parser.add_argument('--policy-slots-per-traversal', type=int, default=64)
     parser.add_argument('--save-dir', type=str, default='models')
     parser.add_argument('--prefix', type=str, default='slumbot_2p')
     parser.add_argument('--eval-every', type=int, default=50)
     parser.add_argument('--save-every', type=int, default=100)
+    parser.add_argument('--seed', type=int)
     return parser
 
 
@@ -55,6 +59,17 @@ def main():
     print("=" * 60)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(args.seed)
+    if args.use_frontier_indexing and args.average_strategy_weight > 0:
+        raise SystemExit(
+            "--use-frontier-indexing does not yet support "
+            "--average-strategy-weight > 0"
+        )
 
     if args.resume:
         trainer = GPUDeepCFRTrainer.load(args.resume, device=device)
@@ -62,6 +77,8 @@ def main():
         trainer.n_training_steps = args.n_training_steps
         trainer.average_strategy_weight = args.average_strategy_weight
         trainer.traversal_slots_per_traversal = args.traversal_slots_per_traversal
+        trainer.use_frontier_indexing = args.use_frontier_indexing
+        trainer.traversal_seed = args.seed
         trainer.policy_slots_per_traversal = args.policy_slots_per_traversal
         print(f"Resumed from iteration {trainer.iteration}")
     else:
@@ -78,6 +95,8 @@ def main():
             device=device,
             average_strategy_weight=args.average_strategy_weight,
             traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+            use_frontier_indexing=args.use_frontier_indexing,
+            traversal_seed=args.seed,
             policy_slots_per_traversal=args.policy_slots_per_traversal,
         )
 
@@ -89,6 +108,7 @@ def main():
     print(f"Config: {n_iterations} iters, {trainer.n_traversals} trav, "
           f"{trainer.n_training_steps} steps, batch={trainer.batch_size}, "
           f"avg-strategy-weight={trainer.average_strategy_weight}, "
+          f"frontier-indexing={trainer.use_frontier_indexing}, "
           f"buf={args.buffer_capacity//1_000_000}M, chips={trainer.initial_chips}, "
           f"device={trainer.device}")
     print()

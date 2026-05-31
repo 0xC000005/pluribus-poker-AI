@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1380,
+      "path": "benchmark_audit.md",
+      "sha256": "d19e6d43915fb009e35fa0d1065793d4a00f6a613926e4671e9e5507a48980c5"
+    },
+    {
+      "bytes": 807,
+      "path": "decision.json",
+      "sha256": "c1358fecce5dd648f75ac9b7b7deab0d750e40536d40931cce26c02e69869eea"
+    },
+    {
+      "bytes": 1471,
+      "path": "mechanism_review.md",
+      "sha256": "89e6d6415b6823974bfa0e384ab722482b0394132445192f47ec413f32e08617"
+    },
+    {
+      "bytes": 1865,
+      "path": "related_work.md",
+      "sha256": "edcdbe9ef569f29d70146b3a40f114adebf129a2d007b921c75408d617146d1d"
+    },
+    {
+      "bytes": 1635,
+      "path": "review.md",
+      "sha256": "1b5d8325259edef37568d74b3537f6424530b3e8131c86f0dd01f864fa906b8a"
+    },
+    {
+      "bytes": 2713,
+      "path": "review_scope.json",
+      "sha256": "a4219a4365e57bdb169c8a09d1b5433a714d3ef4a6cbfa3dd1cb638723e836b0"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The analyzer and loader fix are diagnostic/protective, not promotion machinery. The actual gates failed, so the correct decision is to proceed with the documented pivot away from local search-score actor targets.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T135018Z-trajectory-level-search-calibration-analyzer-and-policy-checkpoint",
+  "review_id": "20260526T135018Z-trajectory-level-search-calibration-analyzer-and-policy-checkpoint",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2006.00283",
+    "https://arxiv.org/abs/2605.19235",
+    "autoresearch-session/search_as_actor/exact_search_actor_trajectory_calibration_100x8_seed20260535.json",
+    "autoresearch-session/search_as_actor/exact_search_actor_trajectory_calibration_search_guided_20x2_inner1_seed20260536.json",
+    "autoresearch-session/decision_value_actor/mixed_search_actor_on_policy_search_improved_klq_smoke.json"
+  ],
+  "written_at": "2026-05-26T13:52:54Z"
+}

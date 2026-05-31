@@ -12,8 +12,10 @@ import os
 import subprocess
 import sys
 import time
+from glob import glob
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from fnmatch import fnmatch
 from hashlib import sha256
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
@@ -29,14 +31,54 @@ STOP_FILE = "STOP"
 RESEARCH_LOG = "RESEARCH_LOG.md"
 REVIEW_MANIFESTS_DIR = Path("docs") / "research_protocols" / "poker_review_manifests"
 ALLOWED_REVIEW_DECISIONS = {"proceed", "revise", "abandon", "gather_more_evidence"}
+HARD_STOP_FAILURE_CLASSES = {
+    "eval_invalid",
+    "evaluation_invalid",
+    "objective_drift",
+    "benchmark_hacking",
+    "action_mapping",
+    "legal_mask",
+    "readiness",
+}
+LOCAL_TARGET_CONSUMER_TERMS = (
+    "xdo",
+    "npi",
+    "target consumer",
+    "policy consumer",
+    "search target",
+    "local target",
+    "exact-oracle target",
+    "policy-continuation",
+    "supervised imitation",
+    "imitator",
+)
+RL_RESPONSE_ORACLE_TERMS = (
+    "response oracle",
+    "rainbow",
+    "ppo",
+    "nfsp",
+    "fsp",
+    "marl",
+    "ippo",
+    "tianshou",
+    "agilerl",
+    "openspiel",
+    "stochastic neural actor",
+    "empirical-game meta-policy",
+)
 ALLOWED_RESEARCH_PHASES = {
     "open_research",
     "callback_state_calibration_debug",
+    "exact_gpu_resolving",
     "neural_regret_field_resolving",
+    "self_play_policy_improvement",
 }
 PROTECTED_EVAL_SURFACES = [
+    "scripts/poker_autoresearch.py",
     "scripts/poker_autoresearch_eval.py",
     "scripts/poker_autoresearch_slumbot.py",
+    "scripts/run_neural_policy_iteration_loop.py",
+    "scripts/eval_mixed_policy_h2h.py",
     "scripts/poker_resolver_benchmark.py",
     "scripts/play_slumbot.py",
     "scripts/solver.py",
@@ -45,16 +87,36 @@ PROTECTED_EVAL_SURFACES = [
     "scripts/eval_solver_budget_profiles.py",
     "scripts/eval_solver_budget_selective_escalation.py",
     "scripts/eval_solver_budget_boundary_predictor.py",
+    "scripts/eval_slumbot_response_range_ev_gate.py",
     "scripts/analyze_cfr_trace_sequence_predictor.py",
     "scripts/run_frozen_best_response.py",
     "scripts/eval_restricted_action_values.py",
     "scripts/poker_objective_audit.py",
     "poker_ai/research/autoresearch.py",
+    "poker_ai/research/mixed_policy_h2h.py",
     "poker_ai/research/promotion.py",
     "test/unit/test_network_mask.py",
     "test/unit/test_slumbot_mapping.py",
     "test/unit/test_legal_mask_parity.py",
     "test/unit/test_poker_autoresearch_eval.py",
+]
+PROTECTED_EVAL_SURFACE_PATTERNS = [
+    "scripts/eval_*.py",
+    "scripts/analyze_*trace*.py",
+    "scripts/build_*trace*.py",
+    "scripts/*slumbot*.py",
+    "scripts/*resolver*.py",
+    "scripts/*objective_audit*.py",
+    "scripts/*methodology_review*.py",
+    "scripts/*synthesis_review*.py",
+    "poker_ai/research/*trace*.py",
+    "poker_ai/research/*slumbot*.py",
+    "poker_ai/research/*resolver*.py",
+    "poker_ai/research/*promotion*.py",
+    "test/unit/test_*slumbot*.py",
+    "test/unit/test_*resolver*.py",
+    "test/unit/test_*parity*.py",
+    "test/unit/test_*autoresearch*.py",
 ]
 KNOB_COLUMNS = [
     "name",
@@ -64,9 +126,40 @@ KNOB_COLUMNS = [
     "mechanism",
     "rationale",
     "removal_criterion",
+    "review_id",
     "created_at",
     "retired_at",
 ]
+FORCE_SYNC_GOAL_KEYS = {
+    "objective",
+    "primary_metric",
+}
+FORCE_SYNC_GOAL_SECTION_KEYS = {
+    "objective_alignment_policy": {
+        "active_method_target",
+        "learning_philosophy",
+        "long_term_objective",
+        "neural_policy_iteration_policy",
+        "promotion_requires",
+        "slumbot_validation_policy",
+        "self_play_league_policy",
+        "visible_metric_rule",
+    },
+    "agent_goal_contract": {
+        "current_frontier",
+        "success_criteria",
+        "blocked_pivots",
+        "hard_stop_rules",
+    },
+    "mechanism_brief_policy": {
+        "required_for",
+        "required_fields",
+        "reject_if_missing",
+    },
+    "research_phase": {
+        "self_play_policy_improvement",
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -130,6 +223,121 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _checkpoint_mode(path: Path) -> str:
+    """Return lightweight checkpoint mode metadata when it is cheaply available."""
+    try:
+        import torch
+
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("mode", ""))
+
+
+def _warm_start_evaluator_script(checkpoint: Path) -> str:
+    mode = _checkpoint_mode(checkpoint)
+    if mode == "regret_policy_warm_start_checkpoint":
+        return "scripts/eval_regret_policy_warm_start.py"
+    return "scripts/eval_joint_pbs_policy_warm_start.py"
+
+
+def _first_numeric_key(payload: object, keys: set[str]) -> tuple[str, float] | None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key in keys and isinstance(value, (int, float)):
+                return key, float(value)
+            found = _first_numeric_key(value, keys)
+            if found is not None:
+                return found
+    if isinstance(payload, list):
+        for value in payload:
+            found = _first_numeric_key(value, keys)
+            if found is not None:
+                return found
+    return None
+
+
+def _internal_self_play_league_evidence(root: Path) -> dict:
+    state = _read_json(_state_path(root))
+    lower95_keys = {
+        "best_worst_lower95",
+        "best_worst_lower95_chips_per_hand",
+        "lower95_chips_per_hand",
+        "paired_delta_lower95_chips_per_hand_across_seeds",
+    }
+    for record in reversed(state.get("history", [])):
+        if record.get("outcome") != "passed":
+            continue
+        descriptor = " ".join(
+            str(record.get(key, ""))
+            for key in ("gate", "type", "hypothesis", "summary")
+        ).lower()
+        if not any(token in descriptor for token in ("self-play", "self_play", "league")):
+            continue
+        metrics_path = Path(str(record.get("run_dir", ""))) / "metrics.json"
+        metrics = {}
+        if metrics_path.exists():
+            try:
+                metrics = _read_json(metrics_path)
+            except json.JSONDecodeError:
+                metrics = {}
+        lower95 = _first_numeric_key(metrics, lower95_keys)
+        if lower95 is not None and lower95[1] > 0.0:
+            return {
+                "passed": True,
+                "run_id": record.get("run_id"),
+                "gate": record.get("gate"),
+                "metric": lower95[0],
+                "value": lower95[1],
+            }
+    return {
+        "passed": False,
+        "reason": "no passed self-play checkpoint league with positive lower95 evidence",
+    }
+
+
+def _candidate_promotion_gate_evidence(root: Path) -> dict:
+    """Return the latest passed dual-surface pre-Slumbot promotion evidence."""
+    state = _read_json(_state_path(root))
+    for record in reversed(state.get("history", [])):
+        if record.get("outcome") != "passed":
+            continue
+        descriptor = " ".join(
+            str(record.get(key, ""))
+            for key in ("gate", "type", "hypothesis", "summary")
+        ).lower()
+        if "promotion" not in descriptor or "slumbot" not in descriptor:
+            continue
+        metrics_path = Path(str(record.get("run_dir", ""))) / "metrics.json"
+        if not metrics_path.exists():
+            continue
+        try:
+            metrics = _read_json(metrics_path)
+        except json.JSONDecodeError:
+            continue
+        if (
+            metrics.get("algorithm") == "poker_candidate_promotion_gate"
+            and bool(metrics.get("passed", False))
+            and bool(metrics.get("slumbot_confidence_eligible", False))
+        ):
+            return {
+                "passed": True,
+                "run_id": record.get("run_id"),
+                "gate": record.get("gate"),
+                "metrics_path": str(metrics_path),
+                "promotion_blockers": list(metrics.get("promotion_blockers", [])),
+            }
+    return {
+        "passed": False,
+        "reason": (
+            "no passed pre-Slumbot candidate promotion gate with RLCard reference, "
+            "native H2H, and empirical-game evidence"
+        ),
+    }
+
+
 def _append_missing(items: list, defaults: list) -> list:
     seen = set(items)
     for item in defaults:
@@ -153,6 +361,9 @@ def _merge_default_dict(existing: dict, defaults: dict) -> dict:
 
 def _sync_goal_defaults(goal: dict, default_goal: dict) -> dict:
     for key, default_value in default_goal.items():
+        if key in FORCE_SYNC_GOAL_KEYS:
+            goal[key] = default_value
+            continue
         if key == "gates":
             goal.setdefault("gates", {})
             for gate_name, gate_config in default_value.items():
@@ -173,7 +384,10 @@ def _sync_goal_defaults(goal: dict, default_goal: dict) -> dict:
             goal[key] = _append_missing(list(goal.get(key, [])), default_value)
             continue
         if isinstance(default_value, dict):
-            _merge_default_dict(goal.setdefault(key, {}), default_value)
+            merged = _merge_default_dict(goal.setdefault(key, {}), default_value)
+            for forced_key in FORCE_SYNC_GOAL_SECTION_KEYS.get(key, set()):
+                if forced_key in default_value:
+                    merged[forced_key] = default_value[forced_key]
             continue
         goal.setdefault(key, default_value)
     return goal
@@ -202,6 +416,7 @@ def _migrate_knobs_file(path: Path) -> None:
             "mechanism": record.get("mechanism", ""),
             "rationale": record.get("rationale", ""),
             "removal_criterion": record.get("removal_criterion", ""),
+            "review_id": record.get("review_id", ""),
             "created_at": record.get("created_at", ""),
             "retired_at": record.get("retired_at", ""),
         }
@@ -228,19 +443,100 @@ def _default_goal(root: str | Path | None = None) -> dict:
     python = _project_python(root)
     return {
         "objective": (
-            "Develop an elegant, novel, SOTA-oriented full-deck heads-up no-limit "
-            "hold'em engine that trains on a personal PC, uses learned public-belief "
-            "search initialization plus CFR/resolving during play, and beats Slumbot "
-            "and stronger public baselines without hand-crafted poker-strategy rules."
+            "Continuously run the poker autoresearch outer loop until explicit "
+            "user stop or real promotion evidence is achieved. Develop and "
+            "falsify a PSRO/XDO-style local population improvement method for "
+            "full-deck heads-up no-limit hold'em: freeze the current local "
+            "incumbent, solve the native empirical game, train maintained "
+            "neural response oracles against the empirical-game meta-policy, "
+            "and add a candidate only if it beats parent and population gates "
+            "before any Slumbot confidence run. Slumbot remains held-out "
+            "evaluation only, with tiny smoke allowed for integration and "
+            "catastrophic-transfer checks. The method must stay elegant, "
+            "novel, bitter lesson aligned, personal-PC trainable, and free of "
+            "hand-crafted poker-strategy rules."
         ),
         "constraints": [
             "keep generated checkpoints and raw run artifacts out of git",
             "do not add opponent-specific or street-specific human strategy rules",
+            "do not use Slumbot as a primary promotion signal before self-play league gates pass",
+            "train a fresh environment-native model per card/action environment; transfer the training schema, not checkpoints or action mappings",
+            "treat explicit opponent ranges as diagnostic scaffolding unless a counterfactual-EV gate passes",
             "run Tier 0 integrity before promoting any result",
             "classify every failed or inconclusive cycle",
             "batch commits by research objective rather than by individual gate",
             "run methodology review before method, promotion, or persistent knob changes",
+            "run a paradigm innovation review before repeating a failed mechanism family",
         ],
+        "agent_goal_contract": {
+            "north_star": (
+                "Build a heads-up no-limit hold'em agent whose stochastic neural "
+                "policy improves through local self-play/population competition, "
+                "then validates externally on Slumbot only after internal parent "
+                "and empirical-game population gates pass."
+            ),
+            "current_frontier": {
+                "mechanism": (
+                    "Neural self-play policy iteration through PSRO/XDO-style "
+                    "plug-in population improvement with maintained neural "
+                    "response-oracle learners"
+                ),
+                "why_now": (
+                    "The current Tianshou Rainbow response oracle became the best "
+                    "local plug-in RL incumbent in the complete empirical game, "
+                    "but the next identical response-oracle generation failed its "
+                    "parent gate; the next work must make population improvement "
+                    "repeatable rather than repeat the same oracle recipe."
+                ),
+                "decision_object": (
+                    "stochastic neural policies, CFR-improved mixed strategies, "
+                    "native empirical-game payoffs, meta-strategy support, and "
+                    "parent/population H2H lower bounds"
+                ),
+            },
+            "success_criteria": [
+                "candidate response oracle beats its parent/incumbent with positive lower95",
+                "root-disjoint same-budget controls show decision impact before promotion",
+                "complete native empirical game keeps the candidate in meta-strategy support",
+                "candidate does not lose to saved local controls with positive-confidence evidence",
+                "candidate remains legal and traversal-valid with zero rejected chunks in fidelity-gated runs",
+                "external Slumbot confidence validation is attempted only after repeated internal population gates pass",
+                "public RLCard and native 9-action evidence come from separately trained environment-native candidates, not cross-environment checkpoint adaptation",
+            ],
+            "completion_rules": {
+                "mechanism_failure_is_not_completion": True,
+                "complete_only_on_promotion_evidence": (
+                    "A goal is complete only after a candidate clears internal "
+                    "self-play league gates and held-out Slumbot transfer "
+                    "confidence, or the user explicitly changes the objective."
+                ),
+                "soft_pivot_is_part_of_workflow": (
+                    "A failed mechanism retires that inner hypothesis, then "
+                    "triggers synthesis, related-work review, paradigm "
+                    "innovation review, and the next principled mechanism."
+                ),
+            },
+            "soft_pivot_rules": [
+                "after a failed decision-impact mechanism gate, document the result and queue failure synthesis",
+                "after repeated same-failure-class results, queue paradigm innovation review and related-work research",
+                "treat pivot review as continuation of the outer goal, not as completion",
+                "choose the next mechanism from the synthesis and innovation review before more experiments",
+            ],
+            "held_out_validation": [
+                "Slumbot confidence runs are held-out external validation, not the optimization target",
+                "tiny Slumbot smoke is allowed for integration and catastrophic-transfer checks only before internal league promotion",
+            ],
+            "blocked_pivots": [
+                "do not tune loss-weight, target count, hidden size, or selector thresholds after a failed mechanism without a positive root-decision gate",
+                "do not weaken evaluation, parser, legal-mask, or promotion surfaces to improve visible metrics",
+                "do not promote policy patches that only fit supervised labels without self-play decision impact",
+            ],
+            "hard_stop_rules": [
+                "stop only for explicit user STOP, readiness failure, invalid evaluation, benchmark hacking, or unsafe objective drift",
+                "stop if a proposed change primarily optimizes a visible benchmark instead of a mechanism",
+                "stop if a control run has rejected traversal chunks or unmatched compute budget",
+            ],
+        },
         "commit_policy": {
             "mode": "batch_by_research_objective",
             "commit_during_continuous": False,
@@ -272,6 +568,8 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "requires_related_work": True,
             "requires_mechanism_review": True,
             "requires_review_manifest": True,
+            "requires_review_scope": True,
+            "requires_decision_impact_statement": True,
             "mechanism_review_fields": [
                 "learned object",
                 "search boundary",
@@ -282,6 +580,52 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "fail action",
                 "related-work delta",
             ],
+            "review_scope_fields": [
+                "changed_paths",
+                "protected_hits",
+                "mechanism",
+                "expected_gate",
+                "decision_impact",
+                "decision_impact_gate",
+                "fallback_if_no_decision_impact",
+                "pass_action",
+                "fail_action",
+            ],
+            "decision_impact_rule": (
+                "Every new CUDA/search primitive must explicitly state how it "
+                "gets the project closer to stronger root decisions per "
+                "millisecond or better self-play checkpoint-league strength. "
+                "If that path is indirect, the review must name the next "
+                "decision-impact gate and the fallback if impact is absent."
+            ),
+        },
+        "mechanism_brief_policy": {
+            "required_for": [
+                "methodology_review",
+                "paradigm_innovation_review",
+                "persistent_knob",
+                "new_training_objective",
+                "new_search_or_resolver_primitive",
+            ],
+            "required_fields": [
+                "decision_object",
+                "where_consumed",
+                "matched_control",
+                "primary_decision_gate",
+                "retirement_criterion",
+                "flexibility_boundary",
+                "anti_benchmark_hack",
+                "neural_policy_role",
+                "cfr_role",
+                "stochastic_policy_contract",
+            ],
+            "reject_if_missing": True,
+            "rule": (
+                "A research action may stay flexible in implementation, but it "
+                "must pin down the object being improved, the matched control, "
+                "and the result that retires the mechanism before protected "
+                "methodology changes are accepted."
+            ),
         },
         "synthesis_policy": {
             "experiments_per_synthesis": 5,
@@ -296,11 +640,42 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "write a failure synthesis before adding a new experiment family."
             ),
         },
+        "innovation_policy": {
+            "required_after_consecutive_failures": 2,
+            "selection_rule": (
+                "Use Bayesian surprise and root-cause anomaly value to choose "
+                "one mechanism-level novelty sprint; do not select by easiest "
+                "visible benchmark gain."
+            ),
+            "required_fields": [
+                "Anomaly ledger",
+                "Current-practice limit",
+                "First-principles reduction",
+                "Cross-paradigm analogy",
+                "Novel mechanism",
+                "Bitter-lesson alignment",
+                "Smallest decisive test",
+                "Falsifier",
+            ],
+            "thought_experiment_fields": [
+                "Mechanism stress test",
+                "Failure thought experiment",
+                "Transfer thought experiment",
+                "Compute thought experiment",
+            ],
+            "rule": (
+                "After repeated failures in the same mechanism family, force a "
+                "novelty review with online related work, first-principles "
+                "analysis, paradigm alternatives, ideation, and thought "
+                "experiments before another scale run or knob."
+            ),
+        },
         "research_phase": {
-            "current": "neural_regret_field_resolving",
+            "current": "self_play_policy_improvement",
             "reason": (
-                "default after hard value-cut replacement and direct policy imitation "
-                "failed root-disjoint resolver gates"
+                "default after trace-specific and detached target mechanisms "
+                "failed transfer; local self-play is the mainline and Slumbot "
+                "is evaluation-only"
             ),
             "set_at": None,
             "allowed_phases": sorted(ALLOWED_RESEARCH_PHASES),
@@ -318,6 +693,7 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "allowed_actions": [
                     "methodology_review",
                     "mechanism_review",
+                    "paradigm_innovation_review",
                     "failure_synthesis",
                     "objective_audit",
                     "implement_solver_warm_start",
@@ -349,6 +725,7 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "callback_state_calibration_audit",
                     "methodology_review",
                     "mechanism_review",
+                    "paradigm_innovation_review",
                     "failure_synthesis",
                     "objective_audit",
                 ],
@@ -357,6 +734,80 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "slumbot_smoke",
                     "new_model_size_or_search_knob",
                 ],
+            },
+            "exact_gpu_resolving": {
+                "problem": (
+                    "Static learned warm-starts and shallow trace controllers "
+                    "lost to spending the same latency on exact CFR+ updates."
+                ),
+                "approved_method": (
+                    "Use exact GPU CFR+/resolving as the current search baseline; "
+                    "learned components must beat the CUDA budget frontier by root "
+                    "decision quality per millisecond before becoming mainline."
+                ),
+                "allowed_actions": [
+                    "methodology_review",
+                    "mechanism_review",
+                    "paradigm_innovation_review",
+                    "failure_synthesis",
+                    "objective_audit",
+                    "solver_budget_frontier",
+                    "solver_latency_profile",
+                    "self_play_league_training",
+                ],
+                "blocked_actions": [
+                    "static_warm_start_resolver_gate_as_mainline",
+                    "another_warm_start_mass_sweep",
+                    "policy_mixing_after_solve",
+                    "slumbot_confidence_before_internal_league_pass",
+                ],
+                "gate": (
+                    "Exact CUDA search changes must be judged by root-disjoint "
+                    "budget frontiers, illegal-mass parity, latency, and downstream "
+                    "self-play league evidence before any Slumbot confidence claim."
+                ),
+            },
+            "self_play_policy_improvement": {
+                "problem": (
+                    "A maintained Tianshou Rainbow response oracle became the "
+                    "best local plug-in RL incumbent, but the next identical "
+                    "response-oracle generation failed its parent gate."
+                ),
+                "approved_method": (
+                    "Use a stochastic neural policy/value actor as the player: "
+                    "freeze the current local incumbent, solve the native "
+                    "empirical game over local self-play checkpoints, train "
+                    "maintained-library neural response "
+                    "oracles against the empirical-game meta-policy or a reviewed "
+                    "population approximation, and promote only by positive "
+                    "parent plus population H2H lower-bound evidence before "
+                    "held-out Slumbot validation."
+                ),
+                "allowed_actions": [
+                    "methodology_review",
+                    "mechanism_review",
+                    "paradigm_innovation_review",
+                    "failure_synthesis",
+                    "objective_audit",
+                    "gpu_deep_cfr_training",
+                    "self_play_league_training",
+                    "solver_budget_frontier",
+                    "solver_latency_profile",
+                ],
+                "blocked_actions": [
+                    "slumbot_confidence_before_internal_league_pass",
+                    "slumbot_trace_training_data",
+                    "repeat_identical_single_checkpoint_response_oracle_after_parent_gate_failure",
+                    "always_on_cfr_argmax_as_mainline",
+                    "response_range_as_live_opponent_model",
+                    "post_hoc_policy_calibration_as_mainline",
+                    "detached_trace_target_injection_as_mainline",
+                ],
+                "gate": (
+                    "Candidates must beat parent/incumbent and the native "
+                    "empirical-game population with positive lower-bound evidence "
+                    "before any Slumbot confidence run."
+                ),
             },
         },
         "knob_policy": {
@@ -374,6 +825,8 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "root-disjoint train/test split and a resolver-behavior gate."
             ),
             "approved_roles": [
+                "exact GPU resolving baseline",
+                "root-disjoint budget frontier",
                 "public-belief encoder",
                 "private-card set encoder",
                 "action-sequence encoder",
@@ -389,17 +842,186 @@ def _default_goal(root: str | Path | None = None) -> dict:
         "objective_alignment_policy": {
             "long_term_objective": (
                 "Develop an elegant, novel, compute-efficient Texas hold'em method "
-                "that can reach SOTA-style Slumbot performance on personal-PC "
-                "hardware by amortizing search knowledge into reusable neural "
-                "regret/policy initialization while preserving CFR/resolving as the "
-                "runtime correction mechanism."
+                "whose self-play checkpoint league strength improves over time on "
+                "personal-PC hardware, then transfers to SOTA-style Slumbot and "
+                "public baseline performance by using the available GPU for local "
+                "self-play, neural learning, and general search improvement rather "
+                "than Slumbot-specific fitting."
             ),
             "active_method_target": (
-                "Neural regret-field resolving: learn reusable public-belief "
-                "regret/policy fields that warm-start search, then evaluate by "
-                "whether the low-budget resolver approaches a high-budget teacher."
+                "PSRO/XDO-style local population improvement: use the current "
+                "local incumbent from the native empirical game, train maintained-"
+                "library neural response oracles against the empirical-game "
+                "meta-policy or reviewed population approximation, add candidates "
+                "only after parent/population H2H gates pass, and keep Slumbot as "
+                "held-out evaluation after internal progress."
             ),
+            "learning_philosophy": (
+                "Prefer neural self-play/population improvement adapted to "
+                "imperfect information. A stochastic neural policy should remain "
+                "the deployable player, while maintained-"
+                "library response oracles should do the learning. CFR/resolving "
+                "remain acceptable as principled evaluators, teachers, or search "
+                "controls, but the active loop is population improvement through "
+                "native empirical-game gates, not Slumbot-specific fitting or "
+                "hand-crafted poker rules."
+            ),
+            "population_improvement_policy": {
+                "active_loop": "psro_xdo_plug_in_population_improvement",
+                "current_local_incumbent_source": "autoresearch-session/poker_state.json.incumbent_checkpoint",
+                "response_oracle_rule": "use maintained libraries through native 9-action adapters",
+                "meta_policy_rule": "solve the native empirical game before choosing the next response-oracle training distribution",
+                "drift_guard": (
+                    "Run the research-log drift guard before every queued "
+                    "experiment; repeated local target-consumer/search-label "
+                    "transfer failures require review instead of another small "
+                    "variant."
+                ),
+                "slumbot_rule": "tiny smoke only until repeated parent/population gates pass; never use Slumbot as training data or selector",
+                "required_ladder": [
+                    "candidate versus parent/incumbent",
+                    "candidate versus empirical-game population/meta-policy",
+                    "candidate versus saved local controls such as NFSP, NPI, and Rainbow variants",
+                    "complete empirical-game matrix with no missing required pairs",
+                    "tiny held-out Slumbot smoke only after local promotion, then larger Slumbot confidence only after repeat progress",
+                ],
+                "blocked_drift": [
+                    "do not repeat identical single-checkpoint response-oracle training",
+                    "do not ignore a parent-gate failure from the previous response-oracle generation",
+                "do not train from Slumbot hands, traces, or revealed cards",
+                "do not adapt checkpoints across card/action environments for promotion; train fresh per environment and transfer only the general learning schema",
+                "do not replace maintained RL learners with local PPO/Rainbow/NFSP/PSRO internals without methodology review",
+                    "do not promote a checkpoint that only beats one frozen target but fails the broader population",
+                ],
+                "current_negative_evidence": (
+                    "The second same-style Tianshou Rainbow response oracle lost "
+                    "to its parent; population exposure or meta-policy training "
+                    "must change before another response-oracle attempt."
+                ),
+            },
+            "neural_policy_iteration_policy": {
+                "current_status": "paused_until_target_collapse_resolved",
+                "neural_policy_role": "main_stochastic_actor",
+                "cfr_role": "policy_improvement_teacher",
+                "deploy_policy_rule": "sample_mixed_strategy_not_argmax_by_default",
+                "generic_rl_algorithm_policy": "plug_in_maintained_libraries_only",
+                "local_code_boundary": (
+                    "Implement native poker environment adapters, legal masks, "
+                    "checkpoint loaders, evaluators, empirical-game gates, and "
+                    "batching/profiling glue locally; do not implement generic "
+                    "PPO/Rainbow/NFSP/PSRO learner internals unless maintained "
+                    "libraries cannot preserve the native poker contract and a "
+                    "methodology review approves the exception."
+                ),
+                "control_gate_rule": "require_fixed_or_mixed_controls_per_generation",
+                "required_loop_flag": "--require-control-gate",
+                "required_control_kinds": [
+                    "same-format-npi",
+                    "native-nfsp",
+                    "tianshou-rainbow",
+                    "tianshou-ppo",
+                ],
+                "training_loop": [
+                    "stochastic neural policy/value self-play generates trajectories",
+                    "public-belief CFR improves sampled states into mixed-strategy/value targets",
+                    "policy/value network trains on improved targets and realized outcomes",
+                    "updated stochastic network returns to self-play",
+                ],
+                "blocked_drift": [
+                    "always run fixed-budget CFR as the entire player",
+                    "deploy deterministic argmax policy without a reviewed exploitability gate",
+                    "use PPO/Rainbow/Gym/PettingZoo as benchmark tuning detached from poker equilibrium pressure",
+                    "hand-roll generic PPO/Rainbow/NFSP/PSRO internals when Tianshou/RLCard/OpenSpiel/AgileRL can be adapted",
+                ],
+                "allowed_infrastructure": [
+                    "Gymnasium",
+                    "PettingZoo",
+                    "RLCard",
+                    "OpenSpiel",
+                    "AgileRL",
+                    "Tianshou PPO/Rainbow",
+                    "maintained NFSP controls",
+                ],
+            },
+            "self_play_league_policy": {
+                "primary_role": "promotion_gate",
+                "metric": "checkpoint league positive lower95 versus incumbent or previous checkpoint",
+                "required_ladder": [
+                    "candidate versus previous checkpoint",
+                    "candidate versus current incumbent",
+                    "candidate versus empirical-game population/meta-policy",
+                    "candidate versus native self-play controls such as NFSP/PPO/Deep CFR",
+                    "fixed-state resolver diagnostics for solver-coupled changes",
+                    "held-out Slumbot validation only after internal league gates pass",
+                ],
+                "slumbot_role": (
+                    "Held-out external validation and integration benchmark after "
+                    "self-play league progress is established."
+                ),
+                "blocked_before_internal_pass": (
+                    "Slumbot chip-rate claims, Slumbot-specific response patches, "
+                    "or promotion based on sparse live API smokes."
+                ),
+                "progress_plot_fields": [
+                    "checkpoint_iteration",
+                    "opponent_or_baseline",
+                    "strategy_source",
+                    "n_games",
+                    "seeds",
+                    "mean_chips_per_hand",
+                    "lower95_chips_per_hand",
+                    "upper95_chips_per_hand",
+                    "promotion_blockers",
+                ],
+            },
+            "slumbot_validation_policy": {
+                "max_smoke_hands_before_internal_pass": 50,
+                "allowed_without_internal_pass": (
+                    "Sparse live Slumbot integration smokes up to the hand cap "
+                    "may check API parsing, latency, and trace fields only."
+                ),
+                "confidence_requires": [
+                    "passed pre-Slumbot candidate promotion gate covering RLCard AlphaNLHoldem reference, native 9-action H2H, and empirical-game support",
+                    "passed self-play checkpoint league with positive lower95 evidence",
+                    "candidate versus incumbent or previous checkpoint evidence",
+                    "native self-play controls when applicable",
+                    "fixed-state resolver diagnostics for solver-coupled changes",
+                ],
+                "blocked_without_internal_pass": [
+                    "Slumbot confidence runs",
+                    "Slumbot chip-rate promotion claims",
+                    "Slumbot-specific response/range/action patches",
+                ],
+            },
+            "explicit_range_policy": {
+                "default_role": "diagnostic_teacher_only",
+                "allowed_roles": [
+                    "belief-state falsification",
+                    "counterfactual-EV replay evaluator",
+                    "debugging Slumbot trace likelihood failures",
+                ],
+                "blocked_roles": [
+                    "default live opponent model",
+                    "street-specific range patch",
+                    "Slumbot-only exploit prior",
+                    "training data or target source",
+                    "checkpoint selector",
+                    "promotion target based only on revealed-hand likelihood",
+                ],
+                "mainline_replacement": (
+                    "local self-play representation learned from public state, "
+                    "private cards, actions, and rewards; any belief-like state "
+                    "must arise inside the general self-play/search loop"
+                ),
+                "promotion_rule": (
+                    "Explicit range interventions remain diagnostic unless a completed "
+                    "methodology review reframes them as general locally trained "
+                    "mechanisms and they pass matched local self-play gates before "
+                    "held-out Slumbot evaluation."
+                ),
+            },
             "protected_surfaces": PROTECTED_EVAL_SURFACES,
+            "protected_surface_patterns": PROTECTED_EVAL_SURFACE_PATTERNS,
             "protected_surface_rule": (
                 "Evaluation harnesses, Slumbot adapters, promotion logic, seed "
                 "lists, parsers, and parity tests are immutable during ordinary "
@@ -407,17 +1029,19 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "and benchmark-hacking audit artifacts."
             ),
             "promotion_requires": [
-                "paired incumbent head-to-head lower-bound evidence",
+                "checkpoint league positive lower95 versus incumbent or previous checkpoint",
+                "native self-play control comparison when applicable",
                 "fixed-state resolver diagnostics",
-                "sparse live Slumbot confirmation",
+                "held-out Slumbot validation after internal league pass",
                 "objective-alignment audit",
             ],
             "visible_metric_rule": (
-                "Local random and smoke metrics are diagnostics, not promotion "
-                "targets. Do not optimize solely for visible smoke gates."
+                "Local random, sparse Slumbot, and smoke metrics are diagnostics, "
+                "not promotion targets. Do not optimize solely for visible smoke "
+                "gates or Slumbot chip noise before the self-play league ladder passes."
             ),
         },
-        "primary_metric": "lower_95_ci_mbb_per_hand_vs_incumbent",
+        "primary_metric": "checkpoint_league_lower_95_ci_chips_per_hand_vs_incumbent",
         "hard_stop_conditions": [
             "STOP file exists",
             "Tier 0 integrity gate fails",
@@ -425,6 +1049,7 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "Slumbot credentials, network access, or API limits block evaluation",
             "cycle would overwrite an incumbent checkpoint",
             "cycle requires a hand-crafted opponent rule",
+            "cycle treats Slumbot chips as primary promotion evidence before self-play league pass",
             "cycle treats hard learned value cuts or policy argmax imitation as a "
             "mainline method without a completed failure synthesis and resolver gate",
         ],
@@ -552,6 +1177,61 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     ]
                 ],
             },
+            "eval-self-play-league-smoke": {
+                "description": (
+                    "Checkpoint-league evaluator smoke. Duplicate-swapped "
+                    "model-vs-model self-comparison validates the self-play league "
+                    "path before it is used to promote candidate checkpoints."
+                ),
+                "timeout_seconds": 2400,
+                "commands": [
+                    [
+                        python,
+                        "scripts/poker_autoresearch_eval.py",
+                        "--checkpoint",
+                        "models/slumbot_2p_iter1000.pt",
+                        "--baseline-checkpoint",
+                        "models/slumbot_2p_iter1000.pt",
+                        "--head-to-head",
+                        "--n-games",
+                        "200",
+                        "--device",
+                        "auto",
+                        "--seeds",
+                        "20260511,20260512,20260513",
+                    ]
+                ],
+            },
+            "native_rollout_parity_and_5x_throughput": {
+                "description": (
+                    "Native-style rollout substrate gate: deterministic replay "
+                    "parity against full_deck/state.py plus at least 5x environment-step "
+                    "throughput before learner integration."
+                ),
+                "timeout_seconds": 1200,
+                "commands": [
+                    [
+                        python,
+                        "scripts/eval_native_rollout_substrate.py",
+                        "--n-parity-games",
+                        "32",
+                        "--parity-max-steps",
+                        "96",
+                        "--n-benchmark-games",
+                        "512",
+                        "--benchmark-max-steps",
+                        "128",
+                        "--initial-chips",
+                        "1000",
+                        "--seed",
+                        "20260752",
+                        "--min-speedup",
+                        "5.0",
+                        "--output-json",
+                        "autoresearch-session/native_rollout_substrate/native_rollout_parity_5x.json",
+                    ]
+                ],
+            },
             "eval-resolver-fixed-states": {
                 "description": (
                     "Fixed public-state turn/river benchmark for blueprint-vs-resolver "
@@ -568,6 +1248,38 @@ def _default_goal(root: str | Path | None = None) -> dict:
                         "auto",
                         "--solver-iterations",
                         "25",
+                    ]
+                ],
+            },
+            "eval-response-range-counterfactual-ev": {
+                "description": (
+                    "Diagnostic replay gate that asks whether calibrated Slumbot "
+                    "response ranges improve counterfactual action EV, not just "
+                    "revealed-hand likelihood or top-action agreement."
+                ),
+                "timeout_seconds": 1800,
+                "commands": [
+                    [
+                        python,
+                        "scripts/eval_slumbot_response_range_ev_gate.py",
+                        "--checkpoint",
+                        "models/autoresearch_gpu_20260515T111750Z/avg_strategy_candidate_final.pt",
+                        "--strategy-source",
+                        "average-policy",
+                        "--cases-json",
+                        "autoresearch-session/slumbot_trace_cases/20260515T134500Z-session3-resolver-cases.json",
+                        "--trace",
+                        "autoresearch-session/slumbot_traces/slumbot-candidate-trace-20260515T134500Z-avg-strategy-noallin-fullhist-500h-session3.jsonl",
+                        "--action-likelihood",
+                        "autoresearch-session/slumbot_trace_cases/20260515T125000Z-avg-strategy-noallin-fullhist-500h-action-likelihood.json",
+                        "--output-json",
+                        "autoresearch-session/slumbot_trace_cases/response_range_counterfactual_ev_gate.json",
+                        "--max-cases",
+                        "16",
+                        "--solver-iterations",
+                        "5",
+                        "--evaluator-iterations",
+                        "10",
                     ]
                 ],
             },
@@ -850,14 +1562,28 @@ def register_research_knob(
     mechanism: str,
     rationale: str,
     removal_criterion: str,
+    review_dir: str | Path | None = None,
     max_active: int | None = None,
 ) -> dict:
     """Register one persistent research knob with a mechanism and budget."""
+    root = Path(root)
     _assert_phase_allows_action(
-        Path(root),
+        root,
         "new_model_size_or_search_knob",
         details=f"{name} {failure_class} {mechanism} {rationale}",
     )
+    if review_dir is None:
+        raise RuntimeError(
+            "Persistent research knobs require a completed methodology review."
+        )
+    review_result = validate_methodology_review(
+        _resolve_existing_path(root, review_dir, label="Methodology review")
+    )
+    if not review_result["passed"]:
+        raise RuntimeError(
+            "Persistent research knob review artifacts are incomplete: "
+            + "; ".join(review_result["errors"])
+        )
     fields = {
         "name": name,
         "default": default,
@@ -875,7 +1601,6 @@ def register_research_knob(
             "not a broad sweep."
         )
 
-    root = Path(root)
     goal = _read_json(_goal_path(root))
     budget = int(max_active or goal.get("knob_policy", {}).get("max_active_knobs", 5))
     knob_path = _knobs_path(root)
@@ -899,6 +1624,7 @@ def register_research_knob(
         "mechanism": mechanism,
         "rationale": rationale,
         "removal_criterion": removal_criterion,
+        "review_id": Path(review_dir).name,
         "created_at": _now(),
         "retired_at": "",
     }
@@ -984,6 +1710,9 @@ def set_research_phase(root: str | Path, *, phase: str, reason: str) -> dict:
     phase_record["reason"] = reason
     phase_record["set_at"] = _now()
     phase_record["allowed_phases"] = sorted(ALLOWED_RESEARCH_PHASES)
+    default_phase_record = _default_goal(root)["research_phase"]
+    if phase in default_phase_record:
+        phase_record.setdefault(phase, default_phase_record[phase])
     _write_json(_goal_path(root), goal)
     return phase_record
 
@@ -1032,6 +1761,26 @@ def _assert_phase_allows_action(
                 f"gate. Blocked action: {action}."
             )
         return
+    if phase == "exact_gpu_resolving":
+        if action in review_actions:
+            return
+        if action == "eval_warm_start_resolver_gate":
+            raise RuntimeError(
+                "Research phase exact_gpu_resolving blocks this action. static "
+                "warm-start resolver gates are retired as mainline unless a "
+                "methodology review reopens them against the CUDA budget frontier. "
+                f"Blocked action: {action}."
+            )
+        if action == "new_model_size_or_search_knob":
+            lowered = details.lower()
+            stale_terms = ("warm", "initializer", "mix", "policy prior", "eta")
+            if any(term in lowered for term in stale_terms):
+                raise RuntimeError(
+                    "Research phase exact_gpu_resolving blocks this action. "
+                    "Static warm-start or policy-mixing knobs must first beat "
+                    f"the exact CUDA budget frontier. Blocked action: {action}."
+                )
+        return
     if phase != "callback_state_calibration_debug":
         return
     if action in review_actions | {"callback_state_calibration_audit"}:
@@ -1071,7 +1820,8 @@ def synthesis_status(root: str | Path) -> dict:
     since = [
         record
         for record in history[last_synthesis_idx + 1 :]
-        if record.get("type") not in {"methodology_review", "synthesis"}
+        if record.get("type") != "synthesis"
+        and "review" not in str(record.get("type", ""))
     ]
     return {
         "due": len(since) >= interval,
@@ -1158,6 +1908,123 @@ def enqueue_failure_synthesis(
     return item
 
 
+def _write_paradigm_innovation_templates(
+    innovation_dir: Path,
+    *,
+    subject: str,
+    anomaly: str,
+) -> None:
+    innovation_dir.mkdir(parents=True, exist_ok=True)
+    (innovation_dir / "innovation.md").write_text(
+        "# Paradigm Innovation Review\n\n"
+        f"Subject: {subject}\n\n"
+        f"Anomaly ledger: {anomaly or 'TODO'}\n"
+        "Current-practice limit: TODO\n"
+        "First-principles reduction: TODO\n"
+        "Cross-paradigm analogy: TODO\n"
+        "Novel mechanism: TODO\n"
+        "Bitter-lesson alignment: TODO\n"
+        "Smallest decisive test: TODO\n"
+        "Falsifier: TODO\n\n"
+        "Verdict: PENDING\n",
+        encoding="utf-8",
+    )
+    (innovation_dir / "thought_experiments.md").write_text(
+        "# Thought Experiments\n\n"
+        "Mechanism stress test: TODO\n"
+        "Failure thought experiment: TODO\n"
+        "Transfer thought experiment: TODO\n"
+        "Compute thought experiment: TODO\n",
+        encoding="utf-8",
+    )
+    (innovation_dir / "related_work.md").write_text(
+        "# Related Work\n\n"
+        "Title: TODO\n"
+        "Source URL: TODO\n"
+        "Source type: TODO primary / secondary / no suitable primary source found\n"
+        "Transfers to this codebase: TODO\n"
+        "Does not transfer: TODO\n"
+        "Novelty delta: TODO\n"
+        "Smallest local test: TODO\n",
+        encoding="utf-8",
+    )
+    _write_json(
+        innovation_dir / "decision.json",
+        {
+            "schema_version": 1,
+            "decision": "pending",
+            "reason": "PENDING",
+            "sources": [],
+        },
+    )
+
+
+def enqueue_paradigm_innovation_review(
+    root: str | Path,
+    *,
+    subject: str,
+    anomaly: str,
+    timeout_seconds: int = 600,
+) -> dict:
+    """Queue a novelty review before expanding a repeatedly failed paradigm."""
+    root = Path(root)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    innovation_dir = _unique_child_dir(
+        _reviews_path(root),
+        f"{timestamp}-{_slug(subject)}-innovation",
+    )
+    _write_paradigm_innovation_templates(
+        innovation_dir,
+        subject=subject,
+        anomaly=anomaly,
+    )
+
+    gate_name = _unique_gate_name(
+        root,
+        f"paradigm-innovation-{timestamp}-{_slug(subject)}",
+    )
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/poker_innovation_review.py",
+        "--innovation-dir",
+        str(innovation_dir),
+        "--require-complete",
+    ]
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Validate novelty research, first-principles reduction, thought "
+            "experiments, and related work before another paradigm expansion."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [command],
+    }
+    _write_json(_goal_path(root), goal)
+    item = enqueue_cycle(
+        root,
+        hypothesis=(
+            f"Paradigm innovation review for {subject} should convert the "
+            "repeated anomaly into one falsifiable mechanism-level sprint."
+        ),
+        cycle_type="innovation_review",
+        failure_class="research_direction",
+        gate=gate_name,
+    )
+    item["innovation_dir"] = str(innovation_dir)
+    item["requires_related_work"] = True
+    item["requires_first_principles"] = True
+    item["requires_thought_experiments"] = True
+    state = _read_json(_state_path(root))
+    state["hypothesis_queue"][-1]["innovation_dir"] = str(innovation_dir)
+    state["hypothesis_queue"][-1]["requires_related_work"] = True
+    state["hypothesis_queue"][-1]["requires_first_principles"] = True
+    state["hypothesis_queue"][-1]["requires_thought_experiments"] = True
+    state["updated_at"] = _now()
+    _write_json(_state_path(root), state)
+    return item
+
+
 def _write_methodology_review_templates(
     review_dir: Path,
     *,
@@ -1183,14 +2050,12 @@ def _write_methodology_review_templates(
     (review_dir / "related_work.md").write_text(
         "# Related Work\n\n"
         f"Diagnostic question: {claim}\n\n"
-        "Required sources:\n"
-        "- TODO: add at least one primary source with a URL.\n\n"
-        "Transfers to this codebase:\n"
-        "- TODO\n\n"
-        "Does not transfer:\n"
-        "- TODO\n\n"
-        "Smallest local test:\n"
-        "- TODO\n",
+        "Title: TODO\n"
+        "Source URL: TODO\n"
+        "Source type: TODO primary / secondary / no suitable primary source found\n"
+        "Transfers to this codebase: TODO\n"
+        "Does not transfer: TODO\n"
+        "Smallest local test: TODO\n",
         encoding="utf-8",
     )
     (review_dir / "benchmark_audit.md").write_text(
@@ -1234,6 +2099,32 @@ def _write_methodology_review_templates(
         "Use separate sub-agents for these roles when available. The files are "
         "the source of truth, not chat memory.\n",
         encoding="utf-8",
+    )
+    _write_json(
+        review_dir / "review_scope.json",
+        {
+            "changed_paths": [],
+            "protected_hits": [],
+            "mechanism": "PENDING",
+            "mechanism_brief": {
+                "decision_object": "PENDING",
+                "where_consumed": "PENDING",
+                "matched_control": "PENDING",
+                "primary_decision_gate": "PENDING",
+                "retirement_criterion": "PENDING",
+                "flexibility_boundary": "PENDING",
+                "anti_benchmark_hack": "PENDING",
+                "neural_policy_role": "PENDING",
+                "cfr_role": "PENDING",
+                "stochastic_policy_contract": "PENDING",
+            },
+            "expected_gate": "PENDING",
+            "decision_impact": "PENDING",
+            "decision_impact_gate": "PENDING",
+            "fallback_if_no_decision_impact": "PENDING",
+            "pass_action": "PENDING",
+            "fail_action": "PENDING",
+        },
     )
     _write_json(
         review_dir / "decision.json",
@@ -1367,7 +2258,15 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
     benchmark_path = review_dir / "benchmark_audit.md"
     mechanism_path = review_dir / "mechanism_review.md"
     decision_path = review_dir / "decision.json"
-    for path in (review_path, related_path, benchmark_path, mechanism_path, decision_path):
+    scope_path = review_dir / "review_scope.json"
+    for path in (
+        review_path,
+        related_path,
+        benchmark_path,
+        mechanism_path,
+        scope_path,
+        decision_path,
+    ):
         if not path.exists():
             errors.append(f"Missing required artifact: {path.name}")
 
@@ -1382,6 +2281,19 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
         errors.append("related_work.md is still pending")
     if "http://" not in related_text and "https://" not in related_text:
         errors.append("related_work.md must cite at least one source URL")
+    for required in (
+        "Source type:",
+        "Transfers to this codebase:",
+        "Does not transfer:",
+        "Smallest local test:",
+    ):
+        if required not in related_text:
+            errors.append(f"related_work.md must include {required}")
+    lowered_related = related_text.lower()
+    if "source type: primary" not in lowered_related and "no suitable primary source found" not in lowered_related:
+        errors.append(
+            "related_work.md must identify a primary source or explain that no suitable primary source was found"
+        )
 
     benchmark_text = benchmark_path.read_text(encoding="utf-8") if benchmark_path.exists() else ""
     if "PENDING" in benchmark_text or "TODO" in benchmark_text:
@@ -1408,6 +2320,74 @@ def validate_methodology_review(review_dir: str | Path) -> dict:
         errors.append("mechanism_review.md must include a Verdict line")
 
     decision: dict = {}
+    if scope_path.exists():
+        try:
+            scope = _read_json(scope_path)
+            mechanism_brief = scope.get("mechanism_brief")
+            if not isinstance(mechanism_brief, dict):
+                errors.append("review_scope.json must include mechanism_brief object")
+                mechanism_brief = {}
+            else:
+                for required in (
+                    "decision_object",
+                    "where_consumed",
+                    "matched_control",
+                    "primary_decision_gate",
+                    "retirement_criterion",
+                    "flexibility_boundary",
+                    "anti_benchmark_hack",
+                    "neural_policy_role",
+                    "cfr_role",
+                    "stochastic_policy_contract",
+                ):
+                    value = mechanism_brief.get(required)
+                    if value is None:
+                        errors.append(
+                            f"review_scope.json mechanism_brief must include {required}"
+                        )
+                    elif isinstance(value, str) and value == "PENDING":
+                        errors.append(
+                            f"review_scope.json mechanism_brief {required} is still pending"
+                        )
+            for required in (
+                "changed_paths",
+                "protected_hits",
+                "mechanism",
+                "expected_gate",
+                "decision_impact",
+                "decision_impact_gate",
+                "fallback_if_no_decision_impact",
+                "pass_action",
+                "fail_action",
+            ):
+                if required not in scope:
+                    errors.append(f"review_scope.json must include {required}")
+                elif isinstance(scope[required], str) and scope[required] == "PENDING":
+                    errors.append(f"review_scope.json {required} is still pending")
+            for required in (
+                "decision_impact",
+                "decision_impact_gate",
+                "fallback_if_no_decision_impact",
+            ):
+                value = str(scope.get(required, "")).lower()
+                if required == "decision_impact" and value:
+                    if not any(
+                        token in value
+                        for token in (
+                            "root decision",
+                            "root action",
+                            "self-play",
+                            "checkpoint league",
+                            "decision quality",
+                            "decisions per millisecond",
+                        )
+                    ):
+                        errors.append(
+                            "review_scope.json decision_impact must connect to "
+                            "root decisions or self-play league strength"
+                        )
+        except json.JSONDecodeError as exc:
+            errors.append(f"review_scope.json is invalid JSON: {exc}")
     if decision_path.exists():
         try:
             decision = _read_json(decision_path)
@@ -1478,13 +2458,221 @@ def validate_failure_synthesis(synthesis_dir: str | Path) -> dict:
     }
 
 
-def _is_protected_path(path: str, protected_surfaces: Iterable[str]) -> bool:
+def validate_paradigm_innovation_review(innovation_dir: str | Path) -> dict:
+    """Validate a paradigm-innovation review bundle."""
+    innovation_dir = Path(innovation_dir)
+    errors: list[str] = []
+    innovation_path = innovation_dir / "innovation.md"
+    thought_path = innovation_dir / "thought_experiments.md"
+    related_path = innovation_dir / "related_work.md"
+    decision_path = innovation_dir / "decision.json"
+    for path in (innovation_path, thought_path, related_path, decision_path):
+        if not path.exists():
+            errors.append(f"Missing required artifact: {path.name}")
+
+    innovation_text = innovation_path.read_text(encoding="utf-8") if innovation_path.exists() else ""
+    if "PENDING" in innovation_text or "TODO" in innovation_text:
+        errors.append("innovation.md is still pending")
+    for required in (
+        "Anomaly ledger:",
+        "Current-practice limit:",
+        "First-principles reduction:",
+        "Cross-paradigm analogy:",
+        "Novel mechanism:",
+        "Bitter-lesson alignment:",
+        "Smallest decisive test:",
+        "Falsifier:",
+    ):
+        if required not in innovation_text:
+            errors.append(f"innovation.md must include {required}")
+    if "Verdict:" not in innovation_text:
+        errors.append("innovation.md must include a Verdict line")
+
+    thought_text = thought_path.read_text(encoding="utf-8") if thought_path.exists() else ""
+    if "PENDING" in thought_text or "TODO" in thought_text:
+        errors.append("thought_experiments.md is still pending")
+    for required in (
+        "Mechanism stress test:",
+        "Failure thought experiment:",
+        "Transfer thought experiment:",
+        "Compute thought experiment:",
+    ):
+        if required not in thought_text:
+            errors.append(f"thought_experiments.md must include {required}")
+
+    related_text = related_path.read_text(encoding="utf-8") if related_path.exists() else ""
+    if "PENDING" in related_text or "TODO" in related_text:
+        errors.append("related_work.md is still pending")
+    if "http://" not in related_text and "https://" not in related_text:
+        errors.append("related_work.md must cite at least one source URL")
+    for required in (
+        "Source type:",
+        "Transfers to this codebase:",
+        "Does not transfer:",
+        "Novelty delta:",
+        "Smallest local test:",
+    ):
+        if required not in related_text:
+            errors.append(f"related_work.md must include {required}")
+    lowered_related = related_text.lower()
+    if "source type: primary" not in lowered_related and "no suitable primary source found" not in lowered_related:
+        errors.append(
+            "related_work.md must identify a primary source or explain that no suitable primary source was found"
+        )
+
+    decision: dict = {}
+    if decision_path.exists():
+        try:
+            decision = _read_json(decision_path)
+        except json.JSONDecodeError as exc:
+            errors.append(f"decision.json is invalid JSON: {exc}")
+    if decision:
+        if decision.get("decision") not in ALLOWED_REVIEW_DECISIONS:
+            errors.append(
+                "decision.json decision must be one of: "
+                + ", ".join(sorted(ALLOWED_REVIEW_DECISIONS))
+            )
+        if not str(decision.get("reason", "")).strip() or decision.get("reason") == "PENDING":
+            errors.append("decision.json must include a non-pending reason")
+        if not decision.get("sources"):
+            errors.append("decision.json must include at least one source")
+    return {
+        "passed": not errors,
+        "innovation_dir": str(innovation_dir),
+        "errors": errors,
+        "decision": decision.get("decision"),
+    }
+
+
+def git_changed_paths(root: str | Path, base_ref: str | None = None) -> list[str]:
+    """Return repo-relative changed paths from unstaged, staged, and optional base diff."""
+    root = Path(root)
+    commands = [
+        ["git", "diff", "--name-only"],
+        ["git", "diff", "--cached", "--name-only"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    ]
+    if base_ref:
+        commands.append(["git", "diff", "--name-only", base_ref, "--"])
+
+    paths: set[str] = set()
+    for command in commands:
+        result = subprocess.run(
+            command,
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or f"git command failed: {command}")
+        paths.update(path.strip() for path in result.stdout.splitlines() if path.strip())
+    return sorted(paths)
+
+
+def _is_protected_path(
+    path: str,
+    protected_surfaces: Iterable[str],
+    protected_patterns: Iterable[str] | None = None,
+) -> bool:
     normalized = path.replace("\\", "/").lstrip("./")
     for protected in protected_surfaces:
         prefix = protected.replace("\\", "/").rstrip("/")
         if normalized == prefix or normalized.startswith(f"{prefix}/"):
             return True
+    for pattern in protected_patterns or ():
+        normalized_pattern = pattern.replace("\\", "/").lstrip("./")
+        if fnmatch(normalized, normalized_pattern):
+            return True
     return False
+
+
+def _review_manifest_path(root: Path, review_dir: str | Path) -> Path:
+    review_path = Path(review_dir)
+    review_id = review_path.name
+    return _review_manifest_dir(root) / f"{review_id}.json"
+
+
+def _validate_review_manifest(root: Path, review_dir: str | Path) -> dict:
+    manifest_path = _review_manifest_path(root, review_dir)
+    if not manifest_path.exists():
+        return {
+            "passed": False,
+            "manifest_path": str(manifest_path.relative_to(root)),
+            "errors": ["Missing tracked review manifest."],
+        }
+    try:
+        manifest = _read_json(manifest_path)
+    except json.JSONDecodeError as exc:
+        return {
+            "passed": False,
+            "manifest_path": str(manifest_path.relative_to(root)),
+            "errors": [f"Review manifest is invalid JSON: {exc}"],
+        }
+    decision = manifest.get("decision")
+    errors = []
+    if decision not in ALLOWED_REVIEW_DECISIONS - {"abandon"}:
+        errors.append("Tracked review manifest decision is not usable for protected changes.")
+    return {
+        "passed": not errors,
+        "manifest_path": str(manifest_path.relative_to(root)),
+        "errors": errors,
+        "decision": decision,
+    }
+
+
+def _validate_review_scope(
+    root: Path,
+    review_dir: str | Path,
+    changed_paths: Sequence[str],
+    protected_hits: Sequence[str],
+) -> dict:
+    review_path = Path(review_dir)
+    if not review_path.is_absolute():
+        review_path = root / review_path
+    scope_path = review_path / "review_scope.json"
+    if not scope_path.exists():
+        return {
+            "passed": False,
+            "scope_path": str(scope_path),
+            "errors": ["Missing review_scope.json for protected-surface audit."],
+        }
+    try:
+        scope = _read_json(scope_path)
+    except json.JSONDecodeError as exc:
+        return {
+            "passed": False,
+            "scope_path": str(scope_path),
+            "errors": [f"review_scope.json is invalid JSON: {exc}"],
+        }
+    scoped = {
+        str(path).replace("\\", "/").lstrip("./")
+        for path in scope.get("changed_paths", [])
+    }
+    scoped_protected = {
+        str(path).replace("\\", "/").lstrip("./")
+        for path in scope.get("protected_hits", [])
+    }
+    missing_changed = [path for path in changed_paths if path not in scoped]
+    missing_protected = [path for path in protected_hits if path not in scoped_protected]
+    errors = []
+    if missing_changed:
+        errors.append(
+            "review_scope.json does not cover changed paths: "
+            + ", ".join(missing_changed)
+        )
+    if missing_protected:
+        errors.append(
+            "review_scope.json does not cover protected hits: "
+            + ", ".join(missing_protected)
+        )
+    return {
+        "passed": not errors,
+        "scope_path": str(scope_path),
+        "errors": errors,
+        "changed_paths": sorted(scoped),
+        "protected_hits": sorted(scoped_protected),
+    }
 
 
 def audit_objective_alignment(
@@ -1497,13 +2685,30 @@ def audit_objective_alignment(
     root = Path(root)
     goal = _read_json(_goal_path(root))
     policy = goal.get("objective_alignment_policy", {})
-    protected_surfaces = policy.get("protected_surfaces", PROTECTED_EVAL_SURFACES)
+    default_review_policy = _default_goal(root).get("review_policy", {})
+    review_policy = dict(goal.get("review_policy", {}))
+    for hard_required in ("requires_review_manifest", "requires_review_scope"):
+        review_policy[hard_required] = bool(review_policy.get(hard_required)) or bool(
+            default_review_policy.get(hard_required)
+        )
+    protected_surfaces = _append_missing(
+        list(policy.get("protected_surfaces", [])),
+        PROTECTED_EVAL_SURFACES,
+    )
+    protected_patterns = _append_missing(
+        list(policy.get("protected_surface_patterns", [])),
+        PROTECTED_EVAL_SURFACE_PATTERNS,
+    )
     changed = sorted({str(path).replace("\\", "/").lstrip("./") for path in changed_paths})
     protected_hits = [
-        path for path in changed if _is_protected_path(path, protected_surfaces)
+        path
+        for path in changed
+        if _is_protected_path(path, protected_surfaces, protected_patterns)
     ]
     errors: list[str] = []
     review_result: dict | None = None
+    manifest_result: dict | None = None
+    scope_result: dict | None = None
 
     if protected_hits:
         if review_dir is None:
@@ -1519,6 +2724,22 @@ def audit_objective_alignment(
                     "are incomplete."
                 )
                 errors.extend(review_result["errors"])
+            if review_policy.get("requires_review_manifest", False):
+                manifest_result = _validate_review_manifest(root, review_dir)
+                if not manifest_result["passed"]:
+                    errors.append(
+                        "Protected evaluation surfaces changed without a tracked review manifest."
+                    )
+                    errors.extend(manifest_result["errors"])
+            if review_policy.get("requires_review_scope", False):
+                scope_result = _validate_review_scope(
+                    root,
+                    review_dir,
+                    changed,
+                    protected_hits,
+                )
+                if not scope_result["passed"]:
+                    errors.extend(scope_result["errors"])
 
     return {
         "passed": not errors,
@@ -1526,6 +2747,8 @@ def audit_objective_alignment(
         "protected_hits": protected_hits,
         "errors": errors,
         "review": review_result,
+        "review_manifest": manifest_result,
+        "review_scope": scope_result,
     }
 
 
@@ -1549,19 +2772,24 @@ def enqueue_gpu_training(
     batch_size: int = 4096,
     traversal_pool_max_slots: int = 1_000_000,
     traversal_slots_per_traversal: int = 7000,
+    use_frontier_indexing: bool = False,
     policy_slots_per_traversal: int = 64,
     max_pool_exhausted_per_traversal: float | None = None,
     max_overflow_chunk_fraction: float | None = None,
+    max_rejected_traversal_chunks: int | None = None,
     min_traversals_per_second: float | None = None,
     average_strategy_weight: float = 0.0,
     average_strategy_memory_capacity: int = 0,
     average_strategy_batch_size: int = 0,
+    average_strategy_targets: str | Path | None = None,
     search_targets: str | Path | None = None,
     search_target_weight: float = 0.0,
     search_target_batch_size: int = 0,
     save_dir: str | Path | None = None,
     prefix: str = "candidate",
     save_every: int = 0,
+    save_replay_buffers: bool = False,
+    require_replay_buffer_resume: bool = False,
     resume: str | Path | None = None,
     eval_games: int = 0,
     auto_compare: bool = False,
@@ -1571,6 +2799,9 @@ def enqueue_gpu_training(
     compare_timeout_seconds: int = 2400,
     compare_head_to_head: bool = True,
     compare_strategy_source: str = "regret",
+    compare_candidate_strategy_source: str | None = None,
+    compare_baseline_strategy_source: str | None = None,
+    seed: int | None = None,
     timeout_seconds: int = 7200,
 ) -> dict:
     """Create and queue a GPU Deep CFR candidate-training gate."""
@@ -1588,6 +2819,12 @@ def enqueue_gpu_training(
         resume = _resolve_existing_path(root, resume, label="Resume checkpoint")
     if search_targets:
         search_targets = _resolve_existing_path(root, search_targets, label="Search targets")
+    if average_strategy_targets:
+        average_strategy_targets = _resolve_existing_path(
+            root,
+            average_strategy_targets,
+            label="Average-strategy targets",
+        )
 
     gate_name = _unique_gate_name(
         root,
@@ -1636,6 +2873,10 @@ def enqueue_gpu_training(
         "--eval-games",
         str(eval_games),
     ]
+    if seed is not None:
+        command.extend(["--seed", str(seed)])
+    if use_frontier_indexing:
+        command.append("--use-frontier-indexing")
     if max_pool_exhausted_per_traversal is not None:
         command.extend([
             "--max-pool-exhausted-per-traversal",
@@ -1646,6 +2887,11 @@ def enqueue_gpu_training(
             "--max-overflow-chunk-fraction",
             str(max_overflow_chunk_fraction),
         ])
+    if max_rejected_traversal_chunks is not None:
+        command.extend([
+            "--max-rejected-traversal-chunks",
+            str(max_rejected_traversal_chunks),
+        ])
     if min_traversals_per_second is not None:
         command.extend([
             "--min-traversals-per-second",
@@ -1653,8 +2899,14 @@ def enqueue_gpu_training(
         ])
     if resume:
         command.extend(["--resume", str(resume)])
+    if save_replay_buffers:
+        command.append("--save-replay-buffers")
+    if require_replay_buffer_resume:
+        command.append("--require-replay-buffer-resume")
     if search_targets:
         command.extend(["--search-targets", str(search_targets)])
+    if average_strategy_targets:
+        command.extend(["--average-strategy-targets", str(average_strategy_targets)])
 
     goal = _read_json(_goal_path(root))
     goal.setdefault("gates", {})[gate_name] = {
@@ -1667,6 +2919,11 @@ def enqueue_gpu_training(
         "search_target_weight": float(search_target_weight),
         "search_targets": str(search_targets) if search_targets else "",
         "average_strategy_weight": float(average_strategy_weight),
+        "average_strategy_targets": (
+            str(average_strategy_targets) if average_strategy_targets else ""
+        ),
+        "save_replay_buffers": bool(save_replay_buffers),
+        "require_replay_buffer_resume": bool(require_replay_buffer_resume),
     }
     _write_json(_goal_path(root), goal)
     postprocess = None
@@ -1679,6 +2936,12 @@ def enqueue_gpu_training(
             "timeout_seconds": int(compare_timeout_seconds),
             "head_to_head": bool(compare_head_to_head),
             "strategy_source": compare_strategy_source,
+            "candidate_strategy_source": (
+                compare_candidate_strategy_source or compare_strategy_source
+            ),
+            "baseline_strategy_source": (
+                compare_baseline_strategy_source or compare_strategy_source
+            ),
         }
     return enqueue_cycle(
         root,
@@ -1703,6 +2966,7 @@ def enqueue_warm_start_resolver_gate(
     start_index: int = 128,
     limit: int = 64,
     low_iterations: int = 5,
+    baseline_iterations: int | None = None,
     reference_iterations: int = 25,
     solver_backend: str = "cpu",
     device: str = "auto",
@@ -1738,9 +3002,10 @@ def enqueue_warm_start_resolver_gate(
         f"warm-start-resolver-{timestamp}-{_slug(checkpoint_path.stem)}",
     )
     python = _project_python(root)
+    evaluator_script = _warm_start_evaluator_script(checkpoint_path)
     command = [
         python,
-        "scripts/eval_joint_pbs_policy_warm_start.py",
+        evaluator_script,
         "--checkpoint",
         str(checkpoint_path),
         "--cases",
@@ -1759,10 +3024,6 @@ def enqueue_warm_start_resolver_gate(
         str(reference_iterations),
         "--solver-backend",
         solver_backend,
-        "--regret-mass-scale",
-        str(regret_mass_scale),
-        "--strategy-mass",
-        str(strategy_mass),
         "--min-evaluated",
         str(min_evaluated),
         "--max-warm-latency-ratio",
@@ -1770,6 +3031,22 @@ def enqueue_warm_start_resolver_gate(
         "--output-json",
         str(output_json),
     ]
+    if evaluator_script == "scripts/eval_joint_pbs_policy_warm_start.py":
+        if baseline_iterations is not None:
+            raise ValueError(
+                "baseline_iterations is currently supported only for "
+                "regret-policy warm-start checkpoints."
+            )
+        command.extend(
+            [
+                "--regret-mass-scale",
+                str(regret_mass_scale),
+                "--strategy-mass",
+                str(strategy_mass),
+            ]
+        )
+    elif baseline_iterations is not None:
+        command.extend(["--baseline-iterations", str(baseline_iterations)])
     if train_path is not None:
         command.extend(["--train-labels-npz", str(train_path)])
 
@@ -1783,10 +3060,15 @@ def enqueue_warm_start_resolver_gate(
         "timeout_seconds": int(timeout_seconds),
         "commands": [command],
         "checkpoint": str(checkpoint_path),
+        "checkpoint_mode": _checkpoint_mode(checkpoint_path),
+        "evaluator_script": evaluator_script,
         "cases_json": str(cases_path),
         "cfv_cache": str(cache_path),
         "output_json": str(output_json),
         "low_iterations": int(low_iterations),
+        "baseline_iterations": (
+            int(baseline_iterations) if baseline_iterations is not None else None
+        ),
         "reference_iterations": int(reference_iterations),
     }
     _write_json(_goal_path(root), goal)
@@ -1799,6 +3081,176 @@ def enqueue_warm_start_resolver_gate(
         ),
         cycle_type="warm_start_resolver_gate",
         failure_class="search_quality",
+        gate=gate_name,
+    )
+
+
+def _comma_ints(values: Sequence[int] | str) -> str:
+    if isinstance(values, str):
+        parsed = [int(part.strip()) for part in values.split(",") if part.strip()]
+    else:
+        parsed = [int(value) for value in values]
+    if not parsed or min(parsed) <= 0:
+        raise ValueError("integer list must contain positive values")
+    return ",".join(str(value) for value in parsed)
+
+
+def enqueue_cfr_budget_frontier(
+    root: str | Path,
+    *,
+    cases_json: str | Path,
+    cfv_cache: str | Path,
+    budgets: Sequence[int] | str,
+    start_index: int = 128,
+    limit: int = 64,
+    reference_iterations: int = 25,
+    solver_backend: str = "torch-levelsync-cuda",
+    solver_update: str = "cfr_plus",
+    min_evaluated: int = 1,
+    output_json: str | Path | None = None,
+    timeout_seconds: int = 3600,
+) -> dict:
+    """Queue a root-disjoint exact CFR budget frontier gate."""
+    root = Path(root)
+    _assert_phase_allows_action(root, "solver_budget_frontier")
+    cases_path = _resolve_existing_path(root, cases_json, label="CFR frontier cases JSON")
+    cache_path = _resolve_existing_path(root, cfv_cache, label="CFR frontier CFV cache")
+    budget_list = _comma_ints(budgets)
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if output_json is None:
+        output_json = _runs_path(root) / f"{timestamp}-cfr-budget-frontier" / "metrics.json"
+    else:
+        output_json = Path(output_json)
+        if not output_json.is_absolute():
+            output_json = root / output_json
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+
+    gate_name = _unique_gate_name(
+        root,
+        f"cfr-budget-frontier-{timestamp}",
+    )
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/eval_cfr_budget_frontier.py",
+        "--cases",
+        str(cases_path),
+        "--cfv-cache",
+        str(cache_path),
+        "--budgets",
+        budget_list,
+        "--start-index",
+        str(start_index),
+        "--limit",
+        str(limit),
+        "--reference-iterations",
+        str(reference_iterations),
+        "--solver-backend",
+        solver_backend,
+        "--solver-update",
+        solver_update,
+        "--min-evaluated",
+        str(min_evaluated),
+        "--output-json",
+        str(output_json),
+    ]
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Root-disjoint exact CFR budget frontier. This gate compares lower "
+            "CFR budgets against a higher-budget teacher and records root "
+            "decision quality, illegal mass, and latency."
+        ),
+        "timeout_seconds": int(timeout_seconds),
+        "commands": [command],
+        "cases_json": str(cases_path),
+        "cfv_cache": str(cache_path),
+        "output_json": str(output_json),
+        "budgets": budget_list,
+        "reference_iterations": int(reference_iterations),
+        "solver_backend": solver_backend,
+        "solver_update": solver_update,
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            "Exact GPU CFR budget frontier should preserve legal root decisions "
+            "and improve quality as budget increases on root-disjoint public states."
+        ),
+        cycle_type="solver_budget_frontier",
+        failure_class="search_quality",
+        gate=gate_name,
+    )
+
+
+def enqueue_cfr_matrix_footprint(
+    root: str | Path,
+    *,
+    cases_json: str | Path,
+    start_index: int = 128,
+    max_cases: int | None = None,
+    chunk_memory_cap_mib: float | None = None,
+    output_json: str | Path | None = None,
+    timeout_seconds: int = 900,
+) -> dict:
+    """Queue a matrix/fused CFR footprint and memory-chunk planning gate."""
+    root = Path(root)
+    _assert_phase_allows_action(root, "solver_latency_profile")
+    cases_path = _resolve_existing_path(root, cases_json, label="CFR matrix cases JSON")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    if output_json is None:
+        output_json = _runs_path(root) / f"{timestamp}-cfr-matrix-footprint" / "metrics.json"
+    else:
+        output_json = Path(output_json)
+        if not output_json.is_absolute():
+            output_json = root / output_json
+    output_json.parent.mkdir(parents=True, exist_ok=True)
+
+    gate_name = _unique_gate_name(root, f"cfr-matrix-footprint-{timestamp}")
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/analyze_cfr_matrix_footprint.py",
+        "--cases-json",
+        str(cases_path),
+        "--start-index",
+        str(start_index),
+        "--output-json",
+        str(output_json),
+    ]
+    if max_cases is not None:
+        command.extend(["--max-cases", str(max_cases)])
+    if chunk_memory_cap_mib is not None:
+        command.extend(["--chunk-memory-cap-mib", str(float(chunk_memory_cap_mib))])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Matrix/fused CFR feasibility gate. This estimates per-root solver "
+            "state memory and, when requested, emits an order-preserving "
+            "memory-capped chunk plan before any fused solver implementation."
+        ),
+        "timeout_seconds": int(timeout_seconds),
+        "commands": [command],
+        "cases_json": str(cases_path),
+        "output_json": str(output_json),
+        "start_index": int(start_index),
+        "max_cases": int(max_cases) if max_cases is not None else None,
+        "chunk_memory_cap_mib": (
+            float(chunk_memory_cap_mib) if chunk_memory_cap_mib is not None else None
+        ),
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            "CFR matrix footprint should yield a memory-capped chunk plan before "
+            "attempting fused exact GPU resolving."
+        ),
+        cycle_type="exact_gpu_solver_planning",
+        failure_class="compute_efficiency",
         gate=gate_name,
     )
 
@@ -1858,9 +3310,55 @@ def _postprocess_completed_cycle(root: Path, item: dict, metrics: dict) -> list[
                 timeout_seconds=int(postprocess.get("timeout_seconds", 2400)),
                 head_to_head=bool(postprocess.get("head_to_head", True)),
                 strategy_source=str(postprocess.get("strategy_source", "regret")),
+                candidate_strategy_source=str(
+                    postprocess.get(
+                        "candidate_strategy_source",
+                        postprocess.get("strategy_source", "regret"),
+                    )
+                ),
+                baseline_strategy_source=str(
+                    postprocess.get(
+                        "baseline_strategy_source",
+                        postprocess.get("strategy_source", "regret"),
+                    )
+                ),
             )
         )
     return queued
+
+
+def _is_soft_mechanism_failure(item: dict) -> bool:
+    cycle_type = str(item.get("type", ""))
+    failure_class = str(item.get("failure_class", ""))
+    if not failure_class or failure_class == "none":
+        return False
+    if failure_class in HARD_STOP_FAILURE_CLASSES:
+        return False
+    if (
+        cycle_type == "synthesis"
+        or "review" in cycle_type
+        or "audit" in cycle_type
+    ):
+        return False
+    return True
+
+
+def _postprocess_failed_mechanism_cycle(root: Path, item: dict) -> list[dict]:
+    """Queue synthesis and pivot review after a failed mechanism gate."""
+    subject = f"{item.get('failure_class', 'mechanism failure')} after {item.get('gate', 'gate')}"
+    anomaly = (
+        f"Gate {item.get('gate', 'unknown')} failed for hypothesis: "
+        f"{item.get('hypothesis', 'unknown hypothesis')}. "
+        "Treat this as evidence to synthesize and pivot, not as project completion."
+    )
+    return [
+        enqueue_failure_synthesis(root, subject=subject),
+        enqueue_paradigm_innovation_review(
+            root,
+            subject=f"pivot after {item.get('failure_class', 'mechanism failure')}",
+            anomaly=anomaly,
+        ),
+    ]
 
 
 def enqueue_candidate_comparison(
@@ -1874,11 +3372,15 @@ def enqueue_candidate_comparison(
     timeout_seconds: int = 2400,
     head_to_head: bool = False,
     strategy_source: str = "regret",
+    candidate_strategy_source: str | None = None,
+    baseline_strategy_source: str | None = None,
 ) -> dict:
     """Create and queue a one-off candidate-vs-incumbent local comparison gate."""
     root = Path(root)
     candidate = _resolve_existing_path(root, candidate_checkpoint, label="Candidate checkpoint")
     state = _read_json(_state_path(root))
+    candidate_strategy_source = candidate_strategy_source or strategy_source
+    baseline_strategy_source = baseline_strategy_source or strategy_source
 
     if baseline_checkpoint is None:
         incumbent = state.get("incumbent_checkpoint") or {}
@@ -1908,9 +3410,21 @@ def enqueue_candidate_comparison(
     ]
     if head_to_head:
         command.append("--head-to-head")
-    if strategy_source != "regret":
-        command.extend(["--strategy-source", strategy_source])
+    if candidate_strategy_source == baseline_strategy_source:
+        if candidate_strategy_source != "regret":
+            command.extend(["--strategy-source", candidate_strategy_source])
+    else:
+        command.extend(["--candidate-strategy-source", candidate_strategy_source])
+        command.extend(["--baseline-strategy-source", baseline_strategy_source])
     command.append("--require-positive-lower95")
+
+    if candidate_strategy_source == baseline_strategy_source:
+        strategy_description = f"{candidate_strategy_source} strategy source"
+    else:
+        strategy_description = (
+            f"candidate {candidate_strategy_source} vs baseline "
+            f"{baseline_strategy_source} strategy sources"
+        )
 
     gate_config = {
         "description": (
@@ -1930,10 +3444,102 @@ def enqueue_candidate_comparison(
         hypothesis=(
             f"Candidate checkpoint {candidate.name} should improve local "
             f"comparison metrics against incumbent {baseline.name} without "
-            f"claiming local-only promotion using {strategy_source} strategy source."
+            f"claiming local-only promotion using {strategy_description}."
         ),
         cycle_type="experiment",
         failure_class="strategy_quality",
+        gate=gate_name,
+    )
+
+
+def enqueue_candidate_promotion_gate(
+    root: str | Path,
+    *,
+    rlcard_reference_json: str | Path,
+    native_h2h_json: str | Path,
+    empirical_game_json: str | Path | None = None,
+    native_candidate_checkpoint: str | Path | None = None,
+    min_lower95: float = 0.0,
+    min_candidate_support: float = 1.0e-9,
+    timeout_seconds: int = 300,
+) -> dict:
+    """Create and queue the dual-surface pre-Slumbot promotion gate."""
+    root = Path(root)
+    rlcard_path = _resolve_existing_path(
+        root,
+        rlcard_reference_json,
+        label="RLCard AlphaNLHoldem reference metrics",
+    )
+    native_path = _resolve_existing_path(
+        root,
+        native_h2h_json,
+        label="Native 9-action H2H metrics",
+    )
+    empirical_path = (
+        None
+        if empirical_game_json is None
+        else _resolve_existing_path(root, empirical_game_json, label="Native empirical-game metrics")
+    )
+    native_candidate_path = (
+        None
+        if native_candidate_checkpoint is None
+        else _resolve_existing_path(
+            root,
+            native_candidate_checkpoint,
+            label="Native candidate checkpoint",
+        )
+    )
+
+    gate_name = _unique_gate_name(
+        root,
+        f"candidate-promotion-gate-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}",
+    )
+    output_json = _session(root) / "candidate_promotion" / f"{gate_name}.json"
+    python = _project_python(root)
+    command = [
+        python,
+        "scripts/eval_candidate_promotion_gate.py",
+        "--rlcard-reference-json",
+        str(rlcard_path),
+        "--native-h2h-json",
+        str(native_path),
+        "--min-lower95",
+        str(float(min_lower95)),
+        "--min-candidate-support",
+        str(float(min_candidate_support)),
+        "--output-json",
+        str(output_json),
+    ]
+    if empirical_path is not None:
+        command.extend(["--empirical-game-json", str(empirical_path)])
+    if native_candidate_path is not None:
+        command.extend(["--native-candidate-checkpoint", str(native_candidate_path)])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "Pre-Slumbot candidate promotion gate. Requires RLCard AlphaNLHoldem "
+            "reference evidence, native 9-action H2H evidence, native empirical-game "
+            "support, no benchmark data leakage, and no cross-environment action projection."
+        ),
+        "timeout_seconds": int(timeout_seconds),
+        "commands": [command],
+        "promotion_role": "pre_slumbot_confidence_gate",
+        "requires_rlcard_reference_pass": True,
+        "requires_native_h2h_pass": True,
+        "requires_empirical_game_pass": True,
+        "blocks_slumbot_confidence_until_passed": True,
+        "output_json": str(output_json),
+    }
+    _write_json(_goal_path(root), goal)
+    return enqueue_cycle(
+        root,
+        hypothesis=(
+            "Candidate should clear the dual-surface pre-Slumbot promotion gate "
+            "before any held-out Slumbot confidence evaluation."
+        ),
+        cycle_type="candidate_promotion_gate",
+        failure_class="promotion_evidence",
         gate=gate_name,
     )
 
@@ -1955,6 +3561,27 @@ def enqueue_slumbot_smoke(
     root = Path(root)
     _assert_phase_allows_action(root, "slumbot_smoke")
     model_path = _resolve_existing_path(root, model, label="Slumbot model checkpoint")
+    goal = _read_json(_goal_path(root))
+    slumbot_policy = goal.get("objective_alignment_policy", {}).get(
+        "slumbot_validation_policy", {}
+    )
+    smoke_cap = int(slumbot_policy.get("max_smoke_hands_before_internal_pass", 50))
+    requires_internal_league = int(hands) > smoke_cap
+    internal_league_evidence = _internal_self_play_league_evidence(root)
+    candidate_promotion_evidence = _candidate_promotion_gate_evidence(root)
+    if requires_internal_league and not internal_league_evidence["passed"]:
+        raise RuntimeError(
+            "Slumbot confidence spend requires a passed self-play checkpoint league "
+            f"with positive lower95 evidence before queueing {hands} hands. "
+            f"Evidence status: {internal_league_evidence.get('reason', 'missing')}."
+        )
+    if requires_internal_league and not candidate_promotion_evidence["passed"]:
+        raise RuntimeError(
+            "Slumbot confidence spend requires a passed pre-Slumbot candidate promotion gate "
+            "covering the RLCard AlphaNLHoldem reference surface, native 9-action H2H, "
+            f"and empirical-game evidence before queueing {hands} hands. "
+            f"Evidence status: {candidate_promotion_evidence.get('reason', 'missing')}."
+        )
     gate_name = _unique_gate_name(root, (
         f"slumbot-candidate-smoke-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}-"
         f"{_slug(model_path.stem)}"
@@ -1986,7 +3613,6 @@ def enqueue_slumbot_smoke(
     if strategy_source != "regret":
         command.extend(["--strategy-source", strategy_source])
 
-    goal = _read_json(_goal_path(root))
     goal.setdefault("gates", {})[gate_name] = {
         "description": (
             "One-off sparse live Slumbot smoke for a candidate checkpoint. "
@@ -1995,6 +3621,14 @@ def enqueue_slumbot_smoke(
         ),
         "timeout_seconds": timeout_seconds,
         "commands": [command],
+        "promotion_role": (
+            "held_out_external_validation"
+            if requires_internal_league
+            else "integration_smoke_only"
+        ),
+        "requires_internal_league_pass": requires_internal_league,
+        "internal_league_evidence": internal_league_evidence,
+        "candidate_promotion_evidence": candidate_promotion_evidence,
     }
     _write_json(_goal_path(root), goal)
     return enqueue_cycle(
@@ -2165,6 +3799,122 @@ def enqueue_falsification_ladder(
         root,
         hypothesis=(
             f"Candidate checkpoint {candidate.name} should survive falsification "
+            f"of mechanism: {mechanism}"
+        ),
+        cycle_type="falsification",
+        failure_class="strategy_quality",
+        gate=gate_name,
+    )
+    item["mechanism"] = mechanism
+    state = _read_json(_state_path(root))
+    state["hypothesis_queue"][-1]["mechanism"] = mechanism
+    state["updated_at"] = _now()
+    _write_json(_state_path(root), state)
+    return item
+
+
+def enqueue_sd_cfr_mixture_falsification(
+    root: str | Path,
+    *,
+    candidate_globs: Iterable[str | Path] | None = None,
+    candidate_checkpoints: Iterable[str | Path] | None = None,
+    mechanism: str,
+    baseline_checkpoint: str | Path | None = None,
+    n_games: int = 500,
+    seeds: str = "20260511,20260512,20260513",
+    device: str = "auto",
+    changed_paths: Iterable[str] | None = None,
+    review_dir: str | Path | None = None,
+    strategy_source: str = "regret",
+    timeout_seconds: int = 3600,
+) -> dict:
+    """Create and queue a local falsification gate for a fixed SD-CFR checkpoint mixture."""
+    if not mechanism.strip():
+        raise ValueError("SD-CFR mixture falsification requires a mechanism claim.")
+
+    root = Path(root)
+    resolved_globs: list[str] = []
+    for pattern in candidate_globs or []:
+        path_pattern = Path(pattern)
+        resolved = path_pattern if path_pattern.is_absolute() else root / path_pattern
+        matches = sorted(glob(str(resolved)))
+        if not matches:
+            raise FileNotFoundError(f"Candidate checkpoint glob matched no files: {resolved}")
+        resolved_globs.append(str(resolved))
+
+    resolved_checkpoints = [
+        str(_resolve_existing_path(root, checkpoint, label="Candidate checkpoint"))
+        for checkpoint in candidate_checkpoints or []
+    ]
+    if not resolved_globs and not resolved_checkpoints:
+        raise ValueError("Provide at least one candidate glob or candidate checkpoint.")
+
+    state = _read_json(_state_path(root))
+    if baseline_checkpoint is None:
+        incumbent = state.get("incumbent_checkpoint") or {}
+        baseline_checkpoint = incumbent.get("checkpoint")
+        if baseline_checkpoint is None:
+            raise RuntimeError("No baseline checkpoint provided and no incumbent is recorded.")
+    baseline = _resolve_existing_path(root, baseline_checkpoint, label="Baseline checkpoint")
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    gate_name = _unique_gate_name(root, f"sd-cfr-mixture-falsification-{timestamp}")
+    python = _project_python(root)
+    audit_command = [
+        python,
+        "scripts/poker_objective_audit.py",
+    ]
+    if review_dir is not None:
+        audit_command.extend(["--review-dir", str(review_dir)])
+    paths = list(changed_paths or [])
+    if paths:
+        for changed_path in paths:
+            audit_command.extend(["--changed-path", str(changed_path)])
+    else:
+        audit_command.extend(["--base-ref", "HEAD"])
+
+    output_path = _session(root) / "sd_cfr_mixture" / f"{gate_name}.json"
+    compare_command = [
+        python,
+        "scripts/eval_sd_cfr_mixture.py",
+        "--baseline-checkpoint",
+        str(baseline),
+        "--n-games",
+        str(n_games),
+        "--device",
+        device,
+        "--seeds",
+        seeds,
+        "--strategy-source",
+        strategy_source,
+        "--output",
+        str(output_path),
+    ]
+    for pattern in resolved_globs:
+        compare_command.extend(["--candidate-glob", pattern])
+    for checkpoint in resolved_checkpoints:
+        compare_command.extend(["--candidate-checkpoint", checkpoint])
+
+    goal = _read_json(_goal_path(root))
+    goal.setdefault("gates", {})[gate_name] = {
+        "description": (
+            "SD-CFR checkpoint-mixture falsification gate: objective-drift audit "
+            "plus duplicate-swapped local H2H using fixed candidate globs or "
+            "checkpoints. This blocks weak mixture candidates before Slumbot spend."
+        ),
+        "timeout_seconds": timeout_seconds,
+        "commands": [audit_command, compare_command],
+        "mechanism": mechanism,
+        "candidate_globs": resolved_globs,
+        "candidate_checkpoints": resolved_checkpoints,
+        "baseline_checkpoint": str(baseline),
+        "output_json": str(output_path),
+    }
+    _write_json(_goal_path(root), goal)
+    item = enqueue_cycle(
+        root,
+        hypothesis=(
+            "Fixed SD-CFR checkpoint mixture should survive local falsification "
             f"of mechanism: {mechanism}"
         ),
         cycle_type="falsification",
@@ -2366,6 +4116,189 @@ def close_cycle(
     return closed
 
 
+def _latest_log_heading(root: Path) -> str | None:
+    log_path = _log_path(root)
+    if not log_path.exists():
+        return None
+    headings = [
+        line.strip()
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("## ")
+    ]
+    return headings[-1] if headings else None
+
+
+def commit_ready_report(
+    root: str | Path,
+    *,
+    changed_paths: Iterable[str] | None = None,
+    base_ref: str | None = None,
+    review_dir: str | Path | None = None,
+    allow_empty: bool = False,
+) -> dict:
+    """Summarize whether the current research batch is ready for a natural commit."""
+    root = Path(root)
+    if changed_paths is None:
+        changed = git_changed_paths(root, base_ref=base_ref)
+    else:
+        changed = sorted({str(path).replace("\\", "/").lstrip("./") for path in changed_paths})
+    objective = audit_objective_alignment(
+        root,
+        changed_paths=changed,
+        review_dir=review_dir,
+    )
+    synthesis = synthesis_status(root)
+    state = _read_json(_state_path(root))
+    blockers: list[str] = []
+    if not changed and not allow_empty:
+        blockers.append("no changed paths; use allow_empty only for a deliberate no-op report")
+    if not objective["passed"]:
+        blockers.append("objective audit failed")
+    if synthesis.get("due"):
+        blockers.append("failure synthesis is due before another research commit")
+    if state.get("active_cycle") is not None:
+        blockers.append("an active autoresearch cycle is still open")
+    if any(item.get("type") == "methodology_review" for item in state.get("hypothesis_queue", [])):
+        blockers.append("methodology review is queued but not completed")
+
+    return {
+        "ready": not blockers,
+        "changed_paths": changed,
+        "objective_audit": objective,
+        "synthesis": synthesis,
+        "active_cycle": state.get("active_cycle"),
+        "queued_cycles": len(state.get("hypothesis_queue", [])),
+        "latest_research_log_entry": _latest_log_heading(root),
+        "blockers": blockers,
+    }
+
+
+def _cycle_can_run_when_synthesis_due(item: dict) -> bool:
+    cycle_type = str(item.get("type", ""))
+    return (
+        cycle_type == "synthesis"
+        or "review" in cycle_type
+        or "audit" in cycle_type
+    )
+
+
+def _cycle_text(item: dict) -> str:
+    fields = [
+        item.get("type", ""),
+        item.get("gate", ""),
+        item.get("failure_class", ""),
+        item.get("hypothesis", ""),
+        item.get("summary", ""),
+    ]
+    return " ".join(str(field).lower() for field in fields if field is not None)
+
+
+def _is_local_target_consumer_family(item: dict) -> bool:
+    text = _cycle_text(item)
+    if not any(term in text for term in LOCAL_TARGET_CONSUMER_TERMS):
+        return False
+    if "audit" in text or "review" in text or "synthesis" in text:
+        return False
+    if "response oracle" in text and not ("target consumer" in text or "npi" in text or "xdo" in text):
+        return False
+    return True
+
+
+def _is_primary_rl_response_oracle_family(item: dict) -> bool:
+    text = _cycle_text(item)
+    return any(term in text for term in RL_RESPONSE_ORACLE_TERMS)
+
+
+def _failed_local_target_consumer_records(history: Sequence[dict], *, limit: int = 12) -> list[dict]:
+    failures: list[dict] = []
+    for record in list(history)[-int(limit) :]:
+        if record.get("outcome") != "failed":
+            continue
+        if record.get("failure_class") not in {"mechanism_transfer", "strategy_quality"}:
+            continue
+        if _is_local_target_consumer_family(record):
+            failures.append(record)
+    return failures
+
+
+def research_drift_status(
+    root: str | Path,
+    *,
+    next_cycle: dict | None = None,
+    recent_limit: int = 12,
+    failure_threshold: int = 2,
+) -> dict:
+    """Return whether the next item repeats a failed mechanism family.
+
+    This is a lightweight research-log guard. The structured state history is
+    the machine-readable mirror of ``RESEARCH_LOG.md``; use it to stop obvious
+    philosophy drift before another experiment starts.
+    """
+    root = Path(root)
+    state = _read_json(_state_path(root))
+    history = state.get("history", [])
+    recent_failures = _failed_local_target_consumer_records(
+        history,
+        limit=int(recent_limit),
+    )
+    blockers: list[str] = []
+    matched_family = None
+    requires_review = False
+    blocked = False
+
+    if next_cycle is not None and _cycle_can_run_when_synthesis_due(next_cycle):
+        return {
+            "blocked": False,
+            "requires_review": False,
+            "matched_family": None,
+            "recent_failed_same_family_count": len(recent_failures),
+            "recent_failed_run_ids": [str(record.get("run_id", "")) for record in recent_failures],
+            "latest_research_log_entry": _latest_log_heading(root),
+            "blockers": [],
+        }
+
+    if (
+        next_cycle is not None
+        and _is_local_target_consumer_family(next_cycle)
+        and not _is_primary_rl_response_oracle_family(next_cycle)
+        and len(recent_failures) >= int(failure_threshold)
+    ):
+        matched_family = "local_target_consumer"
+        requires_review = True
+        blocked = True
+        blockers.append(
+            "review the research log before repeating local target-consumer/search-label "
+            "experiments; recent failures show this family has not transferred to "
+            "whole-game parent/incumbent H2H"
+        )
+
+    return {
+        "blocked": blocked,
+        "requires_review": requires_review,
+        "matched_family": matched_family,
+        "recent_failed_same_family_count": len(recent_failures),
+        "recent_failed_run_ids": [str(record.get("run_id", "")) for record in recent_failures],
+        "latest_research_log_entry": _latest_log_heading(root),
+        "blockers": blockers,
+    }
+
+
+def _pop_next_cycle_for_synthesis_state(
+    queue: list[dict],
+    *,
+    synthesis_due: bool,
+) -> tuple[dict | None, list[dict]]:
+    if not synthesis_due or _cycle_can_run_when_synthesis_due(queue[0]):
+        item = queue.pop(0)
+        return item, queue
+
+    for idx, queued in enumerate(queue[1:], start=1):
+        if _cycle_can_run_when_synthesis_due(queued):
+            item = queue.pop(idx)
+            return item, queue
+    return None, queue
+
+
 def continuous(
     root: str | Path,
     *,
@@ -2373,10 +4306,12 @@ def continuous(
     runner: CommandRunner = run_command,
     sleep_seconds: float = 30.0,
     max_idle_checks: int | None = None,
+    continue_on_mechanism_fail: bool = False,
 ) -> dict:
     root = Path(root)
     cycles_completed = 0
     idle_checks = 0
+    continued_after_failures = 0
 
     while max_cycles is None or cycles_completed < max_cycles:
         if _stop_path(root).exists():
@@ -2402,7 +4337,35 @@ def continuous(
             continue
         idle_checks = 0
 
-        item = queue.pop(0)
+        synthesis = synthesis_status(root)
+        item, queue = _pop_next_cycle_for_synthesis_state(
+            queue,
+            synthesis_due=bool(synthesis["due"]),
+        )
+        if item is None:
+            return {
+                "cycles_completed": cycles_completed,
+                "stopped_reason": "synthesis_due",
+                "synthesis": synthesis,
+                "next_cycle": queue[0],
+            }
+        drift = research_drift_status(root, next_cycle=item)
+        if drift.get("blocked"):
+            queue.insert(0, item)
+            review_item: dict | None = None
+            for idx, queued in enumerate(queue[1:], start=1):
+                if _cycle_can_run_when_synthesis_due(queued):
+                    review_item = queue.pop(idx)
+                    break
+            if review_item is None:
+                return {
+                    "cycles_completed": cycles_completed,
+                    "stopped_reason": "objective_drift_review_required",
+                    "drift": drift,
+                    "next_cycle": item,
+                }
+            item = review_item
+
         state["hypothesis_queue"] = queue
         state["updated_at"] = _now()
         _write_json(_state_path(root), state)
@@ -2422,6 +4385,14 @@ def continuous(
                     "queued_followup_cycles": queued_followups,
                 }
                 _write_json(Path(cycle["run_dir"]) / "metrics.json", metrics)
+        elif continue_on_mechanism_fail and _is_soft_mechanism_failure(item):
+            queued_followups = _postprocess_failed_mechanism_cycle(root, item)
+            continued_after_failures += 1
+            metrics["postprocessed"] = {
+                "continued_after_mechanism_failure": True,
+                "queued_followup_cycles": queued_followups,
+            }
+            _write_json(Path(cycle["run_dir"]) / "metrics.json", metrics)
         outcome = "passed" if metrics["passed"] else "failed"
         close_cycle(
             root,
@@ -2434,8 +4405,15 @@ def continuous(
         cycles_completed += 1
 
         if not metrics["passed"]:
+            if continue_on_mechanism_fail and _is_soft_mechanism_failure(item):
+                if max_cycles is None:
+                    time.sleep(sleep_seconds)
+                continue
             return {"cycles_completed": cycles_completed, "stopped_reason": "gate_failed"}
         if max_cycles is None:
             time.sleep(sleep_seconds)
 
-    return {"cycles_completed": cycles_completed, "stopped_reason": "max_cycles"}
+    result = {"cycles_completed": cycles_completed, "stopped_reason": "max_cycles"}
+    if continued_after_failures:
+        result["continued_after_failures"] = continued_after_failures
+    return result

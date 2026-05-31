@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1689,
+      "path": "benchmark_audit.md",
+      "sha256": "fb167a9a35098118dc692bc002386abdeab15f688e68b85b2c91545e33564481"
+    },
+    {
+      "bytes": 525,
+      "path": "decision.json",
+      "sha256": "d4b2c6eb1f51c49333b1f3bbaffc29deefe288eebb0f525f78c4e246c47cfa65"
+    },
+    {
+      "bytes": 1511,
+      "path": "mechanism_review.md",
+      "sha256": "b0e10adeec69c8a657d70b4fa0c88b8f83c6e58507f5bfe30143bf8657dc4669"
+    },
+    {
+      "bytes": 2994,
+      "path": "related_work.md",
+      "sha256": "cdcfc8869bb96581f3eb7a2758553d6e3e84f45856cd2ec6d235e786017467c7"
+    },
+    {
+      "bytes": 1790,
+      "path": "review.md",
+      "sha256": "e0654d6a1cd180e96514235c27fe8c18b7fba5d5ed3fd741443c229ec51d683b"
+    },
+    {
+      "bytes": 1134,
+      "path": "review_scope.json",
+      "sha256": "059820fd9b4567e8e8c4ce2be10d3624fa2ddaab828bb4c7e990be39a4cc7880"
+    },
+    {
+      "bytes": 565,
+      "path": "team_review.md",
+      "sha256": "8f5aaddc5848bf3cea7a6c62d5a69e199d40cee3f2971def8bdf30c623ba7a3b"
+    }
+  ],
+  "reason": "A diagnostic-only attribution step is justified because fixed-state calibration and restricted value proxies disagree with duplicate-swapped rollout results. The implementation must not alter evaluator semantics or promotion gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T022046Z-duplicate-swapped-policy-head-transfer-attribution",
+  "review_id": "20260521T022046Z-duplicate-swapped-policy-head-transfer-attribution",
+  "sources": [
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1901.07621",
+    "https://arxiv.org/abs/2108.06898",
+    "https://huggingface.co/papers/2603.25562"
+  ],
+  "written_at": "2026-05-21T02:21:59Z"
+}

@@ -49,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
             "torch-cpu",
             "torch-levelsync-cuda",
             "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
         ),
         default="auto",
     )

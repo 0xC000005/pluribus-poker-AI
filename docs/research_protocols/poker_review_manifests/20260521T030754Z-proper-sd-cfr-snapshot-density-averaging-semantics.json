@@ -1,0 +1,49 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 815,
+      "path": "benchmark_audit.md",
+      "sha256": "b990b8b11480a7ac8ef6f039cb622012d1378b5010fadcb42d5c7080bf3786e6"
+    },
+    {
+      "bytes": 562,
+      "path": "decision.json",
+      "sha256": "573dc3fd0265fe5a6718977c9a7065389c5b7990b6475546d1c4372e29aa2858"
+    },
+    {
+      "bytes": 1987,
+      "path": "mechanism_review.md",
+      "sha256": "19c5980c35a8f3c4c3ec55faf585252ee6cd18daf5acbb60cee16c23b51bd065"
+    },
+    {
+      "bytes": 1581,
+      "path": "related_work.md",
+      "sha256": "5193261d72291e8ed1d13f732d6fd0dda407bc1f340c56154edcb2afb5c5316c"
+    },
+    {
+      "bytes": 1529,
+      "path": "review.md",
+      "sha256": "b036367529b625c3ce5d48606ac5f12f2a03fc40c6697928fdaef5157be989b4"
+    },
+    {
+      "bytes": 1085,
+      "path": "review_scope.json",
+      "sha256": "423fdbbd368c3590161990a5830f6fc5b0711ef9babe2d3d9f93dcd4b485ec4d"
+    },
+    {
+      "bytes": 515,
+      "path": "team_review.md",
+      "sha256": "0f8bb2eda787a8838805dc35a34f5db00469131f378813c0a0a2798305213be7"
+    }
+  ],
+  "reason": "The sparse four-snapshot mixture failed strict lower95, while related work supports reconstructing average play from stored value networks. Proceed only with predeclared SD-CFR snapshot semantics and strict gates; do not checkpoint-pick.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T030754Z-proper-sd-cfr-snapshot-density-averaging-semantics",
+  "review_id": "20260521T030754Z-proper-sd-cfr-snapshot-density-averaging-semantics",
+  "sources": [
+    "https://arxiv.org/abs/1901.07621",
+    "autoresearch-session/sd_cfr_mixture/sd-cfr-mixture-falsification-20260521T030042Z_strict.json",
+    "autoresearch-session/sd_cfr_mixture/single_iter100_vs_iter1000_seed20260525_27_strict.json"
+  ],
+  "written_at": "2026-05-21T03:09:40Z"
+}

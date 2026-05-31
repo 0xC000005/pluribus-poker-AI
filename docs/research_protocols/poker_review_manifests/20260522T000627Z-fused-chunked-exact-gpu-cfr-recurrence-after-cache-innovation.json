@@ -1,0 +1,36 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 655,
+      "path": "decision.json",
+      "sha256": "cd603f8cd09e1caa378a14b2d2901b9cea01d021fc7b6f3a3629026eefc4597b"
+    },
+    {
+      "bytes": 2789,
+      "path": "innovation.md",
+      "sha256": "515faf15c45103ecc7a41b1d0df413685faf570f7c32c37546cd247587fd9d6f"
+    },
+    {
+      "bytes": 3444,
+      "path": "related_work.md",
+      "sha256": "ce764968d8a6fa06b33af718672cdeb6535fa8a5501951cc246642d8948daf16"
+    },
+    {
+      "bytes": 1327,
+      "path": "thought_experiments.md",
+      "sha256": "2cb8081a0cef31286dd9a4ffa9f525b4da08f4f08645f0dd2103a1b9f630df4e"
+    }
+  ],
+  "reason": "Related work and local evidence both favor improving the exact search primitive before another learned warm-start or Slumbot-specific branch; the next sprint should test a memory-capped chunked exact CFR recurrence against the post-cache CUDA frontier.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T000627Z-fused-chunked-exact-gpu-cfr-recurrence-after-cache-innovation",
+  "review_id": "20260522T000627Z-fused-chunked-exact-gpu-cfr-recurrence-after-cache-innovation",
+  "sources": [
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1603.01121",
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/"
+  ],
+  "written_at": "2026-05-22T00:11:45Z"
+}

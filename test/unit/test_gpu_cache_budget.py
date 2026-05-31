@@ -210,6 +210,7 @@ def test_summarize_traversal_pool_stats_reports_overflow_and_slot_pressure():
     assert summary["traversal_max_nonterminal_slots_per_traversal"] == 50.0
     assert summary["traversal_mean_allocated_to_live_ratio"] == 4.0
     assert summary["traversal_max_allocated_to_live_ratio"] == 6.0
+    assert summary["traversal_accepted_requested_traversals"] == 15
 
 
 def test_summarize_rejected_traversal_pool_stats_reports_retry_pressure():
@@ -227,6 +228,7 @@ def test_summarize_rejected_traversal_pool_stats_reports_retry_pressure():
     assert summary["traversal_rejected_overflow_chunks"] == 1
     assert summary["traversal_rejected_pool_exhausted_nodes"] == 10
     assert summary["traversal_rejected_max_pool_demand_ratio"] == 1.03838
+    assert summary["traversal_retry_pressure_requested_traversals"] == 142
 
 
 def test_build_iteration_profile_reports_warmup_safe_throughput_metrics():

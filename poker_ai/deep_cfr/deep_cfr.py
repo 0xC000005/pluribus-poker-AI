@@ -21,9 +21,11 @@ import torch.optim as optim
 from poker_ai.deep_cfr.buffer import ReservoirBuffer
 from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
 from poker_ai.deep_cfr.policy_targets import (
+    MixedPolicyTargetBuffer,
     PolicyTargetBuffer,
     PolicyReservoirBuffer,
     masked_policy_cross_entropy,
+    policy_target_calibration_metadata,
     train_average_policy_network,
 )
 from poker_ai.games.full_deck.state import (
@@ -415,6 +417,7 @@ class DeepCFRTrainer:
         policy_target_weight: float = 0.0,
         policy_target_batch_size: int | None = None,
         average_strategy_memory_capacity: int | None = None,
+        average_strategy_target_buffer: PolicyTargetBuffer | None = None,
         average_strategy_weight: float = 0.0,
         average_strategy_batch_size: int | None = None,
         use_betting_history: bool = True,
@@ -428,11 +431,17 @@ class DeepCFRTrainer:
         self.policy_target_buffer = policy_target_buffer
         self.policy_target_weight = float(policy_target_weight)
         self.policy_target_batch_size = policy_target_batch_size
+        self.average_strategy_target_buffer = average_strategy_target_buffer
         self.average_strategy_weight = float(average_strategy_weight)
         self.average_strategy_batch_size = average_strategy_batch_size
         self.use_betting_history = bool(use_betting_history)
+        strategy_capacity = (
+            int(buffer_capacity)
+            if average_strategy_memory_capacity is None
+            else max(0, int(average_strategy_memory_capacity))
+        )
         self.strategy_buffer = PolicyReservoirBuffer(
-            int(average_strategy_memory_capacity or buffer_capacity)
+            strategy_capacity
         )
 
         if device is None:
@@ -462,6 +471,53 @@ class DeepCFRTrainer:
         self.has_average_policy_net = False
         self.iteration = 0
 
+    def _average_strategy_training_buffer(
+        self,
+    ) -> PolicyTargetBuffer | PolicyReservoirBuffer | MixedPolicyTargetBuffer:
+        if (
+            self.average_strategy_target_buffer is not None
+            and self.strategy_buffer.size > 0
+        ):
+            return MixedPolicyTargetBuffer(
+                self.average_strategy_target_buffer,
+                self.strategy_buffer,
+            )
+        return self.average_strategy_target_buffer or self.strategy_buffer
+
+    def _average_strategy_external_target_size(self) -> int:
+        return int(
+            self.average_strategy_target_buffer.size
+            if self.average_strategy_target_buffer is not None else 0
+        )
+
+    def _average_strategy_target_size(self) -> int:
+        external_size = self._average_strategy_external_target_size()
+        return int(external_size + self.strategy_buffer.size)
+
+    def _traversal_strategy_buffer(self) -> PolicyReservoirBuffer | None:
+        if self.average_strategy_weight <= 0:
+            return None
+        if self.strategy_buffer.capacity <= 0:
+            return None
+        return self.strategy_buffer
+
+    def _train_average_policy_from_strategy_targets(
+        self,
+        *,
+        n_epochs: int | None = None,
+        batch_size: int | None = None,
+    ) -> PolicyNetwork:
+        return train_average_policy_network(
+            self._average_strategy_training_buffer(),
+            hidden_dim=self.hidden_dim,
+            n_layers=2,
+            n_epochs=n_epochs or self.n_training_steps,
+            batch_size=batch_size or self.average_strategy_batch_size or self.batch_size,
+            lr=self.lr,
+            device=self.device,
+            use_betting_history=self.use_betting_history,
+        )
+
     def run_iteration(self):
         """Run one full CFR iteration.
 
@@ -482,9 +538,7 @@ class DeepCFRTrainer:
                     buffer=self.buffers[player_i],
                     iteration=self.iteration,
                     device=self.device,
-                    strategy_buffer=(
-                        self.strategy_buffer if self.average_strategy_weight > 0 else None
-                    ),
+                    strategy_buffer=self._traversal_strategy_buffer(),
                 )
 
         # Combine all player buffers for training.
@@ -502,18 +556,17 @@ class DeepCFRTrainer:
                 policy_target_buffer=self.policy_target_buffer,
                 policy_target_weight=self.policy_target_weight,
                 policy_target_batch_size=self.policy_target_batch_size,
+                average_strategy_buffer=(
+                    self._average_strategy_training_buffer()
+                    if self.average_strategy_weight > 0
+                    and self._average_strategy_target_size() > 0
+                    else None
+                ),
+                average_strategy_weight=self.average_strategy_weight,
+                average_strategy_batch_size=self.average_strategy_batch_size,
             )
-            if self.average_strategy_weight > 0 and self.strategy_buffer.size > 0:
-                self.average_policy_net = train_average_policy_network(
-                    self.strategy_buffer,
-                    hidden_dim=self.hidden_dim,
-                    n_layers=2,
-                    n_epochs=self.n_training_steps,
-                    batch_size=self.average_strategy_batch_size or self.batch_size,
-                    lr=self.lr,
-                    device=self.device,
-                    use_betting_history=self.use_betting_history,
-                )
+            if self.average_strategy_weight > 0 and self._average_strategy_target_size() > 0:
+                self.average_policy_net = self._train_average_policy_from_strategy_targets()
                 self.has_average_policy_net = True
 
     def _combine_buffers(self) -> ReservoirBuffer:
@@ -551,17 +604,29 @@ class DeepCFRTrainer:
 
     def save(self, path: str):
         """Save the trainer state to disk."""
+        policy_calibration = policy_target_calibration_metadata(
+            self.policy_target_buffer,
+            weight=self.policy_target_weight,
+        )
         torch.save(
             {
                 "value_net": self.value_net.state_dict(),
                 "iteration": self.iteration,
                 "n_players": self.n_players,
                 "hidden_dim": self.hidden_dim,
-                "average_strategy_target_size": int(self.strategy_buffer.size),
+                "average_strategy_target_size": self._average_strategy_target_size(),
+                "average_strategy_collected_size": int(self.strategy_buffer.size),
+                "average_strategy_external_target_size": (
+                    self._average_strategy_external_target_size()
+                ),
                 "average_strategy_weight": self.average_strategy_weight,
                 "uses_betting_history": self.use_betting_history,
                 "has_average_policy_net": bool(self.has_average_policy_net),
                 "buffer_sizes": [len(b) for b in self.buffers],
+                **(
+                    {"policy_calibration": policy_calibration}
+                    if policy_calibration else {}
+                ),
                 **(
                     {"average_policy_net": self.average_policy_net.state_dict()}
                     if self.has_average_policy_net else {}

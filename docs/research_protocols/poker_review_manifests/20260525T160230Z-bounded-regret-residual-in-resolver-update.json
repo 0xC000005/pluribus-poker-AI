@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1012,
+      "path": "benchmark_audit.md",
+      "sha256": "95974ec3fda918c51b3fb348dd9f350df30ef4a82aa19e0857e5f99a8b02fa82"
+    },
+    {
+      "bytes": 519,
+      "path": "decision.json",
+      "sha256": "ef9975471227cbff0d0586c493be5f5b4baad38f63386fbcf36f1ad545a483d5"
+    },
+    {
+      "bytes": 1213,
+      "path": "mechanism_review.md",
+      "sha256": "949caef4cb2c0e01311385293e5eacbaa111c57b590aeee1af9ea42d7b33c95e"
+    },
+    {
+      "bytes": 1937,
+      "path": "related_work.md",
+      "sha256": "11116423e3d83f90913264a39b584dcb9808f09ad1596d60765a475088454a0a"
+    },
+    {
+      "bytes": 1276,
+      "path": "review.md",
+      "sha256": "f0a1cfcf3e92d015c9e8ae9191659d9146948ef7b1e8d1a829bf9ebab6ce7ddd"
+    },
+    {
+      "bytes": 1912,
+      "path": "review_scope.json",
+      "sha256": "6f23500373908d58fa9c9f6e44f82b1b7f77e6e961204c2d510099b15faae79c"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The repeated failure mode is unconstrained solver-state replacement. One bounded residual hook is a mechanism-level revision with a clear root-disjoint falsifier and exact CFR controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T160230Z-bounded-regret-residual-in-resolver-update",
+  "review_id": "20260525T160230Z-bounded-regret-residual-in-resolver-update",
+  "sources": [
+    "https://papers.nips.cc/paper/2020/hash/c61f571dbd2fb949d3fe5ae1608dd48b-Abstract.html",
+    "https://www.sciencedirect.com/science/article/pii/S0004370224001681",
+    "https://arxiv.org/abs/2511.08174",
+    "https://arxiv.org/abs/2605.19928"
+  ],
+  "written_at": "2026-05-25T16:09:53Z"
+}

@@ -13,7 +13,7 @@ The solver takes precomputed terminal evaluation matrices (win/lose/tie
 or equity versions) and a game tree, then runs CFR+ iterations.
 """
 import itertools
-from collections import deque
+from collections import OrderedDict, deque
 
 import numpy as np
 import torch
@@ -28,6 +28,28 @@ _DCFR_ALPHA = 1.5
 _DCFR_GAMMA = 2.0
 _PDCFR_ALPHA = 2.3
 _PDCFR_GAMMA = 5.0
+_MAX_TORCH_MATRIX_TENSOR_CACHE = 2
+_TORCH_MATRIX_TENSOR_CACHE = OrderedDict()
+_TORCH_MATRIX_TENSOR_CACHE_HITS = 0
+_TORCH_MATRIX_TENSOR_CACHE_MISSES = 0
+
+
+def clear_torch_matrix_tensor_cache():
+    """Clear cached torch terminal-matrix tensor bundles."""
+    global _TORCH_MATRIX_TENSOR_CACHE_HITS, _TORCH_MATRIX_TENSOR_CACHE_MISSES
+    _TORCH_MATRIX_TENSOR_CACHE.clear()
+    _TORCH_MATRIX_TENSOR_CACHE_HITS = 0
+    _TORCH_MATRIX_TENSOR_CACHE_MISSES = 0
+
+
+def torch_matrix_tensor_cache_info():
+    """Return diagnostics for repeated terminal-matrix tensor reuse."""
+    return {
+        "entries": len(_TORCH_MATRIX_TENSOR_CACHE),
+        "max_entries": _MAX_TORCH_MATRIX_TENSOR_CACHE,
+        "hits": _TORCH_MATRIX_TENSOR_CACHE_HITS,
+        "misses": _TORCH_MATRIX_TENSOR_CACHE_MISSES,
+    }
 
 
 def _validate_solver_update(solver_update):
@@ -221,6 +243,17 @@ def _validated_initial_array(initial, expected_shape, name):
         raise ValueError(f"{name} must be finite")
     if (arr < 0).any():
         raise ValueError(f"{name} must be non-negative for CFR+ warm starts")
+    return arr.copy()
+
+
+def _validated_updated_array(updated, expected_shape, name):
+    arr = np.asarray(updated, dtype=np.float32)
+    if arr.shape != expected_shape:
+        raise ValueError(f"{name} shape {arr.shape} != {expected_shape}")
+    if not np.isfinite(arr).all():
+        raise ValueError(f"{name} must be finite")
+    if (arr < 0).any():
+        raise ValueError(f"{name} must be non-negative for CFR+ update hooks")
     return arr.copy()
 
 
@@ -500,6 +533,134 @@ def _torch_level_regret_matching(regret_rows, legal_mask):
     )
 
 
+def _torch_level_regret_matching_batched(regret_rows, legal_mask):
+    legal = legal_mask.to(dtype=regret_rows.dtype).unsqueeze(0).unsqueeze(-1)
+    positive = torch.clamp(regret_rows, min=0.0) * legal
+    totals = positive.sum(dim=2)
+    safe = totals.clamp(min=1.0)
+    legal_counts = legal_mask.sum(dim=1).to(dtype=regret_rows.dtype).clamp(min=1.0)
+    uniform = (1.0 / legal_counts).reshape(1, -1, 1, 1)
+    return torch.where(
+        totals.unsqueeze(2) > 0.0,
+        positive / safe.unsqueeze(2),
+        legal * uniform,
+    )
+
+
+def _torch_static_cache_key(torch_device, n_hands, win_m, lose_m, tie_m, valid_m):
+    matrices = (win_m, lose_m, tie_m, valid_m)
+    matrix_sig = tuple(
+        (
+            id(matrix),
+            tuple(np.shape(matrix)),
+            str(np.asarray(matrix).dtype),
+        )
+        for matrix in matrices
+    )
+    return (str(torch_device), int(n_hands), matrix_sig)
+
+
+def _torch_matrix_tensor_bundle(torch_device, win_m, lose_m, tie_m, valid_m):
+    global _TORCH_MATRIX_TENSOR_CACHE_HITS, _TORCH_MATRIX_TENSOR_CACHE_MISSES
+    cache_key = _torch_static_cache_key(
+        torch_device,
+        np.shape(win_m)[0],
+        win_m,
+        lose_m,
+        tie_m,
+        valid_m,
+    )
+    cached = _TORCH_MATRIX_TENSOR_CACHE.get(cache_key)
+    if cached is not None:
+        _TORCH_MATRIX_TENSOR_CACHE_HITS += 1
+        _TORCH_MATRIX_TENSOR_CACHE.move_to_end(cache_key)
+        return cached
+
+    _TORCH_MATRIX_TENSOR_CACHE_MISSES += 1
+    win_t = torch.as_tensor(win_m, dtype=torch.float32, device=torch_device)
+    lose_t = torch.as_tensor(lose_m, dtype=torch.float32, device=torch_device)
+    tie_t = torch.as_tensor(tie_m, dtype=torch.float32, device=torch_device)
+    valid_t = torch.as_tensor(valid_m, dtype=torch.float32, device=torch_device)
+    cached = {
+        'win': win_t,
+        'lose': lose_t,
+        'tie': tie_t,
+        'valid': valid_t,
+        'win_T': win_t.T.contiguous(),
+        'lose_T': lose_t.T.contiguous(),
+        'tie_T': tie_t.T.contiguous(),
+        'valid_T': valid_t.T.contiguous(),
+    }
+    _TORCH_MATRIX_TENSOR_CACHE[cache_key] = cached
+    _TORCH_MATRIX_TENSOR_CACHE.move_to_end(cache_key)
+    while len(_TORCH_MATRIX_TENSOR_CACHE) > _MAX_TORCH_MATRIX_TENSOR_CACHE:
+        _TORCH_MATRIX_TENSOR_CACHE.popitem(last=False)
+    return cached
+
+
+def _torch_levelsync_workspace(static, expected_shape, nn, n, n_actions, torch_device):
+    workspace = static.setdefault("_workspace", {})
+    specs = {
+        "regret_sum": expected_shape,
+        "strategy_sum": expected_shape,
+        "hr_at": (nn, n),
+        "vr_at": (nn, n),
+        "hvals": (nn, n),
+        "vvals": (nn, n),
+    }
+    for name, shape in specs.items():
+        tensor = workspace.get(name)
+        if (
+            tensor is None
+            or tuple(tensor.shape) != tuple(shape)
+            or tensor.device != torch_device
+            or tensor.dtype != torch.float32
+        ):
+            tensor = torch.empty(shape, dtype=torch.float32, device=torch_device)
+            workspace[name] = tensor
+    return workspace
+
+
+def _torch_levelsync_static_cache(tree, n_hands, win_m, lose_m, tie_m, valid_m, torch_device):
+    cache = tree.setdefault("_torch_levelsync_cache", {})
+    cache_key = _torch_static_cache_key(torch_device, n_hands, win_m, lose_m, tie_m, valid_m)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    groups_np = tree.setdefault('_level_edge_groups', _level_edge_groups(tree))
+    groups = []
+    for group in groups_np:
+        if group is None:
+            groups.append(None)
+            continue
+        entry = {
+            'parents': torch.as_tensor(group['parents'], dtype=torch.long, device=torch_device),
+            'edge_parent': torch.as_tensor(group['edge_parent'], dtype=torch.long, device=torch_device),
+            'edge_action': torch.as_tensor(group['edge_action'], dtype=torch.long, device=torch_device),
+            'edge_child': torch.as_tensor(group['edge_child'], dtype=torch.long, device=torch_device),
+            'edge_parent_pos': torch.as_tensor(group['edge_parent_pos'], dtype=torch.long, device=torch_device),
+            'legal_mask': torch.as_tensor(group['legal_mask'], dtype=torch.bool, device=torch_device),
+        }
+        edge_player = torch.as_tensor(group['edge_player'], dtype=torch.long, device=torch_device)
+        entry['hero_edges'] = edge_player == 0
+        entry['villain_edges'] = ~entry['hero_edges']
+        groups.append(entry)
+
+    matrix_bundle = _torch_matrix_tensor_bundle(torch_device, win_m, lose_m, tie_m, valid_m)
+    cached = {
+        'groups': groups,
+        **matrix_bundle,
+        'stacks_h': torch.as_tensor(tree['stacks_h'], dtype=torch.float32, device=torch_device),
+        'stacks_v': torch.as_tensor(tree['stacks_v'], dtype=torch.float32, device=torch_device),
+        'show_idx': torch.as_tensor(tree['showdown_idx'], dtype=torch.long, device=torch_device),
+        'hero_fold_idx': torch.as_tensor(tree['hero_fold_idx'], dtype=torch.long, device=torch_device),
+        'villain_fold_idx': torch.as_tensor(tree['villain_fold_idx'], dtype=torch.long, device=torch_device),
+    }
+    cache[cache_key] = cached
+    return cached
+
+
 def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                               pot_start, hero_stack_start, villain_stack_start,
                               n_iterations=100, hero_range=None,
@@ -514,36 +675,32 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
     n = int(n_hands)
     nn = int(tree['n_nodes'])
     n_actions = int(tree['n_actions'])
-    groups_np = tree.setdefault('_level_edge_groups', _level_edge_groups(tree))
-    groups = []
-    for group in groups_np:
-        if group is None:
-            groups.append(None)
-            continue
-        groups.append(
-            {
-                key: torch.as_tensor(value, device=torch_device)
-                for key, value in group.items()
-            }
-        )
+    static = _torch_levelsync_static_cache(
+        tree,
+        n,
+        win_m,
+        lose_m,
+        tie_m,
+        valid_m,
+        torch_device,
+    )
+    groups = static['groups']
+    win_t = static['win']
+    lose_t = static['lose']
+    tie_t = static['tie']
+    valid_t = static['valid']
+    win_tT = static['win_T']
+    lose_tT = static['lose_T']
+    tie_tT = static['tie_T']
+    valid_tT = static['valid_T']
 
-    win_t = torch.as_tensor(win_m, dtype=torch.float32, device=torch_device)
-    lose_t = torch.as_tensor(lose_m, dtype=torch.float32, device=torch_device)
-    tie_t = torch.as_tensor(tie_m, dtype=torch.float32, device=torch_device)
-    valid_t = torch.as_tensor(valid_m, dtype=torch.float32, device=torch_device)
-    win_tT = win_t.T.contiguous()
-    lose_tT = lose_t.T.contiguous()
-    tie_tT = tie_t.T.contiguous()
-    valid_tT = valid_t.T.contiguous()
-
-    player = torch.as_tensor(tree['player'], dtype=torch.int64, device=torch_device)
-    stacks_h = torch.as_tensor(tree['stacks_h'], dtype=torch.float32, device=torch_device)
-    stacks_v = torch.as_tensor(tree['stacks_v'], dtype=torch.float32, device=torch_device)
+    stacks_h = static['stacks_h']
+    stacks_v = static['stacks_v']
     hi_all = float(hero_stack_start) - stacks_h
     vi_all = float(villain_stack_start) - stacks_v
-    show_idx = torch.as_tensor(tree['showdown_idx'], dtype=torch.long, device=torch_device)
-    hfold_idx = torch.as_tensor(tree['hero_fold_idx'], dtype=torch.long, device=torch_device)
-    vfold_idx = torch.as_tensor(tree['villain_fold_idx'], dtype=torch.long, device=torch_device)
+    show_idx = static['show_idx']
+    hfold_idx = static['hero_fold_idx']
+    vfold_idx = static['villain_fold_idx']
 
     if show_idx.numel() > 0:
         hi_s = hi_all.index_select(0, show_idx).reshape(-1, 1)
@@ -566,6 +723,14 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         vf_vill_coeff = -vi_vf
 
     expected_shape = (nn, n_actions, n)
+    workspace = _torch_levelsync_workspace(
+        static,
+        expected_shape,
+        nn,
+        n,
+        n_actions,
+        torch_device,
+    )
     initial_regret_np = _validated_initial_array(
         initial_regret_sum,
         expected_shape,
@@ -577,18 +742,24 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         "initial_strategy_sum",
     )
     if initial_regret_np is None:
-        regret_sum = torch.zeros(expected_shape, dtype=torch.float32, device=torch_device)
+        regret_sum = workspace["regret_sum"]
+        regret_sum.zero_()
     else:
         regret_sum = torch.as_tensor(initial_regret_np, dtype=torch.float32, device=torch_device)
     if initial_strategy_np is None:
-        strategy_sum = torch.zeros_like(regret_sum)
+        strategy_sum = workspace["strategy_sum"]
+        strategy_sum.zero_()
     else:
         strategy_sum = torch.as_tensor(initial_strategy_np, dtype=torch.float32, device=torch_device)
 
-    hr_at = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
-    vr_at = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
-    hvals = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
-    vvals = torch.zeros((nn, n), dtype=torch.float32, device=torch_device)
+    hr_at = workspace["hr_at"]
+    vr_at = workspace["vr_at"]
+    hvals = workspace["hvals"]
+    vvals = workspace["vvals"]
+    hr_at.zero_()
+    vr_at.zero_()
+    hvals.zero_()
+    vvals.zero_()
     hr_init = (
         torch.as_tensor(hero_range, dtype=torch.float32, device=torch_device)
         if hero_range is not None else torch.ones(n, dtype=torch.float32, device=torch_device)
@@ -607,19 +778,19 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
             if group is None:
                 level_strategies.append(None)
                 continue
-            parents = group['parents'].long()
+            parents = group['parents']
             strategies = _torch_level_regret_matching(
                 regret_sum.index_select(0, parents),
-                group['legal_mask'].bool(),
+                group['legal_mask'],
             )
             level_strategies.append(strategies)
-            edge_parent = group['edge_parent'].long()
-            edge_action = group['edge_action'].long()
-            edge_child = group['edge_child'].long()
-            edge_parent_pos = group['edge_parent_pos'].long()
+            edge_parent = group['edge_parent']
+            edge_action = group['edge_action']
+            edge_child = group['edge_child']
+            edge_parent_pos = group['edge_parent_pos']
             edge_strategy = strategies[edge_parent_pos, edge_action]
-            hero_edges = group['edge_player'].long() == 0
-            villain_edges = ~hero_edges
+            hero_edges = group['hero_edges']
+            villain_edges = group['villain_edges']
             if bool(hero_edges.any()):
                 hp = edge_parent[hero_edges]
                 hc = edge_child[hero_edges]
@@ -658,11 +829,11 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         for group, strategies in zip(reversed(groups), reversed(level_strategies), strict=False):
             if group is None or strategies is None:
                 continue
-            parents = group['parents'].long()
-            edge_parent = group['edge_parent'].long()
-            edge_action = group['edge_action'].long()
-            edge_child = group['edge_child'].long()
-            edge_parent_pos = group['edge_parent_pos'].long()
+            parents = group['parents']
+            edge_parent = group['edge_parent']
+            edge_action = group['edge_action']
+            edge_child = group['edge_child']
+            edge_parent_pos = group['edge_parent_pos']
             edge_strategy = strategies[edge_parent_pos, edge_action]
 
             parent_hvals = torch.zeros(
@@ -676,8 +847,8 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
             hvals[parents] = parent_hvals
             vvals[parents] = parent_vvals
 
-            hero_edges = group['edge_player'].long() == 0
-            villain_edges = ~hero_edges
+            hero_edges = group['hero_edges']
+            villain_edges = group['villain_edges']
             if bool(hero_edges.any()):
                 hp = edge_parent[hero_edges]
                 ha = edge_action[hero_edges]
@@ -707,7 +878,661 @@ def solve_cfr_levelsync_torch(tree, n_hands, win_m, lose_m, tie_m, valid_m,
 
     if torch_device.type == "cuda":
         torch.cuda.synchronize(torch_device)
-    return regret_sum.cpu().numpy(), strategy_sum.cpu().numpy()
+    return regret_sum.detach().cpu().numpy().copy(), strategy_sum.detach().cpu().numpy().copy()
+
+
+def _terminal_type_array(tree):
+    n_nodes = int(tree["n_nodes"])
+    return np.asarray(tree.get("terminal_type", np.zeros(n_nodes, dtype=np.int32)), dtype=np.int32)
+
+
+def _same_topology_signature(tree):
+    return (
+        int(tree["n_nodes"]),
+        int(tree["n_actions"]),
+        np.asarray(tree["player"], dtype=np.int32),
+        np.asarray(tree["parent_idx"], dtype=np.int32),
+        np.asarray(tree["children"], dtype=np.int32),
+        _terminal_type_array(tree),
+    )
+
+
+def _validate_same_topology_batch(trees, n_hands):
+    if not trees:
+        raise ValueError("trees must contain at least one tree")
+    base = _same_topology_signature(trees[0])
+    for index, tree in enumerate(trees[1:], start=1):
+        candidate = _same_topology_signature(tree)
+        if candidate[0] != base[0] or candidate[1] != base[1]:
+            raise ValueError(f"all trees must have the same topology; tree {index} shape differs")
+        for lhs, rhs in zip(base[2:], candidate[2:], strict=True):
+            if lhs.shape != rhs.shape or not np.array_equal(lhs, rhs):
+                raise ValueError(f"all trees must have the same topology; tree {index} differs")
+    n = int(n_hands)
+    for index, tree in enumerate(trees):
+        if int(tree["n_actions"]) != int(base[1]):
+            raise ValueError(f"tree {index} action count differs")
+        for key in ("stacks_h", "stacks_v"):
+            if np.asarray(tree[key]).shape != (int(base[0]),):
+                raise ValueError(f"tree {index} {key} shape is incompatible with topology")
+    return int(base[0]), int(base[1]), n
+
+
+def _stack_matrix_batch(matrices, n_hands, name, torch_device):
+    stacked = np.stack([np.asarray(matrix, dtype=np.float32) for matrix in matrices], axis=0)
+    expected = (len(matrices), int(n_hands), int(n_hands))
+    if stacked.shape != expected:
+        raise ValueError(f"{name} batch shape {stacked.shape} != {expected}")
+    return torch.as_tensor(stacked, dtype=torch.float32, device=torch_device)
+
+
+def _stack_vector(values, name, torch_device):
+    return torch.as_tensor(np.asarray(values, dtype=np.float32), dtype=torch.float32, device=torch_device)
+
+
+def solve_cfr_levelsync_torch_batched_same_topology(
+    trees,
+    n_hands,
+    win_ms,
+    lose_ms,
+    tie_ms,
+    valid_ms,
+    pot_starts,
+    hero_stack_starts,
+    villain_stack_starts,
+    n_iterations=100,
+    hero_ranges=None,
+    villain_ranges=None,
+    terminal_eval_mode="batched",
+    device="cuda",
+):
+    """Run level-synchronous CFR+ over a batch of exact-same-topology trees.
+
+    This is a research-only primitive for testing whether same-shape public
+    roots can amortize the resolver recurrence. It intentionally handles only
+    the exact CFR+ path and rejects topology mismatches instead of padding.
+    """
+    trees = list(trees)
+    batch_size = len(trees)
+    torch_device = torch.device(device)
+    if torch_device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA level-sync backend requested but torch.cuda is unavailable.")
+    if terminal_eval_mode not in {"batched", "loop", "loop_showdown", "loop_folds"}:
+        raise ValueError(
+            "terminal_eval_mode must be 'batched', 'loop', 'loop_showdown', or 'loop_folds'"
+        )
+    loop_showdown = terminal_eval_mode in {"loop", "loop_showdown"}
+    loop_folds = terminal_eval_mode in {"loop", "loop_folds"}
+    if not (
+        len(win_ms)
+        == len(lose_ms)
+        == len(tie_ms)
+        == len(valid_ms)
+        == len(pot_starts)
+        == len(hero_stack_starts)
+        == len(villain_stack_starts)
+        == batch_size
+    ):
+        raise ValueError("all batched inputs must have one entry per tree")
+
+    nn, n_actions, n = _validate_same_topology_batch(trees, n_hands)
+    base_tree = trees[0]
+    groups_np = base_tree.setdefault("_level_edge_groups", _level_edge_groups(base_tree))
+    groups = []
+    for group in groups_np:
+        if group is None:
+            groups.append(None)
+            continue
+        edge_player = torch.as_tensor(group["edge_player"], dtype=torch.long, device=torch_device)
+        groups.append(
+            {
+                "parents": torch.as_tensor(group["parents"], dtype=torch.long, device=torch_device),
+                "edge_parent": torch.as_tensor(group["edge_parent"], dtype=torch.long, device=torch_device),
+                "edge_action": torch.as_tensor(group["edge_action"], dtype=torch.long, device=torch_device),
+                "edge_child": torch.as_tensor(group["edge_child"], dtype=torch.long, device=torch_device),
+                "edge_parent_pos": torch.as_tensor(group["edge_parent_pos"], dtype=torch.long, device=torch_device),
+                "legal_mask": torch.as_tensor(group["legal_mask"], dtype=torch.bool, device=torch_device),
+                "hero_edges": edge_player == 0,
+                "villain_edges": edge_player != 0,
+            }
+        )
+
+    win_t = _stack_matrix_batch(win_ms, n, "win_ms", torch_device)
+    lose_t = _stack_matrix_batch(lose_ms, n, "lose_ms", torch_device)
+    tie_t = _stack_matrix_batch(tie_ms, n, "tie_ms", torch_device)
+    valid_t = _stack_matrix_batch(valid_ms, n, "valid_ms", torch_device)
+    win_tT = win_t.transpose(1, 2).contiguous()
+    lose_tT = lose_t.transpose(1, 2).contiguous()
+    tie_tT = tie_t.transpose(1, 2).contiguous()
+    valid_tT = valid_t.transpose(1, 2).contiguous()
+
+    stacks_h = torch.as_tensor(
+        np.stack([np.asarray(tree["stacks_h"], dtype=np.float32) for tree in trees], axis=0),
+        dtype=torch.float32,
+        device=torch_device,
+    )
+    stacks_v = torch.as_tensor(
+        np.stack([np.asarray(tree["stacks_v"], dtype=np.float32) for tree in trees], axis=0),
+        dtype=torch.float32,
+        device=torch_device,
+    )
+    pot_t = _stack_vector(pot_starts, "pot_starts", torch_device).reshape(batch_size, 1, 1)
+    hero_stack_t = _stack_vector(hero_stack_starts, "hero_stack_starts", torch_device).reshape(batch_size, 1)
+    villain_stack_t = _stack_vector(villain_stack_starts, "villain_stack_starts", torch_device).reshape(batch_size, 1)
+
+    hi_all = hero_stack_t - stacks_h
+    vi_all = villain_stack_t - stacks_v
+    show_idx = torch.as_tensor(base_tree["showdown_idx"], dtype=torch.long, device=torch_device)
+    hfold_idx = torch.as_tensor(base_tree["hero_fold_idx"], dtype=torch.long, device=torch_device)
+    vfold_idx = torch.as_tensor(base_tree["villain_fold_idx"], dtype=torch.long, device=torch_device)
+
+    if show_idx.numel() > 0:
+        hi_s = hi_all.index_select(1, show_idx).unsqueeze(-1)
+        vi_s = vi_all.index_select(1, show_idx).unsqueeze(-1)
+        hw_s = pot_t + vi_s
+        hl_s = -hi_s
+        ht_s = (pot_t + vi_s - hi_s) / 2.0
+        vw_s = pot_t + hi_s
+        vl_s = -vi_s
+        vt_s = (pot_t + hi_s - vi_s) / 2.0
+
+    if hfold_idx.numel() > 0:
+        hi_hf = hi_all.index_select(1, hfold_idx).unsqueeze(-1)
+        hf_hero_coeff = -hi_hf
+        hf_vill_coeff = pot_t + hi_hf
+
+    if vfold_idx.numel() > 0:
+        vi_vf = vi_all.index_select(1, vfold_idx).unsqueeze(-1)
+        vf_hero_coeff = pot_t + vi_vf
+        vf_vill_coeff = -vi_vf
+
+    regret_sum = torch.zeros((batch_size, nn, n_actions, n), dtype=torch.float32, device=torch_device)
+    strategy_sum = torch.zeros_like(regret_sum)
+    hr_at = torch.zeros((batch_size, nn, n), dtype=torch.float32, device=torch_device)
+    vr_at = torch.zeros_like(hr_at)
+    hvals = torch.zeros_like(hr_at)
+    vvals = torch.zeros_like(hr_at)
+    if hero_ranges is None:
+        hr_init = torch.ones((batch_size, n), dtype=torch.float32, device=torch_device)
+    else:
+        hr_init = torch.as_tensor(
+            np.stack([np.asarray(value, dtype=np.float32) for value in hero_ranges], axis=0),
+            dtype=torch.float32,
+            device=torch_device,
+        )
+    if villain_ranges is None:
+        vr_init = torch.ones((batch_size, n), dtype=torch.float32, device=torch_device)
+    else:
+        vr_init = torch.as_tensor(
+            np.stack([np.asarray(value, dtype=np.float32) for value in villain_ranges], axis=0),
+            dtype=torch.float32,
+            device=torch_device,
+        )
+    if hr_init.shape != (batch_size, n) or vr_init.shape != (batch_size, n):
+        raise ValueError("hero_ranges and villain_ranges must have shape (batch, n_hands)")
+
+    for _iter in range(int(n_iterations)):
+        hr_at.zero_()
+        vr_at.zero_()
+        hvals.zero_()
+        vvals.zero_()
+        hr_at[:, 0, :].copy_(hr_init)
+        vr_at[:, 0, :].copy_(vr_init)
+        level_strategies = []
+
+        for group in groups:
+            if group is None:
+                level_strategies.append(None)
+                continue
+            parents = group["parents"]
+            strategies = _torch_level_regret_matching_batched(
+                regret_sum.index_select(1, parents),
+                group["legal_mask"],
+            )
+            level_strategies.append(strategies)
+            edge_parent = group["edge_parent"]
+            edge_action = group["edge_action"]
+            edge_child = group["edge_child"]
+            edge_parent_pos = group["edge_parent_pos"]
+            edge_strategy = strategies[:, edge_parent_pos, edge_action, :]
+            hero_edges = group["hero_edges"]
+            villain_edges = group["villain_edges"]
+            if bool(hero_edges.any()):
+                hp = edge_parent[hero_edges]
+                hc = edge_child[hero_edges]
+                hr_at[:, hc, :] = hr_at[:, hp, :] * edge_strategy[:, hero_edges, :]
+                vr_at[:, hc, :] = vr_at[:, hp, :]
+            if bool(villain_edges.any()):
+                vp = edge_parent[villain_edges]
+                vc = edge_child[villain_edges]
+                hr_at[:, vc, :] = hr_at[:, vp, :]
+                vr_at[:, vc, :] = vr_at[:, vp, :] * edge_strategy[:, villain_edges, :]
+
+        if show_idx.numel() > 0:
+            VR_s = hr_at.new_empty((batch_size, show_idx.numel(), n))
+            HR_s = hr_at.new_empty((batch_size, show_idx.numel(), n))
+            VR_s.copy_(vr_at.index_select(1, show_idx))
+            HR_s.copy_(hr_at.index_select(1, show_idx))
+            if loop_showdown:
+                for batch_idx in range(batch_size):
+                    h_win = VR_s[batch_idx] @ win_tT[batch_idx]
+                    h_lose = VR_s[batch_idx] @ lose_tT[batch_idx]
+                    h_tie = VR_s[batch_idx] @ tie_tT[batch_idx]
+                    v_win = HR_s[batch_idx] @ win_t[batch_idx]
+                    v_lose = HR_s[batch_idx] @ lose_t[batch_idx]
+                    v_tie = HR_s[batch_idx] @ tie_t[batch_idx]
+                    hvals[batch_idx, show_idx, :] = (
+                        hw_s[batch_idx] * h_win
+                        + hl_s[batch_idx] * h_lose
+                        + ht_s[batch_idx] * h_tie
+                    )
+                    vvals[batch_idx, show_idx, :] = (
+                        vw_s[batch_idx] * v_lose
+                        + vl_s[batch_idx] * v_win
+                        + vt_s[batch_idx] * v_tie
+                    )
+            else:
+                h_win = torch.bmm(VR_s, win_tT)
+                h_lose = torch.bmm(VR_s, lose_tT)
+                h_tie = torch.bmm(VR_s, tie_tT)
+                v_win = torch.bmm(HR_s, win_t)
+                v_lose = torch.bmm(HR_s, lose_t)
+                v_tie = torch.bmm(HR_s, tie_t)
+                hvals[:, show_idx, :] = hw_s * h_win + hl_s * h_lose + ht_s * h_tie
+                vvals[:, show_idx, :] = vw_s * v_lose + vl_s * v_win + vt_s * v_tie
+
+        if hfold_idx.numel() > 0:
+            VR_hf = vr_at.index_select(1, hfold_idx)
+            HR_hf = hr_at.index_select(1, hfold_idx)
+            if loop_folds:
+                for batch_idx in range(batch_size):
+                    hvals[batch_idx, hfold_idx, :] = (
+                        hf_hero_coeff[batch_idx] * (VR_hf[batch_idx] @ valid_tT[batch_idx])
+                    )
+                    vvals[batch_idx, hfold_idx, :] = (
+                        hf_vill_coeff[batch_idx] * (HR_hf[batch_idx] @ valid_t[batch_idx])
+                    )
+            else:
+                hvals[:, hfold_idx, :] = hf_hero_coeff * torch.bmm(VR_hf, valid_tT)
+                vvals[:, hfold_idx, :] = hf_vill_coeff * torch.bmm(HR_hf, valid_t)
+
+        if vfold_idx.numel() > 0:
+            VR_vf = vr_at.index_select(1, vfold_idx)
+            HR_vf = hr_at.index_select(1, vfold_idx)
+            if loop_folds:
+                for batch_idx in range(batch_size):
+                    hvals[batch_idx, vfold_idx, :] = (
+                        vf_hero_coeff[batch_idx] * (VR_vf[batch_idx] @ valid_tT[batch_idx])
+                    )
+                    vvals[batch_idx, vfold_idx, :] = (
+                        vf_vill_coeff[batch_idx] * (HR_vf[batch_idx] @ valid_t[batch_idx])
+                    )
+            else:
+                hvals[:, vfold_idx, :] = vf_hero_coeff * torch.bmm(VR_vf, valid_tT)
+                vvals[:, vfold_idx, :] = vf_vill_coeff * torch.bmm(HR_vf, valid_t)
+
+        for group, strategies in zip(reversed(groups), reversed(level_strategies), strict=False):
+            if group is None or strategies is None:
+                continue
+            parents = group["parents"]
+            edge_parent = group["edge_parent"]
+            edge_action = group["edge_action"]
+            edge_child = group["edge_child"]
+            edge_parent_pos = group["edge_parent_pos"]
+            edge_strategy = strategies[:, edge_parent_pos, edge_action, :]
+            parent_hvals = torch.zeros((batch_size, parents.numel(), n), dtype=torch.float32, device=torch_device)
+            parent_vvals = torch.zeros_like(parent_hvals)
+            parent_hvals.index_add_(1, edge_parent_pos, edge_strategy * hvals[:, edge_child, :])
+            parent_vvals.index_add_(1, edge_parent_pos, edge_strategy * vvals[:, edge_child, :])
+            hvals[:, parents, :] = parent_hvals
+            vvals[:, parents, :] = parent_vvals
+
+            hero_edges = group["hero_edges"]
+            villain_edges = group["villain_edges"]
+            regret_flat = regret_sum.reshape(batch_size, nn * n_actions, n)
+            strategy_flat = strategy_sum.reshape(batch_size, nn * n_actions, n)
+            if bool(hero_edges.any()):
+                hp = edge_parent[hero_edges]
+                ha = edge_action[hero_edges]
+                hpos = edge_parent_pos[hero_edges]
+                child = edge_child[hero_edges]
+                flat_idx = hp * n_actions + ha
+                instant = hvals[:, child, :] - parent_hvals[:, hpos, :]
+                regret_flat[:, flat_idx, :] = torch.clamp(
+                    regret_flat[:, flat_idx, :] + instant,
+                    min=0.0,
+                )
+                strategy_flat[:, flat_idx, :] = (
+                    strategy_flat[:, flat_idx, :]
+                    + hr_at[:, hp, :] * edge_strategy[:, hero_edges, :]
+                )
+            if bool(villain_edges.any()):
+                vp = edge_parent[villain_edges]
+                va = edge_action[villain_edges]
+                vpos = edge_parent_pos[villain_edges]
+                child = edge_child[villain_edges]
+                flat_idx = vp * n_actions + va
+                instant = vvals[:, child, :] - parent_vvals[:, vpos, :]
+                regret_flat[:, flat_idx, :] = torch.clamp(
+                    regret_flat[:, flat_idx, :] + instant,
+                    min=0.0,
+                )
+                strategy_flat[:, flat_idx, :] = (
+                    strategy_flat[:, flat_idx, :]
+                    + vr_at[:, vp, :] * edge_strategy[:, villain_edges, :]
+                )
+
+    if torch_device.type == "cuda":
+        torch.cuda.synchronize(torch_device)
+    return regret_sum.detach().cpu().numpy().copy(), strategy_sum.detach().cpu().numpy().copy()
+
+
+def _ragged_bmm_numpy(
+    left_matrices,
+    right_matrices,
+    *,
+    n_hands,
+    torch_device,
+):
+    """Evaluate a ragged list of `(rows, n) @ (n, n)` products."""
+    if len(left_matrices) != len(right_matrices):
+        raise ValueError("left_matrices and right_matrices must have the same length")
+    if not left_matrices:
+        return []
+    rows = [int(np.asarray(left).shape[0]) for left in left_matrices]
+    max_rows = max(rows, default=0)
+    if max_rows == 0:
+        return [
+            np.zeros((0, int(n_hands)), dtype=np.float32)
+            for _ in left_matrices
+        ]
+    padded = torch.zeros(
+        (len(left_matrices), max_rows, int(n_hands)),
+        dtype=torch.float32,
+        device=torch_device,
+    )
+    for index, left in enumerate(left_matrices):
+        left_np = np.asarray(left, dtype=np.float32)
+        if left_np.ndim != 2 or left_np.shape[1] != int(n_hands):
+            raise ValueError(f"left matrix {index} has incompatible shape {left_np.shape}")
+        if left_np.shape[0] > 0:
+            padded[index, : left_np.shape[0], :] = torch.as_tensor(
+                left_np,
+                dtype=torch.float32,
+                device=torch_device,
+            )
+    right = torch.stack(
+        [
+            torch.as_tensor(
+                np.asarray(matrix, dtype=np.float32),
+                dtype=torch.float32,
+                device=torch_device,
+            )
+            for matrix in right_matrices
+        ],
+        dim=0,
+    )
+    expected_right = (len(right_matrices), int(n_hands), int(n_hands))
+    if tuple(right.shape) != expected_right:
+        raise ValueError(f"right matrix batch shape {tuple(right.shape)} != {expected_right}")
+    output = torch.bmm(padded, right).detach().cpu().numpy()
+    return [output[index, : row_count, :].copy() for index, row_count in enumerate(rows)]
+
+
+def solve_cfr_levelsync_torch_ragged_terminals(
+    trees,
+    n_hands,
+    win_ms,
+    lose_ms,
+    tie_ms,
+    valid_ms,
+    pot_starts,
+    hero_stack_starts,
+    villain_stack_starts,
+    n_iterations=100,
+    hero_ranges=None,
+    villain_ranges=None,
+    device="cuda",
+):
+    """Run CFR+ on heterogeneous roots with ragged batched terminal products.
+
+    This is a research primitive, not a production resolver backend. The tree
+    recurrence stays per-root, while terminal matrix products are grouped as
+    padded ragged torch batches so root-decision parity can be tested before
+    investing in a fully fused segmented solver.
+    """
+    trees = list(trees)
+    batch_size = len(trees)
+    if batch_size == 0:
+        raise ValueError("trees must be non-empty")
+    if not (
+        len(win_ms)
+        == len(lose_ms)
+        == len(tie_ms)
+        == len(valid_ms)
+        == len(pot_starts)
+        == len(hero_stack_starts)
+        == len(villain_stack_starts)
+        == batch_size
+    ):
+        raise ValueError("all ragged-terminal inputs must have one entry per tree")
+    torch_device = torch.device(device)
+    if torch_device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA ragged-terminal backend requested but torch.cuda is unavailable.")
+
+    n = int(n_hands)
+    n_actions = int(trees[0]["n_actions"])
+    for index, tree in enumerate(trees):
+        if int(tree["n_actions"]) != n_actions:
+            raise ValueError(f"tree {index} action count differs")
+
+    hero_ranges = [None] * batch_size if hero_ranges is None else list(hero_ranges)
+    villain_ranges = [None] * batch_size if villain_ranges is None else list(villain_ranges)
+    if len(hero_ranges) != batch_size or len(villain_ranges) != batch_size:
+        raise ValueError("hero_ranges and villain_ranges must have one entry per tree")
+
+    states = []
+    for index, tree in enumerate(trees):
+        nn = int(tree["n_nodes"])
+        expected_shape = (nn, n_actions, n)
+        regret_sum = np.zeros(expected_shape, dtype=np.float32)
+        strategy_sum = np.zeros_like(regret_sum)
+        hr_at = np.zeros((nn, n), dtype=np.float32)
+        vr_at = np.zeros_like(hr_at)
+        hvals = np.zeros_like(hr_at)
+        vvals = np.zeros_like(hr_at)
+        decision_actions = tree["decision_actions"]
+        children = tree["children"]
+        action_arrays = []
+        child_arrays = []
+        for node_i, actions in enumerate(decision_actions):
+            if actions:
+                action_array = np.asarray(actions, dtype=np.intp)
+                child_array = children[node_i, action_array].astype(np.intp, copy=False)
+            else:
+                action_array = np.zeros(0, dtype=np.intp)
+                child_array = np.zeros(0, dtype=np.intp)
+            action_arrays.append(action_array)
+            child_arrays.append(child_array)
+
+        hero_init = (
+            np.ones(n, dtype=np.float32)
+            if hero_ranges[index] is None
+            else np.asarray(hero_ranges[index], dtype=np.float32)
+        )
+        villain_init = (
+            np.ones(n, dtype=np.float32)
+            if villain_ranges[index] is None
+            else np.asarray(villain_ranges[index], dtype=np.float32)
+        )
+        if hero_init.shape != (n,) or villain_init.shape != (n,):
+            raise ValueError(f"range {index} must have shape ({n},)")
+
+        hi_all = float(hero_stack_starts[index]) - np.asarray(tree["stacks_h"], dtype=np.float32)
+        vi_all = float(villain_stack_starts[index]) - np.asarray(tree["stacks_v"], dtype=np.float32)
+        show_idx = np.asarray(tree["showdown_idx"], dtype=np.intp)
+        hfold_idx = np.asarray(tree["hero_fold_idx"], dtype=np.intp)
+        vfold_idx = np.asarray(tree["villain_fold_idx"], dtype=np.intp)
+        state = {
+            "tree": tree,
+            "regret_sum": regret_sum,
+            "strategy_sum": strategy_sum,
+            "hr_at": hr_at,
+            "vr_at": vr_at,
+            "hvals": hvals,
+            "vvals": vvals,
+            "action_arrays": action_arrays,
+            "child_arrays": child_arrays,
+            "hero_init": hero_init,
+            "villain_init": villain_init,
+            "show_idx": show_idx,
+            "hfold_idx": hfold_idx,
+            "vfold_idx": vfold_idx,
+            "win_m": np.asarray(win_ms[index], dtype=np.float32),
+            "lose_m": np.asarray(lose_ms[index], dtype=np.float32),
+            "tie_m": np.asarray(tie_ms[index], dtype=np.float32),
+            "valid_m": np.asarray(valid_ms[index], dtype=np.float32),
+            "win_mT": np.asarray(win_ms[index], dtype=np.float32).T.copy(),
+            "lose_mT": np.asarray(lose_ms[index], dtype=np.float32).T.copy(),
+            "tie_mT": np.asarray(tie_ms[index], dtype=np.float32).T.copy(),
+            "valid_mT": np.asarray(valid_ms[index], dtype=np.float32).T.copy(),
+        }
+        if state["win_m"].shape != (n, n) or state["valid_m"].shape != (n, n):
+            raise ValueError(f"terminal matrices for tree {index} must have shape ({n}, {n})")
+        if show_idx.size:
+            hi_s = hi_all[show_idx].astype(np.float32)
+            vi_s = vi_all[show_idx].astype(np.float32)
+            state["hw_s"] = (float(pot_starts[index]) + vi_s).reshape(-1, 1)
+            state["hl_s"] = (-hi_s).reshape(-1, 1)
+            state["ht_s"] = ((float(pot_starts[index]) + vi_s - hi_s) / 2.0).reshape(-1, 1)
+            state["vw_s"] = (float(pot_starts[index]) + hi_s).reshape(-1, 1)
+            state["vl_s"] = (-vi_s).reshape(-1, 1)
+            state["vt_s"] = ((float(pot_starts[index]) + hi_s - vi_s) / 2.0).reshape(-1, 1)
+        if hfold_idx.size:
+            hi_hf = hi_all[hfold_idx].astype(np.float32)
+            state["hf_hero_coeff"] = (-hi_hf).reshape(-1, 1)
+            state["hf_vill_coeff"] = (float(pot_starts[index]) + hi_hf).reshape(-1, 1)
+        if vfold_idx.size:
+            vi_vf = vi_all[vfold_idx].astype(np.float32)
+            state["vf_hero_coeff"] = (float(pot_starts[index]) + vi_vf).reshape(-1, 1)
+            state["vf_vill_coeff"] = (-vi_vf).reshape(-1, 1)
+        states.append(state)
+
+    for _iter in range(int(n_iterations)):
+        for state in states:
+            tree = state["tree"]
+            hr_at = state["hr_at"]
+            vr_at = state["vr_at"]
+            hvals = state["hvals"]
+            vvals = state["vvals"]
+            hr_at.fill(0.0)
+            vr_at.fill(0.0)
+            hvals.fill(0.0)
+            vvals.fill(0.0)
+            hr_at[0] = state["hero_init"]
+            vr_at[0] = state["villain_init"]
+            state["iteration_strategy"] = [None] * int(tree["n_nodes"])
+            for node_i in range(int(tree["n_nodes"])):
+                if int(tree["player"][node_i]) == -1:
+                    continue
+                actions = state["action_arrays"][node_i]
+                children = state["child_arrays"][node_i]
+                strategy = _regret_matching_strategy(state["regret_sum"][node_i, actions, :])
+                state["iteration_strategy"][node_i] = strategy
+                if int(tree["player"][node_i]) == 0:
+                    hr_at[children, :] = hr_at[node_i].reshape(1, -1) * strategy
+                    vr_at[children, :] = vr_at[node_i]
+                else:
+                    hr_at[children, :] = hr_at[node_i]
+                    vr_at[children, :] = vr_at[node_i].reshape(1, -1) * strategy
+
+        show_states = [state for state in states if state["show_idx"].size]
+        if show_states:
+            vr_show = [state["vr_at"][state["show_idx"]] for state in show_states]
+            hr_show = [state["hr_at"][state["show_idx"]] for state in show_states]
+            h_win = _ragged_bmm_numpy(vr_show, [state["win_mT"] for state in show_states], n_hands=n, torch_device=torch_device)
+            h_lose = _ragged_bmm_numpy(vr_show, [state["lose_mT"] for state in show_states], n_hands=n, torch_device=torch_device)
+            h_tie = _ragged_bmm_numpy(vr_show, [state["tie_mT"] for state in show_states], n_hands=n, torch_device=torch_device)
+            v_win = _ragged_bmm_numpy(hr_show, [state["win_m"] for state in show_states], n_hands=n, torch_device=torch_device)
+            v_lose = _ragged_bmm_numpy(hr_show, [state["lose_m"] for state in show_states], n_hands=n, torch_device=torch_device)
+            v_tie = _ragged_bmm_numpy(hr_show, [state["tie_m"] for state in show_states], n_hands=n, torch_device=torch_device)
+            for index, state in enumerate(show_states):
+                show_idx = state["show_idx"]
+                state["hvals"][show_idx] = (
+                    state["hw_s"] * h_win[index]
+                    + state["hl_s"] * h_lose[index]
+                    + state["ht_s"] * h_tie[index]
+                )
+                state["vvals"][show_idx] = (
+                    state["vw_s"] * v_lose[index]
+                    + state["vl_s"] * v_win[index]
+                    + state["vt_s"] * v_tie[index]
+                )
+
+        hfold_states = [state for state in states if state["hfold_idx"].size]
+        if hfold_states:
+            vr_hfold = [state["vr_at"][state["hfold_idx"]] for state in hfold_states]
+            hr_hfold = [state["hr_at"][state["hfold_idx"]] for state in hfold_states]
+            hfold_hero = _ragged_bmm_numpy(vr_hfold, [state["valid_mT"] for state in hfold_states], n_hands=n, torch_device=torch_device)
+            hfold_villain = _ragged_bmm_numpy(hr_hfold, [state["valid_m"] for state in hfold_states], n_hands=n, torch_device=torch_device)
+            for index, state in enumerate(hfold_states):
+                hfold_idx = state["hfold_idx"]
+                state["hvals"][hfold_idx] = state["hf_hero_coeff"] * hfold_hero[index]
+                state["vvals"][hfold_idx] = state["hf_vill_coeff"] * hfold_villain[index]
+
+        vfold_states = [state for state in states if state["vfold_idx"].size]
+        if vfold_states:
+            vr_vfold = [state["vr_at"][state["vfold_idx"]] for state in vfold_states]
+            hr_vfold = [state["hr_at"][state["vfold_idx"]] for state in vfold_states]
+            vfold_hero = _ragged_bmm_numpy(vr_vfold, [state["valid_mT"] for state in vfold_states], n_hands=n, torch_device=torch_device)
+            vfold_villain = _ragged_bmm_numpy(hr_vfold, [state["valid_m"] for state in vfold_states], n_hands=n, torch_device=torch_device)
+            for index, state in enumerate(vfold_states):
+                vfold_idx = state["vfold_idx"]
+                state["hvals"][vfold_idx] = state["vf_hero_coeff"] * vfold_hero[index]
+                state["vvals"][vfold_idx] = state["vf_vill_coeff"] * vfold_villain[index]
+
+        for state in states:
+            tree = state["tree"]
+            player = tree["player"]
+            hvals = state["hvals"]
+            vvals = state["vvals"]
+            hr_at = state["hr_at"]
+            vr_at = state["vr_at"]
+            regret_sum = state["regret_sum"]
+            strategy_sum = state["strategy_sum"]
+            for node_i in reversed(range(int(tree["n_nodes"]))):
+                if int(player[node_i]) == -1:
+                    continue
+                actions = state["action_arrays"][node_i]
+                children = state["child_arrays"][node_i]
+                strategy = state["iteration_strategy"][node_i]
+                child_hvals = hvals[children, :]
+                child_vvals = vvals[children, :]
+                hval = np.sum(strategy * child_hvals, axis=0, dtype=np.float32)
+                vval = np.sum(strategy * child_vvals, axis=0, dtype=np.float32)
+                hvals[node_i] = hval
+                vvals[node_i] = vval
+                if int(player[node_i]) == 0:
+                    instant = child_hvals - hval.reshape(1, -1)
+                    regret_sum[node_i, actions, :] = np.maximum(
+                        regret_sum[node_i, actions, :] + instant,
+                        0,
+                    )
+                    strategy_sum[node_i, actions, :] += hr_at[node_i].reshape(1, -1) * strategy
+                else:
+                    instant = child_vvals - vval.reshape(1, -1)
+                    regret_sum[node_i, actions, :] = np.maximum(
+                        regret_sum[node_i, actions, :] + instant,
+                        0,
+                    )
+                    strategy_sum[node_i, actions, :] += vr_at[node_i].reshape(1, -1) * strategy
+
+    if torch_device.type == "cuda":
+        torch.cuda.synchronize(torch_device)
+    return [
+        (state["regret_sum"].copy(), state["strategy_sum"].copy())
+        for state in states
+    ]
 
 
 def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
@@ -716,6 +1541,7 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
               showdown_leaf_fn=None, cut_node_indices=None, cut_node_fn=None,
               initial_regret_sum=None, initial_strategy_sum=None,
               trace_node_indices=None, trace_node_fn=None,
+              iteration_update_fn=None,
               solver_update="cfr_plus"):
     """Run iterative CFR+ with batched terminal evaluation.
 
@@ -749,6 +1575,11 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         Optional CPU-only diagnostic hook. Trace nodes are not cut and do not
         alter solving. The hook receives current reaches and exact node values
         after each backward pass.
+    iteration_update_fn : callable or None
+        Optional CPU-only diagnostic hook for learned in-resolver update
+        experiments. It is called after each CFR iteration with copies of the
+        current solver state and may return a dict containing replacement
+        ``regret_sum`` and/or ``strategy_sum`` arrays.
     solver_update : {"cfr_plus", "dcfr_plus", "pdcfr_plus"}
         Regret-minimization update rule. ``cfr_plus`` preserves the historical
         recurrence. ``dcfr_plus`` applies fixed DCFR-style discounts to old
@@ -779,6 +1610,8 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
         raise ValueError("trace_node_fn is required when trace_node_indices are provided")
     if trace_node_fn is not None and trace_idx.size == 0:
         raise ValueError("trace_node_indices are required when trace_node_fn is provided")
+    if iteration_update_fn is not None and not callable(iteration_update_fn):
+        raise ValueError("iteration_update_fn must be callable")
 
     # Pre-extract terminal data as contiguous arrays
     show_idx = tree['showdown_idx']
@@ -1089,6 +1922,36 @@ def solve_cfr(tree, n_hands, win_m, lose_m, tie_m, valid_m,
                 hero_stack_start=hero_stack_start,
                 villain_stack_start=villain_stack_start,
             )
+        if iteration_update_fn is not None:
+            update = iteration_update_fn(
+                iteration=int(iteration_number),
+                tree=tree,
+                hero_reach=hr_at.copy(),
+                villain_reach=vr_at.copy(),
+                hero_values=hvals.copy(),
+                villain_values=vvals.copy(),
+                regret_sum=regret_sum.copy(),
+                strategy_sum=strategy_sum.copy(),
+                valid_m=valid_m,
+                pot_start=pot_start,
+                hero_stack_start=hero_stack_start,
+                villain_stack_start=villain_stack_start,
+            )
+            if update is not None:
+                if not isinstance(update, dict):
+                    raise ValueError("iteration_update_fn must return None or a dict")
+                if "regret_sum" in update:
+                    regret_sum = _validated_updated_array(
+                        update["regret_sum"],
+                        expected_shape,
+                        "iteration_update_fn regret_sum",
+                    )
+                if "strategy_sum" in update:
+                    strategy_sum = _validated_updated_array(
+                        update["strategy_sum"],
+                        expected_shape,
+                        "iteration_update_fn strategy_sum",
+                    )
 
     return regret_sum, strategy_sum
 

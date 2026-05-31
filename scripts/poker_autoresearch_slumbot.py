@@ -20,7 +20,20 @@ from poker_ai.research.slumbot_eval import add_runtime_metrics, parse_slumbot_su
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a Slumbot smoke evaluation.")
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--model")
+    parser.add_argument(
+        "--model-glob",
+        action="append",
+        default=[],
+        help="Opt-in SD-CFR mixture checkpoint glob forwarded to play_slumbot.py.",
+    )
+    parser.add_argument(
+        "--model-checkpoint",
+        action="append",
+        default=[],
+        help="Opt-in explicit SD-CFR mixture checkpoint path forwarded to play_slumbot.py.",
+    )
+    parser.add_argument("--mixture-seed", type=int, default=20260521)
     parser.add_argument("--hands", type=int, default=5)
     parser.add_argument("--greedy", action="store_true")
     parser.add_argument("--no-allin", action="store_true")
@@ -34,14 +47,17 @@ def main(argv: list[str] | None = None) -> int:
             "torch-cpu",
             "torch-levelsync-cuda",
             "torch-levelsync-cpu",
+            "segmented-cuda",
+            "segmented-cpu",
         ),
         default="auto",
     )
     parser.add_argument(
         "--solver-budget-profile",
-        choices=("live", "fast-live"),
+        choices=("live", "frontier-live", "fast-live", "selective-fast-live"),
         default="live",
     )
+    parser.add_argument("--solver-budget-policy")
     parser.add_argument(
         "--strategy-source",
         choices=("regret", "policy-head", "average-policy", "policy-head-covered"),
@@ -51,15 +67,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-timeout-seconds", type=float, default=10.0)
     parser.add_argument("--timeout-seconds", type=float, default=300.0)
     args = parser.parse_args(argv)
+    if not args.model and not args.model_glob and not args.model_checkpoint:
+        parser.error("either --model or --model-glob/--model-checkpoint is required")
 
     command = [
         sys.executable,
         "scripts/play_slumbot.py",
-        "--model",
-        args.model,
         "--hands",
         str(args.hands),
     ]
+    if args.model:
+        command.extend(["--model", args.model])
+    for pattern in args.model_glob:
+        command.extend(["--model-glob", pattern])
+    for checkpoint in args.model_checkpoint:
+        command.extend(["--model-checkpoint", checkpoint])
+    if args.model_glob or args.model_checkpoint:
+        command.extend(["--mixture-seed", str(args.mixture_seed)])
     if args.greedy:
         command.append("--greedy")
     if args.no_allin:
@@ -70,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         command.extend(["--solver-backend", args.solver_backend])
     if not args.no_solver and args.solver_budget_profile != "live":
         command.extend(["--solver-budget-profile", args.solver_budget_profile])
+    if not args.no_solver and args.solver_budget_policy:
+        command.extend(["--solver-budget-policy", args.solver_budget_policy])
     if args.strategy_source != "regret":
         command.extend(["--strategy-source", args.strategy_source])
     if args.trace_jsonl:

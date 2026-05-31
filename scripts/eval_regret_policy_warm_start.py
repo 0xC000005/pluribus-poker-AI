@@ -50,6 +50,14 @@ from train_regret_policy_warm_start import (  # noqa: E402
 )
 
 
+def _mean(values: list[float]) -> float:
+    return round(float(np.mean(values)), 8) if values else 0.0
+
+
+def _rate(values: list[bool]) -> float:
+    return round(float(np.mean(values)), 8) if values else 0.0
+
+
 def _resolve_device(device: str | torch.device) -> torch.device:
     if isinstance(device, torch.device):
         return device
@@ -251,6 +259,65 @@ def _warm_start_decision(
     )
 
 
+def _apply_uniform_budget_baseline(
+    summary: dict[str, Any],
+    records: list[dict[str, Any]],
+    *,
+    baseline_iterations: int | None,
+) -> dict[str, Any]:
+    """Add a same-teacher uniform-budget baseline to a warm-start summary."""
+    if baseline_iterations is None:
+        summary["baseline_iterations"] = None
+        return summary
+    evaluated = [
+        record
+        for record in records
+        if record.get("passed") and "baseline_l1_to_reference" in record
+    ]
+    baseline_l1 = [float(record["baseline_l1_to_reference"]) for record in evaluated]
+    baseline_kl = [float(record["baseline_kl_to_reference"]) for record in evaluated]
+    baseline_latency = [float(record["baseline_latency_ms"]) for record in evaluated]
+    baseline_allin = _rate([bool(record["baseline_allin_selected"]) for record in evaluated])
+    reference_allin = _rate([bool(record["reference_allin_selected"]) for record in evaluated])
+    baseline_allin_prob = [float(record["baseline_allin_prob"]) for record in evaluated]
+    reference_allin_prob = [float(record["reference_allin_prob"]) for record in evaluated]
+    baseline_agreement = _rate(
+        [bool(record["baseline_agrees_with_reference"]) for record in evaluated]
+    )
+    mean_baseline_l1 = _mean(baseline_l1)
+    mean_baseline_kl = _mean(baseline_kl)
+    warm_beats_uniform = bool(
+        evaluated
+        and summary.get("mean_warm_l1_to_reference", 0.0) < mean_baseline_l1
+        and summary.get("mean_warm_kl_to_reference", 0.0) < mean_baseline_kl
+        and summary.get("warm_action_agreement", 0.0) >= baseline_agreement
+        and summary.get("warm_allin_gap", 0.0)
+        <= round(abs(baseline_allin - reference_allin), 8)
+        and summary.get("warm_allin_prob_gap", 0.0)
+        <= round(abs(_mean(baseline_allin_prob) - _mean(reference_allin_prob)), 8)
+    )
+    summary.update(
+        {
+            "baseline_iterations": int(baseline_iterations),
+            "baseline_n_evaluated": int(len(evaluated)),
+            "mean_baseline_l1_to_reference": mean_baseline_l1,
+            "mean_baseline_kl_to_reference": mean_baseline_kl,
+            "baseline_action_agreement": baseline_agreement,
+            "baseline_allin_rate": baseline_allin,
+            "baseline_allin_gap": round(abs(baseline_allin - reference_allin), 8),
+            "mean_baseline_allin_prob": _mean(baseline_allin_prob),
+            "baseline_allin_prob_gap": round(
+                abs(_mean(baseline_allin_prob) - _mean(reference_allin_prob)),
+                8,
+            ),
+            "mean_baseline_latency_ms": _mean(baseline_latency),
+            "warm_beats_uniform_budget": warm_beats_uniform,
+        }
+    )
+    summary["passed"] = bool(summary["passed"] and warm_beats_uniform)
+    return summary
+
+
 def eval_regret_policy_warm_start(
     *,
     checkpoint: str | Path,
@@ -261,6 +328,7 @@ def eval_regret_policy_warm_start(
     limit: int = 64,
     low_iterations: int = 5,
     reference_iterations: int = 25,
+    baseline_iterations: int | None = None,
     solver_backend: str = "cpu",
     train_labels_npz: str | Path | None = None,
     require_root_disjoint: bool = True,
@@ -299,6 +367,17 @@ def eval_regret_policy_warm_start(
             solver_iterations=low_iterations,
             solver_backend=solver_backend,
         )
+        baseline_solved = (
+            _solve_with_belief(
+                case,
+                parsed,
+                belief_row=belief_row,
+                solver_iterations=baseline_iterations,
+                solver_backend=solver_backend,
+            )
+            if baseline_iterations is not None
+            else None
+        )
         reference_solved = _solve_with_belief(
             case,
             parsed,
@@ -306,11 +385,18 @@ def eval_regret_policy_warm_start(
             solver_iterations=reference_iterations,
             solver_backend=solver_backend,
         )
-        if low_solved is None or reference_solved is None:
+        if low_solved is None or reference_solved is None or (
+            baseline_iterations is not None and baseline_solved is None
+        ):
             records.append({"label": case.label, "passed": False, "skipped": "solver_skipped"})
             continue
         low_solver, low_node, low = low_solved
         reference_solver, reference_node, reference = reference_solved
+        if baseline_solved is not None:
+            _baseline_solver, baseline_node, baseline = baseline_solved
+        else:
+            baseline_node = None
+            baseline = None
         warm_solved = _warm_start_decision(
             model=model,
             payload=payload,
@@ -328,42 +414,68 @@ def eval_regret_policy_warm_start(
             records.append({"label": case.label, "passed": False, "skipped": "warm_start_skipped"})
             continue
         _warm_solver, warm_node, warm = warm_solved
-        records.append(
-            {
-                "label": case.label,
-                "passed": True,
-                "low_action": int(np.argmax(low.strategy)),
-                "reference_action": int(np.argmax(reference.strategy)),
-                "warm_action": int(np.argmax(warm.strategy)),
-                "low_l1_to_reference": round(float(np.abs(low.strategy - reference.strategy).sum()), 8),
-                "warm_l1_to_reference": round(float(np.abs(warm.strategy - reference.strategy).sum()), 8),
-                "low_kl_to_reference": _kl_to_reference(low.strategy, reference.strategy),
-                "warm_kl_to_reference": _kl_to_reference(warm.strategy, reference.strategy),
-                "low_allin_prob": round(float(low.strategy[8]), 8),
-                "reference_allin_prob": round(float(reference.strategy[8]), 8),
-                "warm_allin_prob": round(float(warm.strategy[8]), 8),
-                "low_allin_selected": bool(int(np.argmax(low.strategy)) == 8),
-                "reference_allin_selected": bool(int(np.argmax(reference.strategy)) == 8),
-                "warm_allin_selected": bool(int(np.argmax(warm.strategy)) == 8),
-                "low_illegal_mass": _illegal_mass(low.strategy, low_node),
-                "reference_illegal_mass": _illegal_mass(reference.strategy, reference_node),
-                "warm_illegal_mass": _illegal_mass(warm.strategy, warm_node),
-                "low_latency_ms": round(float(low.latency_ms), 3),
-                "reference_latency_ms": round(float(reference.latency_ms), 3),
-                "warm_latency_ms": round(float(warm.latency_ms), 3),
-                "low_agrees_with_reference": bool(
-                    int(np.argmax(low.strategy)) == int(np.argmax(reference.strategy))
-                ),
-                "warm_agrees_with_reference": bool(
-                    int(np.argmax(warm.strategy)) == int(np.argmax(reference.strategy))
-                ),
-            }
-        )
+        record = {
+            "label": case.label,
+            "passed": True,
+            "low_action": int(np.argmax(low.strategy)),
+            "reference_action": int(np.argmax(reference.strategy)),
+            "warm_action": int(np.argmax(warm.strategy)),
+            "low_l1_to_reference": round(float(np.abs(low.strategy - reference.strategy).sum()), 8),
+            "warm_l1_to_reference": round(float(np.abs(warm.strategy - reference.strategy).sum()), 8),
+            "low_kl_to_reference": _kl_to_reference(low.strategy, reference.strategy),
+            "warm_kl_to_reference": _kl_to_reference(warm.strategy, reference.strategy),
+            "low_allin_prob": round(float(low.strategy[8]), 8),
+            "reference_allin_prob": round(float(reference.strategy[8]), 8),
+            "warm_allin_prob": round(float(warm.strategy[8]), 8),
+            "low_allin_selected": bool(int(np.argmax(low.strategy)) == 8),
+            "reference_allin_selected": bool(int(np.argmax(reference.strategy)) == 8),
+            "warm_allin_selected": bool(int(np.argmax(warm.strategy)) == 8),
+            "low_illegal_mass": _illegal_mass(low.strategy, low_node),
+            "reference_illegal_mass": _illegal_mass(reference.strategy, reference_node),
+            "warm_illegal_mass": _illegal_mass(warm.strategy, warm_node),
+            "low_latency_ms": round(float(low.latency_ms), 3),
+            "reference_latency_ms": round(float(reference.latency_ms), 3),
+            "warm_latency_ms": round(float(warm.latency_ms), 3),
+            "low_agrees_with_reference": bool(
+                int(np.argmax(low.strategy)) == int(np.argmax(reference.strategy))
+            ),
+            "warm_agrees_with_reference": bool(
+                int(np.argmax(warm.strategy)) == int(np.argmax(reference.strategy))
+            ),
+        }
+        if baseline is not None and baseline_node is not None:
+            record.update(
+                {
+                    "baseline_iterations": int(baseline_iterations),
+                    "baseline_action": int(np.argmax(baseline.strategy)),
+                    "baseline_l1_to_reference": round(
+                        float(np.abs(baseline.strategy - reference.strategy).sum()),
+                        8,
+                    ),
+                    "baseline_kl_to_reference": _kl_to_reference(
+                        baseline.strategy,
+                        reference.strategy,
+                    ),
+                    "baseline_allin_prob": round(float(baseline.strategy[8]), 8),
+                    "baseline_allin_selected": bool(int(np.argmax(baseline.strategy)) == 8),
+                    "baseline_illegal_mass": _illegal_mass(baseline.strategy, baseline_node),
+                    "baseline_latency_ms": round(float(baseline.latency_ms), 3),
+                    "baseline_agrees_with_reference": bool(
+                        int(np.argmax(baseline.strategy)) == int(np.argmax(reference.strategy))
+                    ),
+                }
+            )
+        records.append(record)
     summary = _summarize_records(
         records,
         root_audit=root_audit,
         min_evaluated=min_evaluated,
         max_warm_latency_ratio=max_warm_latency_ratio,
+    )
+    summary = _apply_uniform_budget_baseline(
+        summary,
+        records,
+        baseline_iterations=baseline_iterations,
     )
     return {
         "mode": "regret_policy_warm_start_solver_budget",
@@ -374,6 +486,7 @@ def eval_regret_policy_warm_start(
         "start_index": int(start_index),
         "limit": int(limit),
         "low_iterations": int(low_iterations),
+        "baseline_iterations": int(baseline_iterations) if baseline_iterations is not None else None,
         "reference_iterations": int(reference_iterations),
         "solver_backend": solver_backend,
         "require_root_disjoint": bool(require_root_disjoint),
@@ -397,6 +510,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-index", type=int, default=128)
     parser.add_argument("--limit", type=int, default=64)
     parser.add_argument("--low-iterations", type=int, default=5)
+    parser.add_argument(
+        "--baseline-iterations",
+        type=int,
+        help="Optional uniform CFR+ budget that warm-started resolving must also beat.",
+    )
     parser.add_argument("--reference-iterations", type=int, default=25)
     parser.add_argument("--solver-backend", choices=("cpu", "auto"), default="cpu")
     parser.add_argument("--train-labels-npz")
@@ -414,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
         start_index=args.start_index,
         limit=args.limit,
         low_iterations=args.low_iterations,
+        baseline_iterations=args.baseline_iterations,
         reference_iterations=args.reference_iterations,
         solver_backend=args.solver_backend,
         train_labels_npz=args.train_labels_npz,

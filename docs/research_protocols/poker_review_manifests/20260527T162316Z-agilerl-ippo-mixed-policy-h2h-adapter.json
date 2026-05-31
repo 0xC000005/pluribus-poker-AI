@@ -1,0 +1,54 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1452,
+      "path": "benchmark_audit.md",
+      "sha256": "69160ec5711561f4eb45a2e3ad007fb5245a4cf109358bf3ef35252a6300312c"
+    },
+    {
+      "bytes": 813,
+      "path": "decision.json",
+      "sha256": "983b1f6a48d4d7dba519a87e4a279d25f72db7fb1ea84f8450d8f482ae8502db"
+    },
+    {
+      "bytes": 1523,
+      "path": "mechanism_review.md",
+      "sha256": "ad25328c78647cc2cd44e5d4914a5868ba95540549d73268037487745e18fe76"
+    },
+    {
+      "bytes": 2201,
+      "path": "related_work.md",
+      "sha256": "53da21a35ec15c7eb8d0e4a79e2988ae0e359d0eb74bae7ab3346aabf55c70c4"
+    },
+    {
+      "bytes": 1809,
+      "path": "review.md",
+      "sha256": "51c185f514beb1201f19a7d202cbf11dd43d952bfcd7a5c5fce3ab5c23f9117a"
+    },
+    {
+      "bytes": 2603,
+      "path": "review_scope.json",
+      "sha256": "8171bc5cef61c8939684bb395785c1b83d713c6a853584a3674778fa69be044e"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The evaluator adapter is valid and tested, but the bounded AgileRL IPPO checkpoint failed the parent H2H gate; use the adapter for future maintained-backend falsification, not for promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T162316Z-agilerl-ippo-mixed-policy-h2h-adapter",
+  "review_id": "20260527T162316Z-agilerl-ippo-mixed-policy-h2h-adapter",
+  "sources": [
+    "poker_ai/research/mixed_policy_h2h.py",
+    "test/unit/test_mixed_policy_h2h.py",
+    "autoresearch-session/agilerl/agilerl_ippo_h128_4k_seed20260531_current.json",
+    "autoresearch-session/agilerl/agilerl_ippo_h128_4k_vs_psro_rainbow_500_seed20260531_current.json",
+    "https://docs.agilerl.com/en/stable/api/algorithms/ippo.html",
+    "https://pettingzoo.farama.org/api/parallel/",
+    "https://arxiv.org/abs/2403.02227",
+    "https://papers.nips.cc/paper/2021/hash/c2e06e9a80370952f6ec5463c77cbace-Abstract.html"
+  ],
+  "written_at": "2026-05-27T16:25:38Z"
+}

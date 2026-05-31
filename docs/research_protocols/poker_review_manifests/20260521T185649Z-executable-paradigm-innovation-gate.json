@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1376,
+      "path": "benchmark_audit.md",
+      "sha256": "0bd2464d5c5be3f3f775b2da9a29816950c1cad78368d7c388ef9d94b045aa4a"
+    },
+    {
+      "bytes": 446,
+      "path": "decision.json",
+      "sha256": "0a0c0a119c23c0b60b47bf9f88bb0298c7439a0266ceab067239c32e5c504333"
+    },
+    {
+      "bytes": 1284,
+      "path": "mechanism_review.md",
+      "sha256": "864373f16e5007f34cbf0690262ab381dee72d51afbc8313d66eaf4a6bc58636"
+    },
+    {
+      "bytes": 1770,
+      "path": "related_work.md",
+      "sha256": "13caf5be975eaee412639d6e0d0152f0791bd185f15e37159e95a940e2c8cca2"
+    },
+    {
+      "bytes": 1313,
+      "path": "review.md",
+      "sha256": "a0eb1ccc67d2a842d30be2c3230b1bbabd99039100d19bb2aafa3e126e946083"
+    },
+    {
+      "bytes": 1060,
+      "path": "review_scope.json",
+      "sha256": "2a3f912b92faeef887706b37def1b3fa5f2045321aa111a786133701ba660fdc"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The executable innovation gate hardens unattended autoresearch against repeated shallow mechanism expansion and benchmark-hacking while preserving fixed-budget experiment loops after a mechanism is selected.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T185649Z-executable-paradigm-innovation-gate",
+  "review_id": "20260521T185649Z-executable-paradigm-innovation-gate",
+  "sources": [
+    "https://arxiv.org/abs/2507.00310",
+    "https://arxiv.org/abs/2408.06292",
+    "https://arxiv.org/abs/2504.08066",
+    "https://autoresearch.lol/"
+  ],
+  "written_at": "2026-05-21T18:58:07Z"
+}

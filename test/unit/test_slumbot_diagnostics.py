@@ -1,6 +1,7 @@
 import json
 import sys
 import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 
 import torch
@@ -12,7 +13,11 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 from play_slumbot import (
     ActionDiagnostics,
+    PerHandCheckpointSelector,
+    SlumbotModelChoice,
     _base_policy_action,
+    _selective_budget_decision,
+    _suppress_solver_allin_action,
     _solver_iterations_for_profile,
     api_new_hand,
     action_to_slumbot,
@@ -136,6 +141,78 @@ def test_action_diagnostics_writes_jsonl_trace(tmp_path):
     assert records[2]["bot_hole_cards"] == ["Qs", "Qd"]
 
 
+def test_action_diagnostics_writes_checkpoint_context_to_trace(tmp_path):
+    trace_path = tmp_path / "slumbot_trace.jsonl"
+    diagnostics = ActionDiagnostics(trace_path=trace_path)
+
+    diagnostics.begin_hand(
+        hand_index=3,
+        client_pos=0,
+        hole_cards=["As", "Ad"],
+        model_context={
+            "checkpoint": "models/iter_50.pt",
+            "checkpoint_iteration": 50,
+            "mixture_index": 0,
+            "mixture_weight": 0.25,
+            "mixture_size": 4,
+        },
+    )
+    diagnostics.record_policy_action(
+        1,
+        "k",
+        "",
+        client_pos=0,
+        parsed=parse_action(""),
+        street=0,
+        strategy_source="regret",
+    )
+    diagnostics.end_hand(100)
+
+    records = [json.loads(line) for line in trace_path.read_text().splitlines()]
+    assert records[0]["checkpoint"] == "models/iter_50.pt"
+    assert records[0]["checkpoint_iteration"] == 50
+    assert records[0]["mixture_index"] == 0
+    assert records[0]["mixture_weight"] == 0.25
+    assert records[0]["mixture_size"] == 4
+    assert records[1]["checkpoint"] == "models/iter_50.pt"
+
+
+def test_per_hand_checkpoint_selector_samples_one_model_with_context():
+    first = torch.nn.Linear(1, 1)
+    second = torch.nn.Linear(1, 1)
+    selector = PerHandCheckpointSelector(
+        [
+            SlumbotModelChoice(
+                value_net=first,
+                metadata={"checkpoint": "iter_50.pt", "checkpoint_iteration": 50},
+                mixture_index=0,
+                mixture_weight=0.0,
+                mixture_size=2,
+            ),
+            SlumbotModelChoice(
+                value_net=second,
+                metadata={"checkpoint": "iter_100.pt", "checkpoint_iteration": 100},
+                mixture_index=1,
+                mixture_weight=1.0,
+                mixture_size=2,
+            ),
+        ],
+        weights=[0.0, 1.0],
+        seed=20260521,
+    )
+
+    choice = selector.select_for_hand(hand_index=1)
+
+    assert choice.value_net is second
+    assert choice.trace_context == {
+        "checkpoint": "iter_100.pt",
+        "checkpoint_iteration": 100,
+        "mixture_index": 1,
+        "mixture_weight": 1.0,
+        "mixture_size": 2,
+    }
+
+
 def test_action_diagnostics_records_fallback_and_parse_error():
     diagnostics = ActionDiagnostics()
 
@@ -233,6 +310,66 @@ def test_solver_iteration_profiles_keep_live_default_and_fast_live_candidate():
         hero_stack=5000,
         villain_stack=5000,
     ) == 250
+    assert _solver_iterations_for_profile(
+        "frontier-live",
+        to_call=0,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 125
+    assert _solver_iterations_for_profile(
+        "frontier-live",
+        to_call=300,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 250
+    assert _solver_iterations_for_profile(
+        "frontier-live",
+        to_call=600,
+        pot=1000,
+        hero_stack=5000,
+        villain_stack=5000,
+    ) == 350
+
+
+def test_selective_budget_decision_uses_solver_native_policy_score():
+    policy = {
+        "feature_dim": 17,
+        "feature_mean": [0.0] * 17,
+        "feature_std": [1.0] * 17,
+        "ridge_weights": [0.0] * 18,
+        "score_threshold": 0.5,
+    }
+    policy["ridge_weights"][14] = 1.0  # normalized entropy feature
+
+    escalate, score, threshold = _selective_budget_decision(
+        policy,
+        strategy={0: 0.5, 1: 0.5},
+        solver_action=0,
+    )
+    assert escalate is True
+    assert score >= threshold
+
+    escalate, score, threshold = _selective_budget_decision(
+        policy,
+        strategy={0: 1.0, 1: 0.0},
+        solver_action=0,
+    )
+    assert escalate is False
+    assert score < threshold
+
+
+def test_no_allin_suppresses_solver_allin_to_best_non_allin_action():
+    action = _suppress_solver_allin_action(
+        8,
+        {1: 0.2, 6: 0.6, 8: 0.9},
+        no_allin=True,
+    )
+
+    assert action == 6
+    assert _suppress_solver_allin_action(8, {8: 1.0}, no_allin=True) == 8
+    assert _suppress_solver_allin_action(8, {1: 0.2, 6: 0.6}, no_allin=False) == 8
 
 
 class _PolicyHeadProbeNet(torch.nn.Module):
@@ -346,6 +483,50 @@ def test_play_slumbot_script_help_imports_from_repo_root():
 
     assert result.returncode == 0
     assert "--strategy-source" in result.stdout
+    assert "--model-glob" in result.stdout
     assert "torch-levelsync-cuda" in result.stdout
     assert "--trace-jsonl" in result.stdout
     assert "--api-timeout-seconds" in result.stdout
+
+
+def test_poker_autoresearch_slumbot_forwards_model_glob(monkeypatch, capsys):
+    import poker_autoresearch_slumbot
+
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "FINAL: 1 hands | +0 chips\n"
+                "Avg: +0 +/- 0 chips/hand\n"
+                "Rate: +0 mbb/hand\n"
+                "Win rate: 0.0%\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(poker_autoresearch_slumbot.subprocess, "run", fake_run)
+
+    rc = poker_autoresearch_slumbot.main(
+        [
+            "--model-glob",
+            "models/run/*iter_*.pt",
+            "--hands",
+            "1",
+            "--greedy",
+            "--no-solver",
+            "--trace-jsonl",
+            "trace.jsonl",
+        ]
+    )
+
+    assert rc == 0
+    command = calls[0]
+    assert "--model-glob" in command
+    assert "models/run/*iter_*.pt" in command
+    assert "--model" not in command
+    assert "--trace-jsonl" in command
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["passed"] is True

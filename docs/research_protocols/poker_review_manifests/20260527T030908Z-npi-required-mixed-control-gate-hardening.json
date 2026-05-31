@@ -1,0 +1,49 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1119,
+      "path": "benchmark_audit.md",
+      "sha256": "2b16d97ee3502f4d8e67d738a73995a6cec796935686b25f4cae0516c0d75ae9"
+    },
+    {
+      "bytes": 351,
+      "path": "decision.json",
+      "sha256": "b30dc611779db8047d9a2a6713b6c039249df824f2574778e468e7e68ea116b0"
+    },
+    {
+      "bytes": 1241,
+      "path": "mechanism_review.md",
+      "sha256": "b8a78149597b4d0ecdff742192999798a3e7714127db55ab98f0f533ef8098a4"
+    },
+    {
+      "bytes": 1864,
+      "path": "related_work.md",
+      "sha256": "a88a422c6e0945d76d0f0f4c93fbe33e59ceeb393f88741bdd56b3c606a84f23"
+    },
+    {
+      "bytes": 1491,
+      "path": "review.md",
+      "sha256": "5c9fbfa7094c92365a52b47a1701fbf4ed2e3e594b1651752e3c9c4da18f2d45"
+    },
+    {
+      "bytes": 2383,
+      "path": "review_scope.json",
+      "sha256": "d0a3e6cc2d3bebfa37464bd804304a5ff90916bdd6430add5da1f59306791b75"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The change tightens the NPI loop by requiring per-generation fixed or mixed controls before any Slumbot confidence path.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T030908Z-npi-required-mixed-control-gate-hardening",
+  "review_id": "20260527T030908Z-npi-required-mixed-control-gate-hardening",
+  "sources": [
+    "https://tianshou.org/en/latest/02_deep_dives/L6_MARL.html",
+    "https://arxiv.org/abs/2403.02227",
+    "https://arxiv.org/abs/2202.00633"
+  ],
+  "written_at": "2026-05-27T03:11:15Z"
+}

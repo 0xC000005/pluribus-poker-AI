@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1402,
+      "path": "benchmark_audit.md",
+      "sha256": "058b202964d3e9bb73b6c2e2978f3e6951e7184661a712673e20528fa97052f4"
+    },
+    {
+      "bytes": 458,
+      "path": "decision.json",
+      "sha256": "3698a2e614dc22722061201ba35f51293249be8658ad17b89573aec30a4903a7"
+    },
+    {
+      "bytes": 1424,
+      "path": "mechanism_review.md",
+      "sha256": "34cb541d12590e37f6cbe1c810f5d13a610872b6e411e343b029bc1141b7c467"
+    },
+    {
+      "bytes": 2301,
+      "path": "related_work.md",
+      "sha256": "437f12b3aada2d23e0c25673fd2d7529462841785114999f8353b0633fe44421"
+    },
+    {
+      "bytes": 2111,
+      "path": "review.md",
+      "sha256": "263644f51cd89a7e9f8e26759427d1168b0ffd2c860a298b25a217b1c73c700f"
+    },
+    {
+      "bytes": 1202,
+      "path": "review_scope.json",
+      "sha256": "53b93f4e9877abc9f196bcf9513b7eec0dc93561ff332394ce91bba32c321726"
+    },
+    {
+      "bytes": 707,
+      "path": "team_review.md",
+      "sha256": "c4a4df8204465e52bf4dbc0c303ffbcc5b761edcd5625369be9e3d214fcc5222"
+    }
+  ],
+  "reason": "Recent live evidence points to early blueprint all-in drift before resolver involvement. A fixed-state diagnostic is a low-cost, non-gameplay-changing way to verify that failure locally before more Slumbot spend.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T020033Z-early-street-blueprint-calibration-diagnostic",
+  "review_id": "20260521T020033Z-early-street-blueprint-calibration-diagnostic",
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178"
+  ],
+  "written_at": "2026-05-21T02:01:30Z"
+}

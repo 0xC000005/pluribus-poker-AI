@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 504,
+      "path": "decision.json",
+      "sha256": "089a79451f28568d6bbc56dee0513ce8cc8a48ef9149c3ac87f198d0bf1d30fd"
+    },
+    {
+      "bytes": 1921,
+      "path": "innovation.md",
+      "sha256": "1109ab01def5475fc6758f9925ff5770717a3b03065eb97c447d44de017a4f87"
+    },
+    {
+      "bytes": 813,
+      "path": "related_work.md",
+      "sha256": "b62ae1d9801897140ebafe03532c621a059079b31b805e45ce6c9e9365320ef8"
+    },
+    {
+      "bytes": 672,
+      "path": "thought_experiments.md",
+      "sha256": "bfd93368556797d4c773df73765de30a5fbbc9f24ff42d9ce10e74013fecb28e"
+    }
+  ],
+  "reason": "The next bounded sprint should integrate search-improved behavior into GPU Deep CFR average-policy training with a matched no-search control.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T202534Z-move-search-improved-behavior-into-gpu-deep-cfr-innovation",
+  "review_id": "20260525T202534Z-move-search-improved-behavior-into-gpu-deep-cfr-innovation",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544"
+  ],
+  "written_at": "2026-05-25T20:26:44Z"
+}

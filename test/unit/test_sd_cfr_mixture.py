@@ -1,10 +1,12 @@
 import numpy as np
 import torch
 
+import poker_ai.research.sd_cfr_mixture as sd_cfr_mixture
 from poker_ai.deep_cfr.networks import ValueNetwork
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.sd_cfr_mixture import (
     discover_checkpoint_paths,
+    evaluate_checkpoint_mixture_across_seeds,
     evaluate_checkpoint_mixture_head_to_head,
     load_checkpoint_policy_set,
 )
@@ -69,3 +71,40 @@ def test_checkpoint_mixture_head_to_head_returns_finite_metrics(tmp_path):
     assert metrics["mode"] == "sd_cfr_checkpoint_mixture_head_to_head"
     assert metrics["n_games"] == 4
     assert np.isfinite(metrics["avg_chips_per_hand"])
+
+
+def test_checkpoint_mixture_across_seeds_requires_positive_lower95(monkeypatch):
+    def fake_run(*args, **kwargs):
+        seed = int(kwargs["seed"])
+        avg_by_seed = {1: -10.0, 2: 90.0, 3: 10.0}
+        return {
+            "passed": True,
+            "mode": "sd_cfr_checkpoint_mixture_head_to_head",
+            "n_games": 200,
+            "n_players": 2,
+            "initial_chips": 1000,
+            "seed": seed,
+            "strategy_source": "regret",
+            "avg_chips_per_hand": avg_by_seed[seed],
+            "paired_delta_lower95_chips_per_hand": avg_by_seed[seed] - 1.0,
+            "promotable": False,
+            "promotion_blockers": ["local_head_to_head_requires_slumbot_confirmation"],
+        }
+
+    monkeypatch.setattr(
+        sd_cfr_mixture,
+        "evaluate_checkpoint_mixture_head_to_head",
+        fake_run,
+    )
+
+    metrics = evaluate_checkpoint_mixture_across_seeds(
+        ["candidate.pt"],
+        "baseline.pt",
+        torch.device("cpu"),
+        n_games=100,
+        seeds=[1, 2, 3],
+    )
+
+    assert metrics["lower95_chips_per_hand_across_seeds"] < 0.0
+    assert metrics["passed"] is False
+    assert "local_across_seed_lower95_not_positive" in metrics["promotion_blockers"]

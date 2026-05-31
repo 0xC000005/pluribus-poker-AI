@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1063,
+      "path": "benchmark_audit.md",
+      "sha256": "8887d94cd91e8a2a1c7e9d0af9b67e73dd57557fe325247f35df957bac27f5c5"
+    },
+    {
+      "bytes": 728,
+      "path": "decision.json",
+      "sha256": "d7644304e943f684b43e963b3484fc79f6b9f434f6afb04f6aa55b4a293f0666"
+    },
+    {
+      "bytes": 1143,
+      "path": "mechanism_review.md",
+      "sha256": "48b3d4845119014c7e8e5900365f1367cdd5760190b783494c14ef4354fa9bdb"
+    },
+    {
+      "bytes": 2330,
+      "path": "related_work.md",
+      "sha256": "0eb7ddaa9502bac23a01e3a4e79f12173961e04a069cf257323114051b236adb"
+    },
+    {
+      "bytes": 2864,
+      "path": "review.md",
+      "sha256": "01f4b4a82b12684022913142891a035d288bbbc139203a917bd3ab9afc31d1eb"
+    },
+    {
+      "bytes": 1020,
+      "path": "review_scope.json",
+      "sha256": "6216503ac517ffeb54dcac50b8261728bdf5f46ab24007cf60cb623051860ba9"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The diagnostics preserve the Deep CFR/game-theoretic contract and only target measured GPU frontier allocation waste. The row-processing and frontier-index interop smokes are not promotion evidence, but they justify an opt-in stable-slot compacted-frontier prototype with strict parity and overflow gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T195220Z-active-frontier-compaction-research-smoke",
+  "review_id": "20260515T195220Z-active-frontier-compaction-research-smoke",
+  "sources": [
+    "https://research.nvidia.com/publication/2012-02_scalable-gpu-graph-traversal",
+    "https://research.nvidia.com/publication/2016-03_single-pass-parallel-prefix-scan-decoupled-look-back",
+    "https://papers.nips.cc/paper/3713-monte-carlo-sampling-for-regret-minimization-in-extensive-games",
+    "https://arxiv.org/abs/1811.00164"
+  ],
+  "written_at": "2026-05-15T19:57:59Z"
+}

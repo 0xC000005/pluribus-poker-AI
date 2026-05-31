@@ -1,0 +1,24 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 557,
+      "path": "decision.json",
+      "sha256": "74dca26896f4e663b880390cc859863d44792054d866df7d954da4e72c78b65b"
+    },
+    {
+      "bytes": 2222,
+      "path": "synthesis.md",
+      "sha256": "8e8b342cc15a2a48a9c85cc467b4551eb607f1cb67dcd99635a5ad89a72eb59b"
+    }
+  ],
+  "reason": "Proceed with one precision/formulation ablation before expanding batching. CFR25 and top-action evidence are promising, but the CFR125 teacher-relative policy drift blocks using batched outputs as high-budget policy labels.",
+  "review_dir": "autoresearch-session/poker_reviews/20260522T004931Z-same-topology-batched-cfr-after-cfr125-teacher-relative-synthesis",
+  "review_id": "20260522T004931Z-same-topology-batched-cfr-after-cfr125-teacher-relative-synthesis",
+  "sources": [
+    "RESEARCH_LOG.md#20260522T004240Z-reusable-same-topology-batched-cfr-evaluator---passed",
+    "RESEARCH_LOG.md#20260522T004645Z-same-topology-batched-cfr-cfr125-scaleup---failed",
+    "RESEARCH_LOG.md#20260522T004950Z-batched-cfr125-teacher-relative-probe---failed"
+  ],
+  "written_at": "2026-05-22T00:50:52Z"
+}

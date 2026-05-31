@@ -1,0 +1,34 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 325,
+      "path": "decision.json",
+      "sha256": "b5636740110034a09e279936a99046105cb091022335074892c55b074b7dfcd1"
+    },
+    {
+      "bytes": 1610,
+      "path": "innovation.md",
+      "sha256": "5b6030b86c80ac42300165b90815d576c8ca39baac8125f16d1d619020a187e3"
+    },
+    {
+      "bytes": 1348,
+      "path": "related_work.md",
+      "sha256": "fa68cb2f08a856b9f3015685ec31d42189193ca4d0c68e94483c264205e7a79f"
+    },
+    {
+      "bytes": 569,
+      "path": "thought_experiments.md",
+      "sha256": "1d3c23907893a2ecaf227d5e5a056bacbee1474063354437eb95e3998f35a73a"
+    }
+  ],
+  "reason": "Proceed with explicit resume-continuity metadata and validation before more parent-child continuation experiments.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T164211Z-pivot-after-strategy-quality-innovation",
+  "review_id": "20260526T164211Z-pivot-after-strategy-quality-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "poker_ai/deep_cfr/cuda/gpu_trainer.py"
+  ],
+  "written_at": "2026-05-26T16:46:54Z"
+}

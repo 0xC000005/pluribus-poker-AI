@@ -1,0 +1,25 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 711,
+      "path": "decision.json",
+      "sha256": "b14ca4000c4c9ffe4991aec05a3f9d6a27f6f222ee108eb4cf925308779bf8d1"
+    },
+    {
+      "bytes": 2352,
+      "path": "synthesis.md",
+      "sha256": "9ca5f4ef3f52e61b34e06fc2cf0b1793711abc68f3e4aae070155668a02dcd42"
+    }
+  ],
+  "reason": "The mixed actor fixed the external-only over-jam/coverage bug but still lost the matched H2H gate, so the next test must optimize and gate decision value directly rather than tuning static target mixtures.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T193026Z-mixed-search-as-actor-fixed-overjam-but-failed-synthesis",
+  "review_id": "20260525T193026Z-mixed-search-as-actor-fixed-overjam-but-failed-synthesis",
+  "sources": [
+    "autoresearch-session/search_targets/mixed_search_actor_avg_policy_holdout128_eval_seed20260525.json",
+    "autoresearch-session/policy_calibration/mixed_search_actor_vs_no_target_early_street_seed20260525.json",
+    "autoresearch-session/policy_calibration/mixed_search_actor_vs_no_target_h2h_attribution_seed20260522_24.json",
+    "autoresearch-session/policy_calibration/mixed_search_actor_fixed_continuation_rollout_seed20260525.json"
+  ],
+  "written_at": "2026-05-25T19:32:03Z"
+}

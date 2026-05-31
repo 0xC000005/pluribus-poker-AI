@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 659,
+      "path": "decision.json",
+      "sha256": "d7cbcd9693b58d0b9610bc4e6fe4018cf66b98e949c2cd0eae5547ff5e2a66d0"
+    },
+    {
+      "bytes": 2085,
+      "path": "innovation.md",
+      "sha256": "2a09d240cda76b8a5f2bcec6da109e557114a109af4624a898fcaa4abe0a8acb"
+    },
+    {
+      "bytes": 2305,
+      "path": "related_work.md",
+      "sha256": "5b65827d7aefe41006d96209752ec116f23beca115ef59cd0b7feea0233e4a36"
+    },
+    {
+      "bytes": 953,
+      "path": "thought_experiments.md",
+      "sha256": "b9b4a02c3e17f060dacf5a334c724f390c5ec9cfb32078950fd641510ad61250"
+    }
+  ],
+  "reason": "Repeated average-policy target-fitting variants fail root-action collapse or root impact. The next principled pivot is to make search-improved behavior generate the training memory directly under matched no-search controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T210208Z-pivot-after-memory-seeded-average-policy-collapse-innovation",
+  "review_id": "20260525T210208Z-pivot-after-memory-seeded-average-policy-collapse-innovation",
+  "sources": [
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "autoresearch-session/gpu_average_strategy_injection/root_gate_memory_seed_3x128_summary_seed20260529.json"
+  ],
+  "written_at": "2026-05-25T21:03:43Z"
+}

@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 707,
+      "path": "decision.json",
+      "sha256": "5abd6e5eb0270f27bae021a38408ca43e1c741fffc6bfb137203cd1486d9f7b2"
+    },
+    {
+      "bytes": 2648,
+      "path": "innovation.md",
+      "sha256": "fb6ea4bdbdeaab8013fdadfd839538a591364b7df665be172a93a4496415b219"
+    },
+    {
+      "bytes": 2973,
+      "path": "related_work.md",
+      "sha256": "d8e16b274e5581f31c7080bec26b3af71f15b45301a5e755270abb20ba3c5dca"
+    },
+    {
+      "bytes": 1141,
+      "path": "thought_experiments.md",
+      "sha256": "b6745f92d2ec1f7b1a335cfb5d7caae43ffcb6224ea11efecdf83dc6d5de22a1"
+    }
+  ],
+  "reason": "Repeated target/replay collapse argues for a forked pivot: exact search-as-actor versus native self-play actor, both gated by held-out root decision impact before H2H.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T211150Z-pivot-after-one-hot-behavior-memory-collapse-innovation",
+  "review_id": "20260525T211150Z-pivot-after-one-hot-behavior-memory-collapse-innovation",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/2112.03178",
+    "https://deep.ai/publication/manipulating-the-distributions-of-experience-used-for-self-play-learning-in-expert-iteration",
+    "autoresearch-session/gpu_average_strategy_injection/root_gate_onehot_behavior_memory_seed_3x128_summary_seed20260531.json"
+  ],
+  "written_at": "2026-05-25T21:14:04Z"
+}

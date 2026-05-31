@@ -115,6 +115,88 @@ class PolicyTargetBuffer:
         return PolicyTargetBatch(features, legal_masks, target_probs, weights)
 
 
+class MixedPolicyTargetBuffer:
+    """Sample from several policy-target buffers as one training source."""
+
+    def __init__(
+        self,
+        *buffers: PolicyTargetBuffer | "PolicyReservoirBuffer" | None,
+    ):
+        self.buffers = [
+            buffer for buffer in buffers if buffer is not None and int(buffer.size) > 0
+        ]
+        if not self.buffers:
+            raise ValueError("MixedPolicyTargetBuffer needs at least one non-empty buffer")
+        self.size = int(sum(int(buffer.size) for buffer in self.buffers))
+
+    def sample_batch(
+        self,
+        batch_size: int,
+        device: torch.device | None = None,
+    ) -> PolicyTargetBatch:
+        n = min(int(batch_size), self.size)
+        if n <= 0:
+            raise ValueError("empty mixed policy target buffer")
+        sizes = np.asarray(
+            [int(buffer.size) for buffer in self.buffers],
+            dtype=np.float64,
+        )
+        expected = n * sizes / sizes.sum()
+        counts = np.floor(expected).astype(np.int64)
+        remainder = int(n - counts.sum())
+        if remainder > 0:
+            order = np.argsort(-(expected - counts))
+            for idx in order[:remainder]:
+                counts[int(idx)] += 1
+        batches = [
+            buffer.sample_batch(int(count), device=None)
+            for buffer, count in zip(self.buffers, counts, strict=True)
+            if int(count) > 0
+        ]
+        features = torch.cat([batch.features for batch in batches], dim=0)
+        legal_masks = torch.cat([batch.legal_masks for batch in batches], dim=0)
+        target_probs = torch.cat([batch.target_probs for batch in batches], dim=0)
+        weights = torch.cat([batch.weights for batch in batches], dim=0)
+        if device is not None:
+            features = features.to(device)
+            legal_masks = legal_masks.to(device)
+            target_probs = target_probs.to(device)
+            weights = weights.to(device)
+        return PolicyTargetBatch(features, legal_masks, target_probs, weights)
+
+
+def policy_target_calibration_metadata(
+    target_buffer: PolicyTargetBuffer | None,
+    *,
+    weight: float,
+    source: str | None = None,
+) -> dict:
+    """Return checkpoint metadata for policy heads trained from search targets."""
+    if (
+        target_buffer is None
+        or float(weight) <= 0.0
+        or getattr(target_buffer, "size", 0) <= 0
+    ):
+        return {}
+    street_one_hot = np.asarray(target_buffer.features, dtype=np.float32)[:, 104:108]
+    valid = np.max(street_one_hot, axis=1) > 0
+    streets = np.argmax(street_one_hot, axis=1)[valid].astype(np.int64)
+    unique, counts = np.unique(streets, return_counts=True)
+    metadata = {
+        "source": "search_targets",
+        "target_size": int(target_buffer.size),
+        "search_target_weight": float(weight),
+        "target_streets": [int(street) for street in unique],
+        "target_street_counts": {
+            str(int(street)): int(count)
+            for street, count in zip(unique, counts, strict=True)
+        },
+    }
+    if source:
+        metadata["source_targets"] = str(source)
+    return metadata
+
+
 class PolicyReservoirBuffer:
     """Reservoir-sampled mutable policy-target memory."""
 

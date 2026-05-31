@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 578,
+      "path": "benchmark_audit.md",
+      "sha256": "34f11f8c9af8073eec41784047eb3b84a135bd6ccd39495d4632c112c54c92d2"
+    },
+    {
+      "bytes": 480,
+      "path": "decision.json",
+      "sha256": "ae06bcd0c2b32de91950f3de82018d26d9afbb10fb28d9481bd32416325143e2"
+    },
+    {
+      "bytes": 1361,
+      "path": "mechanism_review.md",
+      "sha256": "7e4a34c4b97a6787ea385aa8c018f1e60d26138f66e4c3ad3d630506ccbf8183"
+    },
+    {
+      "bytes": 1328,
+      "path": "related_work.md",
+      "sha256": "28070ffd5ec6e6ca371279c55dac730c62ef16e796fad13fa3bfb123a304462e"
+    },
+    {
+      "bytes": 942,
+      "path": "review.md",
+      "sha256": "83256c511e65077f43b264cae03b2f1cf4a52d17f0d980b7fda9326606cda3b1"
+    },
+    {
+      "bytes": 1980,
+      "path": "review_scope.json",
+      "sha256": "8ae574d028b011cb6ba655862a96391d5b163c40017bf60d2b588c9b9f280553"
+    },
+    {
+      "bytes": 448,
+      "path": "team_review.md",
+      "sha256": "4184367e12123cbf3df9dbcc49aedc700bdb345085fa6fd0b4f7d18fc562ac35"
+    }
+  ],
+  "reason": "The policy-only PPO branch is a bounded falsifier of the public-belief/search assumption, uses the native full-deck action contract, and blocks Slumbot promotion until local controls are passed.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T183000Z-policy-only-ppo-falsifier",
+  "review_id": "20260515T183000Z-policy-only-ppo-falsifier",
+  "sources": [
+    "https://arxiv.org/abs/1707.06347",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2206.15378",
+    "https://arxiv.org/abs/2502.08938"
+  ],
+  "written_at": "2026-05-15T18:33:53Z"
+}

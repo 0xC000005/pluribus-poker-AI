@@ -1,0 +1,27 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 729,
+      "path": "decision.json",
+      "sha256": "2f67189ca73791158f887dbc25bf7b771692f192bc1f42fdfda1ee10a6e8eb53"
+    },
+    {
+      "bytes": 1839,
+      "path": "synthesis.md",
+      "sha256": "2b32b2830ed3810e46dfaa8f9d5c92565964e13d042378eb5ebd96619a81898e"
+    }
+  ],
+  "reason": "The maintained-backend branch should not add another strength experiment until the AgileRL off-policy tensor contract is localized or the branch is abandoned; the plain IPPO candidate already failed the parent gate.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T162922Z-maintained-backend-response-oracle-branch-after-agilerl-ippo-synthesis",
+  "review_id": "20260527T162922Z-maintained-backend-response-oracle-branch-after-agilerl-ippo-synthesis",
+  "sources": [
+    "autoresearch-session/agilerl/agilerl_ippo_h128_4k_vs_psro_rainbow_500_seed20260531_current.json",
+    "autoresearch-session/agilerl/agilerl_offpolicy_contract_maddpg_matd3_seed20260532.json",
+    "autoresearch-session/poker_reviews/20260527T162316Z-agilerl-ippo-mixed-policy-h2h-adapter",
+    "https://docs.agilerl.com/en/stable/api/algorithms/ippo.html",
+    "https://pettingzoo.farama.org/api/parallel/",
+    "https://arxiv.org/abs/2403.02227"
+  ],
+  "written_at": "2026-05-27T16:31:41Z"
+}

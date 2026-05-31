@@ -4,6 +4,7 @@ import torch
 from poker_ai.deep_cfr.networks import ValueNetwork
 from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 from poker_ai.research.sampled_deep_cfr_traversal_probe import (
+    _rng_for_path,
     _sample_action_indices,
     run_probe_grid,
     run_probe,
@@ -27,6 +28,14 @@ def test_sample_action_indices_enumerates_when_budget_covers_legal_actions():
     assert sampled.tolist() == [1, 2, 4]
 
 
+def test_action_keyed_rng_is_path_stable_and_order_independent():
+    first = _rng_for_path(123, (4, 2, 7)).choice(10, size=4).tolist()
+    _ = _rng_for_path(123, (4, 9, 7)).choice(10, size=4).tolist()
+    second = _rng_for_path(123, (4, 2, 7)).choice(10, size=4).tolist()
+
+    assert second == first
+
+
 def test_sampled_traversal_probe_emits_tiny_full_deck_metrics():
     metrics = run_probe(
         n_repeats=4,
@@ -39,6 +48,7 @@ def test_sampled_traversal_probe_emits_tiny_full_deck_metrics():
 
     assert metrics["mode"] == "sampled_deep_cfr_traversal_probe"
     assert metrics["sampling_mode"] == "with-replacement"
+    assert metrics["randomization_contract"] == "action-keyed"
     assert metrics["sample_count"] == 4
     assert metrics["n_repeats"] == 4
     assert metrics["seed"] == 20260525
@@ -62,7 +72,24 @@ def test_sampled_traversal_probe_supports_without_replacement_mode():
     )
 
     assert metrics["sampling_mode"] == "without-replacement"
+    assert metrics["randomization_contract"] == "action-keyed"
     assert metrics["sample_count"] == 4
+    assert metrics["promotion"] is False
+
+
+def test_sampled_traversal_probe_keeps_legacy_randomization_available():
+    metrics = run_probe(
+        n_repeats=2,
+        n_reference_repeats=2,
+        initial_chips=300,
+        sample_count=4,
+        randomization_contract="legacy-sequential",
+        hidden_dim=16,
+        n_layers=1,
+        seed=20260535,
+    )
+
+    assert metrics["randomization_contract"] == "legacy-sequential"
     assert metrics["promotion"] is False
 
 
@@ -212,6 +239,7 @@ def test_sampled_traversal_probe_grid_aggregates_cases():
 
     assert metrics["mode"] == "sampled_deep_cfr_traversal_probe_grid"
     assert metrics["n_cases"] == 2
+    assert metrics["randomization_contract"] == "action-keyed"
     assert len(metrics["cases"]) == 2
     assert 0.0 <= metrics["top_action_match_rate"] <= 1.0
 

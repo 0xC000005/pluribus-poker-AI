@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1767,
+      "path": "benchmark_audit.md",
+      "sha256": "e5bd86b01f6ff359683f3cb358bceecbcf57190660087ad18ddee3b86fd2ad60"
+    },
+    {
+      "bytes": 720,
+      "path": "decision.json",
+      "sha256": "82b7c9f00117551da27d284d3b632c62235bed86ee5f824029a7760520d3be2c"
+    },
+    {
+      "bytes": 1326,
+      "path": "mechanism_review.md",
+      "sha256": "f226af0adffbf35dac160e75392118c93fbf746e7dac5f0b9af13a5d51c82da3"
+    },
+    {
+      "bytes": 2154,
+      "path": "related_work.md",
+      "sha256": "88b4991e223b5d0928d9c4a6dfb479a1bc469e1930b2d3f27e140d2962d58a73"
+    },
+    {
+      "bytes": 1734,
+      "path": "review.md",
+      "sha256": "9a3b8d617929001861358920e29c28716ba6465a2e97bf7071eb3d3d102360c5"
+    },
+    {
+      "bytes": 1128,
+      "path": "review_scope.json",
+      "sha256": "944783c1af9403d5ab2ca044359365579da38ba8d0224dad0084eb767c62c6a0"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The auto-to-CUDA backend change has direct fixed-state latency evidence and keeps exact CFR+ semantics. The static cache is low-risk and parity-tested, but should be reported as a minor optimization.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T191715Z-cuda-auto-solver-backend-and-static-tensor-cache",
+  "review_id": "20260521T191715Z-cuda-auto-solver-backend-and-static-tensor-cache",
+  "sources": [
+    "test/unit/test_solver_backend.py",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_auto_default_cpu_smoke4_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/cfr_budget_frontier_auto_default_cuda_smoke4_seed20260521.json",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-21T19:21:38Z"
+}

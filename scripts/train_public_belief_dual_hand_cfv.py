@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--value-factorization",
-        choices=("direct", "state-player-offset"),
+        choices=("direct", "state-player-offset", "opponent-reach-ev"),
         default="direct",
     )
     parser.add_argument("--label-jobs", type=int, default=1)

@@ -1,0 +1,55 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1521,
+      "path": "benchmark_audit.md",
+      "sha256": "54b0b92943cd1ab47bf13cf944780c67bfc66f0c6599dccad3fd36201eb21d9f"
+    },
+    {
+      "bytes": 844,
+      "path": "decision.json",
+      "sha256": "48e50ff0e9774571d9c5f7e777c9ef1b42c7f76121bef4b64917d3cc71799e4a"
+    },
+    {
+      "bytes": 1794,
+      "path": "mechanism_review.md",
+      "sha256": "c63edf86c75bcbaf326f060296c0129918b7b99d583eae71a61c7435aab21f3c"
+    },
+    {
+      "bytes": 2761,
+      "path": "related_work.md",
+      "sha256": "457753c5458aeee5933ab1c78cb82f9f65b213129685391d4457991b8a5b9d7d"
+    },
+    {
+      "bytes": 1713,
+      "path": "review.md",
+      "sha256": "9187ef3870f05629a936b13f3688c13c1a6e3b691d8bb61041afe6cc0fdab946"
+    },
+    {
+      "bytes": 2135,
+      "path": "review_scope.json",
+      "sha256": "f8ed07bf5b16751c1caa6e8f1aa376d3316c60f1b4b75b1ac01df23d9e4c7ffb"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only with a fixed-root-first exact search-as-actor gate on a local self-play checkpoint. This is the smallest non-detached search-coupled policy-improvement test after target fitting, trajectory-return cloning, and Q-boost PPO failed to clear transfer gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T171650Z-search-coupled-trajectory-self-play-policy-improvement-sprint",
+  "review_id": "20260526T171650Z-search-coupled-trajectory-self-play-policy-improvement-sprint",
+  "sources": [
+    "RESEARCH_LOG.md#20260526T135000Z-trajectory-calibration-and-onpolicy-klq",
+    "RESEARCH_LOG.md#20260526T140900Z-trajectory-return-behavior-actor",
+    "RESEARCH_LOG.md#20260526T145950Z-corrected-ctde-qboost-native-ppo",
+    "scripts/eval_decision_value_search_actor.py",
+    "scripts/eval_decision_value_search_actor_h2h.py",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2605.19235",
+    "https://arxiv.org/abs/1906.00190"
+  ],
+  "written_at": "2026-05-26T17:20:34Z"
+}

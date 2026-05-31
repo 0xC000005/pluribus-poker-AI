@@ -1,0 +1,34 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 447,
+      "path": "decision.json",
+      "sha256": "faa5781c72d0e3c5636c18b509aadc8325a00b7a88e18e50a583c93137c24f55"
+    },
+    {
+      "bytes": 1692,
+      "path": "innovation.md",
+      "sha256": "50315d1edb4a7b2823753ad4c84a349332ef158f0dd0f2aa1068e23f9c79754f"
+    },
+    {
+      "bytes": 1354,
+      "path": "related_work.md",
+      "sha256": "30c461bbcbe111a078581857569cccb70fa97a564a72a1bda1aa30aa63d20d8d"
+    },
+    {
+      "bytes": 674,
+      "path": "thought_experiments.md",
+      "sha256": "08b8213864df507b4b238b6bf3bc81ebe067753039e44adb8b687e8d58dc878a"
+    }
+  ],
+  "reason": "Proceed with incumbent continuation as the next bounded falsifier of the self-play loop before adding another mechanism.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T163003Z-pivot-after-strategy-quality-innovation",
+  "review_id": "20260526T163003Z-pivot-after-strategy-quality-innovation",
+  "sources": [
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/2007.13544",
+    "autoresearch-session/poker_runs/20260526T163001Z-candidate-checkpoint-selfplay-reset-baseline-25x2k-seed20260526-final/metrics.json"
+  ],
+  "written_at": "2026-05-26T16:46:54Z"
+}

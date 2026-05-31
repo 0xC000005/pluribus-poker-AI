@@ -6,7 +6,10 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from train_cfr_trace_delta_mlp import fit_trace_delta_mlp_from_payloads  # noqa: E402
+from train_cfr_trace_delta_mlp import (  # noqa: E402
+    _advantage_context_row,
+    fit_trace_delta_mlp_from_payloads,
+)
 
 
 def _record(
@@ -154,3 +157,20 @@ def test_trace_delta_mlp_uses_optional_public_belief_features():
 
     assert metrics["passed"] is True
     assert metrics["mean_pred_l1_to_reference"] < 0.1
+
+
+def test_advantage_context_row_adds_scale_invariant_search_features():
+    record = {
+        "legal_actions": [1, 2],
+        "counterfactual_advantage": [0.0, 10.0, 20.0],
+        "advantage_policy": [0.0, 0.25, 0.75],
+    }
+
+    row = _advantage_context_row(record, action_dim=3)
+
+    assert row.shape == (11,)
+    assert row[0] == 0.0
+    assert row[1] == -1.0
+    assert row[2] == 1.0
+    assert row[3:6].tolist() == [0.0, 0.25, 0.75]
+    assert row[6] == 20.0

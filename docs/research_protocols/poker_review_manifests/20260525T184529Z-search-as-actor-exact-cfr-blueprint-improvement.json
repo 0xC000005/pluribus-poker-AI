@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1645,
+      "path": "benchmark_audit.md",
+      "sha256": "0dd4e250c0aef4a1ebcd117b08713e29d7b8e17588144d83d70dfff1ac51c381"
+    },
+    {
+      "bytes": 659,
+      "path": "decision.json",
+      "sha256": "461f65706d8497ac03df6701bb3ff1d71014a79aaaef20eacdd2e8ea83434e92"
+    },
+    {
+      "bytes": 1629,
+      "path": "mechanism_review.md",
+      "sha256": "aa3148ccf58156d780f3803eba5a387dcde2cd31a9227ab8d6163560079a775d"
+    },
+    {
+      "bytes": 2128,
+      "path": "related_work.md",
+      "sha256": "88d2562ba3024fab882c5c18fd3af8d3619c0551be4012f0a958f04094c4019d"
+    },
+    {
+      "bytes": 1626,
+      "path": "review.md",
+      "sha256": "83dee1f83e8dbe648790a675e142b6de14b732f597764954490d2d819f080dac"
+    },
+    {
+      "bytes": 2341,
+      "path": "review_scope.json",
+      "sha256": "bd1545ab4ea318d1d5c6d954ab6bcfded39d6c3cba5bd804ef960445708cee92"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with a bounded search-as-actor pilot because exact search is the only current positive decision-impact operator, while static target distillation failed. The pilot must pass held-out root decision impact before self-play or Slumbot interpretation.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T184529Z-search-as-actor-exact-cfr-blueprint-improvement",
+  "review_id": "20260525T184529Z-search-as-actor-exact-cfr-blueprint-improvement",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2206.15378",
+    "autoresearch-session/poker_runs/20260525T182829Z-gpu-deep-cfr-training-should-produce-disagreement-weighted/metrics.json",
+    "docs/research_protocols/poker_autoresearch_current_findings.md"
+  ],
+  "written_at": "2026-05-25T18:53:23Z"
+}

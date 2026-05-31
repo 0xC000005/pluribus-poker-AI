@@ -1,0 +1,50 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1517,
+      "path": "benchmark_audit.md",
+      "sha256": "2cb76b713926a82d8c975dd3c090e5612e10fcd037e56c7c84b25bdb61f562a1"
+    },
+    {
+      "bytes": 606,
+      "path": "decision.json",
+      "sha256": "09d3467259193c95d027374f8154f44853936f7c98a56b63c4783b4b744c5641"
+    },
+    {
+      "bytes": 1538,
+      "path": "mechanism_review.md",
+      "sha256": "e55cc3c52000106377f541ba58beb7f60d52f398f705fb7bee5fe8a91ef8593b"
+    },
+    {
+      "bytes": 2442,
+      "path": "related_work.md",
+      "sha256": "d47caf00ddfa4f292a3d64cb6bc86857fa2dc76b8f77175bb1ca5db9995cd6c5"
+    },
+    {
+      "bytes": 2147,
+      "path": "review.md",
+      "sha256": "06daa01566a76b05ccc621fff0b552088c40228ee7e9862b1ecf37f1b86201b1"
+    },
+    {
+      "bytes": 2879,
+      "path": "review_scope.json",
+      "sha256": "b8cf105eea9a936be44fdd8506a6958a02d83207735a399b8223f64da32c23b4"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The exact response-oracle H2H gate is methodologically aligned with PSRO/XDO, but the 100x4 local CUDA result failed its lower95 confidence gate, so no neural response imitator should be trained from this evidence yet.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T160215Z-exact-restricted-response-oracle-h2h-gate",
+  "review_id": "20260527T160215Z-exact-restricted-response-oracle-h2h-gate",
+  "sources": [
+    "https://papers.nips.cc/paper/2021/hash/c2e06e9a80370952f6ec5463c77cbace-Abstract.html",
+    "https://arxiv.org/abs/2403.02227",
+    "https://proceedings.mlr.press/v202/tang23b.html",
+    "autoresearch-session/exact_response_oracle/exact_response_vs_tianshou_100x4_seed20260698.json"
+  ],
+  "written_at": "2026-05-27T16:05:18Z"
+}

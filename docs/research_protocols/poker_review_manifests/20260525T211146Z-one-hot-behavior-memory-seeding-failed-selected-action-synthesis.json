@@ -1,0 +1,24 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 664,
+      "path": "decision.json",
+      "sha256": "6a32d71cd22a8cd1d6695d8a67381cefae7f1eef96a44df2b10cb5f156fcf527"
+    },
+    {
+      "bytes": 1650,
+      "path": "synthesis.md",
+      "sha256": "6de893a916026ab8eab608908d649d0f121ca30cf7b0ab45afaa0dd6eaca0aad"
+    }
+  ],
+  "reason": "Three target/replay variants now fail the protected fixed-root decision surface. Do not add another target-file knob without a mechanism review; pivot to exact search-as-actor or native self-play policy learning with the same decision-impact gate.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T211146Z-one-hot-behavior-memory-seeding-failed-selected-action-synthesis",
+  "review_id": "20260525T211146Z-one-hot-behavior-memory-seeding-failed-selected-action-synthesis",
+  "sources": [
+    "autoresearch-session/gpu_average_strategy_injection/root_gate_onehot_behavior_memory_seed_3x128_summary_seed20260531.json",
+    "autoresearch-session/gpu_average_strategy_injection/root_gate_memory_seed_3x128_summary_seed20260529.json",
+    "autoresearch-session/gpu_average_strategy_injection/root_gate_memory_seed_smoke_summary_seed20260528.json"
+  ],
+  "written_at": "2026-05-25T21:14:04Z"
+}

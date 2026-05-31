@@ -32,8 +32,10 @@ from poker_ai.deep_cfr.deep_cfr import regret_match, train_value_network
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
 from poker_ai.deep_cfr.networks import ValueNetwork, PolicyNetwork
 from poker_ai.deep_cfr.policy_targets import (
+    MixedPolicyTargetBuffer,
     PolicyTargetBuffer,
     PolicyReservoirBuffer,
+    policy_target_calibration_metadata,
     train_average_policy_network,
 )
 
@@ -43,15 +45,20 @@ from poker_ai.deep_cfr.cuda.game_state import (
 )
 from poker_ai.deep_cfr.cuda.game_kernels import (
     apply_action_kernel,
+    apply_action_mapped_kernel,
     compute_winners_kernel,
     get_features_kernel,
+    get_features_mapped_kernel,
     get_legal_mask_kernel,
+    get_legal_mask_mapped_kernel,
 )
 from poker_ai.deep_cfr.cuda.action_kernels import (
     regret_match_kernel,
     sample_action_kernel,
     classify_and_sample_kernel,
+    classify_and_sample_mapped_kernel,
     fork_kernel,
+    fork_mapped_kernel,
     copy_from_parent_kernel,
     propagate_kernel,
     collect_policy_targets_kernel,
@@ -73,6 +80,124 @@ _MIN_NN_FORWARD_CHUNK = 8_192
 _NN_FORWARD_TIGHT_MEMORY_BYTES = 2 * 1024**3
 _NN_FORWARD_MAX_WORK_BYTES = 384 * 1024**2
 _NN_FORWARD_MIN_WORK_BYTES = 64 * 1024**2
+_REPLAY_BUFFER_CHECKPOINT_FORMAT = "torch_tensor_v1"
+
+
+def _checkpoint_tensor(array: np.ndarray) -> torch.Tensor:
+    """Return a CPU tensor that is safe for ``weights_only=True`` loading."""
+    return torch.from_numpy(np.ascontiguousarray(array).copy()).cpu()
+
+
+def _payload_array(value: object, *, dtype: np.dtype) -> np.ndarray:
+    if isinstance(value, torch.Tensor):
+        array = value.detach().cpu().numpy()
+    else:
+        array = np.asarray(value)
+    return np.asarray(array, dtype=dtype)
+
+
+def _serialize_reservoir_buffer(buffer: ReservoirBuffer) -> dict[str, object]:
+    size = int(buffer.size)
+    return {
+        "format": _REPLAY_BUFFER_CHECKPOINT_FORMAT,
+        "capacity": int(buffer.capacity),
+        "size": size,
+        "n_seen": int(buffer._n_seen),
+        "features": _checkpoint_tensor(buffer.features[:size]),
+        "iterations": _checkpoint_tensor(buffer.iterations[:size]),
+        "advantages": _checkpoint_tensor(buffer.advantages[:size]),
+    }
+
+
+def _restore_reservoir_buffer(payload: dict[str, object]) -> ReservoirBuffer:
+    capacity = int(payload.get("capacity", 0) or 0)
+    size = int(payload.get("size", 0) or 0)
+    capacity = max(capacity, size, 1)
+    size = min(size, capacity)
+    buffer = ReservoirBuffer(capacity)
+    if size > 0:
+        features = _payload_array(payload["features"], dtype=np.float32)
+        iterations = _payload_array(payload["iterations"], dtype=np.int32)
+        advantages = _payload_array(payload["advantages"], dtype=np.float32)
+        if features.shape != (size, N_FEATURES):
+            raise ValueError(
+                f"replay features have shape {features.shape}, "
+                f"expected {(size, N_FEATURES)}"
+            )
+        if iterations.shape != (size,):
+            raise ValueError(
+                f"replay iterations have shape {iterations.shape}, "
+                f"expected {(size,)}"
+            )
+        if advantages.shape != (size, N_ACTIONS):
+            raise ValueError(
+                f"replay advantages have shape {advantages.shape}, "
+                f"expected {(size, N_ACTIONS)}"
+            )
+        buffer.features[:size] = features
+        buffer.iterations[:size] = iterations
+        buffer.advantages[:size] = advantages
+    buffer.size = size
+    buffer._n_seen = max(int(payload.get("n_seen", size) or 0), size)
+    return buffer
+
+
+def _serialize_policy_reservoir_buffer(
+    buffer: PolicyReservoirBuffer,
+) -> dict[str, object]:
+    size = int(buffer.size)
+    return {
+        "format": _REPLAY_BUFFER_CHECKPOINT_FORMAT,
+        "capacity": int(buffer.capacity),
+        "size": size,
+        "n_seen": int(buffer._n_seen),
+        "features": _checkpoint_tensor(buffer.features[:size]),
+        "legal_masks": _checkpoint_tensor(buffer.legal_masks[:size]),
+        "target_probs": _checkpoint_tensor(buffer.target_probs[:size]),
+        "weights": _checkpoint_tensor(buffer.weights[:size]),
+    }
+
+
+def _restore_policy_reservoir_buffer(
+    payload: dict[str, object],
+) -> PolicyReservoirBuffer:
+    capacity = int(payload.get("capacity", 0) or 0)
+    size = int(payload.get("size", 0) or 0)
+    capacity = max(capacity, size, 0)
+    buffer = PolicyReservoirBuffer(capacity)
+    size = min(size, capacity)
+    if size > 0:
+        features = _payload_array(payload["features"], dtype=np.float32)
+        legal_masks = _payload_array(payload["legal_masks"], dtype=np.float32)
+        target_probs = _payload_array(payload["target_probs"], dtype=np.float32)
+        weights = _payload_array(payload["weights"], dtype=np.float32)
+        if features.shape != (size, N_FEATURES):
+            raise ValueError(
+                f"strategy features have shape {features.shape}, "
+                f"expected {(size, N_FEATURES)}"
+            )
+        if legal_masks.shape != (size, N_ACTIONS):
+            raise ValueError(
+                f"strategy legal masks have shape {legal_masks.shape}, "
+                f"expected {(size, N_ACTIONS)}"
+            )
+        if target_probs.shape != (size, N_ACTIONS):
+            raise ValueError(
+                f"strategy targets have shape {target_probs.shape}, "
+                f"expected {(size, N_ACTIONS)}"
+            )
+        if weights.shape != (size,):
+            raise ValueError(
+                f"strategy weights have shape {weights.shape}, "
+                f"expected {(size,)}"
+            )
+        buffer.features[:size] = features
+        buffer.legal_masks[:size] = legal_masks
+        buffer.target_probs[:size] = target_probs
+        buffer.weights[:size] = weights
+    buffer.size = size
+    buffer._n_seen = max(int(payload.get("n_seen", size) or 0), size)
+    return buffer
 
 
 def _traversal_batch_size(
@@ -179,6 +304,25 @@ def _nn_forward_chunk_size(
     return max(_MIN_NN_FORWARD_CHUNK, min(max_chunk, int(rows)))
 
 
+def _frontier_indices_torch(
+    *,
+    stages,
+    is_traverser_node,
+    n_children_expected,
+    n_slots: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """Return stable active frontier slot IDs as a compact int32 CUDA tensor."""
+
+    if n_slots <= 0:
+        return torch.empty(0, dtype=torch.int32, device=device)
+    stage_t = torch.as_tensor(stages, device=device)[:n_slots]
+    traverser_t = torch.as_tensor(is_traverser_node, device=device)[:n_slots]
+    expected_t = torch.as_tensor(n_children_expected, device=device)[:n_slots]
+    live_mask = (stage_t < 4) & ~((traverser_t == 1) & (expected_t > 0))
+    return torch.nonzero(live_mask, as_tuple=False).flatten().to(torch.int32)
+
+
 def _summarize_traversal_pool_stats(
     records: List[dict[str, float | int]],
 ) -> dict[str, float | int]:
@@ -202,6 +346,7 @@ def _summarize_traversal_pool_stats(
             "traversal_max_nonterminal_slots_per_traversal": 0.0,
             "traversal_mean_allocated_to_live_ratio": 0.0,
             "traversal_max_allocated_to_live_ratio": 0.0,
+            "traversal_accepted_requested_traversals": 0,
             "traversal_pool_exhausted_stage_preflop": 0,
             "traversal_pool_exhausted_stage_flop": 0,
             "traversal_pool_exhausted_stage_turn": 0,
@@ -329,6 +474,7 @@ def _summarize_traversal_pool_stats(
             max(allocated_to_live_ratios),
             6,
         ),
+        "traversal_accepted_requested_traversals": total_traversals,
         "traversal_pool_exhausted_stage_preflop": stage_totals[0],
         "traversal_pool_exhausted_stage_flop": stage_totals[1],
         "traversal_pool_exhausted_stage_turn": stage_totals[2],
@@ -347,6 +493,7 @@ def _summarize_rejected_traversal_pool_stats(
         return {
             "traversal_rejected_chunks": 0,
             "traversal_rejected_requested_traversals": 0,
+            "traversal_retry_pressure_requested_traversals": 0,
             "traversal_rejected_overflow_chunks": 0,
             "traversal_rejected_pool_exhausted_nodes": 0,
             "traversal_rejected_max_pool_demand_ratio": 0.0,
@@ -364,6 +511,9 @@ def _summarize_rejected_traversal_pool_stats(
     return {
         "traversal_rejected_chunks": len(records),
         "traversal_rejected_requested_traversals": sum(
+            max(1, int(record.get("n_traversals", 0))) for record in records
+        ),
+        "traversal_retry_pressure_requested_traversals": sum(
             max(1, int(record.get("n_traversals", 0))) for record in records
         ),
         "traversal_rejected_overflow_chunks": overflow_chunks,
@@ -683,6 +833,7 @@ class _GPUTraverseWorkspace:
         pool_max_slots: int = _DEFAULT_TRAVERSAL_POOL_MAX_SLOTS,
         slots_per_traversal: int = _DEFAULT_TRAVERSAL_SLOTS_PER_TRAVERSAL,
         policy_slots_per_traversal: int = _DEFAULT_POLICY_SLOTS_PER_TRAVERSAL,
+        traversal_seed: int | None = None,
     ):
         self.max_traversals = max_traversals
         self.pool_max_slots = max(1, int(pool_max_slots))
@@ -699,6 +850,7 @@ class _GPUTraverseWorkspace:
         )
         self.n_players = n_players
         self.initial_chips = initial_chips
+        self._reset_rng = np.random.default_rng(traversal_seed)
 
         # Shared tables/orders.
         tables = get_gpu_tables()
@@ -770,8 +922,12 @@ class _GPUTraverseWorkspace:
             )
 
         # Reinitialize first n_traversals game slots.
-        rng = np.random.default_rng()
-        seeds = rng.integers(1, 2**62, size=(n_traversals, 2), dtype=np.int64)
+        seeds = self._reset_rng.integers(
+            1,
+            2**62,
+            size=(n_traversals, 2),
+            dtype=np.int64,
+        )
         self.d_seeds[:n_traversals].copy_to_device(seeds)
 
         threads = 256
@@ -977,6 +1133,7 @@ def gpu_traverse_for_player(
     workspace: _GPUTraverseWorkspace | None = None,
     policy_buffer: PolicyReservoirBuffer | None = None,
     discard_on_pool_exhaustion: bool = False,
+    use_frontier_indexing: bool = False,
 ):
     """Run n_traversals game tree traversals on GPU for one player.
 
@@ -989,6 +1146,10 @@ def gpu_traverse_for_player(
             max_traversals=n_traversals,
             n_players=n_players,
             initial_chips=initial_chips,
+        )
+    if use_frontier_indexing and policy_buffer is not None:
+        raise NotImplementedError(
+            "frontier-indexed traversal does not yet collect average-policy targets"
         )
     workspace.reset(n_traversals)
 
@@ -1045,35 +1206,71 @@ def gpu_traverse_for_player(
 
     for depth in range(100):
         depths_executed = depth + 1
-        # 1. GPU: extract features + legal masks.
-        get_features_kernel[blocks_pool, threads](
-            batch.chips, batch.bets, batch.active,
-            batch.hole_cards, batch.community,
-            batch.stage, batch.n_raises, batch.player_i_index,
-            batch.pot_total, batch.history,
-            n_players, d_preflop, d_postflop,
-            d_features, n_active, initial_chips,
-        )
-        get_legal_mask_kernel[blocks_pool, threads](
-            batch.active, batch.chips, batch.bets, batch.n_raises,
-            batch.stage, batch.pot_total,
-            batch.player_i_index, n_players,
-            d_preflop, d_postflop,
-            d_raise_fractions,
-            d_masks, n_active,
-        )
+        frontier_indices_t = None
+        d_frontier_indices = None
+        n_frontier = n_active
+        if use_frontier_indexing:
+            frontier_indices_t = _frontier_indices_torch(
+                stages=batch.stage,
+                is_traverser_node=d_is_traverser_node,
+                n_children_expected=d_n_children_expected,
+                n_slots=n_active,
+                device=device,
+            )
+            n_frontier = int(frontier_indices_t.numel())
+            if n_frontier == 0:
+                break
+            d_frontier_indices = cuda.as_cuda_array(frontier_indices_t.detach())
+            blocks_frontier = (n_frontier + threads - 1) // threads
+            get_features_mapped_kernel[blocks_frontier, threads](
+                batch.chips, batch.bets, batch.active,
+                batch.hole_cards, batch.community,
+                batch.stage, batch.n_raises, batch.player_i_index,
+                batch.pot_total, batch.history,
+                n_players, d_preflop, d_postflop,
+                d_frontier_indices,
+                d_features, n_frontier, initial_chips,
+            )
+            get_legal_mask_mapped_kernel[blocks_frontier, threads](
+                batch.active, batch.chips, batch.bets, batch.n_raises,
+                batch.stage, batch.pot_total,
+                batch.player_i_index, n_players,
+                d_preflop, d_postflop,
+                d_raise_fractions,
+                d_frontier_indices,
+                d_masks, n_frontier,
+            )
+        else:
+            # 1. GPU: extract features + legal masks.
+            get_features_kernel[blocks_pool, threads](
+                batch.chips, batch.bets, batch.active,
+                batch.hole_cards, batch.community,
+                batch.stage, batch.n_raises, batch.player_i_index,
+                batch.pot_total, batch.history,
+                n_players, d_preflop, d_postflop,
+                d_features, n_active, initial_chips,
+            )
+            get_legal_mask_kernel[blocks_pool, threads](
+                batch.active, batch.chips, batch.bets, batch.n_raises,
+                batch.stage, batch.pot_total,
+                batch.player_i_index, n_players,
+                d_preflop, d_postflop,
+                d_raise_fractions,
+                d_masks, n_active,
+            )
         cuda.synchronize()
 
-        # 2. NN forward pass — zero-copy, chunked. Only process n_active slots.
+        # 2. NN forward pass — zero-copy, chunked. Only process live frontier rows.
         feat_t = torch.as_tensor(d_features, device=device)
         NN_CHUNK = _nn_forward_chunk_size(value_net, device)
-        if n_active <= NN_CHUNK:
+        nn_rows = n_frontier if use_frontier_indexing else n_active
+        if nn_rows <= NN_CHUNK:
             with torch.no_grad():
-                adv_t = value_net(feat_t[:n_active])
+                adv_t = value_net(feat_t[:nn_rows])
         else:
             chunks = []
-            for s in range(0, n_active, NN_CHUNK):
-                e = min(s + NN_CHUNK, n_active)
+            for s in range(0, nn_rows, NN_CHUNK):
+                e = min(s + NN_CHUNK, nn_rows)
                 with torch.no_grad():
                     chunks.append(value_net(feat_t[s:e]))
             adv_t = torch.cat(chunks, dim=0)
@@ -1084,15 +1281,23 @@ def gpu_traverse_for_player(
         d_advantages = cuda.as_cuda_array(adv_t.detach())
 
         # 3. GPU: regret matching + classify/sample.
-        blocks_active = (n_active + threads - 1) // threads
+        blocks_active = (nn_rows + threads - 1) // threads
         regret_match_kernel[blocks_active, threads](
-            d_advantages, d_masks, d_strategies, n_active,
+            d_advantages, d_masks, d_strategies, nn_rows,
         )
-        classify_and_sample_kernel[blocks_active, threads](
-            d_strategies, d_masks, batch.stage, batch.player_i_index,
-            n_players, traverser, d_preflop, d_postflop,
-            rng_states, d_actions_gpu, d_is_traverser, n_active,
-        )
+        if use_frontier_indexing:
+            classify_and_sample_mapped_kernel[blocks_active, threads](
+                d_strategies, d_masks, batch.stage, batch.player_i_index,
+                d_frontier_indices,
+                n_players, traverser, d_preflop, d_postflop,
+                rng_states, d_actions_gpu, d_is_traverser, n_frontier,
+            )
+        else:
+            classify_and_sample_kernel[blocks_active, threads](
+                d_strategies, d_masks, batch.stage, batch.player_i_index,
+                n_players, traverser, d_preflop, d_postflop,
+                rng_states, d_actions_gpu, d_is_traverser, n_active,
+            )
         if policy_buffer is not None:
             collect_policy_targets_kernel[blocks_active, threads](
                 d_features, d_masks, d_strategies,
@@ -1104,7 +1309,8 @@ def gpu_traverse_for_player(
                 n_active,
             )
         # 4. GPU: compute winners for terminals.
-        compute_winners_kernel[blocks_active, threads](
+        blocks_highwater = (n_active + threads - 1) // threads
+        compute_winners_kernel[blocks_highwater, threads](
             batch.chips, batch.bets, batch.active,
             batch.hole_cards, batch.community,
             batch.payout, batch.stage, n_active, n_players,
@@ -1115,7 +1321,7 @@ def gpu_traverse_for_player(
         )
 
         # 5. GPU: propagate terminal values up tree, collect regret samples.
-        propagate_kernel[blocks_active, threads](
+        propagate_kernel[blocks_highwater, threads](
             batch.stage, batch.payout, traverser,
             d_parent_idx, d_parent_action,
             d_is_traverser_node, d_traverser_features, d_slot_strategy,
@@ -1129,17 +1335,31 @@ def gpu_traverse_for_player(
         old_next_free = n_active
 
         # 7. GPU: fork traverser nodes — allocate children.
-        fork_kernel[blocks_active, threads](
-            d_is_traverser, batch.stage,
-            d_features, d_strategies, d_masks,
-            d_parent_idx, d_parent_action,
-            d_is_traverser_node, d_traverser_features, d_slot_strategy,
-            d_n_children_expected, d_child_values, d_n_children_done,
-            d_next_free, d_pool_exhausted,
-            d_pool_exhausted_by_depth, d_pool_exhausted_by_stage,
-            max_pool,
-            d_actions_gpu, rng_states, np.int32(depth), n_active,
-        )
+        if use_frontier_indexing:
+            fork_mapped_kernel[blocks_active, threads](
+                d_is_traverser, batch.stage,
+                d_features, d_strategies, d_masks,
+                d_frontier_indices,
+                d_parent_idx, d_parent_action,
+                d_is_traverser_node, d_traverser_features, d_slot_strategy,
+                d_n_children_expected, d_child_values, d_n_children_done,
+                d_next_free, d_pool_exhausted,
+                d_pool_exhausted_by_depth, d_pool_exhausted_by_stage,
+                max_pool,
+                d_actions_gpu, rng_states, np.int32(depth), n_frontier,
+            )
+        else:
+            fork_kernel[blocks_active, threads](
+                d_is_traverser, batch.stage,
+                d_features, d_strategies, d_masks,
+                d_parent_idx, d_parent_action,
+                d_is_traverser_node, d_traverser_features, d_slot_strategy,
+                d_n_children_expected, d_child_values, d_n_children_done,
+                d_next_free, d_pool_exhausted,
+                d_pool_exhausted_by_depth, d_pool_exhausted_by_stage,
+                max_pool,
+                d_actions_gpu, rng_states, np.int32(depth), n_active,
+            )
         cuda.synchronize()
 
         # 8. Read new_next_free (1 scalar D→H). Clamp to max_pool since
@@ -1161,22 +1381,55 @@ def gpu_traverse_for_player(
             )
             n_active = new_next_free
 
-        # 10. GPU: apply actions for ALL slots (opponent sampled + fork children).
-        #     Terminal/traverser slots have action=-1 and are skipped by the kernel.
-        blocks_active = (n_active + threads - 1) // threads
-        apply_action_kernel[blocks_active, threads](
-            batch.chips, batch.bets, batch.active,
-            batch.hole_cards, batch.community, batch.deck,
-            batch.deck_cursor, batch.stage, batch.n_raises,
-            batch.player_i_index, batch.n_actions, batch.pot_total,
-            batch.history, batch.n_players_started_round,
-            d_actions_gpu, n_active, n_players,
-            d_preflop, d_postflop,
-            d_raise_fractions,
-        )
+        # 10. GPU: apply actions.
+        if use_frontier_indexing:
+            apply_action_mapped_kernel[blocks_active, threads](
+                batch.chips, batch.bets, batch.active,
+                batch.hole_cards, batch.community, batch.deck,
+                batch.deck_cursor, batch.stage, batch.n_raises,
+                batch.player_i_index, batch.n_actions, batch.pot_total,
+                batch.history, batch.n_players_started_round,
+                d_actions_gpu, d_frontier_indices, n_frontier, n_players,
+                d_preflop, d_postflop,
+                d_raise_fractions,
+            )
+            if new_next_free > old_next_free:
+                child_indices_t = torch.arange(
+                    old_next_free,
+                    new_next_free,
+                    device=device,
+                    dtype=torch.int32,
+                )
+                d_child_indices = cuda.as_cuda_array(child_indices_t.detach())
+                child_blocks = (int(child_indices_t.numel()) + threads - 1) // threads
+                apply_action_mapped_kernel[child_blocks, threads](
+                    batch.chips, batch.bets, batch.active,
+                    batch.hole_cards, batch.community, batch.deck,
+                    batch.deck_cursor, batch.stage, batch.n_raises,
+                    batch.player_i_index, batch.n_actions, batch.pot_total,
+                    batch.history, batch.n_players_started_round,
+                    d_actions_gpu, d_child_indices, int(child_indices_t.numel()),
+                    n_players,
+                    d_preflop, d_postflop,
+                    d_raise_fractions,
+                )
+        else:
+            # Terminal/traverser slots have action=-1; preserve legacy behavior.
+            blocks_active = (n_active + threads - 1) // threads
+            apply_action_kernel[blocks_active, threads](
+                batch.chips, batch.bets, batch.active,
+                batch.hole_cards, batch.community, batch.deck,
+                batch.deck_cursor, batch.stage, batch.n_raises,
+                batch.player_i_index, batch.n_actions, batch.pot_total,
+                batch.history, batch.n_players_started_round,
+                d_actions_gpu, n_active, n_players,
+                d_preflop, d_postflop,
+                d_raise_fractions,
+            )
         # 11. Count slots that can still advance with a single scalar copy.
         d_active_count.copy_to_device(zero_i32)
-        count_active_frontier_kernel[blocks_active, threads](
+        blocks_highwater = (n_active + threads - 1) // threads
+        count_active_frontier_kernel[blocks_highwater, threads](
             batch.stage,
             d_is_traverser_node,
             d_n_children_expected,
@@ -1312,9 +1565,12 @@ class GPUDeepCFRTrainer:
         policy_target_weight: float = 0.0,
         policy_target_batch_size: int | None = None,
         average_strategy_memory_capacity: int | None = None,
+        average_strategy_target_buffer: PolicyTargetBuffer | None = None,
         average_strategy_weight: float = 0.0,
         average_strategy_batch_size: int | None = None,
         use_betting_history: bool = True,
+        use_frontier_indexing: bool = False,
+        traversal_seed: int | None = None,
     ):
         self.n_players = n_players
         self.initial_chips = initial_chips
@@ -1333,12 +1589,29 @@ class GPUDeepCFRTrainer:
         self.policy_target_buffer = policy_target_buffer
         self.policy_target_weight = float(policy_target_weight)
         self.policy_target_batch_size = policy_target_batch_size
+        self.average_strategy_target_buffer = average_strategy_target_buffer
         self.average_strategy_weight = float(average_strategy_weight)
         self.average_strategy_batch_size = average_strategy_batch_size
         self.use_betting_history = bool(use_betting_history)
-        self.strategy_buffer = PolicyReservoirBuffer(
-            int(average_strategy_memory_capacity or buffer_capacity)
+        self.use_frontier_indexing = bool(use_frontier_indexing)
+        self.traversal_seed = traversal_seed
+        strategy_capacity = (
+            int(buffer_capacity)
+            if average_strategy_memory_capacity is None
+            else max(0, int(average_strategy_memory_capacity))
         )
+        if (
+            self.use_frontier_indexing
+            and self.average_strategy_weight > 0
+            and strategy_capacity > 0
+        ):
+            raise ValueError(
+                "use_frontier_indexing does not yet support average-strategy target collection"
+            )
+        self.strategy_buffer = PolicyReservoirBuffer(
+            strategy_capacity
+        )
+        self.average_strategy_seed_target_size = 0
 
         if device is None:
             self.device = torch.device(
@@ -1376,6 +1649,58 @@ class GPUDeepCFRTrainer:
         self.profile_history: list[dict[str, float | int]] = []
         self._adaptive_traversal_batch_size: int | None = None
 
+    def _average_strategy_training_buffer(
+        self,
+    ) -> PolicyTargetBuffer | PolicyReservoirBuffer | MixedPolicyTargetBuffer:
+        if (
+            self.average_strategy_target_buffer is not None
+            and self.strategy_buffer.size > 0
+        ):
+            return MixedPolicyTargetBuffer(
+                self.average_strategy_target_buffer,
+                self.strategy_buffer,
+            )
+        return self.average_strategy_target_buffer or self.strategy_buffer
+
+    def _average_strategy_external_target_size(self) -> int:
+        return int(
+            self.average_strategy_target_buffer.size
+            if self.average_strategy_target_buffer is not None else 0
+        )
+
+    def _average_strategy_target_size(self) -> int:
+        external_size = self._average_strategy_external_target_size()
+        return int(external_size + self.strategy_buffer.size)
+
+    def _traversal_strategy_buffer(self) -> PolicyReservoirBuffer | None:
+        if self.average_strategy_weight <= 0:
+            return None
+        if self.strategy_buffer.capacity <= 0:
+            return None
+        return self.strategy_buffer
+
+    def seed_average_strategy_memory_from_targets(
+        self,
+        targets: PolicyTargetBuffer,
+        *,
+        weight: float = 1.0,
+    ) -> int:
+        """Insert policy targets into the mutable average-strategy reservoir."""
+        if self.strategy_buffer.capacity <= 0:
+            raise ValueError("average-strategy memory capacity must be positive")
+        count = int(targets.size)
+        if count <= 0:
+            return 0
+        self.strategy_buffer.add_batch(
+            targets.features,
+            targets.legal_masks,
+            targets.target_probs,
+            float(weight),
+            count,
+        )
+        self.average_strategy_seed_target_size += count
+        return count
+
     def run_iteration(self):
         """Run one CFR iteration with GPU traversal."""
         import time as _time
@@ -1405,6 +1730,7 @@ class GPUDeepCFRTrainer:
                 pool_max_slots=self.traversal_pool_max_slots,
                 slots_per_traversal=self.traversal_slots_per_traversal,
                 policy_slots_per_traversal=self.policy_slots_per_traversal,
+                traversal_seed=self.traversal_seed,
             )
 
         t0 = _time.perf_counter()
@@ -1428,10 +1754,9 @@ class GPUDeepCFRTrainer:
                     device=self.device,
                     initial_chips=self.initial_chips,
                     workspace=self._workspace,
-                    policy_buffer=(
-                        self.strategy_buffer if self.average_strategy_weight > 0 else None
-                    ),
+                    policy_buffer=self._traversal_strategy_buffer(),
                     discard_on_pool_exhaustion=True,
+                    use_frontier_indexing=self.use_frontier_indexing,
                 )
                 stats["adaptive_traversal_batch_before"] = int(chunk)
                 next_trav_batch = _adapt_traversal_batch_size(
@@ -1498,10 +1823,18 @@ class GPUDeepCFRTrainer:
                     policy_target_buffer=self.policy_target_buffer,
                     policy_target_weight=self.policy_target_weight,
                     policy_target_batch_size=self.policy_target_batch_size,
+                    average_strategy_buffer=(
+                        self._average_strategy_training_buffer()
+                        if self.average_strategy_weight > 0
+                        and self._average_strategy_target_size() > 0
+                        else None
+                    ),
+                    average_strategy_weight=self.average_strategy_weight,
+                    average_strategy_batch_size=self.average_strategy_batch_size,
                 )
-                if self.average_strategy_weight > 0 and self.strategy_buffer.size > 0:
+                if self.average_strategy_weight > 0 and self._average_strategy_target_size() > 0:
                     self.average_policy_net = train_average_policy_network(
-                        self.strategy_buffer,
+                        self._average_strategy_training_buffer(),
                         hidden_dim=self.hidden_dim,
                         n_layers=self.n_layers,
                         n_epochs=train_steps,
@@ -1565,44 +1898,91 @@ class GPUDeepCFRTrainer:
             initial_chips=self.initial_chips,
         )
 
-    def save(self, path: str):
-        torch.save(
-            {
-                "value_net": self.value_net.state_dict(),
-                "iteration": self.iteration,
-                "n_players": self.n_players,
-                "hidden_dim": self.hidden_dim,
-                "n_layers": self.n_layers,
-                "initial_chips": self.initial_chips,
-                "search_target_weight": self.policy_target_weight,
-                "search_target_size": (
-                    int(self.policy_target_buffer.size)
-                    if self.policy_target_buffer is not None else 0
-                ),
-                "average_strategy_target_size": int(self.strategy_buffer.size),
-                "average_strategy_weight": self.average_strategy_weight,
-                "uses_betting_history": self.use_betting_history,
-                "has_average_policy_net": bool(self.has_average_policy_net),
-                "adaptive_traversal_batch_size": self._adaptive_traversal_batch_size,
-                "buffer_sizes": [len(b) for b in self.buffers],
-                **(
-                    {"average_policy_net": self.average_policy_net.state_dict()}
-                    if self.has_average_policy_net else {}
-                ),
-            },
-            path,
+    def save(self, path: str, *, include_replay_buffers: bool = False):
+        policy_calibration = policy_target_calibration_metadata(
+            self.policy_target_buffer,
+            weight=self.policy_target_weight,
         )
+        checkpoint = {
+            "value_net": self.value_net.state_dict(),
+            "iteration": self.iteration,
+            "n_players": self.n_players,
+            "hidden_dim": self.hidden_dim,
+            "n_layers": self.n_layers,
+            "initial_chips": self.initial_chips,
+            "buffer_capacity": (
+                int(self.buffers[0].capacity) if self.buffers else 0
+            ),
+            "strategy_buffer_capacity": int(self.strategy_buffer.capacity),
+            "search_target_weight": self.policy_target_weight,
+            "search_target_size": (
+                int(self.policy_target_buffer.size)
+                if self.policy_target_buffer is not None else 0
+            ),
+            "average_strategy_target_size": self._average_strategy_target_size(),
+            "average_strategy_collected_size": int(self.strategy_buffer.size),
+            "average_strategy_seed_target_size": int(
+                self.average_strategy_seed_target_size
+            ),
+            "average_strategy_external_target_size": (
+                self._average_strategy_external_target_size()
+            ),
+            "average_strategy_weight": self.average_strategy_weight,
+            "uses_betting_history": self.use_betting_history,
+            "has_average_policy_net": bool(self.has_average_policy_net),
+            "adaptive_traversal_batch_size": self._adaptive_traversal_batch_size,
+            "buffer_sizes": [len(b) for b in self.buffers],
+            **(
+                {"policy_calibration": policy_calibration}
+                if policy_calibration else {}
+            ),
+            **(
+                {"average_policy_net": self.average_policy_net.state_dict()}
+                if self.has_average_policy_net else {}
+            ),
+        }
+        if include_replay_buffers:
+            checkpoint.update(
+                {
+                    "replay_buffer_format": _REPLAY_BUFFER_CHECKPOINT_FORMAT,
+                    "replay_buffers": [
+                        _serialize_reservoir_buffer(buffer)
+                        for buffer in self.buffers
+                    ],
+                    "strategy_replay_buffer": (
+                        _serialize_policy_reservoir_buffer(self.strategy_buffer)
+                    ),
+                }
+            )
+        torch.save(checkpoint, path)
         logger.info(f"Saved checkpoint to {path}")
 
     @classmethod
     def load(cls, path: str, device: torch.device | None = None):
-        checkpoint = torch.load(path, map_location=device, weights_only=True)
+        checkpoint = torch.load(path, map_location="cpu", weights_only=True)
+        replay_buffers = checkpoint.get("replay_buffers")
+        strategy_replay_buffer = checkpoint.get("strategy_replay_buffer")
+        buffer_capacity = int(checkpoint.get("buffer_capacity", 2_000_000))
+        if isinstance(replay_buffers, list) and replay_buffers:
+            buffer_capacity = int(replay_buffers[0].get("capacity", buffer_capacity))
+        strategy_capacity = checkpoint.get("strategy_buffer_capacity")
+        if isinstance(strategy_replay_buffer, dict):
+            strategy_capacity = int(
+                strategy_replay_buffer.get(
+                    "capacity",
+                    strategy_capacity or buffer_capacity,
+                )
+            )
         trainer = cls(
             n_players=checkpoint["n_players"],
+            buffer_capacity=buffer_capacity,
             hidden_dim=checkpoint["hidden_dim"],
             n_layers=checkpoint.get("n_layers", 2),
             initial_chips=checkpoint.get("initial_chips", 10000),
             device=device,
+            average_strategy_memory_capacity=(
+                int(strategy_capacity) if strategy_capacity is not None else None
+            ),
             use_betting_history=bool(checkpoint.get("uses_betting_history", False)),
         )
         state = _remap_legacy_value_state_dict(checkpoint["value_net"])
@@ -1627,4 +2007,18 @@ class GPUDeepCFRTrainer:
         trainer._adaptive_traversal_batch_size = checkpoint.get(
             "adaptive_traversal_batch_size"
         )
+        if isinstance(replay_buffers, list):
+            if len(replay_buffers) != trainer.n_players:
+                raise ValueError(
+                    "checkpoint replay buffer count does not match n_players: "
+                    f"{len(replay_buffers)} != {trainer.n_players}"
+                )
+            trainer.buffers = [
+                _restore_reservoir_buffer(payload)
+                for payload in replay_buffers
+            ]
+        if isinstance(strategy_replay_buffer, dict):
+            trainer.strategy_buffer = _restore_policy_reservoir_buffer(
+                strategy_replay_buffer
+            )
         return trainer

@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1571,
+      "path": "benchmark_audit.md",
+      "sha256": "f67ab5b8e94a0f2aae70bf82cc18f30c98264e01b15f4f42d373ee7920c8738d"
+    },
+    {
+      "bytes": 709,
+      "path": "decision.json",
+      "sha256": "545fca91db28dfadc98c857c19d96c7447ebd83ac75ea6ad5316052eb27b4217"
+    },
+    {
+      "bytes": 2001,
+      "path": "mechanism_review.md",
+      "sha256": "2f670140b3a977de5578c5d3edbb81199ffaa44f3834c10353b3073c93666b72"
+    },
+    {
+      "bytes": 4314,
+      "path": "related_work.md",
+      "sha256": "7df3b5f1992ffc6d305b9173c02946905452e10d3694b498e47d72c601c1b29d"
+    },
+    {
+      "bytes": 2363,
+      "path": "review.md",
+      "sha256": "2c38d3578563825f5c67d030e2727cf14b9c95db976ee425cb3ee03f524724e9"
+    },
+    {
+      "bytes": 963,
+      "path": "review_scope.json",
+      "sha256": "03182b88928f222674b697bdf8d2a1065dc3930efccf9f3514b062bf1abced53"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Local root-disjoint artifacts support the claim that aligned leaf value fit is not enough: CFR10 behavior is mixed and per-root leaf MAE weakly predicts action drift. Proceed only to a bounded decision-impact or safe depth-limit diagnostic, not gameplay promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260516T010232Z-decision-aware-aligned-depth-limited-resolving-objective",
+  "review_id": "20260516T010232Z-decision-aware-aligned-depth-limited-resolving-objective",
+  "sources": [
+    "https://arxiv.org/abs/1805.08195",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/1906.06412",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/25661",
+    "https://arxiv.org/abs/2201.11580",
+    "autoresearch-session/depth_limited_contract_20260516/callback_leaf_aligned_iter10_128x32_noproject_holdout128_error_vs_drift.json"
+  ],
+  "written_at": "2026-05-16T01:07:21Z"
+}

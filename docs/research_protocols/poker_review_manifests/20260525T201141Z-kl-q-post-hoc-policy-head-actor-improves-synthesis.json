@@ -1,0 +1,26 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 581,
+      "path": "decision.json",
+      "sha256": "3bfa3daf7025ebdebdec1bd03bed4ea8c4de828ef5938b36419c35dd0171accf"
+    },
+    {
+      "bytes": 1927,
+      "path": "synthesis.md",
+      "sha256": "79d5fa1720ea34e3bd05eb6896c3ed5fe14ce73bb39c97a33bae81ec9600a76a"
+    }
+  ],
+  "reason": "The KL-Q patch improved its local objective but still failed held-out decision transfer. Pivot from post-hoc policy-head patching to search-improved self-play behavior collection.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T201141Z-kl-q-post-hoc-policy-head-actor-improves-synthesis",
+  "review_id": "20260525T201141Z-kl-q-post-hoc-policy-head-actor-improves-synthesis",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://poker.cs.ualberta.ca/publications/17science.pdf"
+  ],
+  "written_at": "2026-05-25T20:14:04Z"
+}

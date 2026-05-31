@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1347,
+      "path": "benchmark_audit.md",
+      "sha256": "23082625c50298060974ab93d895b76efa3147e55b520178b1124f67a1e4038e"
+    },
+    {
+      "bytes": 821,
+      "path": "decision.json",
+      "sha256": "c3d18b330c4a46f382113e7694cdf192d563270e95c81c7f178e837d6909ccf3"
+    },
+    {
+      "bytes": 1170,
+      "path": "mechanism_review.md",
+      "sha256": "918656a27daad70a64ebba81acbb4c533e58ec27b23d410de50d34d37651d4fd"
+    },
+    {
+      "bytes": 2127,
+      "path": "related_work.md",
+      "sha256": "e51d4ed2b268e0be8866caa73b37b47a141c912afd8c035c1316d6e94153de7a"
+    },
+    {
+      "bytes": 1653,
+      "path": "review.md",
+      "sha256": "37550a74a37cbd58e472d54d2f7ffe0522d98bc79dbe76a193466b94e44fdc5e"
+    },
+    {
+      "bytes": 1082,
+      "path": "review_scope.json",
+      "sha256": "fe2df5e5a03ed7c402ec24b020fcb8d5af19d3b4d9dc90a606f6a6c29dcfee1e"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The evaluator is a protected diagnostic gate, not a promotion. It correctly falsified CFV-only selective escalation while preserving the stronger solver-native boundary direction.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T193136Z-selective-fast-live-to-live-solver-escalation-gate",
+  "review_id": "20260521T193136Z-selective-fast-live-to-live-solver-escalation-gate",
+  "sources": [
+    "scripts/eval_solver_budget_selective_profile.py",
+    "test/unit/test_solver_budget_selective_profile.py",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_escalation_action_disagreement_train128_holdout192_seed20260521.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/selective_profile_escalation_action_disagreement_train192_holdout128_seed20260521.json",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955",
+    "https://arxiv.org/abs/2408.14778"
+  ],
+  "written_at": "2026-05-21T19:36:32Z"
+}

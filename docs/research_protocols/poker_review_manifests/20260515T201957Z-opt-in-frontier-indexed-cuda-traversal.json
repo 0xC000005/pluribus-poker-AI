@@ -1,0 +1,88 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 2086,
+      "path": "benchmark_audit.md",
+      "sha256": "0226529ef1ca3bf92270d4d7f144a8aff7336a65d0775f7b502157a5a2a646bf"
+    },
+    {
+      "bytes": 4772,
+      "path": "decision.json",
+      "sha256": "7d11444af9d015fb3654c8050ceaf11aee24084a15672715f6079b29d8f51759"
+    },
+    {
+      "bytes": 1497,
+      "path": "mechanism_review.md",
+      "sha256": "14b9beddc39ee09c75f3af28a48b873fc89a3901015cffe7a0ebb91bac0d76e4"
+    },
+    {
+      "bytes": 2496,
+      "path": "related_work.md",
+      "sha256": "a510c74bcc952d003ac84f6abaff16f7fbcd36f8f4a9e0d252c3b7729ea2e0c6"
+    },
+    {
+      "bytes": 7343,
+      "path": "review.md",
+      "sha256": "eb5fcaa97a928f1fc9400045c3740f357c81ef52cf5d193136249c726dd3fa6d"
+    },
+    {
+      "bytes": 3048,
+      "path": "review_scope.json",
+      "sha256": "e8dd7a409a68a9babf34276c88bbfcadbf42c4ad319e15d3a35f7050cfc9f496"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The opt-in path has mapped-kernel parity tests, seeded traversal speedups, default-slot training smoke evidence, and an 8-iteration seeded matched H2H with positive lower95. The later 30-iteration 4x512 zero-rejection tests show frontier indexing is a real about-4x accelerator and passes a small traversal-signal parity gate, but two clean matched H2H gates failed the positive-lower95 quality bar. Keep the path opt-in/diagnostic and return the main loop to strategy-quality work.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T201957Z-opt-in-frontier-indexed-cuda-traversal",
+  "review_id": "20260515T201957Z-opt-in-frontier-indexed-cuda-traversal",
+  "sources": [
+    "test/unit/test_gpu_optimizations.py",
+    "test/unit/test_poker_autoresearch.py",
+    "test/unit/test_poker_autoresearch_train.py",
+    "scripts/poker_autoresearch_train.py",
+    "poker_ai/research/frontier_traversal_signal_parity.py",
+    "scripts/eval_frontier_traversal_signal_parity.py",
+    "test/unit/test_frontier_traversal_signal_parity.py",
+    "scripts/run_gpu_deep_cfr.py",
+    "scripts/train_slumbot_2p.py",
+    "scripts/poker_autoresearch.py",
+    "poker_ai/research/autoresearch.py",
+    "autoresearch-session/frontier_indexing_baseline_fullseed_2k_20260515.json",
+    "autoresearch-session/frontier_indexing_optin_fullseed_2k_20260515.json",
+    "autoresearch-session/frontier_indexing_baseline_realistic_2x256_seed20260516.json",
+    "autoresearch-session/frontier_indexing_optin_realistic_2x256_seed20260516.json",
+    "autoresearch-session/poker_runs/20260515T203046Z-gpu-deep-cfr-training-should-produce-frontier-indexed/metrics.json",
+    "autoresearch-session/poker_runs/20260515T203136Z-gpu-deep-cfr-training-should-produce-frontier-indexed/metrics.json",
+    "autoresearch-session/poker_runs/20260515T203403Z-gpu-deep-cfr-training-should-produce-baseline-smoke/metrics.json",
+    "autoresearch-session/poker_runs/20260515T203439Z-candidate-checkpoint-frontier-indexed-smoke-7000-final-pt/metrics.json",
+    "autoresearch-session/poker_runs/20260515T203747Z-gpu-deep-cfr-training-should-produce-baseline10-7000/metrics.json",
+    "autoresearch-session/poker_runs/20260515T203822Z-gpu-deep-cfr-training-should-produce-frontier10-7000/metrics.json",
+    "autoresearch-session/poker_runs/20260515T203921Z-candidate-checkpoint-frontier10-7000-final-pt-should-improve/metrics.json",
+    "autoresearch-session/poker_runs/20260515T204305Z-gpu-deep-cfr-training-should-produce-baseline8-seeded9000/metrics.json",
+    "autoresearch-session/poker_runs/20260515T204340Z-gpu-deep-cfr-training-should-produce-frontier8-seeded9000/metrics.json",
+    "autoresearch-session/poker_runs/20260515T204919Z-candidate-checkpoint-frontier8-seeded9000-final-pt-should-improve/metrics.json",
+    "autoresearch-session/poker_runs/20260515T205005Z-candidate-checkpoint-frontier8-seeded9000-final-pt-should-improve/metrics.json",
+    "autoresearch-session/poker_runs/20260515T221017Z-gpu-deep-cfr-training-should-produce-baseline30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260515T222904Z-gpu-deep-cfr-training-should-produce-frontier30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260515T223444Z-candidate-checkpoint-frontier30-4x512-seeded9000-final-pt-should/metrics.json",
+    "autoresearch-session/poker_runs/20260515T223624Z-gpu-deep-cfr-training-should-produce-baseline30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260515T225503Z-gpu-deep-cfr-training-should-produce-frontier30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260515T231037Z-gpu-deep-cfr-training-should-produce-baseline30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260515T233242Z-gpu-deep-cfr-training-should-produce-frontier30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260515T233807Z-candidate-checkpoint-frontier30-4x512-pool3m-slots12000-final-pt/metrics.json",
+    "autoresearch-session/frontier_traversal_signal_parity_128x4_seed20260530.json",
+    "autoresearch-session/poker_runs/20260515T234424Z-gpu-deep-cfr-training-should-produce-baseline30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260516T000435Z-gpu-deep-cfr-training-should-produce-frontier30-4x512/metrics.json",
+    "autoresearch-session/poker_runs/20260516T000949Z-candidate-checkpoint-frontier30-4x512-pool3m-slots12000-seed20260534-final/metrics.json",
+    "autoresearch-session/poker_reviews/20260516T001019Z-frontier-indexing-multi-seed-quality-blocker-after-clean-synthesis/synthesis.md",
+    "autoresearch-session/frontier_indexing_optin_smoke_20260515.json",
+    "autoresearch-session/poker_reviews/20260515T201844Z-frontier-indexed-traversal-after-failed-learned-shortcuts-synthesis/synthesis.md",
+    "autoresearch-session/poker_reviews/20260515T223518Z-frontier-indexed-traversal-larger-matched-quality-regression-synthesis/synthesis.md"
+  ],
+  "written_at": "2026-05-16T00:19:24Z"
+}

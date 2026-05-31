@@ -1,0 +1,37 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 914,
+      "path": "decision.json",
+      "sha256": "c632dc6981a2cdd0dbbf4f0e6cf0b031d24cf24d17855b60d35f49e719535e7d"
+    },
+    {
+      "bytes": 3364,
+      "path": "innovation.md",
+      "sha256": "1ece641ce73f1bc2dec23dc9761ca874337dc40536906cea54b17f40d53114f2"
+    },
+    {
+      "bytes": 3768,
+      "path": "related_work.md",
+      "sha256": "ac2bb64144921b9637a22f075087ab569124d8058464524bb843105189193505"
+    },
+    {
+      "bytes": 1207,
+      "path": "thought_experiments.md",
+      "sha256": "7e518a58f1d5868caaf42e6250b4015e098bf8a14308e3935404e0b1022183a9"
+    }
+  ],
+  "reason": "Related work and local failures agree that detached local search scores are not enough. The next bounded mechanism is a trajectory-level calibration gate over recorded search actor H2H traces. It is cheap, falsifiable, and decides whether local search evidence can supervise an actor update or must be retired in favor of direct search-guided self-play or VRPO/fictitious-play controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T134257Z-trajectory-level-search-guided-self-play-after-scorer-innovation",
+  "review_id": "20260526T134257Z-trajectory-level-search-guided-self-play-after-scorer-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2006.00283",
+    "https://arxiv.org/abs/2605.19235",
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "autoresearch-session/search_as_actor/exact_search_actor_transfer_analysis_search_guided_20x2_inner1_seed20260536.json"
+  ],
+  "written_at": "2026-05-26T13:52:54Z"
+}

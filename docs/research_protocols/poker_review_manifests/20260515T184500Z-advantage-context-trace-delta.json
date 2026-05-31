@@ -1,0 +1,44 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 743,
+      "path": "benchmark_audit.md",
+      "sha256": "3c23a1511881183a5cff24007b1acbac1924f97730a7afaf9e2c8497f64a1da7"
+    },
+    {
+      "bytes": 399,
+      "path": "decision.json",
+      "sha256": "6e65414354e50cf664696e5188c78c04b57fb02b95d4bfd573c9946be28111ee"
+    },
+    {
+      "bytes": 1312,
+      "path": "mechanism_review.md",
+      "sha256": "505e17dfd6b617a4d9b173ee9faf5340190b3da8f309f43b66f9a22a434b0c66"
+    },
+    {
+      "bytes": 1414,
+      "path": "related_work.md",
+      "sha256": "c5e4eadb7eb3f0d5909247847c96a11e4cb716143749c284d446cd1e034f4146"
+    },
+    {
+      "bytes": 1062,
+      "path": "review.md",
+      "sha256": "5f53e13ec598f9019fc888306f2ab66f10b1903fbe834c84fcf99791d0453cc8"
+    },
+    {
+      "bytes": 2247,
+      "path": "review_scope.json",
+      "sha256": "4ea4e1668f3938161eba980a67ab7744eb5fb3c2b55200ffeb1648cbb2d66775"
+    }
+  ],
+  "reason": "The diagnostic was valid but the mechanism failed its root-disjoint gate: direct counterfactual-advantage context made the trace-delta MLP worse than low trace and much worse than uniform CFR10.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T184500Z-advantage-context-trace-delta",
+  "review_id": "20260515T184500Z-advantage-context-trace-delta",
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1603.01121"
+  ],
+  "written_at": "2026-05-15T18:49:46Z"
+}

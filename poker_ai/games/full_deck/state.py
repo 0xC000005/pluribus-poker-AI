@@ -146,6 +146,7 @@ class PokerState:
         }
         self._skip_counter = 0
         self._first_move_of_current_round = True
+        self._action_records: List[Dict[str, float | int | str]] = []
         self._reset_betting_round_state()
         for player in self.players:
             player.is_turn = False
@@ -174,6 +175,27 @@ class PokerState:
                 f"Action '{action_str}' not in legal actions: {self.legal_actions}"
             )
         new_state = copy.deepcopy(self)
+        acting_player_i = int(new_state.player_i)
+        acting_player = new_state.players[acting_player_i]
+        biggest_bet_before = max(p.n_bet_chips for p in new_state.players)
+        to_call_before = biggest_bet_before - acting_player.n_bet_chips
+        stack_before = acting_player.n_chips
+        pot_before = new_state._table.pot.total
+        record_action = action_str
+        action_record = None
+        if record_action is not None:
+            action_record = {
+                "player_i": acting_player_i,
+                "round_idx": int(new_state.betting_round),
+                "stage": str(new_state.betting_stage),
+                "action": str(record_action),
+                "action_index": int(ACTION_TO_INDEX.get(str(record_action), -1)),
+                "to_call": float(max(to_call_before, 0)),
+                "pot_before": float(pot_before),
+                "stack_before": float(stack_before),
+                "amount_added": 0.0,
+                "player_bet_after": float(acting_player.n_bet_chips),
+            }
         new_state._first_move_of_current_round = False
         if action_str is None:
             assert (
@@ -202,6 +224,13 @@ class PokerState:
             new_state._n_raises += 1
         else:
             raise ValueError(f"Unknown action: {action_str}")
+        if action_record is not None:
+            updated_player = new_state.players[acting_player_i]
+            action_record["amount_added"] = float(
+                max(stack_before - updated_player.n_chips, 0)
+            )
+            action_record["player_bet_after"] = float(updated_player.n_bet_chips)
+            new_state._action_records.append(action_record)
         # Record normalized action in history (all raises → "raise").
         if action_str is not None:
             if action_str.startswith("raise_") or action_str == "all_in":

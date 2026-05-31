@@ -1,0 +1,26 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 784,
+      "path": "decision.json",
+      "sha256": "1fec716654b0f2cfc194845d665b53edc73def3dcb2e8fa9b01db001239560b6"
+    },
+    {
+      "bytes": 1556,
+      "path": "synthesis.md",
+      "sha256": "070b741e7a8bae784882933932f64a68c914138e1ff978e0a409d1c967330c5f"
+    }
+  ],
+  "reason": "Realized-return-weighted behavior cloning fit the target artifacts but regressed held-out fixed-root decision value for both search-improved and matched base behavior actors.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T140723Z-trajectory-return-search-guided-behavior-actor-failed-fixed-synthesis",
+  "review_id": "20260526T140723Z-trajectory-return-search-guided-behavior-actor-failed-fixed-synthesis",
+  "sources": [
+    "autoresearch-session/average_strategy_targets/trajectory_return_search_improved_64x4_seed20260527.json",
+    "autoresearch-session/average_strategy_targets/trajectory_return_base_64x4_seed20260527.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_baseline_eval_32x8_seed20260529.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_search_improved_policy_head_eval_32x8_seed20260529.json",
+    "autoresearch-session/decision_value_actor/trajectory_return_base_policy_head_eval_32x8_seed20260529.json"
+  ],
+  "written_at": "2026-05-26T14:11:09Z"
+}

@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1001,
+      "path": "benchmark_audit.md",
+      "sha256": "12bd9824d4d9302bad1f9fcbb29351a4c439e78d4e85da063923a22d4c5d956f"
+    },
+    {
+      "bytes": 488,
+      "path": "decision.json",
+      "sha256": "6a7c9f1e81bb4a2caa0945dafd6779650f930176d4826f8a156862fd7e8a8bd6"
+    },
+    {
+      "bytes": 1333,
+      "path": "mechanism_review.md",
+      "sha256": "5d4789de4d616c9b240f5b2686b7bbdbf34350f104b1f15336c924e82cca1047"
+    },
+    {
+      "bytes": 2480,
+      "path": "related_work.md",
+      "sha256": "3685522a6a8cdb2562c99585d376962b501b9c91523749b723a4480bd4c3bc93"
+    },
+    {
+      "bytes": 1398,
+      "path": "review.md",
+      "sha256": "891734376c5e21d5ca6b7ff6f4087e74f8038b9772699117bad844855485062d"
+    },
+    {
+      "bytes": 2268,
+      "path": "review_scope.json",
+      "sha256": "cb759e0c11d6ca239b8ecd65d450b2f0fe1737ebb543b8af38d0ee169f63a319"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The workflow change fixes a goal-completion bug: failed mechanisms now become reviewed pivot work under an explicit flag, while invalid evaluations remain hard stops.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T181029Z-continuous-autoresearch-soft-pivot-goal-contract",
+  "review_id": "20260525T181029Z-continuous-autoresearch-soft-pivot-goal-contract",
+  "sources": [
+    "https://openai.com/business/guides-and-resources/a-practical-guide-to-building-ai-agents/",
+    "https://platform.openai.com/docs/guides/agent-evals",
+    "https://arxiv.org/abs/2305.16291",
+    "https://arxiv.org/abs/2408.06292"
+  ],
+  "written_at": "2026-05-25T18:12:24Z"
+}

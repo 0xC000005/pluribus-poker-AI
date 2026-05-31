@@ -1,0 +1,35 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 493,
+      "path": "decision.json",
+      "sha256": "01e3ca07c2967c6795abda9610fc322bf6d0abbdf8a51709a0cbaceb5f9a0387"
+    },
+    {
+      "bytes": 2848,
+      "path": "innovation.md",
+      "sha256": "71a4be0e9bb400b9f1d06cfed94c2496995b68bf3ee679f0180c9fa484b43dda"
+    },
+    {
+      "bytes": 3005,
+      "path": "related_work.md",
+      "sha256": "6b28f79d3bdfa05fa299d1856a8430bf3f77afcc49bde6c02b71f3d5a30e8ad0"
+    },
+    {
+      "bytes": 1093,
+      "path": "thought_experiments.md",
+      "sha256": "45c76196232898c0047b83357e6f6ca4340386f539394f0dcc88320ecf22a11e"
+    }
+  ],
+  "reason": "Retire the learned-hook family and pivot to exact-search-first self-play/blueprint improvement, with any later learned amortization judged by closed-loop root-decision impact.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T181325Z-pivot-after-learned-hook-family-failure-innovation",
+  "review_id": "20260525T181325Z-pivot-after-learned-hook-family-failure-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://papers.nips.cc/paper/2020/hash/c61f571dbd2fb949d3fe5ae1608dd48b-Abstract.html",
+    "https://www.science.org/doi/10.1126/science.add4679",
+    "https://arxiv.org/abs/2605.14379"
+  ],
+  "written_at": "2026-05-25T18:15:12Z"
+}

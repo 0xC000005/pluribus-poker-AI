@@ -14,8 +14,10 @@ Example:
 from __future__ import annotations
 
 import argparse
+import random
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from cuda_env import configure_numba_cuda_env
@@ -28,6 +30,27 @@ from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn
 
 from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
 from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
+
+
+def resolve_average_strategy_memory_capacity(value: int | None) -> int | None:
+    """Preserve 0 as an explicit request for external average-policy targets only."""
+    if value is None:
+        return None
+    return max(0, int(value))
+
+
+def resolve_average_strategy_target_buffers(
+    average_strategy_targets: str,
+    *,
+    seed_memory: bool = False,
+) -> tuple[PolicyTargetBuffer | None, PolicyTargetBuffer | None]:
+    """Route average-strategy targets to external loss or mutable memory."""
+    if not average_strategy_targets:
+        return None, None
+    targets = PolicyTargetBuffer.from_npz(average_strategy_targets)
+    if seed_memory:
+        return None, targets
+    return targets, None
 
 
 def main():
@@ -47,11 +70,23 @@ def main():
     ap.add_argument("--average-strategy-weight", type=float, default=0.0)
     ap.add_argument("--average-strategy-memory-capacity", type=int, default=0)
     ap.add_argument("--average-strategy-batch-size", type=int, default=0)
+    ap.add_argument("--average-strategy-targets", type=str, default="")
+    ap.add_argument(
+        "--seed-average-strategy-memory-from-targets",
+        action="store_true",
+        help=(
+            "Insert --average-strategy-targets into the mutable average-policy "
+            "reservoir instead of using them as a detached external dataset."
+        ),
+    )
+    ap.add_argument("--average-strategy-seed-weight", type=float, default=1.0)
     ap.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
+    ap.add_argument("--use-frontier-indexing", action="store_true")
     ap.add_argument("--policy-slots-per-traversal", type=int, default=64)
     ap.add_argument("--save-path", type=str, default="./models")
     ap.add_argument("--save-every", type=int, default=10)
     ap.add_argument("--eval-every", type=int, default=10)
+    ap.add_argument("--seed", type=int)
     args = ap.parse_args()
 
     console = Console()
@@ -69,6 +104,11 @@ def main():
 
     dev = torch.device("cuda")
     console.print("[bold]Device:[/bold] cuda")
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
 
     save_dir = Path(args.save_path)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -77,6 +117,21 @@ def main():
         if args.search_targets
         else None
     )
+    average_strategy_target_buffer, average_strategy_seed_buffer = (
+        resolve_average_strategy_target_buffers(
+            args.average_strategy_targets,
+            seed_memory=args.seed_average_strategy_memory_from_targets,
+        )
+    )
+    if (
+        args.use_frontier_indexing
+        and args.average_strategy_weight > 0
+        and average_strategy_target_buffer is None
+    ):
+        raise SystemExit(
+            "--use-frontier-indexing does not yet support "
+            "--average-strategy-weight > 0 unless --average-strategy-targets is supplied"
+        )
 
     trainer = GPUDeepCFRTrainer(
         n_players=args.n_players,
@@ -92,11 +147,25 @@ def main():
         policy_target_weight=args.search_target_weight,
         policy_target_batch_size=args.search_target_batch_size or None,
         traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+        use_frontier_indexing=args.use_frontier_indexing,
+        traversal_seed=args.seed,
         policy_slots_per_traversal=args.policy_slots_per_traversal,
-        average_strategy_memory_capacity=args.average_strategy_memory_capacity or None,
+        average_strategy_memory_capacity=resolve_average_strategy_memory_capacity(
+            args.average_strategy_memory_capacity
+        ),
+        average_strategy_target_buffer=average_strategy_target_buffer,
         average_strategy_weight=args.average_strategy_weight,
         average_strategy_batch_size=args.average_strategy_batch_size or None,
     )
+    if average_strategy_seed_buffer is not None:
+        added = trainer.seed_average_strategy_memory_from_targets(
+            average_strategy_seed_buffer,
+            weight=args.average_strategy_seed_weight,
+        )
+        console.print(
+            "[cyan]Seeded average-strategy memory:[/cyan] "
+            f"{added} targets from {args.average_strategy_targets}"
+        )
 
     console.print(
         f"[bold]Training (GPU traversal):[/bold] iters={args.n_iterations}, traversals/iter={args.n_traversals}"

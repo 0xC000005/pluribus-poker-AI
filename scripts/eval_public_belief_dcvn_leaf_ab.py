@@ -223,6 +223,8 @@ def _solve_case(
     state_batch_size: int,
     hand_batch_size: int,
     project_zero_sum: bool,
+    leaf_callback_cls: type[PublicBeliefDCVNLeafCallback] = PublicBeliefDCVNLeafCallback,
+    leaf_callback_kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     parsed = parse_action(case.action_str)
     if "error" in parsed:
@@ -267,7 +269,7 @@ def _solve_case(
     baseline_strategy = _strategy_vector(baseline.get_strategy(hand, baseline_node))
 
     learned = StreetSolver(board_idx, pot, hero_stack, villain_stack, hero_first)
-    callback = PublicBeliefDCVNLeafCallback(
+    callback = leaf_callback_cls(
         case=case,
         board4=board_idx,
         action_prefix=action_prefix,
@@ -278,6 +280,7 @@ def _solve_case(
         state_batch_size=state_batch_size,
         hand_batch_size=hand_batch_size,
         project_zero_sum=project_zero_sum,
+        **(leaf_callback_kwargs or {}),
     )
     callback.solver_hands = list(learned.hands)
     learned.solve(

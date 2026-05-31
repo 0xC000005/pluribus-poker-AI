@@ -434,11 +434,15 @@ class FastPokerState:
 
         n_active = int(self.active.sum())
         if n_active == 0:
+            self.bets[:] = 0
+            self.pot_total = 0
             return
 
         if n_active == 1:
             winner = int(np.argmax(self.active))
             self.chips[winner] += self.pot_total
+            self.bets[:] = 0
+            self.pot_total = 0
             return
 
         # Evaluate hands for all active players.
@@ -469,6 +473,8 @@ class FastPokerState:
             remainder = total - per_winner * len(winners)
             for i, w in enumerate(winners):
                 self.chips[w] += per_winner + (1 if i < remainder else 0)
+        self.bets[:] = 0
+        self.pot_total = 0
 
     def _compute_side_pots(self) -> list[dict[int, int]]:
         """Compute side pots from bets array."""
@@ -508,8 +514,8 @@ class FastPokerState:
                 features[52 + int(c)] = 1.0
 
         # Current betting round: 4-dim one-hot.
-        round_idx = min(self.stage, 3)
-        if self.stage < 4:
+        round_idx = 3 if self.stage == self.TERMINAL else min(self.stage, 3)
+        if self.stage < 4 or self.stage == self.TERMINAL:
             features[104 + round_idx] = 1.0
 
         # Scalar features.

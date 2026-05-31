@@ -1,0 +1,29 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 961,
+      "path": "decision.json",
+      "sha256": "a790d2e21431399a6b40167cfcc8ca52fd0895bbc91ad4ecd604d03c56366649"
+    },
+    {
+      "bytes": 2193,
+      "path": "synthesis.md",
+      "sha256": "b4155ce41065bbe5d0f352154623ff9bcea5c0ea13e53022fc196e52038415e7"
+    }
+  ],
+  "reason": "External repeat-holdout A/B shows the aligned callback-leaf branch has real but non-promotable signal, while neural drift prediction fails external transfer. Retire post-hoc abstention and test a safe or multi-valued depth-limit objective at a useful earlier boundary.",
+  "review_dir": "autoresearch-session/poker_reviews/20260516T012540Z-callback-leaf-neural-drift-external-transfer-failure-synthesis",
+  "review_id": "20260516T012540Z-callback-leaf-neural-drift-external-transfer-failure-synthesis",
+  "sources": [
+    "RESEARCH_LOG.md#20260516T021000Z-callback-leaf-external-repeat-holdout",
+    "RESEARCH_LOG.md#20260516T021600Z-callback-leaf-neural-drift-external-transfer",
+    "autoresearch-session/depth_limited_contract_20260516/callback_leaf_aligned_iter10_128x32_noproject_external_repeat64.json",
+    "autoresearch-session/depth_limited_contract_20260516/callback_leaf_aligned_iter10_neural_drift_predictor_external_repeat64.json",
+    "docs/research_protocols/poker_autoresearch_current_findings.md",
+    "https://arxiv.org/abs/2201.11580",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178"
+  ],
+  "written_at": "2026-05-16T01:26:20Z"
+}

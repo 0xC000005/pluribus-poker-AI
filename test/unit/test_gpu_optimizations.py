@@ -512,6 +512,30 @@ class TestGPUTrainerIntegration:
 class TestTraversalFrontierKernel:
     """Traversal-frontier bookkeeping tests."""
 
+    def test_gpu_traverse_workspace_seed_makes_reset_reproducible(self):
+        from poker_ai.deep_cfr.cuda.gpu_trainer import _GPUTraverseWorkspace
+
+        first = _GPUTraverseWorkspace(
+            max_traversals=4,
+            n_players=2,
+            initial_chips=1000,
+            traversal_seed=20260515,
+        )
+        second = _GPUTraverseWorkspace(
+            max_traversals=4,
+            n_players=2,
+            initial_chips=1000,
+            traversal_seed=20260515,
+        )
+
+        first.reset(4)
+        second.reset(4)
+
+        np.testing.assert_array_equal(
+            first.d_seeds.copy_to_host(),
+            second.d_seeds.copy_to_host(),
+        )
+
     def test_active_frontier_counter_skips_expanded_traverser_nodes(self):
         from poker_ai.deep_cfr.cuda.action_kernels import count_active_frontier_kernel
 
@@ -535,3 +559,495 @@ class TestTraversalFrontierKernel:
         cuda.synchronize()
 
         assert int(d_out_count.copy_to_host()[0]) == 2
+
+    def test_apply_action_minus_one_does_not_advance_state(self):
+        from poker_ai.deep_cfr.cuda.game_kernels import apply_action_kernel
+
+        n_games = 1
+        n_players = 2
+        chips = np.full((n_games, n_players), 1000, dtype=np.int32)
+        bets = np.zeros((n_games, n_players), dtype=np.int32)
+        active = np.ones((n_games, n_players), dtype=np.int8)
+        hole_cards = np.zeros((n_games, n_players, 2), dtype=np.int8)
+        community = np.full((n_games, 5), -1, dtype=np.int8)
+        deck = np.tile(np.arange(52, dtype=np.int8), (n_games, 1))
+        deck_cursor = np.full(n_games, 4, dtype=np.int32)
+        stage = np.zeros(n_games, dtype=np.int8)
+        n_raises = np.zeros(n_games, dtype=np.int8)
+        player_i_index = np.zeros(n_games, dtype=np.int8)
+        n_actions = np.zeros(n_games, dtype=np.int16)
+        pot_total = np.full(n_games, 100, dtype=np.int32)
+        history = np.zeros((n_games, 4, 3), dtype=np.int8)
+        n_started = np.full(n_games, 2, dtype=np.int8)
+        actions = np.array([-1], dtype=np.int8)
+        preflop = cuda.to_device(np.array([0, 1], dtype=np.int8))
+        postflop = cuda.to_device(np.array([1, 0], dtype=np.int8))
+        raise_fractions = cuda.to_device(
+            np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0], dtype=np.float32)
+        )
+        arrays = [
+            cuda.to_device(array.copy())
+            for array in (
+                chips,
+                bets,
+                active,
+                hole_cards,
+                community,
+                deck,
+                deck_cursor,
+                stage,
+                n_raises,
+                player_i_index,
+                n_actions,
+                pot_total,
+                history,
+                n_started,
+            )
+        ]
+
+        apply_action_kernel[1, 16](
+            *arrays,
+            cuda.to_device(actions),
+            n_games,
+            n_players,
+            preflop,
+            postflop,
+            raise_fractions,
+        )
+        cuda.synchronize()
+
+        assert int(arrays[10].copy_to_host()[0]) == 0
+        assert int(arrays[7].copy_to_host()[0]) == 0
+        assert int(arrays[8].copy_to_host()[0]) == 0
+        assert int(arrays[9].copy_to_host()[0]) == 0
+
+    def test_mapped_apply_action_matches_baseline_on_selected_slots(self):
+        from poker_ai.deep_cfr.cuda.game_kernels import (
+            apply_action_kernel,
+            apply_action_mapped_kernel,
+        )
+
+        n_games = 4
+        n_players = 2
+        chips = np.full((n_games, n_players), 1000, dtype=np.int32)
+        bets = np.zeros((n_games, n_players), dtype=np.int32)
+        active = np.ones((n_games, n_players), dtype=np.int8)
+        hole_cards = np.zeros((n_games, n_players, 2), dtype=np.int8)
+        community = np.full((n_games, 5), -1, dtype=np.int8)
+        deck = np.tile(np.arange(52, dtype=np.int8), (n_games, 1))
+        deck_cursor = np.full(n_games, 4, dtype=np.int32)
+        stage = np.zeros(n_games, dtype=np.int8)
+        n_raises = np.zeros(n_games, dtype=np.int8)
+        player_i_index = np.zeros(n_games, dtype=np.int8)
+        n_actions = np.zeros(n_games, dtype=np.int16)
+        pot_total = np.full(n_games, 100, dtype=np.int32)
+        history = np.zeros((n_games, 4, 3), dtype=np.int8)
+        n_started = np.full(n_games, 2, dtype=np.int8)
+        actions = np.array([-1, 1, -1, 0], dtype=np.int8)
+        frontier = np.array([1, 3], dtype=np.int32)
+        preflop = cuda.to_device(np.array([0, 1], dtype=np.int8))
+        postflop = cuda.to_device(np.array([1, 0], dtype=np.int8))
+        raise_fractions = cuda.to_device(
+            np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0], dtype=np.float32)
+        )
+
+        baseline_arrays = [
+            cuda.to_device(array.copy())
+            for array in (
+                chips,
+                bets,
+                active,
+                hole_cards,
+                community,
+                deck,
+                deck_cursor,
+                stage,
+                n_raises,
+                player_i_index,
+                n_actions,
+                pot_total,
+                history,
+                n_started,
+            )
+        ]
+        mapped_arrays = [
+            cuda.to_device(array.copy())
+            for array in (
+                chips,
+                bets,
+                active,
+                hole_cards,
+                community,
+                deck,
+                deck_cursor,
+                stage,
+                n_raises,
+                player_i_index,
+                n_actions,
+                pot_total,
+                history,
+                n_started,
+            )
+        ]
+        d_actions = cuda.to_device(actions)
+        d_frontier = cuda.to_device(frontier)
+
+        apply_action_kernel[1, 16](
+            *baseline_arrays,
+            d_actions,
+            n_games,
+            n_players,
+            preflop,
+            postflop,
+            raise_fractions,
+        )
+        apply_action_mapped_kernel[1, 16](
+            *mapped_arrays,
+            d_actions,
+            d_frontier,
+            frontier.shape[0],
+            n_players,
+            preflop,
+            postflop,
+            raise_fractions,
+        )
+        cuda.synchronize()
+
+        for baseline, mapped in zip(baseline_arrays, mapped_arrays):
+            baseline_host = baseline.copy_to_host()
+            mapped_host = mapped.copy_to_host()
+            np.testing.assert_array_equal(
+                mapped_host[frontier],
+                baseline_host[frontier],
+            )
+
+    def test_mapped_feature_and_mask_kernels_match_baseline_selected_slots(self):
+        from poker_ai.deep_cfr.cuda.game_kernels import (
+            get_features_kernel,
+            get_features_mapped_kernel,
+            get_legal_mask_kernel,
+            get_legal_mask_mapped_kernel,
+        )
+        from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
+
+        n_games = 4
+        n_players = 2
+        initial_chips = 1000
+        chips = np.full((n_games, n_players), initial_chips, dtype=np.int32)
+        bets = np.zeros((n_games, n_players), dtype=np.int32)
+        bets[:, 1] = np.array([0, 100, 200, 0], dtype=np.int32)
+        active = np.ones((n_games, n_players), dtype=np.int8)
+        hole_cards = np.array(
+            [
+                [[0, 1], [2, 3]],
+                [[4, 5], [6, 7]],
+                [[8, 9], [10, 11]],
+                [[12, 13], [14, 15]],
+            ],
+            dtype=np.int8,
+        )
+        community = np.full((n_games, 5), -1, dtype=np.int8)
+        community[:, 0] = np.array([16, 17, 18, 19], dtype=np.int8)
+        stage = np.array([0, 1, 2, 3], dtype=np.int8)
+        n_raises = np.array([0, 1, 2, 0], dtype=np.int8)
+        player_i_index = np.array([0, 1, 0, 1], dtype=np.int8)
+        pot_total = np.array([100, 300, 500, 700], dtype=np.int32)
+        history = np.zeros((n_games, 4, 3), dtype=np.int8)
+        history[:, 0, 0] = np.array([0, 1, 2, 1], dtype=np.int8)
+        frontier = np.array([1, 3], dtype=np.int32)
+        preflop = cuda.to_device(np.array([0, 1], dtype=np.int8))
+        postflop = cuda.to_device(np.array([1, 0], dtype=np.int8))
+        raise_fractions = cuda.to_device(
+            np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0], dtype=np.float32)
+        )
+
+        d_chips = cuda.to_device(chips)
+        d_bets = cuda.to_device(bets)
+        d_active = cuda.to_device(active)
+        d_hole_cards = cuda.to_device(hole_cards)
+        d_community = cuda.to_device(community)
+        d_stage = cuda.to_device(stage)
+        d_n_raises = cuda.to_device(n_raises)
+        d_player_i_index = cuda.to_device(player_i_index)
+        d_pot_total = cuda.to_device(pot_total)
+        d_history = cuda.to_device(history)
+        d_frontier = cuda.to_device(frontier)
+        d_features = cuda.device_array((n_games, N_FEATURES), dtype=np.float32)
+        d_masks = cuda.device_array((n_games, N_ACTIONS), dtype=np.float32)
+        d_mapped_features = cuda.device_array((frontier.shape[0], N_FEATURES), dtype=np.float32)
+        d_mapped_masks = cuda.device_array((frontier.shape[0], N_ACTIONS), dtype=np.float32)
+
+        get_features_kernel[1, 16](
+            d_chips,
+            d_bets,
+            d_active,
+            d_hole_cards,
+            d_community,
+            d_stage,
+            d_n_raises,
+            d_player_i_index,
+            d_pot_total,
+            d_history,
+            n_players,
+            preflop,
+            postflop,
+            d_features,
+            n_games,
+            initial_chips,
+        )
+        get_legal_mask_kernel[1, 16](
+            d_active,
+            d_chips,
+            d_bets,
+            d_n_raises,
+            d_stage,
+            d_pot_total,
+            d_player_i_index,
+            n_players,
+            preflop,
+            postflop,
+            raise_fractions,
+            d_masks,
+            n_games,
+        )
+        get_features_mapped_kernel[1, 16](
+            d_chips,
+            d_bets,
+            d_active,
+            d_hole_cards,
+            d_community,
+            d_stage,
+            d_n_raises,
+            d_player_i_index,
+            d_pot_total,
+            d_history,
+            n_players,
+            preflop,
+            postflop,
+            d_frontier,
+            d_mapped_features,
+            frontier.shape[0],
+            initial_chips,
+        )
+        get_legal_mask_mapped_kernel[1, 16](
+            d_active,
+            d_chips,
+            d_bets,
+            d_n_raises,
+            d_stage,
+            d_pot_total,
+            d_player_i_index,
+            n_players,
+            preflop,
+            postflop,
+            raise_fractions,
+            d_frontier,
+            d_mapped_masks,
+            frontier.shape[0],
+        )
+        cuda.synchronize()
+
+        np.testing.assert_allclose(
+            d_mapped_features.copy_to_host(),
+            d_features.copy_to_host()[frontier],
+        )
+        np.testing.assert_allclose(
+            d_mapped_masks.copy_to_host(),
+            d_masks.copy_to_host()[frontier],
+        )
+
+    def test_mapped_classify_and_sample_matches_baseline_selected_slots(self):
+        from numba.cuda.random import create_xoroshiro128p_states
+        from poker_ai.deep_cfr.cuda.action_kernels import (
+            classify_and_sample_kernel,
+            classify_and_sample_mapped_kernel,
+        )
+        from poker_ai.deep_cfr.fast_state import N_ACTIONS
+
+        n_games = 4
+        n_players = 2
+        traverser = 0
+        stage = np.array([0, 0, 1, 1], dtype=np.int8)
+        player_i_index = np.array([0, 1, 1, 0], dtype=np.int8)
+        frontier = np.array([1, 3], dtype=np.int32)
+        strategies = np.zeros((n_games, N_ACTIONS), dtype=np.float32)
+        strategies[:, 1] = 1.0
+        legal_masks = np.zeros((n_games, N_ACTIONS), dtype=np.float32)
+        legal_masks[:, 1] = 1.0
+        mapped_strategies = strategies[frontier].copy()
+        mapped_masks = legal_masks[frontier].copy()
+        preflop = cuda.to_device(np.array([0, 1], dtype=np.int8))
+        postflop = cuda.to_device(np.array([1, 0], dtype=np.int8))
+        rng_states = create_xoroshiro128p_states(n_games, seed=123)
+        rng_states_mapped = create_xoroshiro128p_states(n_games, seed=123)
+
+        d_stage = cuda.to_device(stage)
+        d_player_i_index = cuda.to_device(player_i_index)
+        d_frontier = cuda.to_device(frontier)
+        d_strategies = cuda.to_device(strategies)
+        d_legal_masks = cuda.to_device(legal_masks)
+        d_mapped_strategies = cuda.to_device(mapped_strategies)
+        d_mapped_masks = cuda.to_device(mapped_masks)
+        d_actions = cuda.device_array(n_games, dtype=np.int8)
+        d_is_traverser = cuda.device_array(n_games, dtype=np.int8)
+        d_mapped_actions = cuda.device_array(n_games, dtype=np.int8)
+        d_mapped_is_traverser = cuda.device_array(n_games, dtype=np.int8)
+
+        classify_and_sample_kernel[1, 16](
+            d_strategies,
+            d_legal_masks,
+            d_stage,
+            d_player_i_index,
+            n_players,
+            traverser,
+            preflop,
+            postflop,
+            rng_states,
+            d_actions,
+            d_is_traverser,
+            n_games,
+        )
+        classify_and_sample_mapped_kernel[1, 16](
+            d_mapped_strategies,
+            d_mapped_masks,
+            d_stage,
+            d_player_i_index,
+            d_frontier,
+            n_players,
+            traverser,
+            preflop,
+            postflop,
+            rng_states_mapped,
+            d_mapped_actions,
+            d_mapped_is_traverser,
+            frontier.shape[0],
+        )
+        cuda.synchronize()
+
+        np.testing.assert_array_equal(
+            d_mapped_actions.copy_to_host()[frontier],
+            d_actions.copy_to_host()[frontier],
+        )
+        np.testing.assert_array_equal(
+            d_mapped_is_traverser.copy_to_host()[frontier],
+            d_is_traverser.copy_to_host()[frontier],
+        )
+
+    def test_mapped_fork_kernel_matches_baseline_single_selected_slot(self):
+        from numba.cuda.random import create_xoroshiro128p_states
+        from poker_ai.deep_cfr.cuda.action_kernels import fork_kernel, fork_mapped_kernel
+        from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
+
+        max_pool = 12
+        n_active = 4
+        selected_slot = 1
+        frontier = np.array([selected_slot], dtype=np.int32)
+        stages = np.zeros(max_pool, dtype=np.int8)
+        features = np.arange(max_pool * N_FEATURES, dtype=np.float32).reshape(
+            max_pool,
+            N_FEATURES,
+        )
+        compact_features = features[frontier].copy()
+        strategies = np.zeros((max_pool, N_ACTIONS), dtype=np.float32)
+        strategies[:, 1] = 0.25
+        strategies[:, 2] = 0.75
+        compact_strategies = strategies[frontier].copy()
+        legal_masks = np.zeros((max_pool, N_ACTIONS), dtype=np.float32)
+        legal_masks[:, 1] = 1.0
+        legal_masks[:, 2] = 1.0
+        compact_masks = legal_masks[frontier].copy()
+        is_traverser = np.zeros(max_pool, dtype=np.int8)
+        is_traverser[selected_slot] = 1
+
+        def device_bookkeeping():
+            return {
+                "parent_idx": cuda.to_device(np.full(max_pool, -1, dtype=np.int32)),
+                "parent_action": cuda.to_device(np.full(max_pool, -1, dtype=np.int8)),
+                "is_traverser_node": cuda.to_device(np.zeros(max_pool, dtype=np.int8)),
+                "traverser_features": cuda.device_array((max_pool, N_FEATURES), dtype=np.float32),
+                "slot_strategy": cuda.device_array((max_pool, N_ACTIONS), dtype=np.float32),
+                "n_children_expected": cuda.to_device(np.zeros(max_pool, dtype=np.int32)),
+                "child_values": cuda.to_device(np.zeros((max_pool, N_ACTIONS), dtype=np.float32)),
+                "n_children_done": cuda.to_device(np.zeros(max_pool, dtype=np.int32)),
+                "next_free": cuda.to_device(np.array([n_active], dtype=np.int32)),
+                "pool_exhausted": cuda.to_device(np.array([0], dtype=np.int32)),
+                "pool_exhausted_by_depth": cuda.to_device(np.zeros(100, dtype=np.int32)),
+                "pool_exhausted_by_stage": cuda.to_device(np.zeros(4, dtype=np.int32)),
+                "actions_out": cuda.to_device(np.full(max_pool, -1, dtype=np.int8)),
+            }
+
+        baseline = device_bookkeeping()
+        mapped = device_bookkeeping()
+        rng_states = create_xoroshiro128p_states(max_pool, seed=123)
+        rng_states_mapped = create_xoroshiro128p_states(max_pool, seed=123)
+
+        fork_kernel[1, 16](
+            cuda.to_device(is_traverser.copy()),
+            cuda.to_device(stages),
+            cuda.to_device(features),
+            cuda.to_device(strategies),
+            cuda.to_device(legal_masks),
+            baseline["parent_idx"],
+            baseline["parent_action"],
+            baseline["is_traverser_node"],
+            baseline["traverser_features"],
+            baseline["slot_strategy"],
+            baseline["n_children_expected"],
+            baseline["child_values"],
+            baseline["n_children_done"],
+            baseline["next_free"],
+            baseline["pool_exhausted"],
+            baseline["pool_exhausted_by_depth"],
+            baseline["pool_exhausted_by_stage"],
+            max_pool,
+            baseline["actions_out"],
+            rng_states,
+            np.int32(0),
+            n_active,
+        )
+        fork_mapped_kernel[1, 16](
+            cuda.to_device(is_traverser.copy()),
+            cuda.to_device(stages),
+            cuda.to_device(compact_features),
+            cuda.to_device(compact_strategies),
+            cuda.to_device(compact_masks),
+            cuda.to_device(frontier),
+            mapped["parent_idx"],
+            mapped["parent_action"],
+            mapped["is_traverser_node"],
+            mapped["traverser_features"],
+            mapped["slot_strategy"],
+            mapped["n_children_expected"],
+            mapped["child_values"],
+            mapped["n_children_done"],
+            mapped["next_free"],
+            mapped["pool_exhausted"],
+            mapped["pool_exhausted_by_depth"],
+            mapped["pool_exhausted_by_stage"],
+            max_pool,
+            mapped["actions_out"],
+            rng_states_mapped,
+            np.int32(0),
+            frontier.shape[0],
+        )
+        cuda.synchronize()
+
+        assert int(mapped["next_free"].copy_to_host()[0]) == int(
+            baseline["next_free"].copy_to_host()[0]
+        )
+        child_slice = slice(n_active, n_active + 2)
+        for key in ("parent_idx", "parent_action", "actions_out"):
+            np.testing.assert_array_equal(
+                mapped[key].copy_to_host()[child_slice],
+                baseline[key].copy_to_host()[child_slice],
+            )
+        assert mapped["is_traverser_node"].copy_to_host()[selected_slot] == 1
+        assert mapped["n_children_expected"].copy_to_host()[selected_slot] == 2
+        np.testing.assert_allclose(
+            mapped["traverser_features"].copy_to_host()[selected_slot],
+            baseline["traverser_features"].copy_to_host()[selected_slot],
+        )
+        np.testing.assert_allclose(
+            mapped["slot_strategy"].copy_to_host()[selected_slot],
+            baseline["slot_strategy"].copy_to_host()[selected_slot],
+        )

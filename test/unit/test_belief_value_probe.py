@@ -472,6 +472,62 @@ def test_dual_cfv_state_player_offset_vectorized_matches_pairwise():
     np.testing.assert_allclose(vectorized, pairwise, rtol=1e-5, atol=1e-5)
 
 
+def test_dual_cfv_opponent_reach_ev_vectorized_matches_pairwise():
+    torch.manual_seed(5)
+    model = _DualHandCFVProbeNet(
+        8,
+        use_belief=True,
+        head_mode="separate",
+        belief_bottleneck_dim=4,
+        card_encoder="deepset",
+        value_factorization="opponent-reach-ev",
+    )
+    payload = {
+        "public_mean": np.zeros((1, N_FEATURES), dtype=np.float32),
+        "public_std": np.ones((1, N_FEATURES), dtype=np.float32),
+        "belief_mean": np.zeros((1, bvp.BELIEF_DIM), dtype=np.float32),
+        "belief_std": np.ones((1, bvp.BELIEF_DIM), dtype=np.float32),
+        "target_mean": 0.05,
+        "target_std": 0.5,
+        "value_factorization": "opponent-reach-ev",
+    }
+    features = np.zeros((1, N_FEATURES), dtype=np.float32)
+    features[:, 52:57] = 1.0
+    belief = np.zeros((1, bvp.BELIEF_DIM), dtype=np.float32)
+    belief[0, HAND_TO_INDEX[(0, 1)]] = 0.45
+    belief[0, HAND_TO_INDEX[(4, 5)]] = 0.55
+    belief[0, bvp.N_HANDS + HAND_TO_INDEX[(2, 3)]] = 0.35
+    belief[0, bvp.N_HANDS + HAND_TO_INDEX[(6, 7)]] = 0.65
+    hero_masks = np.zeros((1, bvp.N_HANDS), dtype=np.float32)
+    villain_masks = np.zeros((1, bvp.N_HANDS), dtype=np.float32)
+    hero_masks[0, [HAND_TO_INDEX[(0, 1)], HAND_TO_INDEX[(4, 5)]]] = 1.0
+    villain_masks[0, [HAND_TO_INDEX[(2, 3)], HAND_TO_INDEX[(6, 7)]]] = 1.0
+
+    pairwise = predict_public_belief_dual_hand_cfv_model(
+        model,
+        payload,
+        features,
+        belief,
+        hero_masks,
+        villain_masks,
+        device="cpu",
+        batch_size=3,
+    )
+    vectorized = predict_public_belief_dual_hand_cfv_model_vectorized(
+        model,
+        payload,
+        features,
+        belief,
+        hero_masks,
+        villain_masks,
+        device="cpu",
+        state_batch_size=1,
+        hand_batch_size=2,
+    )
+
+    np.testing.assert_allclose(vectorized, pairwise, rtol=1e-5, atol=1e-5)
+
+
 def test_dual_cfv_zero_sum_projection_removes_range_weighted_residual():
     pred = np.zeros((2, 2, bvp.N_HANDS), dtype=np.float32)
     pred[0, 0, 0] = 3.0

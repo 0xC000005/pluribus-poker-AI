@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 731,
+      "path": "benchmark_audit.md",
+      "sha256": "d837039b1b4953e54afdc79fa3e848406723734e97281fb93966346c47c6d7bf"
+    },
+    {
+      "bytes": 569,
+      "path": "decision.json",
+      "sha256": "b713d9759342b6ba66730919e81d46fbb74456d529f2330c24069686f69ccb7a"
+    },
+    {
+      "bytes": 780,
+      "path": "mechanism_review.md",
+      "sha256": "cf74dc6a9aa134e0bd72af25ecae3871aedee008f99ae3b226d672da1be1597a"
+    },
+    {
+      "bytes": 938,
+      "path": "related_work.md",
+      "sha256": "9cc85b80e65d66313cc5c6124815ddb2719320dac3c7f5942a4b1f63ebd5608c"
+    },
+    {
+      "bytes": 867,
+      "path": "review.md",
+      "sha256": "839cbca858d1c6f6f85766815bd1d73bd5ace2dc484a85014ed3e33034acbc42"
+    },
+    {
+      "bytes": 846,
+      "path": "review_scope.json",
+      "sha256": "71689794ae4159aef8e7401f2566b41f45a3d173c1e2abd7922b1941d3325a67"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed as an evaluation-contract fix. The change is diagnostic-only, default-preserving, unit-tested, and smoke-tested.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T200838Z-no-allin-solver-diagnostic-suppression",
+  "review_id": "20260521T200838Z-no-allin-solver-diagnostic-suppression",
+  "sources": [
+    "scripts/play_slumbot.py",
+    "test/unit/test_slumbot_diagnostics.py",
+    "autoresearch-session/slumbot_traces/selective_fast_live_solver_native_100_noallin_20260521.jsonl",
+    "autoresearch-session/slumbot_traces/selective_fast_live_noallin_suppressed_smoke_20260521.jsonl",
+    "https://arxiv.org/abs/1701.01724",
+    "https://arxiv.org/abs/1705.02955"
+  ],
+  "written_at": "2026-05-21T20:09:36Z"
+}

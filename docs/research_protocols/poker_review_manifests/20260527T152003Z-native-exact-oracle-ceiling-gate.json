@@ -1,0 +1,50 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1368,
+      "path": "benchmark_audit.md",
+      "sha256": "de69466d6afc5af47a955a15f94b9471e011f2712dc3a023fdffc19c45757ca2"
+    },
+    {
+      "bytes": 551,
+      "path": "decision.json",
+      "sha256": "9427e153b629581220b909e92d3bbaf9de7a95101f3e5e2d8e4a16b068d1441c"
+    },
+    {
+      "bytes": 1521,
+      "path": "mechanism_review.md",
+      "sha256": "a4a24126339408cc3ad62c13b35867bdf97c4954c1886d7e940d4add07dfbbfa"
+    },
+    {
+      "bytes": 2226,
+      "path": "related_work.md",
+      "sha256": "8b10afa8182210e5b464b020030855dfa26af970a2a5b6e5ebca4f5778a769c8"
+    },
+    {
+      "bytes": 1178,
+      "path": "review.md",
+      "sha256": "b3a966af2cfa69740cf618a48c5b0bd9f166619dcd4de71fe92aa533528eb65e"
+    },
+    {
+      "bytes": 2893,
+      "path": "review_scope.json",
+      "sha256": "0270c1fa5023d222ba24cf05046b27c894fddcb6e24ce5da46bbb387b1d008b3"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only as a diagnostic gate. The one-step exact oracle showed a positive root-decision ceiling on the current incumbent, but it is not a deployable actor or full restricted-game response oracle.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T152003Z-native-exact-oracle-ceiling-gate",
+  "review_id": "20260527T152003Z-native-exact-oracle-ceiling-gate",
+  "sources": [
+    "autoresearch-session/exact_oracle_ceiling/psro_response_parent_one_step_ceiling_8x16_seed20260695.json",
+    "https://arxiv.org/abs/2103.06426",
+    "https://proceedings.mlr.press/v202/tang23b/tang23b.pdf",
+    "https://arxiv.org/abs/2403.02227"
+  ],
+  "written_at": "2026-05-27T15:23:18Z"
+}

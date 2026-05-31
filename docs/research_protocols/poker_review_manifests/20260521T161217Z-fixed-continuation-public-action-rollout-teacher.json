@@ -1,0 +1,50 @@
+{
+  "decision": "gather_more_evidence",
+  "files": [
+    {
+      "bytes": 1350,
+      "path": "benchmark_audit.md",
+      "sha256": "4aac03e14be8f03c79227c901e96162f3510a79b7c00c7973505994c7caf22ba"
+    },
+    {
+      "bytes": 581,
+      "path": "decision.json",
+      "sha256": "3b2a2cfb3780974a49e321175b158873452ab6780b48ab7e4263fbc3046c5fbe"
+    },
+    {
+      "bytes": 1528,
+      "path": "mechanism_review.md",
+      "sha256": "9514aff9503430804e9a8c516e13b281279baf9c04f2a50c66f6e907399ddf0c"
+    },
+    {
+      "bytes": 2663,
+      "path": "related_work.md",
+      "sha256": "662c6f35693dc7d023b3750df8092c9fa85c3b2f105523cdbd7fd925a1bd7eb6"
+    },
+    {
+      "bytes": 1738,
+      "path": "review.md",
+      "sha256": "b4300ce8543804398b72ffc3bcda216d75ea06cad9fb2b1c048b9d9f2b848946"
+    },
+    {
+      "bytes": 1219,
+      "path": "review_scope.json",
+      "sha256": "e956aac9643d30bbc03f0863522709003dd509a0caf3ebff3fcce56c16fc5b3d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The current public rollout diagnostic is useful but self-continuation is not a safe teacher. Related work supports public-belief/search-derived or population-based continuation targets. Implement a fixed-continuation/resolver-derived teacher diagnostic before training a correction.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T161217Z-fixed-continuation-public-action-rollout-teacher",
+  "review_id": "20260521T161217Z-fixed-continuation-public-action-rollout-teacher",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://poker.cs.ualberta.ca/publications/17science.pdf",
+    "https://arxiv.org/abs/2112.03178",
+    "https://proceedings.mlr.press/v37/heinrich15.html"
+  ],
+  "written_at": "2026-05-21T16:24:10Z"
+}

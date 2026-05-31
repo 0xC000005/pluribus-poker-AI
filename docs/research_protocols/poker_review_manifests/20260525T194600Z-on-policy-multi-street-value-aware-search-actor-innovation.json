@@ -1,0 +1,37 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 675,
+      "path": "decision.json",
+      "sha256": "99d4b79009f288f0553bc25be871668899934178eadb0a8281f0d863574503ea"
+    },
+    {
+      "bytes": 2622,
+      "path": "innovation.md",
+      "sha256": "2b0dd2435c9f0e0d5539ac0b644b0649af3072958bf960d3e851a0d41599c582"
+    },
+    {
+      "bytes": 3237,
+      "path": "related_work.md",
+      "sha256": "6060d43ea9b9822c68df259ca26fd4d7e608a71d18a6d1bbd81c12fffb1a2c9d"
+    },
+    {
+      "bytes": 1003,
+      "path": "thought_experiments.md",
+      "sha256": "920ee958d07120cf73a2f74c4a14d9290ec6111b236b6f06789c346d8d8de78c"
+    }
+  ],
+  "reason": "Proceed to a bounded on-policy multi-street value-aware actor target collector. The current value-aware update is promising but preflop-only fixed-continuation labels over-concentrate all-in actions and do not clear restored-history confidence.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T194600Z-on-policy-multi-street-value-aware-search-actor-innovation",
+  "review_id": "20260525T194600Z-on-policy-multi-street-value-aware-search-actor-innovation",
+  "sources": [
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1705.08439",
+    "https://poker.cs.ualberta.ca/publications/17science.pdf",
+    "https://arxiv.org/abs/2605.14379",
+    "autoresearch-session/decision_value_actor/restored_decision_value_policy_head_vs_restored_h2h_seed20260522_24.json"
+  ],
+  "written_at": "2026-05-25T19:48:07Z"
+}

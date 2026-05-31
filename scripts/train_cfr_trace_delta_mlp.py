@@ -69,10 +69,61 @@ def _common_labels(*maps: dict[str, dict[str, Any]]) -> list[str]:
     return labels
 
 
+def _advantage_context_row(record: dict[str, Any], action_dim: int) -> np.ndarray:
+    """Return bounded per-action counterfactual-advantage context features."""
+    raw = np.asarray(record.get("counterfactual_advantage", []), dtype=np.float64).reshape(-1)
+    policy = np.asarray(record.get("advantage_policy", []), dtype=np.float64).reshape(-1)
+    legal_mask = np.zeros(action_dim, dtype=np.float64)
+    for action in record.get("legal_actions", ()):
+        action = int(action)
+        if 0 <= action < action_dim:
+            legal_mask[action] = 1.0
+    if raw.shape[0] != action_dim:
+        raw = np.zeros(action_dim, dtype=np.float64)
+    if policy.shape[0] != action_dim:
+        policy = np.zeros(action_dim, dtype=np.float64)
+    centered = np.zeros(action_dim, dtype=np.float64)
+    legal = legal_mask > 0
+    if legal.any():
+        legal_raw = raw[legal]
+        centered_legal = legal_raw - float(np.mean(legal_raw))
+        scale = max(float(np.max(np.abs(centered_legal))), 1e-8)
+        centered[legal] = centered_legal / scale
+    legal_policy = np.where(legal_mask > 0, policy, 0.0)
+    total = float(legal_policy.sum())
+    if total > 1e-12:
+        legal_policy = legal_policy / total
+    max_advantage = float(np.max(raw[legal])) if legal.any() else 0.0
+    min_advantage = float(np.min(raw[legal])) if legal.any() else 0.0
+    spread = max_advantage - min_advantage
+    policy_entropy = 0.0
+    positive_policy = legal_policy[legal_policy > 1e-12]
+    if positive_policy.size:
+        policy_entropy = float(-(positive_policy * np.log(positive_policy)).sum())
+    policy_margin = 0.0
+    if positive_policy.size >= 2:
+        top_two = np.sort(positive_policy)[-2:]
+        policy_margin = float(top_two[-1] - top_two[-2])
+    elif positive_policy.size == 1:
+        policy_margin = float(positive_policy[0])
+    return np.concatenate(
+        [
+            centered,
+            legal_policy,
+            np.asarray(
+                [max_advantage, min_advantage, spread, policy_entropy, policy_margin],
+                dtype=np.float64,
+            ),
+        ]
+    )
+
+
 def _build_dataset(
     low_by_label: dict[str, dict[str, Any]],
     target_by_label: dict[str, dict[str, Any]],
     labels: list[str],
+    *,
+    include_advantage_features: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     action_dim = len(low_by_label[labels[0]]["strategy_policy"])
     features: list[np.ndarray] = []
@@ -91,7 +142,10 @@ def _build_dataset(
         if float(legal_mask.sum()) <= 0.0:
             raise ValueError(f"record {label} has no legal actions")
         context = np.asarray(low_record.get("public_belief_features", ()), dtype=np.float64).reshape(-1)
-        features.append(np.concatenate([_feature_row(low_record, action_dim), context]))
+        parts = [_feature_row(low_record, action_dim), context]
+        if include_advantage_features:
+            parts.append(_advantage_context_row(low_record, action_dim))
+        features.append(np.concatenate(parts))
         low_policies.append(low_policy)
         target_deltas.append(target_policy - low_policy)
         legal_masks.append(legal_mask)
@@ -267,6 +321,7 @@ def fit_trace_delta_mlp_from_payloads(
     batch_size: int = 256,
     seed: int = 20260661,
     device: str = "auto",
+    include_advantage_features: bool = False,
 ) -> dict[str, Any]:
     train_low = _record_map(train_payload, low_trace_iteration)
     train_target = _record_map(train_payload, target_trace_iteration)
@@ -275,6 +330,7 @@ def fit_trace_delta_mlp_from_payloads(
         train_low,
         train_target,
         train_labels,
+        include_advantage_features=include_advantage_features,
     )
     x_train, feature_mean, feature_std = _standardize(x_train)
 
@@ -306,6 +362,7 @@ def fit_trace_delta_mlp_from_payloads(
         holdout_low,
         holdout_target,
         holdout_labels,
+        include_advantage_features=include_advantage_features,
     )
     x_holdout, _, _ = _standardize(x_holdout, mean=feature_mean, std=feature_std)
     pred_delta = _predict_delta(model, x_holdout, train_metrics["device"])
@@ -327,6 +384,7 @@ def fit_trace_delta_mlp_from_payloads(
             "reference_trace_iteration": int(reference_trace_iteration),
             "n_train": int(len(train_labels)),
             "n_holdout": int(len(holdout_labels)),
+            "include_advantage_features": bool(include_advantage_features),
             "model": {
                 **train_metrics,
                 "feature_mean": feature_mean.round(10).tolist(),
@@ -353,6 +411,7 @@ def fit_trace_delta_mlp(
     batch_size: int = 256,
     seed: int = 20260661,
     device: str = "auto",
+    include_advantage_features: bool = False,
 ) -> dict[str, Any]:
     metrics = fit_trace_delta_mlp_from_payloads(
         _load_payload(train_trace_json),
@@ -369,6 +428,7 @@ def fit_trace_delta_mlp(
         batch_size=batch_size,
         seed=seed,
         device=device,
+        include_advantage_features=include_advantage_features,
     )
     metrics["train_trace_json"] = str(train_trace_json)
     metrics["holdout_trace_json"] = str(holdout_trace_json)
@@ -391,6 +451,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=20260661)
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--include-advantage-features",
+        action="store_true",
+        help="Append normalized counterfactual-advantage and advantage-policy trace fields.",
+    )
     parser.add_argument("--output-json")
     args = parser.parse_args(argv)
     metrics = fit_trace_delta_mlp(
@@ -408,6 +473,7 @@ def main(argv: list[str] | None = None) -> int:
         batch_size=args.batch_size,
         seed=args.seed,
         device=args.device,
+        include_advantage_features=args.include_advantage_features,
     )
     if args.output_json:
         save_metrics(metrics, args.output_json)

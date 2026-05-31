@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1027,
+      "path": "benchmark_audit.md",
+      "sha256": "035c87c322ba7d30815fe56a288059d3b9b08358ce3146c0672b858267798303"
+    },
+    {
+      "bytes": 743,
+      "path": "decision.json",
+      "sha256": "826cde6e22d9bdcf959fe078ea98ecfa38b1a188de24aa47e62c65abc873d171"
+    },
+    {
+      "bytes": 1231,
+      "path": "mechanism_review.md",
+      "sha256": "db90addc160cf9d4e888c428c6e946f7dd8911023aef3d4887918fb1c15b97cf"
+    },
+    {
+      "bytes": 1438,
+      "path": "related_work.md",
+      "sha256": "2212c56885ccc53d9060afc0c9162f3b879beb2daed48e3bb7af7f1c9427f8f7"
+    },
+    {
+      "bytes": 1595,
+      "path": "review.md",
+      "sha256": "558a50c156e9faf039baf8192d49e67249afd8bc39a42efa497efb0836dd1724"
+    },
+    {
+      "bytes": 763,
+      "path": "review_scope.json",
+      "sha256": "45eacb325cc8729f8ff008b184fbb65d24d2f807f0df0f6849c66602d9ca33ac"
+    },
+    {
+      "bytes": 418,
+      "path": "team_review.md",
+      "sha256": "48123e948490069749b8798d1ba84eaba8c668757ec35af1ab17fa8f57b3d851"
+    }
+  ],
+  "reason": "The old one-source auto-compare contract invalidated heterogeneous average-policy candidate evaluations by applying average-policy to the incumbent. The evaluator already supports split sources, targeted tests pass, and corrected H2H gates now fail only on strategy quality rather than configuration.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T174010Z-split-strategy-source-auto-compare-contract",
+  "review_id": "20260521T174010Z-split-strategy-source-auto-compare-contract",
+  "sources": [
+    "https://arxiv.org/abs/1811.00164",
+    "https://arxiv.org/abs/1603.01121",
+    "autoresearch-session/poker_runs/20260521T173906Z-candidate-checkpoint-deepcfr-avgpolicy-50x1k-4x512-seed20260531-iter/metrics.json",
+    "autoresearch-session/poker_runs/20260521T173933Z-candidate-checkpoint-deepcfr-avgpolicy-50x1k-4x512-seed20260531-final/metrics.json"
+  ],
+  "written_at": "2026-05-21T17:42:02Z"
+}

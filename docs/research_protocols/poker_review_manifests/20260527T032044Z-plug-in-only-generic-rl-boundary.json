@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1139,
+      "path": "benchmark_audit.md",
+      "sha256": "acf708f7d797c41823948aa581a148282717242713f8ab46e32195bce06173cb"
+    },
+    {
+      "bytes": 449,
+      "path": "decision.json",
+      "sha256": "9c27634f3e32ed0ff5ce7a7009ada66d04fb44056ff3c42be7eb96c54a2ef74c"
+    },
+    {
+      "bytes": 1464,
+      "path": "mechanism_review.md",
+      "sha256": "b2774044e6ec63de7c6c04fae5ac53bb4d819c35bc135023ee722e39735f39b6"
+    },
+    {
+      "bytes": 2412,
+      "path": "related_work.md",
+      "sha256": "bdf7ab1662cfd2f9fde7ee8047b4be99193e995bd470e9a787495a72639c270e"
+    },
+    {
+      "bytes": 1078,
+      "path": "review.md",
+      "sha256": "52ffcf5a3098f0fe10c37375eecd425f8556482d7b63c34b278f2c2df0a3a8c0"
+    },
+    {
+      "bytes": 2673,
+      "path": "review_scope.json",
+      "sha256": "c66e07f47013faf728d79128f058cd419d02e4f3ae2475b204cadef149290d54"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The boundary is stricter, source-grounded, and keeps generic RL learning inside maintained libraries while preserving native poker evaluation gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T032044Z-plug-in-only-generic-rl-boundary",
+  "review_id": "20260527T032044Z-plug-in-only-generic-rl-boundary",
+  "sources": [
+    "https://tianshou.org/en/latest/03_api/env/pettingzoo_env.html",
+    "https://docs.agilerl.com/en/stable/tutorials/pettingzoo/",
+    "https://rlcard.org/algorithms.html",
+    "https://arxiv.org/abs/1908.09453"
+  ],
+  "written_at": "2026-05-27T03:34:29Z"
+}

@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1434,
+      "path": "benchmark_audit.md",
+      "sha256": "a99ca1a908793acdaa8d44c59f2182b31295d0e817c79923b6dc437cb5b01599"
+    },
+    {
+      "bytes": 624,
+      "path": "decision.json",
+      "sha256": "d4f10f700ea052aeaba422087711a28607263434f082ca88d7cacb0bcc838e76"
+    },
+    {
+      "bytes": 1724,
+      "path": "mechanism_review.md",
+      "sha256": "4026c4769de96de665b23168958cf0ee79682625d4e6d6b5d29291f816b067c4"
+    },
+    {
+      "bytes": 2207,
+      "path": "related_work.md",
+      "sha256": "94f641069ee409606a3c3857078ff752b47a2587cf73c393ac3b6e9d3524d887"
+    },
+    {
+      "bytes": 1678,
+      "path": "review.md",
+      "sha256": "e7024fc70e6f1bf6df61d0c716e5f4f71fae479e1067ba5b640107292bf6f172"
+    },
+    {
+      "bytes": 2760,
+      "path": "review_scope.json",
+      "sha256": "7481a55347b2c29d26fa77ae304188901f0b8bbfbcacbeab354b258038d018e7"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The joint-experience collector is valid as a Slumbot-free data contract and should proceed only to a maintained response-oracle trainer plus parent/population H2H gate, not to promotion by itself.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T164844Z-jbr-style-joint-experience-response-oracle-data-contract",
+  "review_id": "20260527T164844Z-jbr-style-joint-experience-response-oracle-data-contract",
+  "sources": [
+    "poker_ai/research/joint_experience.py",
+    "scripts/build_joint_experience_dataset.py",
+    "test/unit/test_joint_experience.py",
+    "autoresearch-session/joint_experience/incumbent_meta_joint32_seed20260533.json",
+    "https://arxiv.org/abs/2602.06599",
+    "https://arxiv.org/abs/2202.00633",
+    "https://arxiv.org/abs/2103.06426"
+  ],
+  "written_at": "2026-05-27T16:54:41Z"
+}

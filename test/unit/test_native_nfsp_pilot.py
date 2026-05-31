@@ -118,6 +118,27 @@ def test_run_native_nfsp_pilot_smoke_uses_nine_action_full_deck_contract():
     assert metrics["train_seconds"] >= 0.0
 
 
+def test_run_native_nfsp_pilot_supports_fast_state_backend():
+    metrics = run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=2,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=20260799,
+            state_backend="fast-state",
+        )
+    )
+
+    assert metrics["algorithm"] == "native_nfsp_dqn"
+    assert metrics["state_backend"] == "fast-state"
+    assert metrics["environment"] == "poker_ai:full_deck_hu_nlhe"
+    assert metrics["num_actions"] == 9
+    assert metrics["train_steps"] > 0
+
+
 def test_run_native_nfsp_pilot_reports_target_network_syncs():
     metrics = run_native_nfsp_pilot(
         NativeNFSPConfig(
@@ -161,6 +182,123 @@ def test_run_native_nfsp_pilot_writes_checkpoint(tmp_path):
     assert "q_net_state_dict" in payload
 
 
+def test_run_native_nfsp_pilot_writes_dueling_q_checkpoint_metadata(tmp_path):
+    checkpoint_path = tmp_path / "native_nfsp_dueling.pt"
+
+    metrics = run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            q_network_arch="dueling",
+            device="cpu",
+            seed=322,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    assert metrics["q_network_arch"] == "dueling"
+    assert payload["q_network_arch"] == "dueling"
+    assert payload["config"]["q_network_arch"] == "dueling"
+    assert payload["algorithm"] == "native_nfsp_dueling_ddqn"
+
+
+def test_run_native_nfsp_requires_checkpoint_for_learned_fixed_opponent():
+    try:
+        run_native_nfsp_pilot(
+            NativeNFSPConfig(
+                train_episodes=1,
+                eval_games=1,
+                hidden_dim=16,
+                batch_size=8,
+                min_buffer_size_to_learn=100,
+                device="cpu",
+                opponent_kind="native-nfsp",
+            )
+        )
+    except ValueError as exc:
+        assert "opponent_checkpoint" in str(exc)
+    else:
+        raise AssertionError("expected learned fixed opponents to require a checkpoint")
+
+
+def test_run_native_nfsp_pilot_records_fixed_opponent_metadata(tmp_path):
+    opponent_path = tmp_path / "opponent.pt"
+    run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=333,
+            checkpoint_path=str(opponent_path),
+        )
+    )
+
+    metrics = run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=334,
+            opponent_kind="native-nfsp",
+            opponent_checkpoint=str(opponent_path),
+        )
+    )
+
+    assert metrics["train_opponent_mode"] == "fixed_policy"
+    assert metrics["opponent_kind"] == "native-nfsp"
+    assert metrics["opponent_checkpoint"] == str(opponent_path)
+    assert metrics["fixed_opponent_learning_seats"] == [0, 1]
+    assert metrics["uses_slumbot_training_data"] is False
+
+
+def test_run_native_nfsp_pilot_samples_fixed_opponent_population(tmp_path):
+    first = tmp_path / "first_opponent.pt"
+    second = tmp_path / "second_opponent.pt"
+    for idx, checkpoint in enumerate((first, second)):
+        run_native_nfsp_pilot(
+            NativeNFSPConfig(
+                train_episodes=2,
+                eval_games=1,
+                hidden_dim=16,
+                batch_size=8,
+                min_buffer_size_to_learn=100,
+                device="cpu",
+                seed=340 + idx,
+                checkpoint_path=str(checkpoint),
+            )
+        )
+
+    metrics = run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=4,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            device="cpu",
+            seed=342,
+            opponent_kind="native-nfsp",
+            opponent_checkpoint=[str(first), str(second)],
+        )
+    )
+
+    assert metrics["train_opponent_mode"] == "fixed_policy_population"
+    assert metrics["opponent_checkpoint"] is None
+    assert metrics["opponent_checkpoints"] == [str(first), str(second)]
+    assert metrics["fixed_opponent_population_size"] == 2
+    assert metrics["opponent_sample_counts"] == {str(first): 2, str(second): 2}
+
+
 def test_evaluate_native_nfsp_checkpoint_roundtrip(tmp_path):
     checkpoint_path = tmp_path / "native_nfsp.pt"
     run_native_nfsp_pilot(
@@ -188,6 +326,34 @@ def test_evaluate_native_nfsp_checkpoint_roundtrip(tmp_path):
     assert metrics["eval_games"] == 2
     assert metrics["resolved_device"] == "cpu"
     assert metrics["promotion"] is False
+
+
+def test_evaluate_native_nfsp_dueling_checkpoint_roundtrip(tmp_path):
+    checkpoint_path = tmp_path / "native_nfsp_dueling.pt"
+    run_native_nfsp_pilot(
+        NativeNFSPConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            min_buffer_size_to_learn=100,
+            q_network_arch="dueling",
+            device="cpu",
+            seed=778,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+
+    metrics = evaluate_native_nfsp_checkpoint(
+        str(checkpoint_path),
+        eval_games=2,
+        device="cpu",
+        seed=779,
+    )
+
+    assert metrics["algorithm"] == "native_nfsp_dueling_ddqn"
+    assert metrics["q_network_arch"] == "dueling"
+    assert metrics["source_checkpoint"] == str(checkpoint_path)
 
 
 def test_evaluate_native_nfsp_head_to_head_roundtrip(tmp_path):
@@ -237,6 +403,10 @@ def test_native_nfsp_cli_builds_config_from_args():
             "32",
             "--batch-size",
             "16",
+            "--q-network-arch",
+            "dueling",
+            "--state-backend",
+            "fast-state",
             "--device",
             "cpu",
             "--checkpoint-out",
@@ -250,6 +420,8 @@ def test_native_nfsp_cli_builds_config_from_args():
     assert cfg.eval_games == 3
     assert cfg.hidden_dim == 32
     assert cfg.batch_size == 16
+    assert cfg.q_network_arch == "dueling"
+    assert cfg.state_backend == "fast-state"
     assert cfg.device == "cpu"
     assert cfg.checkpoint_path == "models/native.pt"
     assert cfg.seed == 42

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -14,30 +13,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from poker_ai.research.autoresearch import audit_objective_alignment  # noqa: E402
-
-
-def _git_changed_paths(root: Path, base_ref: str | None) -> list[str]:
-    commands = [
-        ["git", "diff", "--name-only"],
-        ["git", "diff", "--cached", "--name-only"],
-    ]
-    if base_ref:
-        commands.append(["git", "diff", "--name-only", base_ref, "--"])
-
-    paths: set[str] = set()
-    for command in commands:
-        result = subprocess.run(
-            command,
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(result.stderr.strip() or f"git command failed: {command}")
-        paths.update(path.strip() for path in result.stdout.splitlines() if path.strip())
-    return sorted(paths)
+from poker_ai.research.autoresearch import (  # noqa: E402
+    audit_objective_alignment,
+    git_changed_paths,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,6 +27,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-ref", help="Optional git ref to diff against.")
     parser.add_argument("--review-dir", help="Completed methodology review bundle.")
     parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="Allow an audit with no changed paths. Without this, empty audits fail.",
+    )
+    parser.add_argument(
         "--changed-path",
         action="append",
         default=[],
@@ -56,7 +40,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = Path(args.root)
-    changed_paths = args.changed_path or _git_changed_paths(root, args.base_ref)
+    changed_paths = args.changed_path or git_changed_paths(root, args.base_ref)
+    if not changed_paths and not args.allow_empty:
+        print(
+            "No changed paths found; pass --allow-empty for an explicit no-op audit.",
+            file=sys.stderr,
+        )
+        return 2
     result = audit_objective_alignment(
         root,
         changed_paths=changed_paths,

@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1723,
+      "path": "benchmark_audit.md",
+      "sha256": "d90833ffd6423b5391bfb60f92863f46f019aad63b4ac51145225849d3c49871"
+    },
+    {
+      "bytes": 624,
+      "path": "decision.json",
+      "sha256": "609ad58a61b9218b8e2c98d564f55cdadd261535b062dbb8ecb9fc42142daab7"
+    },
+    {
+      "bytes": 1703,
+      "path": "mechanism_review.md",
+      "sha256": "d8d1d120a265d96da7d6218d6e4f86369cf17de6b4dd3bddde19e93e86d20868"
+    },
+    {
+      "bytes": 3074,
+      "path": "related_work.md",
+      "sha256": "1ded2d41099e217c916c1c8ab362ce66051a22b5f21200642fb7cca99c2e55a0"
+    },
+    {
+      "bytes": 1968,
+      "path": "review.md",
+      "sha256": "e5047d8335823ccb0557883ab0ecca4435de17e56eb6845e9e3fd2f2ecb6181e"
+    },
+    {
+      "bytes": 2671,
+      "path": "review_scope.json",
+      "sha256": "feccac463bb4ae3cbce6a6fc8e52c51712fe313b062cbed2fea054d1a6c346fa"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The current turn/river CFR teacher is too sparse and one-state target generation dominates runtime. A bounded dense early-street teacher is aligned if it is local self-play generated, produces legal mixed targets, keeps CFR/resolving as teacher/evaluator, and is judged by matched root-decision and self-play league gates before Slumbot.",
+  "review_dir": "autoresearch-session/poker_reviews/20260526T191511Z-dense-early-street-neural-self-play-policy-improvement",
+  "review_id": "20260526T191511Z-dense-early-street-neural-self-play-policy-improvement",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://www.science.org/doi/10.1126/science.aam6960"
+  ],
+  "written_at": "2026-05-26T19:17:43Z"
+}

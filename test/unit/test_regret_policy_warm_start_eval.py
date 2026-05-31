@@ -10,7 +10,10 @@ SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from eval_regret_policy_warm_start import build_regret_policy_field_warm_start  # noqa: E402
+from eval_regret_policy_warm_start import (  # noqa: E402
+    _apply_uniform_budget_baseline,
+    build_regret_policy_field_warm_start,
+)
 from solver import StreetSolver  # noqa: E402
 
 
@@ -53,3 +56,34 @@ def test_build_regret_policy_field_warm_start_masks_and_seeds_selected_node_only
     assert np.count_nonzero(initial_regret[node_idx + 1 :]) == 0
     assert np.count_nonzero(initial_strategy[:node_idx]) == 0
     assert np.count_nonzero(initial_strategy[node_idx + 1 :]) == 0
+
+
+def test_uniform_budget_baseline_rejects_warm_start_that_only_beats_low_budget():
+    summary = {
+        "passed": True,
+        "mean_warm_l1_to_reference": 0.4,
+        "mean_warm_kl_to_reference": 0.2,
+        "warm_action_agreement": 0.5,
+        "warm_allin_gap": 0.0,
+        "warm_allin_prob_gap": 0.0,
+    }
+    records = [
+        {
+            "passed": True,
+            "baseline_l1_to_reference": 0.3,
+            "baseline_kl_to_reference": 0.1,
+            "baseline_latency_ms": 20.0,
+            "baseline_allin_selected": False,
+            "reference_allin_selected": False,
+            "baseline_allin_prob": 0.05,
+            "reference_allin_prob": 0.05,
+            "baseline_agrees_with_reference": True,
+        }
+    ]
+
+    updated = _apply_uniform_budget_baseline(summary, records, baseline_iterations=10)
+
+    assert updated["baseline_iterations"] == 10
+    assert updated["mean_baseline_l1_to_reference"] == pytest.approx(0.3)
+    assert not updated["warm_beats_uniform_budget"]
+    assert not updated["passed"]

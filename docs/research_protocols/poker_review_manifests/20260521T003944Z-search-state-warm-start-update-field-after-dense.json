@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1528,
+      "path": "benchmark_audit.md",
+      "sha256": "24852c3e4860d5ac2dec5326427a8059da79a9a67ca5b60ba67c74e869c74345"
+    },
+    {
+      "bytes": 693,
+      "path": "decision.json",
+      "sha256": "ca08d6eff60196ae7d223a1c9bac2effede493c16f1c324b7edc9c4d361646e2"
+    },
+    {
+      "bytes": 1774,
+      "path": "mechanism_review.md",
+      "sha256": "109bcff33036f5a902d6370f068fdf1cffc43f3be74e4c8887f27cb7991ef783"
+    },
+    {
+      "bytes": 2691,
+      "path": "related_work.md",
+      "sha256": "0e1c59b48a12b74ceba5c8bce3efe78bb15066404ff9279f9e25cf083ca38e81"
+    },
+    {
+      "bytes": 1568,
+      "path": "review.md",
+      "sha256": "4d06785438d61124ac4a91a598294e6b4babbdb597e8f5134631fe22edce7b3b"
+    },
+    {
+      "bytes": 1402,
+      "path": "review_scope.json",
+      "sha256": "2f8eb94a0ce630173c39025e0713f15131f6ee789c206b9866e2a3a14428f609"
+    },
+    {
+      "bytes": 674,
+      "path": "team_review.md",
+      "sha256": "a78463580aad9aca1f7cbe72649b0b993515e366b01c1d2f98c1421bdc0f5bd3"
+    }
+  ],
+  "reason": "Exact public-belief replay and fixed-5 replay passed while direct absolute and residual CFV probes failed root-disjoint baselines, so the next smallest principled branch is to learn search-state warm-start/update fields and evaluate them inside resolving.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T003944Z-search-state-warm-start-update-field-after-dense",
+  "review_id": "20260521T003944Z-search-state-warm-start-update-field-after-dense",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://papers.nips.cc/paper/7993-depth-limited-solving-for-imperfect-information-games",
+    "https://www.sciencedirect.com/science/article/pii/S000437022200145X",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20460",
+    "https://arxiv.org/abs/2511.08174"
+  ],
+  "written_at": "2026-05-21T00:44:23Z"
+}

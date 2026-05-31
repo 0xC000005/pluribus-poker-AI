@@ -1,0 +1,24 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 440,
+      "path": "decision.json",
+      "sha256": "b45ad0e2b2209ec026483f562c9b3c2758130417d3229280d7655443340d280e"
+    },
+    {
+      "bytes": 1539,
+      "path": "synthesis.md",
+      "sha256": "195863b89481ee9c84b07075f686ebb4e1a0ce9d524cf56af1901202c7171e40"
+    }
+  ],
+  "reason": "The failed root gate shows the mechanism is detached supervised target injection, not closed-loop search-as-actor training.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T204111Z-external-average-strategy-injection-collapsed-root-decisions-synthesis",
+  "review_id": "20260525T204111Z-external-average-strategy-injection-collapsed-root-decisions-synthesis",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC10651118/",
+    "https://arxiv.org/abs/1705.08439"
+  ],
+  "written_at": "2026-05-25T20:42:59Z"
+}

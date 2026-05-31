@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1099,
+      "path": "benchmark_audit.md",
+      "sha256": "112ee212d2529e1610322c130be92a286f5a2ab9d631679871e2d7d37a841d95"
+    },
+    {
+      "bytes": 486,
+      "path": "decision.json",
+      "sha256": "47216ed143a1b521a44d98a25cb00c73c87ec9aa4f919ff7fa44a1ccbbb45df1"
+    },
+    {
+      "bytes": 1419,
+      "path": "mechanism_review.md",
+      "sha256": "cdd1371b2964f1ee4c1a1c1b54a89e04050423244d5552c3ebe482d5d688fb0f"
+    },
+    {
+      "bytes": 1892,
+      "path": "related_work.md",
+      "sha256": "b4ba7f718ea26c4ddea5db1fe4156d30b24e80204d35d27748b0269e3a5ad6ef"
+    },
+    {
+      "bytes": 1911,
+      "path": "review.md",
+      "sha256": "5f230647ed53e2b144e67952245dbfffba4b0e87067284bc849dcc61c8176e3e"
+    },
+    {
+      "bytes": 927,
+      "path": "review_scope.json",
+      "sha256": "bd8c913095e17dcf604a7bb39a8be2e25f5595365bff3818152cb1e76b2b9a0d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with a bounded opt-in Trinal-Clip-style PPO loss pilot on the raw-sequence q-lambda native self-play branch. Do not change evaluators or SlumBot surfaces; require native policy league improvement before promotion.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T222150Z-trinal-clip-native-ppo-loss-stabilization-for-raw",
+  "review_id": "20260521T222150Z-trinal-clip-native-ppo-loss-stabilization-for-raw",
+  "sources": [
+    "https://cdn.aaai.org/ojs/20394/20394-13-24407-1-2-20220628.pdf",
+    "https://arxiv.org/abs/1707.06347",
+    "RESEARCH_LOG.md",
+    "poker_ai/research/native_ppo_policy.py"
+  ],
+  "written_at": "2026-05-21T22:28:43Z"
+}

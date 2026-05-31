@@ -95,7 +95,11 @@ class _DualHandCFVProbeNet(nn.Module):
             raise ValueError(f"unknown head_mode: {head_mode}")
         if card_encoder not in ("flat", "deepset"):
             raise ValueError(f"unknown card_encoder: {card_encoder}")
-        if value_factorization not in ("direct", "state-player-offset"):
+        if value_factorization not in (
+            "direct",
+            "state-player-offset",
+            "opponent-reach-ev",
+        ):
             raise ValueError(f"unknown value_factorization: {value_factorization}")
         if belief_bottleneck_dim < 0:
             raise ValueError("belief_bottleneck_dim must be non-negative")
@@ -421,18 +425,6 @@ def _standardize(train_x: np.ndarray, holdout_x: np.ndarray) -> tuple[np.ndarray
     )
 
 
-def _standardize_targets(train: DualCFVDataset) -> tuple[float, float]:
-    selected = np.concatenate(
-        [
-            train.hero_values[train.hero_masks > 0],
-            train.villain_values[train.villain_masks > 0],
-        ]
-    )
-    mean = float(selected.mean()) if selected.size else 0.0
-    std = float(selected.std()) if selected.size else 1.0
-    return mean, std if std > 1e-6 else 1.0
-
-
 def _pair_indices(dataset: DualCFVDataset) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     hero_case, hero_hand = np.nonzero(dataset.hero_masks > 0)
     villain_case, villain_hand = np.nonzero(dataset.villain_masks > 0)
@@ -451,6 +443,111 @@ def _pair_indices(dataset: DualCFVDataset) -> tuple[np.ndarray, np.ndarray, np.n
         ]
     ).astype(np.float32)
     return case_idx, hand_idx, player_idx, values
+
+
+def _opponent_reach_factors(
+    raw_belief: np.ndarray,
+    *,
+    case_idx: np.ndarray,
+    hand_idx: np.ndarray,
+    player_idx: np.ndarray,
+    min_reach: float = 1e-6,
+) -> np.ndarray:
+    """Return opponent-compatible reach mass for each (case, hand, player)."""
+    raw_belief = np.asarray(raw_belief, dtype=np.float32)
+    if raw_belief.ndim != 2 or raw_belief.shape[1] < 2 * N_HANDS:
+        raise ValueError("raw_belief must have shape (n_states, 2 * N_HANDS)")
+    case_idx = np.asarray(case_idx, dtype=np.int64).reshape(-1)
+    hand_idx = np.asarray(hand_idx, dtype=np.int64).reshape(-1)
+    player_idx = np.asarray(player_idx, dtype=np.int64).reshape(-1)
+    if not (case_idx.shape == hand_idx.shape == player_idx.shape):
+        raise ValueError("case_idx, hand_idx, and player_idx must have matching shape")
+    valid = _valid_hand_matrix()
+    hero_reach = np.maximum(raw_belief[:, :N_HANDS], 0.0)
+    villain_reach = np.maximum(raw_belief[:, N_HANDS : 2 * N_HANDS], 0.0)
+    hero_den = villain_reach @ valid.T
+    villain_den = hero_reach @ valid
+    factors = np.where(
+        player_idx == 0,
+        hero_den[case_idx, hand_idx],
+        villain_den[case_idx, hand_idx],
+    )
+    return np.maximum(factors.astype(np.float32, copy=False), float(min_reach))
+
+
+def _factorize_pair_values(
+    values: np.ndarray,
+    reach_factors: np.ndarray,
+    *,
+    value_factorization: str,
+) -> np.ndarray:
+    """Map raw CFV labels to the model target space."""
+    values = np.asarray(values, dtype=np.float32)
+    if value_factorization == "opponent-reach-ev":
+        reach = np.asarray(reach_factors, dtype=np.float32)
+        return (values / np.maximum(reach, 1e-6)).astype(np.float32, copy=False)
+    if value_factorization in ("direct", "state-player-offset"):
+        return values.astype(np.float32, copy=False)
+    raise ValueError(f"unknown value_factorization: {value_factorization}")
+
+
+def _reconstruct_pair_values(
+    values: np.ndarray,
+    reach_factors: np.ndarray,
+    *,
+    value_factorization: str,
+) -> np.ndarray:
+    """Map model target-space predictions back to raw CFV space."""
+    values = np.asarray(values, dtype=np.float32)
+    if value_factorization == "opponent-reach-ev":
+        return (values * np.asarray(reach_factors, dtype=np.float32)).astype(
+            np.float32,
+            copy=False,
+        )
+    if value_factorization in ("direct", "state-player-offset"):
+        return values.astype(np.float32, copy=False)
+    raise ValueError(f"unknown value_factorization: {value_factorization}")
+
+
+def _target_values_for_factorization(
+    dataset: DualCFVDataset,
+    *,
+    value_factorization: str,
+    raw_belief: np.ndarray | None,
+) -> np.ndarray:
+    case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
+    if value_factorization == "opponent-reach-ev":
+        if raw_belief is None:
+            raise ValueError("raw_belief is required for opponent-reach-ev factorization")
+        reach = _opponent_reach_factors(
+            raw_belief,
+            case_idx=case_idx,
+            hand_idx=hand_idx,
+            player_idx=player_idx,
+        )
+    else:
+        reach = np.ones_like(values, dtype=np.float32)
+    return _factorize_pair_values(
+        values,
+        reach,
+        value_factorization=value_factorization,
+    )
+
+
+def _standardize_targets(
+    train: DualCFVDataset,
+    *,
+    value_factorization: str = "direct",
+    raw_belief: np.ndarray | None = None,
+) -> tuple[float, float]:
+    selected = _target_values_for_factorization(
+        train,
+        value_factorization=value_factorization,
+        raw_belief=raw_belief,
+    )
+    mean = float(selected.mean()) if selected.size else 0.0
+    std = float(selected.std()) if selected.size else 1.0
+    return mean, std if std > 1e-6 else 1.0
 
 
 def _pair_weights(
@@ -528,7 +625,23 @@ def _fit_model(
     raw_belief: np.ndarray | None = None,
 ) -> _DualHandCFVProbeNet:
     torch.manual_seed(seed)
-    case_idx, hand_idx, player_idx, values = _pair_indices(dataset)
+    case_idx, hand_idx, player_idx, raw_values = _pair_indices(dataset)
+    if value_factorization == "opponent-reach-ev":
+        if raw_belief is None:
+            raise ValueError("raw_belief is required for opponent-reach-ev factorization")
+        reach_factors = _opponent_reach_factors(
+            raw_belief,
+            case_idx=case_idx,
+            hand_idx=hand_idx,
+            player_idx=player_idx,
+        )
+    else:
+        reach_factors = np.ones_like(raw_values, dtype=np.float32)
+    values = _factorize_pair_values(
+        raw_values,
+        reach_factors,
+        value_factorization=value_factorization,
+    )
     weights, weight_summary = _pair_weights(
         dataset,
         case_idx=case_idx,
@@ -609,6 +722,8 @@ def _predict(
     batch_size: int,
     device: torch.device,
     use_belief: bool,
+    value_factorization: str = "direct",
+    raw_belief: np.ndarray | None = None,
 ) -> np.ndarray:
     case_idx, hand_idx, player_idx, _ = _pair_indices(dataset)
     pred = np.zeros((2, dataset.features.shape[0], N_HANDS), dtype=np.float32)
@@ -637,6 +752,22 @@ def _predict(
             )
             outputs.append(out.cpu().numpy().astype(np.float32))
     values = np.concatenate(outputs, axis=0) * float(target_std) + float(target_mean)
+    if value_factorization == "opponent-reach-ev":
+        if raw_belief is None:
+            raise ValueError("raw_belief is required for opponent-reach-ev reconstruction")
+        reach_factors = _opponent_reach_factors(
+            raw_belief,
+            case_idx=case_idx,
+            hand_idx=hand_idx,
+            player_idx=player_idx,
+        )
+    else:
+        reach_factors = np.ones_like(values, dtype=np.float32)
+    values = _reconstruct_pair_values(
+        values,
+        reach_factors,
+        value_factorization=value_factorization,
+    )
     pred[player_idx, case_idx, hand_idx] = values
     return pred
 
@@ -774,8 +905,14 @@ def train_public_belief_dual_hand_cfv_checkpoint(
     train, holdout, public_mean, public_std, belief_mean, belief_std = (
         _standardize_dual_datasets(train_raw, holdout_raw)
     )
-    target_mean, target_std = _standardize_targets(train)
-    target_median = float(np.median(_train_target_values(train)))
+    target_mean, target_std = _standardize_targets(
+        train,
+        value_factorization=value_factorization,
+        raw_belief=train_raw.belief,
+    )
+    raw_train_values = _train_target_values(train)
+    cfv_target_mean = float(np.mean(raw_train_values)) if raw_train_values.size else 0.0
+    target_median = float(np.median(raw_train_values)) if raw_train_values.size else 0.0
     model = _fit_model(
         train,
         target_mean=target_mean,
@@ -807,11 +944,13 @@ def train_public_belief_dual_hand_cfv_checkpoint(
         batch_size=batch_size,
         device=resolved_device,
         use_belief=True,
+        value_factorization=value_factorization,
+        raw_belief=holdout_raw.belief,
     )
     holdout_metrics = _metrics(holdout_pred, holdout)
     constant_baselines = _constant_baselines(
         holdout,
-        target_mean=target_mean,
+        target_mean=cfv_target_mean,
         target_median=target_median,
     )
     zero_metrics = constant_baselines["zero"]
@@ -851,6 +990,7 @@ def train_public_belief_dual_hand_cfv_checkpoint(
             "belief_mean": belief_mean,
             "belief_std": belief_std,
             "target_mean": float(target_mean),
+            "cfv_target_mean": float(cfv_target_mean),
             "target_median": float(target_median),
             "target_std": float(target_std),
             "loss_kind": loss_kind,
@@ -1008,6 +1148,8 @@ def predict_public_belief_dual_hand_cfv_model(
         batch_size=batch_size,
         device=_resolve_device(device),
         use_belief=True,
+        value_factorization=str(payload.get("value_factorization", "direct")),
+        raw_belief=belief,
     )
 
 
@@ -1061,6 +1203,15 @@ def predict_public_belief_dual_hand_cfv_model_vectorized(
     pred = np.zeros((2, n_states, N_HANDS), dtype=np.float32)
     target_mean = float(payload["target_mean"])
     target_std = float(payload["target_std"])
+    reach_t = None
+    if model.value_factorization == "opponent-reach-ev":
+        valid = _valid_hand_matrix()
+        hero_reach = np.maximum(belief[:, :N_HANDS], 0.0)
+        villain_reach = np.maximum(belief[:, N_HANDS : 2 * N_HANDS], 0.0)
+        reach = np.stack([villain_reach @ valid.T, hero_reach @ valid], axis=0)
+        reach_t = torch.from_numpy(np.maximum(reach, 1e-6).astype(np.float32)).to(
+            resolved_device
+        )
     state_step = max(1, int(state_batch_size))
     hand_step = max(1, min(int(hand_batch_size), N_HANDS))
 
@@ -1125,6 +1276,12 @@ def predict_public_belief_dual_hand_cfv_model_vectorized(
                             offset = model.offset_villain_out(offset_body).squeeze(-1)
                         values = values + offset[:, None]
                     values = values * target_std + target_mean
+                    if reach_t is not None:
+                        values = values * reach_t[
+                            player_idx,
+                            state_start:state_end,
+                            hand_start:hand_end,
+                        ]
                     values = values * masks_t[
                         player_idx,
                         state_start:state_end,
@@ -1301,9 +1458,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--value-factorization",
-        choices=("direct", "state-player-offset"),
+        choices=("direct", "state-player-offset", "opponent-reach-ev"),
         default="direct",
-        help="Use direct CFV output or add a learned state/player offset plus hand residual.",
+        help=(
+            "Use direct CFV output, add a learned state/player offset plus hand "
+            "residual, or predict opponent-reach-normalized EV factors."
+        ),
     )
     parser.add_argument("--loss-kind", choices=("mse", "smooth-l1"), default="mse")
     parser.add_argument(
@@ -1360,7 +1520,11 @@ def main(argv: list[str] | None = None) -> int:
         villain_masks=holdout_raw.villain_masks,
         labels=holdout_raw.labels,
     )
-    target_mean, target_std = _standardize_targets(train)
+    target_mean, target_std = _standardize_targets(
+        train,
+        value_factorization=args.value_factorization,
+        raw_belief=train_raw.belief,
+    )
     base = _fit_model(
         train,
         target_mean=target_mean,
@@ -1416,6 +1580,8 @@ def main(argv: list[str] | None = None) -> int:
             batch_size=args.batch_size,
             device=device,
             use_belief=False,
+            value_factorization=args.value_factorization,
+            raw_belief=holdout_raw.belief,
         ),
         holdout,
     )
@@ -1428,14 +1594,17 @@ def main(argv: list[str] | None = None) -> int:
             batch_size=args.batch_size,
             device=device,
             use_belief=True,
+            value_factorization=args.value_factorization,
+            raw_belief=holdout_raw.belief,
         ),
         holdout,
     )
     target_values = _train_target_values(train)
-    target_median = float(np.median(target_values))
+    cfv_target_mean = float(np.mean(target_values)) if target_values.size else 0.0
+    target_median = float(np.median(target_values)) if target_values.size else 0.0
     constant_baselines = _constant_baselines(
         holdout,
-        target_mean=target_mean,
+        target_mean=cfv_target_mean,
         target_median=target_median,
     )
     zero_metrics = constant_baselines["zero"]
@@ -1490,6 +1659,7 @@ def main(argv: list[str] | None = None) -> int:
         "base_train_weight_summary": getattr(base, "_fit_weight_summary", {}),
         "belief_train_weight_summary": getattr(belief, "_fit_weight_summary", {}),
         "target_mean": round(float(target_mean), 8),
+        "cfv_target_mean": round(float(cfv_target_mean), 8),
         "target_median": round(float(target_median), 8),
         "target_dim": int(N_HANDS),
         "train_label_count": int(train.hero_masks.sum() + train.villain_masks.sum()),

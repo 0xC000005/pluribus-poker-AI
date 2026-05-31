@@ -1,0 +1,55 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1298,
+      "path": "benchmark_audit.md",
+      "sha256": "5cb09763475bb798fca8053bfca1dcf83f062c986df42d15c631104e947b8aa0"
+    },
+    {
+      "bytes": 810,
+      "path": "decision.json",
+      "sha256": "dbe9af3d023a34a1a785ad325cf4e3c18fe590778595191e1fac7fa4c4a98e3b"
+    },
+    {
+      "bytes": 1472,
+      "path": "mechanism_review.md",
+      "sha256": "812694122162f6c8394d808a3d4b385da78ef72203b88cf2324f898560158d85"
+    },
+    {
+      "bytes": 2398,
+      "path": "related_work.md",
+      "sha256": "b6ad5f71af6c8eca14500f563aeb83e7bd2b2df79556a27ea61f2c5db98bfd9c"
+    },
+    {
+      "bytes": 1781,
+      "path": "review.md",
+      "sha256": "74ba6317045858f456fd4a6d1765d5aab06fddc3b926e9ab24c4314efdcd1942"
+    },
+    {
+      "bytes": 2707,
+      "path": "review_scope.json",
+      "sha256": "f1a0d250d11b062a0aee96af61d0b8539b723ea9116dba248857cf449b398c61"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with the bridge as a reviewed mechanical response-oracle path, but do not promote the first smoke checkpoint because it failed the parent H2H gate.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T170138Z-maintained-library-joint-experience-response-oracle-trainer-bridge",
+  "review_id": "20260527T170138Z-maintained-library-joint-experience-response-oracle-trainer-bridge",
+  "sources": [
+    "poker_ai/research/joint_experience_response_oracle.py",
+    "scripts/train_joint_experience_response_oracle.py",
+    "test/unit/test_joint_experience_response_oracle.py",
+    "autoresearch-session/joint_experience_response_oracle/jbr_rainbow_smoke_seed20260534.json",
+    "autoresearch-session/joint_experience_response_oracle/jbr_rainbow_smoke_parent_h2h_seed20260534.json",
+    "https://arxiv.org/abs/2602.06599",
+    "https://arxiv.org/abs/2202.00633",
+    "https://arxiv.org/abs/2103.06426",
+    "https://tianshou.org/en/latest/01_tutorials/01_concepts.html"
+  ],
+  "written_at": "2026-05-27T17:03:23Z"
+}

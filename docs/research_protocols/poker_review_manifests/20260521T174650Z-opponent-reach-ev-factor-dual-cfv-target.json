@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 779,
+      "path": "benchmark_audit.md",
+      "sha256": "da46f20864171669f0ae00b78f1d0112ee347f76b642d6c49163505022df6eb6"
+    },
+    {
+      "bytes": 791,
+      "path": "decision.json",
+      "sha256": "a5808188f23fd8eede65c9555a6235519fbe3578a854036727b74fe26d8250eb"
+    },
+    {
+      "bytes": 1253,
+      "path": "mechanism_review.md",
+      "sha256": "fb90f4d47129610c87dcfc3e5df8ae48c228cf87b74d59ae0b577c8a9e7ad8ad"
+    },
+    {
+      "bytes": 2158,
+      "path": "related_work.md",
+      "sha256": "38dce59b414aeddbba24aaa0d06e09f0ba343a0a65f0fc37afb512cfec575ccf"
+    },
+    {
+      "bytes": 1330,
+      "path": "review.md",
+      "sha256": "83eea51440e3decb3234b86c9f17fb62b27a868289f7b034bdd8eb6cd0cdea28"
+    },
+    {
+      "bytes": 881,
+      "path": "review_scope.json",
+      "sha256": "1bb0774914f4a5a3cb5b6a72a743aa32f118468e12a209d52697118ef05514c9"
+    },
+    {
+      "bytes": 332,
+      "path": "team_review.md",
+      "sha256": "382bc3b98c2047fd54d9af0627fdfaf09e7c4edfc8093a898c16be27e22732b9"
+    }
+  ],
+  "reason": "Local raw-CFV and residual targets fail constant baselines, while DEVN provides a primary-source target-shape change that directly addresses reach-weighted CFV labels. Proceed with an opt-in factorization and keep the reconstructed-CFV constant-baseline gate unchanged.",
+  "review_dir": "autoresearch-session/poker_reviews/20260521T174650Z-opponent-reach-ev-factor-dual-cfv-target",
+  "review_id": "20260521T174650Z-opponent-reach-ev-factor-dual-cfv-target",
+  "sources": [
+    "https://ojs.aaai.org/index.php/AAAI/article/view/25661",
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/public_belief_dual_hand_cfv_probe_river384x128_deepset64_ensemble_summary.json",
+    "autoresearch-session/search_consistency_restored200_100x2k_20260513/dual_cfv_state_centered_residual_probe_river384x128_summary.json"
+  ],
+  "written_at": "2026-05-21T17:59:56Z"
+}

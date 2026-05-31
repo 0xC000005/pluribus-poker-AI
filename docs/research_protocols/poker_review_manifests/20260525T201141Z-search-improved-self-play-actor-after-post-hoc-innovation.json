@@ -1,0 +1,36 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 585,
+      "path": "decision.json",
+      "sha256": "0c8d74fb5ed204f686fa2eecf8b59b838b7950ca033a99842100eb0f4c0d13bb"
+    },
+    {
+      "bytes": 2825,
+      "path": "innovation.md",
+      "sha256": "bd7958f26b013b4691bf238f9145c8952aee29e087b54c4067a00b832c304bb8"
+    },
+    {
+      "bytes": 1415,
+      "path": "related_work.md",
+      "sha256": "a86683fb691fde581e0fa5bd91219ede23268c58142b87514f270316be81aa08"
+    },
+    {
+      "bytes": 1181,
+      "path": "thought_experiments.md",
+      "sha256": "391a1ad156d04aa881e4fc2e7b04f2bce1b9c0bc405ad89fd1a59b014d199668"
+    }
+  ],
+  "reason": "Post-hoc actor patches are falsified at smoke scale. The next principled test is search-improved self-play behavior collection with matched no-search controls.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T201141Z-search-improved-self-play-actor-after-post-hoc-innovation",
+  "review_id": "20260525T201141Z-search-improved-self-play-actor-after-post-hoc-innovation",
+  "sources": [
+    "https://aaai.org/papers/04689-alphaholdem-high-performance-artificial-intelligence-for-heads-up-no-limit-poker-via-end-to-end-reinforcement-learning/",
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2007.13544",
+    "https://poker.cs.ualberta.ca/publications/17science.pdf"
+  ],
+  "written_at": "2026-05-25T20:14:04Z"
+}

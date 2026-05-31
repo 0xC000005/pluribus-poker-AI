@@ -1,0 +1,48 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 818,
+      "path": "benchmark_audit.md",
+      "sha256": "cb234d4f768d924bcf84ba97bf306ed01d13cf412ebd694ada55742f67bf79a5"
+    },
+    {
+      "bytes": 319,
+      "path": "decision.json",
+      "sha256": "0fe60f6b579356a9b1a1262b469f3d54656b72e1575058a85bd5abaa95663ae3"
+    },
+    {
+      "bytes": 1073,
+      "path": "mechanism_review.md",
+      "sha256": "1c4d7a64e88350aca7a2a9aff70342f6595e96fc0e08ad36048343dedfd71f85"
+    },
+    {
+      "bytes": 1321,
+      "path": "related_work.md",
+      "sha256": "3e5fa27e2b24f44ace15bc63640e045751018c2875d15c7ee52f90c9d5c116f8"
+    },
+    {
+      "bytes": 798,
+      "path": "review.md",
+      "sha256": "b581aeab6761fcb9424a5233b1457203104085523969d20d241e8fc97c2dabd3"
+    },
+    {
+      "bytes": 1733,
+      "path": "review_scope.json",
+      "sha256": "f5cd72a516fe0bec2ca2eddd6dcc1d13104a8cd9e39d244f30f93f659fd73071"
+    },
+    {
+      "bytes": 462,
+      "path": "team_review.md",
+      "sha256": "5a1bc828e2e21945e618fdb30b03abb3cc4bd46183f67ee331aec6659eec4b19"
+    }
+  ],
+  "reason": "The change strengthens objective alignment by keeping explicit ranges diagnostic and adding an EV replay falsifier before any response-range integration.",
+  "review_dir": "autoresearch-session/poker_reviews/20260515T160000Z-latent-belief-counterfactual-ev-gate",
+  "review_id": "20260515T160000Z-latent-belief-counterfactual-ev-gate",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/1811.00164"
+  ],
+  "written_at": "2026-05-15T18:04:36Z"
+}

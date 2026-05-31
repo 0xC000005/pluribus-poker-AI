@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1530,
+      "path": "benchmark_audit.md",
+      "sha256": "cc66d77a9e312e95eafd7261625015276cf47f21411544f008572f970cdfbdd9"
+    },
+    {
+      "bytes": 825,
+      "path": "decision.json",
+      "sha256": "9396d20f65c7c39306ea712f70fda99987ef5ca10d52b08de8d2f255b4424dfc"
+    },
+    {
+      "bytes": 1811,
+      "path": "mechanism_review.md",
+      "sha256": "275f498d7ed9ceb3e6b9cc547c0d85b5c28dd2a76cf4e74eb092750e53f6a7b7"
+    },
+    {
+      "bytes": 1892,
+      "path": "related_work.md",
+      "sha256": "ef8fabf0b44a2935c8b8b77a5b6ff8ed90b741aa2494671f99fbc659b0542af6"
+    },
+    {
+      "bytes": 1908,
+      "path": "review.md",
+      "sha256": "56f380fcbcee97b951527c7c34e57163278536e76d2772721646dbe8cdd9a4d5"
+    },
+    {
+      "bytes": 2299,
+      "path": "review_scope.json",
+      "sha256": "53d314cee8448258481fb115a44d767aa8ead68b987e5bba9cfb0ac862882dcb"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The failed external-only actor over-jammed early streets because it lacked traversal-distribution coverage. The mixed-source implementation preserves an external-only ablation and has tests plus a CUDA smoke showing both external and collected targets are consumed. Proceed to one bounded matched-control pilot.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T191449Z-mixed-distribution-search-as-actor-average-policy-training",
+  "review_id": "20260525T191449Z-mixed-distribution-search-as-actor-average-policy-training",
+  "sources": [
+    "https://arxiv.org/abs/2007.13544",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/2206.15378",
+    "autoresearch-session/policy_calibration/search_as_actor_vs_no_target_early_street_seed20260525.json",
+    "autoresearch-session/policy_calibration/search_as_actor_vs_no_target_h2h_attribution_seed20260522_24.json",
+    "autoresearch-session/search_as_actor_smoke/mixed_average_strategy_smoke_final.pt"
+  ],
+  "written_at": "2026-05-25T19:16:44Z"
+}

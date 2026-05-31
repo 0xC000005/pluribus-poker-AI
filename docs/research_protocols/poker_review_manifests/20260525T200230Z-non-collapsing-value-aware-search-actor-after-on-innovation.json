@@ -1,0 +1,36 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 568,
+      "path": "decision.json",
+      "sha256": "3fe3fba386bcbf0f76b5cade755e0134722d8d81e128d2e0b2c1b8940f91ed18"
+    },
+    {
+      "bytes": 3353,
+      "path": "innovation.md",
+      "sha256": "ee47ae6beba23a9e8d54edc911127b5480687de74f3533fe35707d16a6637169"
+    },
+    {
+      "bytes": 1524,
+      "path": "related_work.md",
+      "sha256": "77a99e7650cb21eee68e144894f09c0d5461f04d0b8d4d1a1ca89e9914fa43e8"
+    },
+    {
+      "bytes": 1381,
+      "path": "thought_experiments.md",
+      "sha256": "48eb17932fe5acc81d03797750897e32422f244b2baf1524fad67a079a7a639a"
+    }
+  ],
+  "reason": "The next principled mechanism is a KL-anchored expected-Q actor update: it preserves bitter-lesson alignment by learning from search values on policy-induced states while directly gating decision value and avoiding unconstrained target-imitation collapse.",
+  "review_dir": "autoresearch-session/poker_reviews/20260525T200230Z-non-collapsing-value-aware-search-actor-after-on-innovation",
+  "review_id": "20260525T200230Z-non-collapsing-value-aware-search-actor-after-on-innovation",
+  "sources": [
+    "https://arxiv.org/abs/1705.08439",
+    "https://arxiv.org/abs/2007.12509",
+    "https://arxiv.org/abs/2112.03178",
+    "https://www.ifaamas.org/Proceedings/aamas2020/pdfs/p492.pdf",
+    "https://arxiv.org/abs/2408.00751"
+  ],
+  "written_at": "2026-05-25T20:04:55Z"
+}

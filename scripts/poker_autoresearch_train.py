@@ -7,10 +7,13 @@ import argparse
 import contextlib
 import json
 import logging
+import random
 import sys
 import time
 import warnings
 from pathlib import Path
+
+import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -33,8 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--traversal-pool-max-slots", type=int, default=1_000_000)
     parser.add_argument("--traversal-slots-per-traversal", type=int, default=7000)
+    parser.add_argument("--use-frontier-indexing", action="store_true")
     parser.add_argument("--max-pool-exhausted-per-traversal", type=float)
     parser.add_argument("--max-overflow-chunk-fraction", type=float)
+    parser.add_argument("--max-rejected-traversal-chunks", type=int)
     parser.add_argument("--min-traversals-per-second", type=float)
     parser.add_argument(
         "--search-targets",
@@ -46,6 +51,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--average-strategy-weight", type=float, default=0.0)
     parser.add_argument("--average-strategy-memory-capacity", type=int, default=0)
     parser.add_argument("--average-strategy-batch-size", type=int, default=0)
+    parser.add_argument(
+        "--average-strategy-targets",
+        default="",
+        help="Optional .npz exact-search targets used to train the deployed average-policy source.",
+    )
+    parser.add_argument(
+        "--seed-average-strategy-memory-from-targets",
+        action="store_true",
+        help=(
+            "Insert --average-strategy-targets into the mutable average-policy "
+            "reservoir instead of using them as a detached external dataset."
+        ),
+    )
+    parser.add_argument("--average-strategy-seed-weight", type=float, default=1.0)
     parser.add_argument("--policy-slots-per-traversal", type=int, default=64)
     parser.add_argument("--save-dir", default="models/autoresearch_gpu")
     parser.add_argument("--prefix", default="candidate")
@@ -55,8 +74,141 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Save periodic checkpoints every N trainer iterations; 0 disables.",
     )
+    parser.add_argument(
+        "--save-replay-buffers",
+        action="store_true",
+        help=(
+            "Opt into full replay-buffer checkpoints for true continuation. "
+            "Default checkpoints remain compact model-only resumes."
+        ),
+    )
+    parser.add_argument(
+        "--require-replay-buffer-resume",
+        action="store_true",
+        help="Fail if --resume is supplied but the checkpoint has no replay payload.",
+    )
     parser.add_argument("--eval-games", type=int, default=0)
+    parser.add_argument("--seed", type=int)
     return parser
+
+
+def resolve_average_strategy_memory_capacity(value: int | None) -> int | None:
+    """Preserve 0 as an explicit request for external average-policy targets only."""
+    if value is None:
+        return None
+    return max(0, int(value))
+
+
+def resolve_average_strategy_target_buffers(
+    average_strategy_targets: str,
+    *,
+    seed_memory: bool = False,
+):
+    """Route average-strategy targets to external loss or mutable memory."""
+    if not average_strategy_targets:
+        return None, None
+    from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
+
+    targets = PolicyTargetBuffer.from_npz(average_strategy_targets)
+    if seed_memory:
+        return None, targets
+    return targets, None
+
+
+def summarize_resume_checkpoint_metadata(
+    checkpoint: dict[str, object] | None,
+    *,
+    resume_path: str = "",
+) -> dict[str, object]:
+    """Describe whether --resume restored full training state or model weights only."""
+    if not resume_path:
+        return {
+            "resume_used": False,
+            "resume_checkpoint": "",
+            "resume_checkpoint_iteration": None,
+            "resume_checkpoint_buffer_sizes": [],
+            "resume_restored_replay_buffers": False,
+            "resume_semantics": "fresh",
+        }
+
+    checkpoint = checkpoint or {}
+    buffer_sizes = checkpoint.get("buffer_sizes", [])
+    if not isinstance(buffer_sizes, list):
+        buffer_sizes = []
+    replay_payload_keys = (
+        "replay_buffers",
+        "reservoir_buffers",
+        "player_buffers",
+        "serialized_replay_buffers",
+    )
+    restored_replay_buffers = any(key in checkpoint for key in replay_payload_keys)
+    semantics = (
+        "true_replay_buffer_continuation"
+        if restored_replay_buffers
+        else "model_warm_start_no_replay_buffers"
+    )
+    return {
+        "resume_used": True,
+        "resume_checkpoint": str(resume_path),
+        "resume_checkpoint_iteration": checkpoint.get("iteration"),
+        "resume_checkpoint_buffer_sizes": [int(size) for size in buffer_sizes],
+        "resume_restored_replay_buffers": bool(restored_replay_buffers),
+        "resume_semantics": semantics,
+    }
+
+
+def evaluate_training_gate_failures(
+    args: argparse.Namespace,
+    traversal_pool_summary: dict[str, object],
+    *,
+    traversals_per_second: float,
+) -> list[str]:
+    failures: list[str] = []
+    pool_exhausted_per_traversal = float(
+        traversal_pool_summary.get("traversal_pool_exhausted_per_traversal", 0.0)
+        or 0.0
+    )
+    overflow_chunk_fraction = float(
+        traversal_pool_summary.get("traversal_overflow_chunk_fraction", 0.0) or 0.0
+    )
+    rejected_chunks = int(
+        traversal_pool_summary.get("traversal_rejected_chunks", 0) or 0
+    )
+    if (
+        args.max_pool_exhausted_per_traversal is not None
+        and pool_exhausted_per_traversal > args.max_pool_exhausted_per_traversal
+    ):
+        failures.append(
+            "traversal_pool_exhausted_per_traversal "
+            f"{pool_exhausted_per_traversal:.6f} "
+            f"> {args.max_pool_exhausted_per_traversal:.6f}"
+        )
+    if (
+        args.max_overflow_chunk_fraction is not None
+        and overflow_chunk_fraction > args.max_overflow_chunk_fraction
+    ):
+        failures.append(
+            "traversal_overflow_chunk_fraction "
+            f"{overflow_chunk_fraction:.6f} "
+            f"> {args.max_overflow_chunk_fraction:.6f}"
+        )
+    if (
+        args.max_rejected_traversal_chunks is not None
+        and rejected_chunks > args.max_rejected_traversal_chunks
+    ):
+        failures.append(
+            f"traversal_rejected_chunks {rejected_chunks} "
+            f"> {args.max_rejected_traversal_chunks}"
+        )
+    if (
+        args.min_traversals_per_second is not None
+        and traversals_per_second < args.min_traversals_per_second
+    ):
+        failures.append(
+            f"traversals_per_second {traversals_per_second:.6f} "
+            f"< {args.min_traversals_per_second:.6f}"
+        )
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -79,27 +231,70 @@ def main(argv: list[str] | None = None) -> int:
         from poker_ai.deep_cfr.cuda.gpu_trainer import GPUDeepCFRTrainer
         from poker_ai.deep_cfr.policy_targets import PolicyTargetBuffer
 
+        if args.seed is not None:
+            random.seed(args.seed)
+            np.random.seed(args.seed)
+            torch.manual_seed(args.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(args.seed)
+
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         search_target_buffer = (
             PolicyTargetBuffer.from_npz(args.search_targets)
             if args.search_targets
             else None
         )
+        average_strategy_target_buffer, average_strategy_seed_buffer = (
+            resolve_average_strategy_target_buffers(
+                args.average_strategy_targets,
+                seed_memory=args.seed_average_strategy_memory_from_targets,
+            )
+        )
         search_target_batch_size = args.search_target_batch_size or None
+        if (
+            args.use_frontier_indexing
+            and args.average_strategy_weight > 0
+            and average_strategy_target_buffer is None
+        ):
+            raise SystemExit(
+                "--use-frontier-indexing does not yet support "
+                "--average-strategy-weight > 0 unless --average-strategy-targets is supplied"
+            )
         if args.resume:
+            resume_checkpoint = torch.load(
+                args.resume,
+                map_location="cpu",
+                weights_only=True,
+            )
+            resume_metadata = summarize_resume_checkpoint_metadata(
+                resume_checkpoint,
+                resume_path=args.resume,
+            )
+            if (
+                args.require_replay_buffer_resume
+                and not resume_metadata["resume_restored_replay_buffers"]
+            ):
+                raise SystemExit(
+                    "--require-replay-buffer-resume was set, but --resume "
+                    "is a compact model-only checkpoint"
+                )
             trainer = GPUDeepCFRTrainer.load(args.resume, device=device)
             trainer.n_traversals = args.n_traversals
             trainer.n_training_steps = args.n_training_steps
             trainer.batch_size = args.batch_size
             trainer.traversal_pool_max_slots = args.traversal_pool_max_slots
             trainer.traversal_slots_per_traversal = args.traversal_slots_per_traversal
+            trainer.use_frontier_indexing = args.use_frontier_indexing
+            trainer.traversal_seed = args.seed
             trainer.policy_target_buffer = search_target_buffer
             trainer.policy_target_weight = args.search_target_weight
             trainer.policy_target_batch_size = search_target_batch_size
+            trainer.average_strategy_target_buffer = average_strategy_target_buffer
             trainer.average_strategy_weight = args.average_strategy_weight
             trainer.average_strategy_batch_size = args.average_strategy_batch_size or None
             trainer.policy_slots_per_traversal = args.policy_slots_per_traversal
         else:
+            resume_metadata = summarize_resume_checkpoint_metadata(None)
             trainer = GPUDeepCFRTrainer(
                 n_players=2,
                 initial_chips=20000,
@@ -113,15 +308,27 @@ def main(argv: list[str] | None = None) -> int:
                 device=device,
                 traversal_pool_max_slots=args.traversal_pool_max_slots,
                 traversal_slots_per_traversal=args.traversal_slots_per_traversal,
+                use_frontier_indexing=args.use_frontier_indexing,
+                traversal_seed=args.seed,
                 policy_slots_per_traversal=args.policy_slots_per_traversal,
                 policy_target_buffer=search_target_buffer,
                 policy_target_weight=args.search_target_weight,
                 policy_target_batch_size=search_target_batch_size,
                 average_strategy_memory_capacity=(
-                    args.average_strategy_memory_capacity or None
+                    resolve_average_strategy_memory_capacity(
+                        args.average_strategy_memory_capacity
+                    )
                 ),
+                average_strategy_target_buffer=average_strategy_target_buffer,
                 average_strategy_weight=args.average_strategy_weight,
                 average_strategy_batch_size=args.average_strategy_batch_size or None,
+            )
+
+        average_strategy_seeded_size = 0
+        if average_strategy_seed_buffer is not None:
+            average_strategy_seeded_size = trainer.seed_average_strategy_memory_from_targets(
+                average_strategy_seed_buffer,
+                weight=args.average_strategy_seed_weight,
             )
 
         save_dir = Path(args.save_dir)
@@ -136,7 +343,10 @@ def main(argv: list[str] | None = None) -> int:
             iteration_times.append(time.monotonic() - iter_started)
             if args.save_every > 0 and trainer.iteration % args.save_every == 0:
                 periodic = save_dir / f"{args.prefix}_iter_{trainer.iteration}.pt"
-                trainer.save(str(periodic))
+                trainer.save(
+                    str(periodic),
+                    include_replay_buffers=args.save_replay_buffers,
+                )
                 checkpoints.append(
                     {
                         "path": str(periodic),
@@ -146,7 +356,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
         checkpoint = save_dir / f"{args.prefix}_final.pt"
-        trainer.save(str(checkpoint))
+        trainer.save(
+            str(checkpoint),
+            include_replay_buffers=args.save_replay_buffers,
+        )
         checkpoints.append(
             {
                 "path": str(checkpoint),
@@ -156,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         elapsed = time.monotonic() - started
         buffer_size = sum(len(buffer) for buffer in trainer.buffers)
-        average_strategy_target_size = int(trainer.strategy_buffer.size)
+        average_strategy_target_size = int(trainer._average_strategy_target_size())
         traversal_pool_summary = trainer.traversal_pool_summary()
 
         eval_chips = None
@@ -166,39 +379,15 @@ def main(argv: list[str] | None = None) -> int:
         avg_iter_seconds = (
             sum(iteration_times) / len(iteration_times) if iteration_times else 0.0
         )
-        gate_failures = []
-        if (
-            args.max_pool_exhausted_per_traversal is not None
-            and traversal_pool_summary.get("traversal_pool_exhausted_per_traversal", 0.0)
-            > args.max_pool_exhausted_per_traversal
-        ):
-            gate_failures.append(
-                "traversal_pool_exhausted_per_traversal "
-                f"{traversal_pool_summary.get('traversal_pool_exhausted_per_traversal', 0.0):.6f} "
-                f"> {args.max_pool_exhausted_per_traversal:.6f}"
-            )
-        if (
-            args.max_overflow_chunk_fraction is not None
-            and traversal_pool_summary.get("traversal_overflow_chunk_fraction", 0.0)
-            > args.max_overflow_chunk_fraction
-        ):
-            gate_failures.append(
-                "traversal_overflow_chunk_fraction "
-                f"{traversal_pool_summary.get('traversal_overflow_chunk_fraction', 0.0):.6f} "
-                f"> {args.max_overflow_chunk_fraction:.6f}"
-            )
         traversals_per_second = (
             round(float(args.n_iterations * args.n_traversals) / elapsed, 3)
             if elapsed > 0 else 0.0
         )
-        if (
-            args.min_traversals_per_second is not None
-            and traversals_per_second < args.min_traversals_per_second
-        ):
-            gate_failures.append(
-                f"traversals_per_second {traversals_per_second:.6f} "
-                f"< {args.min_traversals_per_second:.6f}"
-            )
+        gate_failures = evaluate_training_gate_failures(
+            args,
+            traversal_pool_summary,
+            traversals_per_second=traversals_per_second,
+        )
 
         metrics = {
             "passed": checkpoint.exists() and not gate_failures,
@@ -208,15 +397,20 @@ def main(argv: list[str] | None = None) -> int:
             "n_iterations": int(args.n_iterations),
             "trainer_iteration": int(trainer.iteration),
             "n_traversals": int(args.n_traversals),
+            "seed": args.seed,
             "n_training_steps": int(args.n_training_steps),
             "batch_size": int(args.batch_size),
             "traversal_pool_max_slots": int(args.traversal_pool_max_slots),
             "traversal_slots_per_traversal": int(args.traversal_slots_per_traversal),
+            "use_frontier_indexing": bool(args.use_frontier_indexing),
             "gate_thresholds": {
                 "max_pool_exhausted_per_traversal": (
                     args.max_pool_exhausted_per_traversal
                 ),
                 "max_overflow_chunk_fraction": args.max_overflow_chunk_fraction,
+                "max_rejected_traversal_chunks": (
+                    args.max_rejected_traversal_chunks
+                ),
                 "min_traversals_per_second": args.min_traversals_per_second,
             },
             "gate_failures": gate_failures,
@@ -229,6 +423,20 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "average_strategy_weight": float(args.average_strategy_weight),
             "average_strategy_target_size": average_strategy_target_size,
+            "average_strategy_targets": str(args.average_strategy_targets),
+            "seed_average_strategy_memory_from_targets": bool(
+                args.seed_average_strategy_memory_from_targets
+            ),
+            "average_strategy_seed_weight": float(args.average_strategy_seed_weight),
+            "average_strategy_seeded_size": int(average_strategy_seeded_size),
+            "average_strategy_seed_target_size": int(
+                getattr(trainer, "average_strategy_seed_target_size", 0)
+            ),
+            "average_strategy_external_target_size": int(
+                average_strategy_target_buffer.size
+                if average_strategy_target_buffer is not None else 0
+            ),
+            "average_strategy_collected_size": int(trainer.strategy_buffer.size),
             "has_average_policy_net": bool(
                 getattr(trainer, "has_average_policy_net", False)
             ),
@@ -236,10 +444,12 @@ def main(argv: list[str] | None = None) -> int:
                 getattr(trainer, "use_betting_history", False)
             ),
             "save_every": int(args.save_every),
+            "save_replay_buffers": bool(args.save_replay_buffers),
             "hidden_dim": int(args.hidden_dim),
             "n_layers": int(args.n_layers),
             "buffer_capacity": int(args.buffer_capacity),
             "buffer_size": int(buffer_size),
+            **resume_metadata,
             **traversal_pool_summary,
             "checkpoints": checkpoints,
             "elapsed_seconds": round(float(elapsed), 3),

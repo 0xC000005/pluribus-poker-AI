@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1615,
+      "path": "benchmark_audit.md",
+      "sha256": "adb24a5dd09a3088ab22c30c5285ad8496d03fb66705763aa700aa0e444e271d"
+    },
+    {
+      "bytes": 842,
+      "path": "decision.json",
+      "sha256": "9ac0a4cde6822b117533ae6302d8e71ea08d4c1a20a5fbee5fbf39b068db8a48"
+    },
+    {
+      "bytes": 1911,
+      "path": "mechanism_review.md",
+      "sha256": "4b41ab9b797b1dbc40cde6ed24b2aed5a3319dff8a73bbba2988ce2e14bf0f66"
+    },
+    {
+      "bytes": 2404,
+      "path": "related_work.md",
+      "sha256": "9d684822be2ddcda54ddf5617826dacc92c5d29c650035784c28c8f5705e5fdd"
+    },
+    {
+      "bytes": 1345,
+      "path": "review.md",
+      "sha256": "aad09ce211bb6750a5724bf6c03f93b87d61ea4dd469f99cf75108fb0602f180"
+    },
+    {
+      "bytes": 3026,
+      "path": "review_scope.json",
+      "sha256": "ff2e44038eddd2abb76bd8c0a63851f01373e971fb400c96410ce3f6a8a75b6a"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with the PSRO/XDO-style population-improvement mainline as an objective/workflow change, not as a strength promotion. The reviewed evidence supports pausing the NPI/CFR-teacher branch after target-collapse failures, freezing the current local plug-in RL incumbent, and requiring parent plus empirical-population gates before Slumbot confidence evaluation.",
+  "review_dir": "autoresearch-session/poker_reviews/20260527T144957Z-psro-xdo-population-improvement-mainline",
+  "review_id": "20260527T144957Z-psro-xdo-population-improvement-mainline",
+  "sources": [
+    "https://arxiv.org/abs/1711.00832",
+    "https://arxiv.org/abs/2201.07700",
+    "https://arxiv.org/abs/2103.06426",
+    "https://arxiv.org/abs/2112.03178",
+    "autoresearch-session/empirical_game/plug_in_rl_population_matrix_with_psro_response_confidence_seed20260527.json",
+    "autoresearch-session/tianshou_rainbow/psro_response_to_psro_response_vs_parent_h2h_1000_seed20260690.json"
+  ],
+  "written_at": "2026-05-27T14:54:28Z"
+}
