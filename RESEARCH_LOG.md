@@ -18534,3 +18534,14 @@
 - Summary: Gate methodology-review-20260602T063727Z-sequence-form-mmd-bridge-for-native-neural-self passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T063940Z-methodology-review-for-sequence-form-mmd-bridge-for/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T063727Z-sequence-form-mmd-bridge-for-native-neural-self", "passed": true}`
+
+## 20260602T064359Z-small-nlhe-mmd-update-fidelity-bridge - passed
+
+- Timestamp: 2026-06-02T06:43:59Z
+- Type: experiment
+- Gate: small_nlhe_sequence_form_mmd_update_fidelity_bridge
+- Hypothesis: The existing neural rollout update should move in the same direction as exact sequence-form MMD on small-NLHE only when its step is small enough; failures near an already-good policy would explain native instability and motivate adaptive/proximal step control instead of larger networks.
+- Failure class: none
+- Summary: Added `scripts/analyze_small_nlhe_mmd_update_fidelity.py` and a tiny OpenSpiel-skipping test. The bridge passed from uniform start at `lr=0.005` (`target_kl_reduction=+0.000176`, cosine `0.5407`). From the stronger 200-step MMD policy, the same update overshot badly at `lr=0.005` (`target_kl_reduction=-0.002586`) and still worsened at `lr=0.0005` (`-0.000143`), but passed at `lr=0.00005` (`target_kl_reduction=+0.00000174`, cosine `0.7587`). This isolates the native NashPG/MMD gap as update-scale/proximal-control fidelity near strong policies, not representation capacity or simple action collapse.
+- Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_start200_delta1_h128_lr5e5_seed20260603.json
+- Key metrics: `{"uniform_lr005_passed": true, "near_policy_lr005_passed": false, "near_policy_lr0005_passed": false, "near_policy_lr00005_passed": true, "near_policy_lr00005_target_kl_reduction": 1.7369847449603441e-06, "near_policy_lr00005_update_delta_cosine": 0.758708585646791}`
