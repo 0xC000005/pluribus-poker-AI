@@ -18084,3 +18084,41 @@
   - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py::test_compiled_rollout_opponent_recognizes_online_rainbow_response_payload test/unit/test_native_neural_nashpg_compiled_learner.py::test_compiled_rollout_opponent_loads_online_rainbow_response_payload test/unit/test_native_neural_nashpg_compiled_learner.py::test_native_neural_nashpg_compiled_learner_writes_native_checkpoint` -> `3 passed`.
   - `python -m py_compile scripts/run_local_vtrace_compiled_native_learner.py scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
 - Decision: keep the checkpoint as falsification evidence only. The next mechanism should not scale this terminal-return NashPG/MMD translation unchanged; it should either implement a stronger policy-gradient return estimator/objective that is faithful to imperfect-information stochastic policies, or return to the maintained-library learner route with an explicit learned actor/average-policy target rather than a Q-head deployment wrapper.
+## 20260602T043614Z-the-strongest-older-raw-sequence-q-lambda-stochastic - failed
+
+- Timestamp: 2026-06-02T04:36:49Z
+- Type: experiment
+- Gate: raw_sequence_qlambda_vs_online_support_current_bar
+- Hypothesis: The strongest older raw-sequence q-lambda stochastic actor should beat the current online-response support checkpoint if explicit stochastic-policy learning is already sufficient.
+- Failure class: strategy_quality
+- Summary: The strongest older raw-sequence q-lambda stochastic actor lost to the current online-response support checkpoint under full-deck native H2H: mean=-0.0221155, lower95=-0.0413337, upper95=-0.00289735 over 2000 games. Explicit stochastic-policy learning from the older branch is not enough against the current support bar; the next learner must train against the current population/support rather than rely on stale checkpoints.
+- Metrics file: autoresearch-session/native_policy_only/raw_sequence_qexpected_lambda_10k_vs_online_support_h2h_2000_seed20260815.json
+- Key metrics: `{"candidate_kind": "native-ppo", "baseline_kind": "tianshou-rainbow", "eval_state_backend": "full-deck", "n_games": 2000, "mean_candidate_payoff": -0.022115499999999993, "lower95_candidate_payoff": -0.0413336544640035, "upper95_candidate_payoff": -0.0028973455359964893, "eval_games_per_second": 106.35634384199629, "resolved_device": "cuda", "passed": false}`
+- Decision: use the older q-lambda actor as a control only. The next test should train a stochastic actor against the current support checkpoint with a stronger trajectory estimator, not simply reuse stale stochastic policies.
+## 20260602T043730Z-a-fresh-native-v-trace-stochastic-actor-trained - failed
+
+- Timestamp: 2026-06-02T04:38:21Z
+- Type: experiment
+- Gate: native_vtrace_stochastic_response_to_online_support
+- Hypothesis: A fresh native V-trace stochastic actor trained against the current online-response support checkpoint should beat that support checkpoint under matched local H2H, improving over the failed terminal-return NashPG response.
+- Failure class: strategy_quality
+- Summary: Fresh native V-trace stochastic actor training against the current online-response support checkpoint ran on CUDA and wrote a valid native checkpoint, but the matched 5000-game local H2H failed versus the support checkpoint: mean=-0.0305206, lower95=-0.0434329, upper95=-0.0176083. This falsifies the existing V-trace actor-learner as a replacement for the current deterministic online Rainbow response candidate at this budget.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_vtrace_vs_online_support_h256_32x2048_seed20260816.json
+  - autoresearch-session/native_neural_nashpg/native_vtrace_vs_online_support_h2h_5000_seed20260817.json
+- Key metrics: `{"train_resolved_device": "cuda", "train_n_samples": 106146, "train_samples_per_second": 14900.639334588928, "train_compiled_needs_python_showdown": 0, "h2h_n_games": 5000, "h2h_mean_candidate_payoff": -0.030520599999999995, "h2h_lower95_candidate_payoff": -0.043432938578677194, "h2h_upper95_candidate_payoff": -0.017608261421322793, "h2h_eval_games_per_second": 305.05750585229634, "h2h_passed": false}`
+- Decision: keep the checkpoint as falsification evidence only. Fresh stochastic actor learners using the current terminal-return NashPG and V-trace implementations both lose to the current deterministic support checkpoint, so the next step needs a mechanism-level change rather than more same-budget reruns.
+## 20260602T043951Z-failure-synthesis-for-stochastic-actor-learners-failed-current - passed
+
+- Timestamp: 2026-06-02T04:39:51Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T043900Z-stochastic-actor-learners-failed-current-online-support-bar
+- Hypothesis: Failure synthesis for Stochastic actor learners failed current online support bar should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: The synthesis concluded that the current local bar is the deterministic online compiled Rainbow response support checkpoint. Post-hoc Q-softmax, fresh terminal-return NashPG/MMD, fresh V-trace, and stale raw-sequence q-lambda actors all failed this bar. The remaining live stochastic-policy hypothesis is narrower: train the previously strongest q-lambda / Expected-SARSA-style actor branch against the current support checkpoint inside the local simulator, rather than reusing stale stochastic checkpoints or rerunning weaker actor objectives.
+- Metrics file: autoresearch-session/poker_runs/20260602T043951Z-failure-synthesis-for-stochastic-actor-learners-failed-current/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T043900Z-stochastic-actor-learners-failed-current-online-support-bar", "passed": true}`
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T043900Z-stochastic-actor-learners-failed-current-online-support-bar-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T043900Z-stochastic-actor-learners-failed-current-online-support-bar-synthesis/decision.json
+- Decision: add a reviewed external-local-opponent mode to the native PPO/q-lambda pilot, train one small raw-sequence q-lambda response checkpoint against `online_response_iter4_support_h256_32x2048_u4096_seed20260717.pt`, and require positive local H2H lower95 versus that support checkpoint before any further promotion.
