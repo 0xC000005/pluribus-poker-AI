@@ -19101,3 +19101,60 @@
   - Parent H2H and 20k support H2H -> completed; both failed the positive-lower95 decision rule.
   - Action-distribution diagnostic -> passed with all 9 actions.
 - Decision: full-state continuation plus empirical-game opponent sampling is useful infrastructure but does not solve native R-NaD strength. The remaining blocker is the R-NaD/MMD objective/estimator under large native HUNL sampling. Do not run another R-NaD response by changing only checkpoint semantics, opponent assignment, or small budget. The next branch should change the estimator/objective itself, such as a lower-variance counterfactual/sequence-form-compatible learner, or return to the stronger local Rainbow/online-response PSRO path while keeping it tabula-rasa and locally trained.
+
+## 20260602T132000Z-native-20k-rainbow-psro-response-plan - planned
+
+- Timestamp: 2026-06-02T13:20:00Z
+- Type: predeclared_experiment
+- Gate: native_20k_rainbow_psro_response_to_current_support
+- Hypothesis: Since the R-NaD/MMD estimator branch failed after full-state and meta-opponent repairs, the strongest tabula-rasa next branch is a maintained-library Rainbow response oracle trained from fresh value/policy heads against the solved local 20k empirical-game support. If the local PSRO/Rainbow path is the current viable self-play improvement operator, a new same-family response to the current 20k support should beat that support with positive lower95 H2H and pass action sanity before entering the empirical-game support set.
+- Controls: train only in the native 9-action local simulator with `initial_chips=20000`, `max_steps_per_hand=256`, support policy `online_response_20k_iter4_support_h256_32x2048_u4096_seed20260822.pt`, and no Slumbot/AlphaNLHoldem/solver-label data. Use the maintained Rainbow response oracle path because it is the current local support family and has already produced the strongest 20k empirical-game policy.
+- Decision rule: promote the response to empirical-game expansion only if it has positive lower95 H2H versus the current 20k support and passes action sanity. If it fails, document the local PSRO response saturation and move to a genuinely new estimator/objective rather than more same-family response tuning.
+
+## 20260602T134500Z-native-20k-rainbow-psro-response - mixed (stale-support pass)
+
+- Timestamp: 2026-06-02T13:45:00Z
+- Type: experiment
+- Gate: native_20k_rainbow_psro_response_to_current_support
+- Hypothesis: A maintained-library Rainbow response oracle trained from fresh value/policy heads against the solved local 20k empirical-game support should beat that support if the local PSRO/Rainbow path remains the viable tabula-rasa self-play improvement operator after the R-NaD estimator branch failed.
+- Failure class: workflow_drift
+- Summary: Ran the predeclared native 20k-chip online compiled Rainbow response against `online_response_20k_iter4_support_h256_32x2048_u4096_seed20260822.pt`. Training used only the local 9-action simulator, observations, legal actions, and rewards; no Slumbot, AlphaNLHoldem, solver labels, or human poker tactics were used. The candidate beat that older support with a positive H2H lower bound, passed action sanity with all 9 actions represented, and entered a six-policy matrix around that older support as pure support. A drift check then found that this was not the true current local lead: AGENTS.md and earlier research-log entries already identified `global_psro_response_iter2_to_support_h256_16x2048_u1024_seed20260861.pt` as the current 20k population support candidate after the reviewed Global-PSRO loop. The new candidate lost to that real current lead over 10k games, so it is not promotable.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_h256_32x2048_u4096_seed20260732.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_vs_support_h2h_5000_seed20260733.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_action_distribution_seed20260734.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_vs_iter2_h2h_5000_seed20260735.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_vs_gen3_h2h_5000_seed20260736.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_vs_old_support_h2h_5000_seed20260737.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_vs_q_lambda_h2h_5000_full_deck_seed20260738.json
+  - autoresearch-session/native_neural_nashpg/rainbow_response_to_20k_support_vs_global_psro_iter2_h2h_10000_seed20260740.json
+  - autoresearch-session/empirical_game/native_20k_support_plus_rainbow_response_matrix_seed20260739.json
+- Key metrics: `{"collector_transitions": 208807, "collector_transitions_per_second": 70258.473, "updates_per_second": 188.033, "vs_stale_support_mean": 0.056502, "vs_stale_support_lower95": 0.044081, "vs_iter2_lower95": 0.019995, "vs_gen3_lower95": 0.043318, "vs_old_support_lower95": -0.000582, "vs_q_lambda_lower95": 0.032536, "vs_global_psro_iter2_mean": -0.015521, "vs_global_psro_iter2_lower95": -0.022271, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.417252, "empirical_covered_pairs": 15, "empirical_meta_strategy_around_stale_support": [0.0, 0.0, 0.0, 0.0, 0.0, 1.0], "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --collect-iterations 32 --games-per-iteration 2048 --max-steps-per-game 256 --initial-chips 20000 --updates-per-collect 128 --epsilon 0.20 --opponent-policy tianshou-rainbow:<20k_support> --opponent-meta-strategy 1.0 ...` -> passed on CUDA with zero Python-showdown fallback.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py ... --n-games 5000 --initial-chips 20000 --max-steps-per-hand 256 --eval-state-backend fast-state-canonical-deal` -> positive lower95 versus stale 20k support, iter2, and gen3.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py ... --baseline-kind native-ppo --eval-state-backend full-deck` -> positive lower95 versus the raw-sequence Q-lambda control; the fast-state backend was rejected because that policy requires full-deck features.
+  - `uv run --with tianshou python scripts/eval_native_policy_action_distribution.py ...` -> passed with all 9 actions and top action fraction below the collapse threshold.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py ... --solve-meta-strategy` -> complete six-policy matrix around the stale support set with pure support on the new candidate.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py ... --baseline global_psro_response_iter2_to_support_h256_16x2048_u1024_seed20260861.pt --n-games 10000` -> failed promotion versus the actual current local lead.
+- Decision: Do not promote `rainbow_response_to_20k_support_h256_32x2048_u4096_seed20260732.pt`. Restore `global_psro_response_iter2_to_support_h256_16x2048_u1024_seed20260861.pt` as the current local native 20k support candidate. The workflow lesson is to run an explicit current-lead drift check before training from any "current support" handle. The next principled branch should follow the existing Global-PSRO saturation synthesis: do not repeat stale-support response training, identical single-support chains, or simple mixture-weight tuning; use a reviewed expansion-quality selector or another tabula-rasa population-learning mechanism.
+
+## 20260602T140500Z-methodology-review-for-post-saturation-population-branch - passed
+
+- Timestamp: 2026-06-02T14:05:00Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T095550Z-native-20k-post-saturation-population-learning-branch
+- Hypothesis: The post-saturation native 20k branch should be reviewed after the stale-support drift, and it should choose a population-quality expansion mechanism or new tabula-rasa population learner before more training.
+- Failure class: workflow_drift
+- Summary: Queued and completed a methodology review for the next native 20k branch. The independent-verifier pass judged the claim as partial: the direction is correct, but the stale-support run proves that current-lead provenance must be enforced before launch. Related work supports a population-quality/strategy-exploration framing rather than another response-chain tweak: Global PSRO emphasizes post-expansion population quality, APSRO/SP-PSRO warns PSRO can increase exploitability between iterations, EPSRO targets response-oracle efficiency, the PSRO survey frames strategy exploration as the central scaling problem, and regularized IIG dynamics keep R-NaD/Nash-style successors in scope if PSRO saturates.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch/review.md
+  - autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch/related_work.md
+  - autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch/benchmark_audit.md
+  - autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch/mechanism_review.md
+  - autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch/review_scope.json
+  - autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch/decision.json
+- Key metrics: `{"decision": "revise", "methodology_review_passed": true, "current_lead_checkpoint": "global_psro_response_iter2_to_support_h256_16x2048_u1024_seed20260861.pt", "stale_support_response_vs_current_lead_lower95": -0.022271, "requires_current_lead_drift_guard": true, "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch --require-complete` -> passed with decision `revise`.
+- Decision: Before any new candidate training, resolve the true current local 20k lead from AGENTS.md, RESEARCH_LOG.md, and the session ledger. The next branch must predeclare fixed candidate budget, support set, seeds, and pass/fail gates, then improve measured local self-play league strength against the true current lead. Do not use Slumbot/RLCard feedback, stale support, identical single-support chains, or simple mixture-weight tuning.
