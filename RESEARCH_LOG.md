@@ -19492,3 +19492,24 @@
 - Verification:
   - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T164500Z-single-world-all-action-target-policy-failed-synthesis --require-complete` -> passed with decision `revise`.
 - Decision: Build a world-averaged all-action target gate that resamples hidden worlds compatible with the acting player's observation/public state and compares learnability against the failed single-world target before another policy-consumer run.
+
+## 20260602T170000Z-native-world-averaged-all-action-target-builder - mixed
+
+- Timestamp: 2026-06-02T17:00:00Z
+- Type: implementation_smoke
+- Gate: native_world_averaged_all_action_target_consistency
+- Hypothesis: Averaging forced-action rollout values over multiple hidden worlds compatible with the acting player's observation should make all-action targets more observation-compatible than single-world labels.
+- Failure class: target_budget_or_belief_variance
+- Summary: Added observation-preserving hidden-world resampling to `scripts/build_native_all_action_counterfactual_targets.py`. The resampler preserves the acting player's feature vector, public board, and public betting state while resampling opponent private cards and future deck order from local chance. Added world-averaged all-action estimates and margin-aware target-consistency reporting. Tests confirm the observation is unchanged and legal values are finite. The first world-averaged target smokes are mechanically clean, but the cheap target remains unstable: W4 low4/high16 had `top_action_agreement=0.59375`, `top_action_agreement_margin_0_05=0.68421`, and mean legal L1 `0.0658`; W8 low8/high32 had lower L1 `0.03637` but only `0.6875` top agreement. This is not enough to train another policy consumer.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_32_w4_low4_high16_seed20260733.json
+  - autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_16_w8_low8_high32_seed20260734.json
+  - autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_margin_32_w4_low4_high16_seed20260735.json
+- Key metrics: `{"w4_low4_high16_top_action_agreement": 0.59375, "w4_margin_0_05_agreement": 0.684211, "w4_mean_legal_l1": 0.0658, "w8_low8_high32_top_action_agreement": 0.6875, "w8_mean_legal_l1": 0.036365, "uses_slumbot_training_data": false, "uses_solver_labels": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_all_action_counterfactual_targets.py` -> `5 passed`.
+  - `python -m py_compile scripts/build_native_all_action_counterfactual_targets.py` -> passed.
+  - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --n-worlds 4 --low-rollouts-per-action 4 --high-rollouts-per-action 16 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260733 --output-json autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_32_w4_low4_high16_seed20260733.json` -> passed.
+  - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 16 --n-worlds 8 --low-rollouts-per-action 8 --high-rollouts-per-action 32 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260734 --output-json autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_16_w8_low8_high32_seed20260734.json` -> passed.
+  - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --n-worlds 4 --low-rollouts-per-action 4 --high-rollouts-per-action 16 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260735 --output-json autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_margin_32_w4_low4_high16_seed20260735.json` -> passed.
+- Decision: Do not train from cheap world-averaged all-action targets yet. The next branch should either increase target efficiency with batched/vectorized world-action rollout evaluation or change the target to a value/ranking objective that is robust to close action margins before policy training.

@@ -51,6 +51,52 @@ def _rollout_payoff(
     return stack_delta / float(rollout.initial_chips), True
 
 
+def resample_hidden_world_for_observer(
+    state: FastPokerState,
+    *,
+    observer: int,
+    seed: int,
+) -> FastPokerState:
+    """Resample opponent private cards and future deck without changing observation."""
+    if int(observer) < 0 or int(observer) >= int(state.n_players):
+        raise ValueError("observer must be a valid player index")
+    rng = np.random.default_rng(int(seed))
+    resampled = state.copy()
+    observer = int(observer)
+    visible_cards: list[int] = []
+    for card in resampled.hole_cards[observer, :2]:
+        if int(card) >= 0:
+            visible_cards.append(int(card))
+    for card in resampled.community:
+        if int(card) >= 0:
+            visible_cards.append(int(card))
+    remaining = [card for card in range(52) if card not in set(visible_cards)]
+    rng.shuffle(remaining)
+    cursor = 0
+    for player_i in range(int(resampled.n_players)):
+        if int(player_i) == observer:
+            continue
+        for card_i in range(2):
+            resampled.hole_cards[player_i, card_i] = int(remaining[cursor])
+            cursor += 1
+
+    used_cards: list[int] = []
+    for player_i in range(int(resampled.n_players)):
+        for card in resampled.hole_cards[player_i, :2]:
+            if int(card) >= 0:
+                used_cards.append(int(card))
+    for card in resampled.community:
+        if int(card) >= 0:
+            used_cards.append(int(card))
+    used_set = set(used_cards)
+    future = [card for card in remaining[cursor:] if int(card) not in used_set]
+    if len(used_cards) + len(future) != 52:
+        raise ValueError("resampled deck must contain exactly 52 unique cards")
+    resampled.deck_order = np.asarray(used_cards + future, dtype=np.int8)
+    resampled.deck_cursor = int(len(used_cards))
+    return resampled
+
+
 def estimate_all_action_rollout_values(
     state: FastPokerState,
     *,
@@ -109,6 +155,57 @@ def estimate_all_action_rollout_values(
     }
 
 
+def estimate_world_averaged_all_action_values(
+    state: FastPokerState,
+    *,
+    n_worlds: int,
+    n_rollouts_per_action: int,
+    max_steps_per_rollout: int,
+    seed: int,
+    paired_rollout_seeds: bool = True,
+) -> dict[str, Any]:
+    """Average all-action values over hidden worlds compatible with observation."""
+    if int(n_worlds) <= 0:
+        raise ValueError("n_worlds must be positive")
+    player = int(state.current_player_i)
+    legal_mask = state.get_legal_mask().astype(np.float32, copy=True)
+    legal = legal_mask > 0
+    world_values: list[np.ndarray] = []
+    total_truncations = np.zeros(N_ACTIONS, dtype=np.int64)
+    for world_i in range(int(n_worlds)):
+        world = resample_hidden_world_for_observer(
+            state,
+            observer=player,
+            seed=int(seed) + int(world_i) * 100_000,
+        )
+        estimate = estimate_all_action_rollout_values(
+            world,
+            n_rollouts_per_action=int(n_rollouts_per_action),
+            max_steps_per_rollout=int(max_steps_per_rollout),
+            seed=int(seed) + int(world_i) * 10_000,
+            paired_rollout_seeds=bool(paired_rollout_seeds),
+        )
+        world_values.append(np.asarray(estimate["values"], dtype=np.float32))
+        total_truncations += np.asarray(estimate["truncations"], dtype=np.int64)
+    stacked = np.stack(world_values).astype(np.float32, copy=False)
+    values = np.full(N_ACTIONS, np.nan, dtype=np.float32)
+    std_errors = np.full(N_ACTIONS, np.nan, dtype=np.float32)
+    values[legal] = np.nanmean(stacked[:, legal], axis=0)
+    std_errors[legal] = np.nanstd(stacked[:, legal], axis=0) / np.sqrt(float(n_worlds))
+    return {
+        "player": player,
+        "stage": int(state.stage),
+        "legal_mask": legal_mask,
+        "values": values,
+        "std_errors": std_errors,
+        "truncations": total_truncations,
+        "n_worlds": int(n_worlds),
+        "n_rollouts_per_action": int(n_rollouts_per_action),
+        "max_steps_per_rollout": int(max_steps_per_rollout),
+        "paired_rollout_seeds": bool(paired_rollout_seeds),
+    }
+
+
 def _top_legal_action(values: np.ndarray, legal_mask: np.ndarray) -> int:
     legal = np.flatnonzero(legal_mask > 0)
     if legal.size <= 0:
@@ -120,6 +217,18 @@ def _top_legal_action(values: np.ndarray, legal_mask: np.ndarray) -> int:
     finite_legal = legal[finite]
     finite_values = legal_values[finite]
     return int(finite_legal[int(np.argmax(finite_values))])
+
+
+def _top_legal_margin(values: np.ndarray, legal_mask: np.ndarray) -> float:
+    legal = np.flatnonzero(legal_mask > 0)
+    if legal.size <= 1:
+        return 0.0
+    legal_values = np.asarray(values, dtype=np.float32)[legal]
+    finite_values = legal_values[np.isfinite(legal_values)]
+    if finite_values.size <= 1:
+        return 0.0
+    sorted_values = np.sort(finite_values)
+    return float(sorted_values[-1] - sorted_values[-2])
 
 
 def _sample_decision_states(
@@ -151,6 +260,7 @@ def _sample_decision_states(
 def run_gate(
     *,
     n_states: int = 16,
+    n_worlds: int = 1,
     low_rollouts_per_action: int = 2,
     high_rollouts_per_action: int = 8,
     max_steps_per_rollout: int = 64,
@@ -161,6 +271,8 @@ def run_gate(
 ) -> dict[str, Any]:
     if int(n_states) <= 0:
         raise ValueError("n_states must be positive")
+    if int(n_worlds) <= 0:
+        raise ValueError("n_worlds must be positive")
     if int(low_rollouts_per_action) <= 0 or int(high_rollouts_per_action) <= 0:
         raise ValueError("rollout counts must be positive")
     if int(high_rollouts_per_action) < int(low_rollouts_per_action):
@@ -177,34 +289,65 @@ def run_gate(
     legal_l1s: list[float] = []
     low_top_actions: list[int] = []
     high_top_actions: list[int] = []
+    high_top_margins: list[float] = []
+    margin_002_agreements = 0
+    margin_002_count = 0
+    margin_005_agreements = 0
+    margin_005_count = 0
     total_truncations = 0
 
     for state_i, state in enumerate(states):
         target_seed = int(seed) + 10_000 + state_i
-        low = estimate_all_action_rollout_values(
-            state,
-            n_rollouts_per_action=int(low_rollouts_per_action),
-            max_steps_per_rollout=int(max_steps_per_rollout),
-            seed=target_seed,
-            paired_rollout_seeds=bool(paired_rollout_seeds),
-        )
-        high = estimate_all_action_rollout_values(
-            state,
-            n_rollouts_per_action=int(high_rollouts_per_action),
-            max_steps_per_rollout=int(max_steps_per_rollout),
-            seed=target_seed if bool(paired_rollout_seeds) else int(seed) + 20_000 + state_i,
-            paired_rollout_seeds=bool(paired_rollout_seeds),
-        )
+        if int(n_worlds) > 1:
+            low = estimate_world_averaged_all_action_values(
+                state,
+                n_worlds=int(n_worlds),
+                n_rollouts_per_action=int(low_rollouts_per_action),
+                max_steps_per_rollout=int(max_steps_per_rollout),
+                seed=target_seed,
+                paired_rollout_seeds=bool(paired_rollout_seeds),
+            )
+            high = estimate_world_averaged_all_action_values(
+                state,
+                n_worlds=int(n_worlds),
+                n_rollouts_per_action=int(high_rollouts_per_action),
+                max_steps_per_rollout=int(max_steps_per_rollout),
+                seed=target_seed if bool(paired_rollout_seeds) else int(seed) + 20_000 + state_i,
+                paired_rollout_seeds=bool(paired_rollout_seeds),
+            )
+        else:
+            low = estimate_all_action_rollout_values(
+                state,
+                n_rollouts_per_action=int(low_rollouts_per_action),
+                max_steps_per_rollout=int(max_steps_per_rollout),
+                seed=target_seed,
+                paired_rollout_seeds=bool(paired_rollout_seeds),
+            )
+            high = estimate_all_action_rollout_values(
+                state,
+                n_rollouts_per_action=int(high_rollouts_per_action),
+                max_steps_per_rollout=int(max_steps_per_rollout),
+                seed=target_seed if bool(paired_rollout_seeds) else int(seed) + 20_000 + state_i,
+                paired_rollout_seeds=bool(paired_rollout_seeds),
+            )
         legal_mask = low["legal_mask"]
         legal = legal_mask > 0
         low_values = low["values"]
         high_values = high["values"]
         low_top = _top_legal_action(low_values, legal_mask)
         high_top = _top_legal_action(high_values, legal_mask)
+        high_margin = _top_legal_margin(high_values, legal_mask)
         agreements += int(low_top == high_top)
+        if high_margin >= 0.02:
+            margin_002_count += 1
+            margin_002_agreements += int(low_top == high_top)
+        if high_margin >= 0.05:
+            margin_005_count += 1
+            margin_005_agreements += int(low_top == high_top)
         legal_counts.append(int(legal.sum()))
         low_top_actions.append(int(low_top))
         high_top_actions.append(int(high_top))
+        high_top_margins.append(float(high_margin))
         legal_l1s.append(float(np.mean(np.abs(low_values[legal] - high_values[legal]))))
         total_truncations += int(np.sum(low["truncations"]) + np.sum(high["truncations"]))
 
@@ -214,6 +357,8 @@ def run_gate(
         "gate": "native_all_action_counterfactual_target_consistency",
         "warning": "Local all-action rollout target builder; not checkpoint or Slumbot strength evidence.",
         "n_states": int(n_states),
+        "n_worlds": int(n_worlds),
+        "world_averaged_targets": bool(int(n_worlds) > 1),
         "low_rollouts_per_action": int(low_rollouts_per_action),
         "high_rollouts_per_action": int(high_rollouts_per_action),
         "max_steps_per_rollout": int(max_steps_per_rollout),
@@ -221,6 +366,15 @@ def run_gate(
         "seed": int(seed),
         "paired_rollout_seeds": bool(paired_rollout_seeds),
         "top_action_agreement": float(agreements / max(len(states), 1)),
+        "mean_high_top_margin": float(np.mean(high_top_margins)) if high_top_margins else 0.0,
+        "margin_0_02_state_count": int(margin_002_count),
+        "top_action_agreement_margin_0_02": (
+            float(margin_002_agreements / margin_002_count) if margin_002_count else None
+        ),
+        "margin_0_05_state_count": int(margin_005_count),
+        "top_action_agreement_margin_0_05": (
+            float(margin_005_agreements / margin_005_count) if margin_005_count else None
+        ),
         "mean_legal_l1": float(np.mean(legal_l1s)) if legal_l1s else None,
         "mean_legal_action_count": float(np.mean(legal_counts)) if legal_counts else 0.0,
         "low_top_actions": low_top_actions,
@@ -243,6 +397,7 @@ def run_gate(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n-states", type=int, default=16)
+    parser.add_argument("--n-worlds", type=int, default=1)
     parser.add_argument("--low-rollouts-per-action", type=int, default=2)
     parser.add_argument("--high-rollouts-per-action", type=int, default=8)
     parser.add_argument("--max-steps-per-rollout", type=int, default=64)
@@ -257,6 +412,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     metrics = run_gate(
         n_states=args.n_states,
+        n_worlds=args.n_worlds,
         low_rollouts_per_action=args.low_rollouts_per_action,
         high_rollouts_per_action=args.high_rollouts_per_action,
         max_steps_per_rollout=args.max_steps_per_rollout,
