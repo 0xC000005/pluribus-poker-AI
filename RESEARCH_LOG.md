@@ -18965,3 +18965,22 @@
   - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py` -> `8 passed`.
   - Real population loader check with `uv run --with tianshou` -> `['native-ppo', 'native-ppo', 'tianshou-rainbow', 'native-nfsp']`.
 - Decision: keep gen2 as local incumbent. Do not repeat this frozen-population response recipe unchanged. The next principled branch should either use a stronger empirical-game objective that directly optimizes support/payoff against a population, or return to a more theoretically grounded R-NaD/MMD/NashPG update with a larger predeclared multi-seed gate. Slumbot/RLCard remain blocked.
+
+## 20260602T104500Z-native-ppo-inner-gen3-256x-compute-scaling - failed
+
+- Timestamp: 2026-06-02T10:45:00Z
+- Type: experiment
+- Gate: native_ppo_inner_gen3_compute_scaling
+- Hypothesis: If the same-budget gen3 repeatability failure was mainly undertraining, then increasing the continuation budget from `64x2048` to `256x2048` while keeping the PPO-inner objective and all hyperparameters fixed should produce a candidate that beats gen2 under 10k duplicate-swapped H2H.
+- Failure class: native_objective_repeatability
+- Summary: Trained one `256x2048` continuation from the gen2 local incumbent with the exact same PPO-inner settings. Training was CUDA-backed and compute-scaled cleanly (`1833932` samples, `25819.309` samples/sec, zero illegal action probability, zero Python showdown fallback). The parent gate still failed: over 10k duplicate-swapped H2H against gen2, the candidate was weakly positive but inconclusive (`mean=+0.001610`, lower95 `-0.002481`, upper95 `+0.005702`). Action sanity passed with all 9 actions selected, top-action fraction `0.293617`, and mean entropy `1.510086`. Because the parent gate failed, Rainbow/NFSP controls and empirical-game support were skipped.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_from_gen2_256x2048_seed20260708.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_256x_vs_gen2_h2h_10k_seed20260709.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_256x_action_distribution_seed20260708.json
+- Key metrics: `{"train_samples": 1833932, "samples_per_second": 25819.309, "h2h_vs_gen2_10k_mean": 0.00161, "h2h_vs_gen2_10k_lower95": -0.002481, "h2h_vs_gen2_10k_upper95": 0.005702, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.293617, "uses_slumbot_training_data": false}`
+- Verification:
+  - 256x continuation train command -> passed and wrote CUDA metrics/checkpoint.
+  - 10k parent H2H command -> completed; positive mean but failed positive-lower95 promotion.
+  - Action-distribution diagnostic -> passed.
+- Decision: keep gen2 as local incumbent. This falsifies the simplest compute-only explanation for the gen3 failures. The current PPO-inner rollout objective is not a reliable monotonic improvement operator at this stage. Next work should stop scaling plain continuation and instead change the game-theoretic learning objective: empirical-game/meta-policy optimization, MMD/R-NaD-style regularized updates with stronger last-iterate guarantees, or a counterfactual-compatible policy-gradient estimator. Slumbot/RLCard remain blocked.

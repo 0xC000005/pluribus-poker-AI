@@ -489,6 +489,10 @@ action use, but lost to gen2 over 10k duplicate-swapped H2H with upper95 still
 negative. Do not repeat the frozen-population response recipe unchanged. Future
 population work needs a stronger empirical-game objective, not just fixed
 opponent sampling.
+A 4x compute-scaling falsifier also failed: `256x2048` plain continuation from
+gen2 trained cleanly at `25819` samples/sec but still did not clear the 10k
+parent lower95 gate. This makes the current blocker the PPO-inner continuation
+objective, not rollout throughput, GPU availability, or action collapse.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
