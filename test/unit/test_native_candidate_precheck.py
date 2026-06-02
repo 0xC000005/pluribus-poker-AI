@@ -23,6 +23,28 @@ def _h2h_payload(*, candidate="candidate.pt", lower95=0.1):
     }
 
 
+def _rainbow_h2h_payload(
+    *,
+    candidate="candidate.pt",
+    lower95=0.1,
+    algorithm="tianshou_rainbow_vs_tianshou_rainbow_h2h",
+):
+    return {
+        "algorithm": algorithm,
+        "role": "rl_control_checkpoint_league",
+        "environment": "poker_ai:full_deck_hu_nlhe",
+        "candidate_checkpoint": candidate,
+        "baseline_checkpoint": "baseline.pt",
+        "candidate_algorithm": "tianshou_marl_rainbow_dqn",
+        "baseline_algorithm": "tianshou_rainbow_dqn",
+        "n_games": 20000,
+        "num_actions": 9,
+        "mean_candidate_payoff": 0.2,
+        "lower95_candidate_payoff": lower95,
+        "uses_slumbot_training_data": False,
+    }
+
+
 def _empirical_payload(*, candidate="candidate.pt", support=1.0):
     return {
         "algorithm": "native_empirical_payoff_matrix",
@@ -62,6 +84,51 @@ def test_native_candidate_local_precheck_passes_local_but_blocks_external(tmp_pa
     assert "rlcard_reference_evidence_missing" in metrics["external_promotion_blockers"]
     assert "held_out_slumbot_smoke_missing" in metrics["external_promotion_blockers"]
     assert "slumbot_adapter_missing_for_candidate_kind" not in metrics["external_promotion_blockers"]
+
+
+def test_native_candidate_local_precheck_accepts_rainbow_h2h_artifact(tmp_path):
+    from poker_ai.research.native_candidate_precheck import (
+        evaluate_native_candidate_local_precheck,
+    )
+
+    h2h = tmp_path / "h2h.json"
+    empirical = tmp_path / "empirical.json"
+    _write_json(h2h, _rainbow_h2h_payload())
+    _write_json(empirical, _empirical_payload())
+
+    metrics = evaluate_native_candidate_local_precheck(
+        candidate_checkpoint="candidate.pt",
+        native_h2h_jsons=[h2h],
+        empirical_game_json=empirical,
+    )
+
+    assert metrics["local_precheck_passed"] is True
+    assert metrics["checks"]["native_h2h"][0]["candidate_kind"] == "tianshou-rainbow"
+    assert metrics["local_blockers"] == []
+
+
+def test_native_candidate_local_precheck_accepts_rainbow_vs_nfsp_h2h_artifact(tmp_path):
+    from poker_ai.research.native_candidate_precheck import (
+        evaluate_native_candidate_local_precheck,
+    )
+
+    h2h = tmp_path / "h2h.json"
+    empirical = tmp_path / "empirical.json"
+    _write_json(
+        h2h,
+        _rainbow_h2h_payload(algorithm="tianshou_rainbow_vs_native_nfsp_h2h"),
+    )
+    _write_json(empirical, _empirical_payload())
+
+    metrics = evaluate_native_candidate_local_precheck(
+        candidate_checkpoint="candidate.pt",
+        native_h2h_jsons=[h2h],
+        empirical_game_json=empirical,
+    )
+
+    assert metrics["local_precheck_passed"] is True
+    assert metrics["checks"]["native_h2h"][0]["candidate_kind"] == "tianshou-rainbow"
+    assert metrics["local_blockers"] == []
 
 
 def test_native_candidate_local_precheck_fails_bad_lower_bound(tmp_path):

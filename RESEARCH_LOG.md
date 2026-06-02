@@ -19633,3 +19633,56 @@
   - `python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_neural_nashpg/native_player_gae_ppo_inner_8x2048_matched_seed20260769.pt --candidate-kind native-ppo --baseline autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_seed20260682.pt --baseline-kind native-ppo --n-games 2000 --initial-chips 20000 --max-steps-per-hand 256 --device cuda --seed 20260770 --eval-state-backend fast-state-canonical-deal --min-lower95-candidate-payoff 0.0 --output-json autoresearch-session/native_neural_nashpg/native_player_gae_ppo_inner_8x2048_vs_ppo_inner_8x_h2h_2k_seed20260770.json` -> failed lower95 gate.
   - `python scripts/eval_native_policy_action_distribution.py --checkpoint autoresearch-session/native_neural_nashpg/native_player_gae_ppo_inner_8x2048_matched_seed20260769.pt --kind native-ppo --n-hands 512 --max-steps-per-hand 256 --initial-chips 20000 --device cuda --seed 20260771 --output-json autoresearch-session/native_neural_nashpg/native_player_gae_ppo_inner_8x2048_action_distribution_seed20260771.json` -> passed action sanity.
 - Decision: Keep `player-gae` because it makes the native compiled learner a faithful translation of the small-game/IIG PPO target, but do not scale the exact 8x recipe. The next simulator-reward branch must be an objective-level change or an empirical-game population objective, not another credit-assignment-only port.
+
+## 20260602T180000Z-synthesis-native-credit-assignment-variants - passed
+
+- Timestamp: 2026-06-02T18:00:00Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T115600Z-native-simulator-reward-credit-assignment-variants-failed-after
+- Hypothesis: After q-expected/NEURD and player-GAE failed same-budget native H2H, the workflow should synthesize the failure before adding another simulator-reward variant.
+- Failure class: none
+- Summary: Completed a failure-synthesis bundle for the latest native simulator-reward credit-assignment variants. The causal model is that compiled rollout speed, legality, and broad action support are working, but credit-assignment changes alone are not producing repeatable full-HUNL policy improvement. The synthesis retires unchanged q-expected/NEURD scaling, player-GAE-only scaling, simple reference retuning, compute-only PPO-inner continuation, stale-support/equal-mixture response retries, and detached all-action target consumers as immediate next steps. The live branches are now either a reviewed empirical-game/population objective or a faithful regularized IIG policy-gradient/R-NaD/MMD/NashPG reproduction, with current-lead re-anchoring and multi-seed gates before any native training run.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T115600Z-native-simulator-reward-credit-assignment-variants-failed-after-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T115600Z-native-simulator-reward-credit-assignment-variants-failed-after-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "next_required_action": "current_lead_reanchor_then_methodology_review", "uses_slumbot_training_data": false}`
+- Related work grounding: Generic PPO remains a valid control when implemented carefully in imperfect-information games (https://arxiv.org/abs/2502.08938), but policy-gradient IIG theory emphasizes counterfactual-compatible or regularized equilibrium objectives for principled convergence (https://arxiv.org/abs/2408.00751).
+- Verification:
+  - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T115600Z-native-simulator-reward-credit-assignment-variants-failed-after-synthesis --require-complete` -> passed with decision `revise`.
+- Decision: Re-anchor the current local 20k lead and run a methodology review for one concrete non-credit-assignment branch. Do not launch another native training run until the branch names the support set, seeds, budget, and multi-seed parent/control plus empirical-game gates.
+
+## 20260602T180500Z-current-lead-reanchor-fast-state-shared-marl - passed
+
+- Timestamp: 2026-06-02T18:05:00Z
+- Type: workflow_guard
+- Gate: current_local_incumbent_drift_reanchor
+- Hypothesis: Before another population or simulator-reward training run, the workflow must resolve the actual current local incumbent from tracked docs, research-log evidence, and session state to avoid repeating the stale-support failure mode.
+- Failure class: none
+- Summary: Re-anchored the current local plug-in RL incumbent to `autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt`, matching `AGENTS.md` and `docs/research_protocols/poker_autoresearch_workflow.md`. This checkpoint continued the prior Rainbow response through fast-state shared-policy Tianshou MARL self-play, passed the 20k duplicate-swapped parent gate (`mean=+0.003705`, `lower95=+0.000561`), beat PSRO response/shared-MARL18k/native NFSP controls, and solved the complete 5-policy empirical game to pure support. PPO-inner gen2 remains useful as the best observed stochastic NashPG checkpoint, but its repeatability audit failed and it is not the active local plug-in RL incumbent. Updated `AGENTS.md` so the current-lead drift guard no longer points future runs to the PPO paragraph.
+- Artifacts:
+  - autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_vs_parent_h2h_20000_seed20260765.json
+  - autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_empirical_game_seed20260770.json
+  - autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_vs_psro_response_h2h_20000_seed20260767.json
+  - autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_vs_shared_marl18k_h2h_5000_seed20260768.json
+  - autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_vs_native_nfsp_h2h_5000_seed20260769.json
+- Key metrics: `{"incumbent_checkpoint": "autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt", "parent_h2h_lower95": 0.000561, "psro_response_h2h_lower95": 0.013226, "shared_marl18k_h2h_lower95": 0.006300, "native_nfsp_h2h_lower95": 0.018762, "empirical_game_support": "pure_incumbent", "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_autoresearch.py set-incumbent --checkpoint autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt --reason "<drift re-anchor>"` -> recorded incumbent in `autoresearch-session/poker_state.json`.
+- Decision: Future candidate gates must beat this fast-state shared-MARL incumbent and retain empirical-game support before any Slumbot/RLCard evaluation. Do not treat PPO-inner gen2, historical Global-PSRO iter2, or stale 20k support handles as the active lead.
+
+## 20260602T181000Z-current-incumbent-native-precheck - passed
+
+- Timestamp: 2026-06-02T18:10:00Z
+- Type: workflow_guard
+- Gate: current_fast_state_shared_marl_incumbent_native_precheck
+- Hypothesis: The re-anchored fast-state shared-MARL incumbent should pass a local native precheck using its existing H2H and empirical-game artifacts, while still blocking external Slumbot promotion.
+- Failure class: none
+- Summary: Fixed `poker_ai/research/native_candidate_precheck.py` to accept the valid native Rainbow-family H2H artifact schemas (`tianshou_rainbow_vs_tianshou_rainbow_h2h` and `tianshou_rainbow_vs_native_nfsp_h2h`) in addition to `mixed_native_policy_h2h`. The first precheck attempt failed because those older H2H files lacked newer `trained_environment_native` and `native_action_projection` fields despite having native 9-action full-deck environment metadata. Regression tests now cover both legacy schemas. The current fast-state shared-MARL incumbent then passed local native precheck across parent, PSRO response, shared-MARL18k, native NFSP, and empirical-game support evidence. External promotion remains blocked because RLCard reference and held-out Slumbot confidence evidence are intentionally missing.
+- Artifacts:
+  - autoresearch-session/native_rollout_substrate/current_fast_state_shared_marl_incumbent_precheck_20260602.json
+- Key metrics: `{"local_precheck_passed": true, "candidate_kind": "tianshou-rainbow", "native_h2h_checks_passed": 4, "candidate_support_probability": 1.0, "promotion": false, "slumbot_confidence_eligible": false, "external_blockers": ["rlcard_reference_evidence_missing", "slumbot_confidence_not_authorized_by_native_only_precheck", "held_out_slumbot_smoke_missing"], "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_candidate_precheck.py` -> `5 passed`.
+  - `python -m py_compile poker_ai/research/native_candidate_precheck.py` -> passed.
+  - `python scripts/eval_native_candidate_local_precheck.py --candidate-checkpoint autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt --native-h2h-json <4 local h2h artifacts> --empirical-game-json autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_empirical_game_seed20260770.json --min-lower95 0.0 --output-json autoresearch-session/native_rollout_substrate/current_fast_state_shared_marl_incumbent_precheck_20260602.json` -> passed local precheck.
+- Decision: Use this precheck artifact as the current-lead fingerprint. The next experiment must beat this incumbent locally and pass empirical-game insertion; do not run Slumbot or RLCard until the formal external evidence gate is intentionally opened.

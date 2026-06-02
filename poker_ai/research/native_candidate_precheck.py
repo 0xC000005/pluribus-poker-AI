@@ -30,6 +30,16 @@ def _bool_field(payload: dict[str, Any], key: str, default: bool) -> bool:
     return bool(payload[key])
 
 
+def _candidate_kind(payload: dict[str, Any]) -> str | None:
+    kind = payload.get("candidate_kind")
+    if kind:
+        return str(kind)
+    algorithm = str(payload.get("candidate_algorithm", ""))
+    if "rainbow" in algorithm:
+        return "tianshou-rainbow"
+    return None
+
+
 def _check_h2h(
     payload: dict[str, Any],
     *,
@@ -38,15 +48,30 @@ def _check_h2h(
 ) -> tuple[dict[str, Any], list[str]]:
     blockers: list[str] = []
     lower95 = _lower95(payload)
-    if payload.get("algorithm") != "mixed_native_policy_h2h":
+    algorithm = str(payload.get("algorithm", ""))
+    accepted_algorithm = algorithm in {
+        "mixed_native_policy_h2h",
+        "tianshou_rainbow_vs_tianshou_rainbow_h2h",
+        "tianshou_rainbow_vs_native_nfsp_h2h",
+    }
+    if not accepted_algorithm:
         blockers.append("native_h2h_wrong_algorithm")
     if payload.get("environment") != "poker_ai:full_deck_hu_nlhe":
         blockers.append("native_h2h_wrong_environment")
     if str(payload.get("candidate_checkpoint", "")) != str(candidate_checkpoint):
         blockers.append("native_h2h_candidate_checkpoint_mismatch")
-    if not _bool_field(payload, "trained_environment_native", False):
+    legacy_native_rainbow_h2h = (
+        algorithm
+        in {
+            "tianshou_rainbow_vs_tianshou_rainbow_h2h",
+            "tianshou_rainbow_vs_native_nfsp_h2h",
+        }
+        and int(payload.get("num_actions", -1)) == 9
+        and payload.get("environment") == "poker_ai:full_deck_hu_nlhe"
+    )
+    if not _bool_field(payload, "trained_environment_native", legacy_native_rainbow_h2h):
         blockers.append("native_h2h_not_environment_native")
-    if _bool_field(payload, "native_action_projection", True):
+    if _bool_field(payload, "native_action_projection", not legacy_native_rainbow_h2h):
         blockers.append("native_h2h_uses_projection")
     if _bool_field(payload, "uses_slumbot_training_data", False) or _bool_field(
         payload,
@@ -64,7 +89,7 @@ def _check_h2h(
         {
             "passed": not blockers,
             "baseline_checkpoint": payload.get("baseline_checkpoint"),
-            "candidate_kind": payload.get("candidate_kind"),
+            "candidate_kind": _candidate_kind(payload),
             "baseline_kind": payload.get("baseline_kind"),
             "n_games": payload.get("n_games"),
             "lower95": lower95,
