@@ -376,6 +376,18 @@ That follow-up compiled joint-experience bridge now exists and is fast
 Rainbow response objective failed even after `2000` CUDA updates
 (`mean=-0.053094`, lower95 `-0.064691` versus the incumbent). Treat compiled
 joint-experience as a data substrate, not a solved policy-improvement operator.
+The online compiled Rainbow response bridge now also exists: it collects
+semi-MDP transitions from the learner's decision to the next learner decision
+or terminal/truncation, trains a maintained Tianshou Rainbow learner, and writes
+a normal `tianshou-rainbow` checkpoint. The first h256 `16x4096` run was fast
+(`166492` learner transitions, `57568.89` transitions/sec, zero fallback), but
+failed the 5000-game H2H gate against the current incumbent (`mean=-0.016945`,
+lower95 `-0.027931`). Treat this as useful collector/checkpoint
+infrastructure. Do not repeat the exact online Rainbow response recipe
+unchanged; the next response-objective branch needs a real mechanism change
+such as stronger bootstrapping/priority semantics, empirical-game-aware
+training, NashPG/MMD/R-NaD-family dynamics, or a reviewed maintained
+game-dynamics learner.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to

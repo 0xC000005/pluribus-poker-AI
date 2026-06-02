@@ -17491,3 +17491,19 @@
 - Verification:
   - `uv run pytest -q test/unit/test_joint_experience.py::test_collect_compiled_joint_experience_records_next_state_contract test/unit/test_joint_experience.py::test_build_compiled_joint_experience_dataset_cli_writes_npz_and_manifest` -> `2 passed`.
 - Decision: compiled population dataset generation is no longer the limiting problem. The current offline joint-experience Rainbow trainer is still a weak policy-improvement objective; the next useful branch should be online/off-policy control using compiled collection in the learning loop, prioritized replay/value bootstrapping changes with a clear mechanism, or a reviewed external game-dynamics learner.
+## 20260602T011500Z-an-online-maintained-tianshou-rainbow-response-oracle-using - failed
+
+- Timestamp: 2026-06-02T01:15:06Z
+- Type: compiled_online_rainbow_response
+- Gate: compiled_online_rainbow_parent_h2h
+- Hypothesis: An online maintained Tianshou Rainbow response oracle using compiled semi-MDP learner transitions should improve over the current fast-state shared-MARL incumbent without Slumbot data, solver labels, or native-to-RLCard projection.
+- Failure class: strategy_quality
+- Summary: Added a compiled online Rainbow response-oracle bridge. It records learner-centric semi-MDP replay rows from the learner's decision to the next learner decision or terminal/truncation, delegates updates to maintained Tianshou Rainbow, and writes a normal loadable `tianshou-rainbow` checkpoint. Mechanics are valid and fast on CUDA, but the first h256 16x4096 response failed the 5000-game H2H gate versus the current incumbent: mean=-0.016945, lower95=-0.027931. Treat the bridge as useful infrastructure; do not promote or repeat the exact online Rainbow response recipe unchanged.
+- Metrics file: autoresearch-session/compiled_rainbow_response/compiled_online_rainbow_vs_incumbent_h256_16x4096_h2h_5000_seed20260627.json
+- Training file: autoresearch-session/compiled_rainbow_response/compiled_online_rainbow_vs_incumbent_h256_16x4096_seed20260626.json
+- Smoke file: autoresearch-session/compiled_rainbow_response/compiled_online_rainbow_vs_incumbent_tiny_seed20260624.json
+- Key metrics: `{"resolved_device": "cuda", "collector_hands": 65536, "collector_transitions": 166492, "collector_seconds": 2.892047963970981, "collector_transitions_per_second": 57568.89307305783, "updates": 256, "train_seconds": 8.530355356000655, "updates_per_second": 30.0104731064829, "needs_python_showdown": 0, "semi_mdp_transitions": true, "h2h_mean": -0.016944999999999995, "h2h_lower95": -0.027931055930971373, "h2h_upper95": -0.005958944069028615, "eval_games_per_second": 233.67295422495792, "passed": false, "promotion": false}`
+- Verification:
+  - `uv run --with tianshou pytest -q test/unit/test_compiled_rainbow_response.py test/unit/test_joint_experience.py test/unit/test_joint_experience_response_oracle.py` -> `10 passed`.
+  - `python -m py_compile poker_ai/research/compiled_rainbow_response.py scripts/run_compiled_rainbow_response_oracle.py` -> passed.
+- Decision: correct semi-MDP collection and maintained-library update integration are no longer the blocker for this branch. The blocker remains policy-improvement quality: online Rainbow response against a singleton incumbent still loses to the incumbent. The next branch needs a mechanism change rather than more same-recipe scale, such as empirical-game/meta-policy-aware response training, principled prioritized/bootstrapped value semantics, or a reviewed NashPG/MMD/R-NaD-style population learner.
