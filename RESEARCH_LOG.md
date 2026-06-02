@@ -18182,3 +18182,33 @@
   - `uv run pytest -q test/unit/test_mixed_policy_h2h.py::test_evaluate_loaded_policies_head_to_head_reports_native_contract test/unit/test_mixed_policy_h2h.py::test_eval_mixed_policy_h2h_cli_writes_json test/unit/test_mixed_policy_h2h.py::test_eval_mixed_policy_h2h_cli_returns_nonzero_on_failed_gate` -> `3 passed`.
   - `python -m py_compile poker_ai/research/mixed_policy_h2h.py scripts/eval_mixed_policy_h2h.py` -> passed.
 - Decision: Stop treating 1000-chip local H2H as sufficient for Slumbot-facing promotion. The next tabula-rasa cycle should build the local self-play/population league around 20000-chip native gates and then test whether an explicit stochastic actor can beat this new 20k-native support, instead of tuning against the stale 1000-chip bar.
+## 20260602T050450Z-failure-synthesis-for-20k-stack-support-conditioned-q - passed
+
+- Timestamp: 2026-06-02T05:04:50Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T050359Z-20k-stack-support-conditioned-q-lambda-actor-failed
+- Hypothesis: Failure synthesis for 20k stack support-conditioned q-lambda actor failed 20k support bar should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T050359Z-20k-stack-support-conditioned-q-lambda-actor-failed passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T050450Z-failure-synthesis-for-20k-stack-support-conditioned-q/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T050359Z-20k-stack-support-conditioned-q-lambda-actor-failed", "passed": true}`
+
+## 20260602T051100Z-native-20k-empirical-game-support-matrix - passed
+
+- Timestamp: 2026-06-02T05:11:00Z
+- Type: empirical_game
+- Gate: native_20k_empirical_game_support_matrix
+- Hypothesis: The corrected 20000-chip online response should be treated as the active local support only if it keeps support in a complete local empirical-game matrix; the 20k q-lambda actor should not be advanced if it has zero support.
+- Failure class: strategy_quality
+- Summary: Trained a 20000-chip raw-sequence q-lambda actor against the new 20k online response support. Training ran on CUDA and wrote a valid stochastic native checkpoint, but the matched 20k H2H gate failed versus the new support (mean=-0.016487, lower95=-0.038066 over 2000 games). Completed the 5-policy 20k empirical-game matrix for iter2, gen3, old 1000-chip support, new 20k support, and the failed q-lambda actor. The solved meta-strategy was pure support on the new 20k online response. This confirms the stack-aligned response as the current local population support and falsifies the small q-lambda actor branch under the corrected stack regime.
+- Metrics files:
+  - autoresearch-session/native_ppo/raw_sequence_20k_support_qexpected_lambda_h512_2k_seed20260826.json
+  - autoresearch-session/native_ppo/raw_sequence_20k_support_qexpected_lambda_h512_2k_vs_20k_support_h2h_2000_seed20260827.json
+  - autoresearch-session/native_neural_nashpg/online_response_20k_vs_old_support_h2h_5000_20kchips_fast_seed20260828.json
+  - autoresearch-session/native_neural_nashpg/gen3_vs_iter2_h2h_5000_20kchips_fast_seed20260829.json
+  - autoresearch-session/native_ppo/raw_sequence_20k_support_qexpected_lambda_h512_2k_vs_old_support_h2h_2000_20kchips_seed20260830.json
+  - autoresearch-session/native_ppo/raw_sequence_20k_support_qexpected_lambda_h512_2k_vs_iter2_h2h_2000_20kchips_seed20260831.json
+  - autoresearch-session/native_ppo/raw_sequence_20k_support_qexpected_lambda_h512_2k_vs_gen3_h2h_2000_20kchips_seed20260832.json
+  - autoresearch-session/empirical_game/native_20k_support_matrix_seed20260828_32.json
+- Key metrics: `{"q_lambda_train_resolved_device": "cuda", "q_lambda_train_steps_per_second": 311.81, "q_lambda_vs_20k_support_lower95": -0.038066, "q_lambda_vs_old_support_lower95": -0.041119, "q_lambda_vs_iter2_lower95": -0.057272, "q_lambda_vs_gen3_lower95": -0.032944, "new_20k_vs_old_support_lower95": 0.000121, "empirical_covered_pairs": 10, "empirical_support_policy": "online_response_20k_iter4_support_h256_32x2048_u4096_seed20260822.pt", "empirical_meta_strategy": [0.0, 0.0, 1.0, 0.0, 0.0]}`
+- Decision: The active local support is now the 20k online compiled response, but it remains a deterministic value-policy response, not the final stochastic tabula-rasa policy. The next reviewed mechanism should train a stochastic/regularized population learner against this 20k empirical-game support or a larger 20k self-play population; do not repeat singleton 2k PPO/q-lambda responses unchanged.
