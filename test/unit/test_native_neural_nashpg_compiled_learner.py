@@ -260,6 +260,116 @@ def test_native_neural_nashpg_compiled_learner_supports_inverse_own_reach_weight
     assert payload["config"]["decision_weight_mode"] == "inverse-own-reach"
 
 
+def test_compiled_q_expected_lambda_targets_use_same_player_next_decision():
+    from scripts.run_native_neural_nashpg_compiled_learner import (
+        _q_expected_lambda_targets,
+    )
+
+    batch = {
+        "features": np.zeros((3, 2), dtype=np.float32),
+        "legal_masks": np.ones((3, 2), dtype=np.float32),
+        "rewards": np.asarray([0.0, 1.0, 2.0], dtype=np.float32),
+        "next_decision_indices": np.asarray([1, -1, -1], dtype=np.int64),
+    }
+    policy_logits = torch.zeros((3, 2), dtype=torch.float32)
+    q_values = torch.tensor(
+        [
+            [0.0, 0.0],
+            [2.0, 4.0],
+            [6.0, 8.0],
+        ],
+        dtype=torch.float32,
+    )
+
+    targets = _q_expected_lambda_targets(
+        batch=batch,
+        policy_logits=policy_logits,
+        q_values=q_values,
+        gamma=1.0,
+        trace_lambda=0.25,
+    )
+
+    assert torch.allclose(targets, torch.tensor([2.5, 1.0, 2.0]))
+
+
+def test_native_neural_nashpg_compiled_learner_supports_q_expected_neurd(tmp_path):
+    from scripts.run_native_neural_nashpg_compiled_learner import run_learner
+
+    checkpoint = tmp_path / "q_expected_neurd.pt"
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=8,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        inner_update="ppo",
+        ppo_epochs=1,
+        ppo_minibatches=1,
+        advantage_target="q_expected_lambda",
+        actor_update_mode="neurd",
+        gamma=1.0,
+        gae_lambda=0.5,
+        seed=20260761,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["advantage_target"] == "q_expected_lambda"
+    assert metrics["actor_update_mode"] == "neurd"
+    assert metrics["uses_q_critic"] is True
+    assert metrics["passed"] is True
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["advantage_target"] == "q_expected_lambda"
+    assert payload["config"]["actor_update_mode"] == "neurd"
+    assert "q_net_state_dict" in payload
+
+
+def test_native_neural_nashpg_compiled_learner_resumes_q_expected_critic(tmp_path):
+    from scripts.run_native_neural_nashpg_compiled_learner import run_learner
+
+    parent = tmp_path / "q_parent.pt"
+    child = tmp_path / "q_child.pt"
+    run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        inner_update="ppo",
+        ppo_epochs=1,
+        ppo_minibatches=1,
+        advantage_target="q_expected_mc",
+        actor_update_mode="neurd",
+        seed=20260765,
+        device="cpu",
+        checkpoint_out=parent,
+    )
+
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        inner_update="ppo",
+        ppo_epochs=1,
+        ppo_minibatches=1,
+        advantage_target="q_expected_mc",
+        actor_update_mode="neurd",
+        checkpoint_in=parent,
+        seed=20260766,
+        device="cpu",
+        checkpoint_out=child,
+    )
+
+    assert metrics["checkpoint_in_q_loaded"] is True
+    assert metrics["uses_q_critic"] is True
+    assert child.exists()
+    payload = torch.load(child, map_location="cpu", weights_only=False)
+    assert payload["metrics"]["checkpoint_in_q_loaded"] is True
+
+
 def test_compiled_rollout_opponent_recognizes_online_rainbow_response_payload():
     from scripts.run_local_vtrace_compiled_native_learner import _is_rainbow_payload
 

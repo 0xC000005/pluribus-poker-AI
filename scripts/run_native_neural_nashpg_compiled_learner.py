@@ -54,6 +54,7 @@ def _load_checkpoint_in(
     checkpoint_in: str | Path | None,
     policy_net: torch.nn.Module,
     value_net: torch.nn.Module,
+    q_net: torch.nn.Module | None = None,
     device: torch.device,
 ) -> dict[str, Any] | None:
     if checkpoint_in is None:
@@ -70,6 +71,11 @@ def _load_checkpoint_in(
     policy_net.load_state_dict(payload["policy_net_state_dict"])
     if "value_net_state_dict" in payload:
         value_net.load_state_dict(payload["value_net_state_dict"])
+    payload = dict(payload)
+    payload["checkpoint_in_q_loaded"] = False
+    if q_net is not None and "q_net_state_dict" in payload:
+        q_net.load_state_dict(payload["q_net_state_dict"])
+        payload["checkpoint_in_q_loaded"] = True
     return dict(payload)
 
 
@@ -222,10 +228,49 @@ def _policy_value_reference_loss(
     return loss, stats, int(actions.numel())
 
 
+def _q_expected_lambda_targets(
+    *,
+    batch: dict[str, np.ndarray],
+    policy_logits: torch.Tensor,
+    q_values: torch.Tensor,
+    gamma: float,
+    trace_lambda: float,
+) -> torch.Tensor:
+    """Expected-SARSA(lambda) targets over recorded same-player decision links."""
+    rewards = torch.as_tensor(
+        batch["rewards"],
+        dtype=q_values.dtype,
+        device=q_values.device,
+    )
+    if policy_logits.shape != q_values.shape:
+        raise ValueError("policy_logits and q_values must have matching shapes")
+    if int(rewards.numel()) != int(q_values.shape[0]):
+        raise ValueError("rewards must match the number of q rows")
+    legal_masks = torch.as_tensor(
+        batch["legal_masks"] > 0,
+        dtype=torch.bool,
+        device=q_values.device,
+    )
+    next_decision_indices = np.asarray(batch["next_decision_indices"], dtype=np.int64)
+    log_probs = masked_log_probs(policy_logits, legal_masks)
+    probs = torch.exp(log_probs)
+    expected_q = torch.sum(probs * torch.where(legal_masks, q_values, torch.zeros_like(q_values)), dim=1)
+    targets = rewards.clone()
+    lam = float(trace_lambda)
+    for record_i in range(int(rewards.numel()) - 1, -1, -1):
+        next_i = int(next_decision_indices[record_i])
+        if next_i >= 0:
+            targets[record_i] = float(gamma) * (
+                (1.0 - lam) * expected_q[next_i] + lam * targets[next_i]
+            )
+    return targets.detach()
+
+
 def _prepare_ppo_fixed_rows(
     *,
     policy_net: torch.nn.Module,
     value_net: torch.nn.Module,
+    q_net: torch.nn.Module | None = None,
     batch: dict[str, np.ndarray],
     device: torch.device,
     advantage_target: str,
@@ -247,8 +292,11 @@ def _prepare_ppo_fixed_rows(
         max_decision_weight=float(max_decision_weight),
         device=device,
     )
+    q_modes = {"q_expected_mc", "q_expected_lambda"}
     with torch.no_grad():
         values = value_net(features).reshape(-1)
+        policy_logits = policy_net(features)
+        q_values = q_net(features) if q_net is not None else None
     target_mode = str(advantage_target)
     if target_mode == "terminal":
         value_targets = returns
@@ -261,8 +309,30 @@ def _prepare_ppo_fixed_rows(
             gamma=float(gamma),
             gae_lambda=float(gae_lambda),
         )
+    elif target_mode == "q_expected_mc":
+        if q_values is None:
+            raise ValueError("q_expected_mc requires q_net")
+        legal_q = torch.where(legal_masks, q_values, torch.zeros_like(q_values))
+        legal_log_probs = masked_log_probs(policy_logits, legal_masks)
+        expected_q = torch.sum(torch.exp(legal_log_probs) * legal_q, dim=1)
+        value_targets = returns
+        advantages = value_targets - expected_q
+    elif target_mode == "q_expected_lambda":
+        if q_values is None:
+            raise ValueError("q_expected_lambda requires q_net")
+        value_targets = _q_expected_lambda_targets(
+            batch=batch,
+            policy_logits=policy_logits,
+            q_values=q_values,
+            gamma=float(gamma),
+            trace_lambda=float(gae_lambda),
+        )
+        legal_q = torch.where(legal_masks, q_values, torch.zeros_like(q_values))
+        legal_log_probs = masked_log_probs(policy_logits, legal_masks)
+        expected_q = torch.sum(torch.exp(legal_log_probs) * legal_q, dim=1)
+        advantages = value_targets - expected_q
     else:
-        raise ValueError("advantage_target must be one of: terminal, gae")
+        raise ValueError("advantage_target must be one of: terminal, gae, q_expected_mc, q_expected_lambda")
     if int(advantages.numel()) > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-5)
     rows = {
@@ -273,6 +343,7 @@ def _prepare_ppo_fixed_rows(
         "value_targets": value_targets.detach(),
         "advantages": advantages.detach(),
         "decision_weights": decision_weights.detach(),
+        "critic_is_q": torch.as_tensor(target_mode in q_modes, dtype=torch.bool, device=device),
     }
     stats = {
         "advantage_target": target_mode,
@@ -288,10 +359,26 @@ def _prepare_ppo_fixed_rows(
     return rows, stats, int(actions.numel())
 
 
+def _compiled_neurd_actor_loss(
+    logits: torch.Tensor,
+    legal_masks: torch.Tensor,
+    actions: torch.Tensor,
+    advantages: torch.Tensor,
+    decision_weights: torch.Tensor,
+) -> torch.Tensor:
+    selected_legal = legal_masks.gather(1, actions.view(-1, 1)).squeeze(1)
+    if bool(torch.any(~selected_legal).detach().cpu()):
+        raise ValueError("NEURD actor update received an illegal sampled action")
+    selected_logits = logits.gather(1, actions.view(-1, 1)).squeeze(1)
+    denom = decision_weights.sum().clamp_min(1e-6)
+    return -torch.sum(decision_weights * selected_logits * advantages.detach()) / denom
+
+
 def _policy_value_reference_ppo_loss_on_rows(
     *,
     policy_net: torch.nn.Module,
     value_net: torch.nn.Module,
+    q_net: torch.nn.Module | None,
     reference_policy: torch.nn.Module | None,
     rows: dict[str, torch.Tensor],
     indices: torch.Tensor,
@@ -299,6 +386,7 @@ def _policy_value_reference_ppo_loss_on_rows(
     entropy_weight: float,
     reference_kl_weight: float,
     clip_coef: float,
+    actor_update_mode: str,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     features = rows["features"][indices]
     legal_masks = rows["legal_masks"][indices]
@@ -312,16 +400,35 @@ def _policy_value_reference_ppo_loss_on_rows(
     logits = policy_net(features)
     log_probs = masked_log_probs(logits, legal_masks)
     probs = torch.exp(log_probs)
-    values = value_net(features).reshape(-1)
     action_log_probs = log_probs.gather(1, actions.view(-1, 1)).squeeze(1)
     ratio = torch.exp(action_log_probs - old_log_probs)
     clipped_ratio = torch.clamp(ratio, 1.0 - float(clip_coef), 1.0 + float(clip_coef))
-    per_row_policy_loss = torch.maximum(
-        -advantages * ratio,
-        -advantages * clipped_ratio,
-    )
-    policy_loss = torch.sum(decision_weights * per_row_policy_loss) / weight_denom
-    value_loss = torch.sum(decision_weights * torch.square(values - value_targets)) / weight_denom
+    if str(actor_update_mode) == "ppo":
+        per_row_policy_loss = torch.maximum(
+            -advantages * ratio,
+            -advantages * clipped_ratio,
+        )
+        policy_loss = torch.sum(decision_weights * per_row_policy_loss) / weight_denom
+    elif str(actor_update_mode) == "neurd":
+        policy_loss = _compiled_neurd_actor_loss(
+            logits,
+            legal_masks,
+            actions,
+            advantages,
+            decision_weights,
+        )
+    else:
+        raise ValueError("actor_update_mode must be one of: ppo, neurd")
+    critic_is_q = bool(rows.get("critic_is_q", torch.tensor(False)).detach().cpu())
+    if critic_is_q:
+        if q_net is None:
+            raise ValueError("q_expected PPO rows require q_net")
+        q_values = q_net(features)
+        q_taken = q_values.gather(1, actions.view(-1, 1)).squeeze(1)
+        value_loss = torch.sum(decision_weights * torch.square(q_taken - value_targets)) / weight_denom
+    else:
+        values = value_net(features).reshape(-1)
+        value_loss = torch.sum(decision_weights * torch.square(values - value_targets)) / weight_denom
     per_row_entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1)
     entropy = torch.sum(decision_weights * per_row_entropy) / weight_denom
 
@@ -369,6 +476,8 @@ def _policy_value_reference_ppo_loss_on_rows(
         "clip_fraction": float(clip_fraction.detach().cpu()),
         "mean_decision_weight": float(decision_weights.detach().mean().cpu()),
         "max_observed_decision_weight": float(decision_weights.detach().max().cpu()),
+        "actor_update_mode": str(actor_update_mode),
+        "uses_q_critic": bool(critic_is_q),
     }
     return loss, stats
 
@@ -408,6 +517,7 @@ def _optimizer_step_with_optional_policy_kl_control(
     *,
     policy_net: torch.nn.Module,
     value_net: torch.nn.Module,
+    q_net: torch.nn.Module | None = None,
     optimizer: torch.optim.Optimizer,
     loss: torch.Tensor | None,
     loss_builder: Callable[[], torch.Tensor] | None = None,
@@ -420,6 +530,8 @@ def _optimizer_step_with_optional_policy_kl_control(
 ) -> dict[str, float | bool | int | None]:
     """Apply one optimizer step, optionally backtracking on realized policy KL."""
     parameters = list(policy_net.parameters()) + list(value_net.parameters())
+    if q_net is not None:
+        parameters += list(q_net.parameters())
     if loss is None and loss_builder is None:
         raise ValueError("loss or loss_builder must be provided")
     if float(max_policy_kl) <= 0.0:
@@ -557,6 +669,7 @@ def run_learner(
     reference_kl_weight: float = 0.05,
     reference_update_every: int = 4,
     inner_update: str = "pg",
+    actor_update_mode: str = "ppo",
     ppo_epochs: int = 4,
     ppo_minibatches: int = 4,
     clip_coef: float = 0.1,
@@ -586,6 +699,10 @@ def run_learner(
         raise ValueError("reference_kl_weight must be non-negative")
     if str(inner_update) not in {"pg", "ppo"}:
         raise ValueError("inner_update must be one of: pg, ppo")
+    if str(actor_update_mode) not in {"ppo", "neurd"}:
+        raise ValueError("actor_update_mode must be one of: ppo, neurd")
+    if str(actor_update_mode) != "ppo" and str(inner_update) != "ppo":
+        raise ValueError("actor_update_mode is only used with inner_update=ppo")
     if int(ppo_epochs) <= 0:
         raise ValueError("ppo_epochs must be positive")
     if int(ppo_minibatches) <= 0:
@@ -600,8 +717,11 @@ def run_learner(
         raise ValueError("adaptive_policy_kl_max_backtracks must be non-negative")
     if not (0.0 < float(adaptive_policy_kl_backtrack_factor) < 1.0):
         raise ValueError("adaptive_policy_kl_backtrack_factor must be in (0, 1)")
-    if str(advantage_target) not in {"terminal", "gae"}:
-        raise ValueError("advantage_target must be one of: terminal, gae")
+    q_advantage_targets = {"q_expected_mc", "q_expected_lambda"}
+    if str(advantage_target) not in {"terminal", "gae", *q_advantage_targets}:
+        raise ValueError("advantage_target must be one of: terminal, gae, q_expected_mc, q_expected_lambda")
+    if str(advantage_target) in q_advantage_targets and str(inner_update) != "ppo":
+        raise ValueError("q_expected_* advantage targets require inner_update=ppo")
     if not (0.0 <= float(gamma) <= 1.0):
         raise ValueError("gamma must be in [0, 1]")
     if not (0.0 <= float(gae_lambda) <= 1.0):
@@ -618,10 +738,16 @@ def run_learner(
     resolved_device = torch.device(device_info["resolved_device"])
     policy_net = _PolicyMLP(int(hidden_dim), input_dim=N_FEATURES).to(resolved_device)
     value_net = _ValueMLP(int(hidden_dim), input_dim=N_FEATURES).to(resolved_device)
+    q_net = (
+        _PolicyMLP(int(hidden_dim), input_dim=N_FEATURES).to(resolved_device)
+        if str(advantage_target) in q_advantage_targets
+        else None
+    )
     checkpoint_payload = _load_checkpoint_in(
         checkpoint_in=checkpoint_in,
         policy_net=policy_net,
         value_net=value_net,
+        q_net=q_net,
         device=resolved_device,
     )
     opponent_policies, opponent_kinds = _load_compiled_rollout_opponents(
@@ -644,10 +770,10 @@ def run_learner(
         for parameter in reference_policy.parameters():
             parameter.requires_grad_(False)
 
-    optimizer = torch.optim.Adam(
-        list(policy_net.parameters()) + list(value_net.parameters()),
-        lr=float(lr),
-    )
+    optimizer_params = list(policy_net.parameters()) + list(value_net.parameters())
+    if q_net is not None:
+        optimizer_params += list(q_net.parameters())
+    optimizer = torch.optim.Adam(optimizer_params, lr=float(lr))
 
     losses: list[float] = []
     entropy_values: list[float] = []
@@ -688,6 +814,7 @@ def run_learner(
             rows, base_stats, batch_samples = _prepare_ppo_fixed_rows(
                 policy_net=policy_net,
                 value_net=value_net,
+                q_net=q_net,
                 batch=batch,
                 device=resolved_device,
                 advantage_target=str(advantage_target),
@@ -710,6 +837,7 @@ def run_learner(
                     loss, last_stats = _policy_value_reference_ppo_loss_on_rows(
                         policy_net=policy_net,
                         value_net=value_net,
+                        q_net=q_net,
                         reference_policy=reference_policy,
                         rows=rows,
                         indices=mb,
@@ -717,12 +845,10 @@ def run_learner(
                         entropy_weight=float(entropy_weight),
                         reference_kl_weight=float(reference_kl_weight),
                         clip_coef=float(clip_coef),
+                        actor_update_mode=str(actor_update_mode),
                     )
                     loss.backward()
-                    torch.nn.utils.clip_grad_norm_(
-                        list(policy_net.parameters()) + list(value_net.parameters()),
-                        10.0,
-                    )
+                    torch.nn.utils.clip_grad_norm_(optimizer_params, 10.0)
                     optimizer.step()
             stats = {**base_stats, **last_stats}
             step_stats = {
@@ -778,6 +904,7 @@ def run_learner(
             step_stats = _optimizer_step_with_optional_policy_kl_control(
                 policy_net=policy_net,
                 value_net=value_net,
+                q_net=q_net,
                 optimizer=optimizer,
                 loss=loss,
                 loss_builder=_rebuild_step_loss,
@@ -837,6 +964,7 @@ def run_learner(
         "reference_kl_weight": float(reference_kl_weight),
         "reference_update_every": int(reference_update_every),
         "inner_update": str(inner_update),
+        "actor_update_mode": str(actor_update_mode),
         "ppo_epochs": int(ppo_epochs),
         "ppo_minibatches": int(ppo_minibatches),
         "clip_coef": float(clip_coef),
@@ -858,6 +986,7 @@ def run_learner(
             float(np.mean(policy_update_lr_scales)) if policy_update_lr_scales else None
         ),
         "advantage_target": str(advantage_target),
+        "uses_q_critic": bool(q_net is not None),
         "gamma": float(gamma),
         "gae_lambda": float(gae_lambda),
         "decision_weight_mode": str(decision_weight_mode),
@@ -877,6 +1006,11 @@ def run_learner(
         "checkpoint_in": str(checkpoint_in) if checkpoint_in is not None else None,
         "checkpoint_in_algorithm": (
             str(checkpoint_payload.get("algorithm", "")) if checkpoint_payload is not None else None
+        ),
+        "checkpoint_in_q_loaded": bool(
+            checkpoint_payload.get("checkpoint_in_q_loaded", False)
+            if checkpoint_payload is not None
+            else False
         ),
         "fresh_initial_policy": checkpoint_payload is None,
         "population_training": bool(opponent_policies),
@@ -929,6 +1063,7 @@ def run_learner(
                 "hidden_dim": int(hidden_dim),
                 "policy_net_state_dict": policy_net.state_dict(),
                 "value_net_state_dict": value_net.state_dict(),
+                **({"q_net_state_dict": q_net.state_dict()} if q_net is not None else {}),
                 "config": {
                     "feature_mode": "flat",
                     "hidden_dim": int(hidden_dim),
@@ -946,6 +1081,7 @@ def run_learner(
                     "reference_kl_weight": float(reference_kl_weight),
                     "reference_update_every": int(reference_update_every),
                     "inner_update": str(inner_update),
+                    "actor_update_mode": str(actor_update_mode),
                     "ppo_epochs": int(ppo_epochs),
                     "ppo_minibatches": int(ppo_minibatches),
                     "clip_coef": float(clip_coef),
@@ -954,6 +1090,7 @@ def run_learner(
                     "adaptive_policy_kl_max_backtracks": int(adaptive_policy_kl_max_backtracks),
                     "adaptive_policy_kl_backtrack_factor": float(adaptive_policy_kl_backtrack_factor),
                     "advantage_target": str(advantage_target),
+                    "uses_q_critic": bool(q_net is not None),
                     "gamma": float(gamma),
                     "gae_lambda": float(gae_lambda),
                     "decision_weight_mode": str(decision_weight_mode),
@@ -990,6 +1127,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--reference-kl-weight", type=float, default=0.05)
     parser.add_argument("--reference-update-every", type=int, default=4)
     parser.add_argument("--inner-update", choices=("pg", "ppo"), default="pg")
+    parser.add_argument(
+        "--actor-update-mode",
+        choices=("ppo", "neurd"),
+        default="ppo",
+        help="Actor update for inner_update=ppo. NEURD applies a direct legal-logit advantage update.",
+    )
     parser.add_argument("--ppo-epochs", type=int, default=4)
     parser.add_argument("--ppo-minibatches", type=int, default=4)
     parser.add_argument("--clip-coef", type=float, default=0.1)
@@ -1001,7 +1144,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--adaptive-policy-kl-max-backtracks", type=int, default=4)
     parser.add_argument("--adaptive-policy-kl-backtrack-factor", type=float, default=0.5)
-    parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
+    parser.add_argument(
+        "--advantage-target",
+        choices=("terminal", "gae", "q_expected_mc", "q_expected_lambda"),
+        default="terminal",
+    )
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument(
@@ -1044,6 +1191,7 @@ def main(argv: list[str] | None = None) -> int:
         reference_kl_weight=args.reference_kl_weight,
         reference_update_every=args.reference_update_every,
         inner_update=args.inner_update,
+        actor_update_mode=args.actor_update_mode,
         ppo_epochs=args.ppo_epochs,
         ppo_minibatches=args.ppo_minibatches,
         clip_coef=args.clip_coef,
