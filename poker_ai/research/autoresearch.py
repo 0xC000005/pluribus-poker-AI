@@ -445,17 +445,20 @@ def _default_goal(root: str | Path | None = None) -> dict:
         "objective": (
             "Continuously run the poker autoresearch outer loop until explicit "
             "user stop or real promotion evidence is achieved. Develop and "
-            "falsify a tabula-rasa game-theoretic neural self-play method for "
-            "full-deck heads-up no-limit hold'em: train stochastic policy/value "
-            "networks from fresh weights using only the simulator, observations, "
-            "legal actions, and rewards; prefer R-NaD/NashPG/MMD-style "
-            "regularized self-play when plain policy-gradient learners cycle; "
-            "and add a candidate only if it beats parent and population gates "
-            "before any Slumbot confidence run. Slumbot remains held-out "
-            "evaluation only, with tiny smoke allowed for integration and "
-            "catastrophic-transfer checks. The method must stay elegant, "
-            "novel, bitter lesson aligned, personal-PC trainable, and free of "
-            "hand-crafted poker-strategy rules or default solver-label imitation."
+            "falsify a population-robust tabula-rasa game-theoretic neural "
+            "self-play method for full-deck heads-up no-limit hold'em: train "
+            "fresh stochastic policy/value networks using only the simulator, "
+            "observations, legal actions, and rewards; make the immediate "
+            "mainline AlphaHoldem-faithful K-best/historical population "
+            "learning so each generation learns against the full local archive "
+            "or solved support instead of one parent; and add a candidate only "
+            "if it beats parent, prior-support, empirical-game, and multi-seed "
+            "population gates before any Slumbot confidence run. Slumbot "
+            "remains held-out evaluation only, with tiny smoke allowed for "
+            "integration and catastrophic-transfer checks. The method must "
+            "stay elegant, novel, bitter lesson aligned, personal-PC "
+            "trainable, and free of hand-crafted poker-strategy rules or "
+            "default solver-label imitation."
         ),
         "constraints": [
             "keep generated checkpoints and raw run artifacts out of git",
@@ -472,28 +475,33 @@ def _default_goal(root: str | Path | None = None) -> dict:
         ],
         "agent_goal_contract": {
             "north_star": (
-                "Build a heads-up no-limit hold'em agent whose stochastic neural "
-                "policy improves through tabula-rasa local self-play/population competition, "
-                "then validates externally on Slumbot only after internal parent "
-                "and empirical-game population gates pass."
+                "Build a heads-up no-limit hold'em agent whose stochastic "
+                "neural policy improves through tabula-rasa local self-play "
+                "against a historical/K-best population, then validates "
+                "externally on Slumbot only after internal parent, prior-"
+                "support, multi-seed, and empirical-game population gates pass."
             ),
             "current_frontier": {
                 "mechanism": (
-                    "R-NaD-style tabula-rasa neural self-play scaled from exact "
-                    "small poker games to the native full-deck 9-action game, "
-                    "with NashPG/MMD-style regularized policy-gradient variants "
-                    "allowed as reviewed successors"
+                    "AlphaHoldem-faithful historical/K-best population learning "
+                    "for the native full-deck 9-action game: keep a local archive "
+                    "of strong checkpoints, train fresh or continued stochastic "
+                    "policy/value networks against the archive/meta-strategy, "
+                    "and promote only when the candidate improves the whole "
+                    "population rather than exploiting one parent"
                 ),
                 "why_now": (
-                    "The current AlphaHoldem-style PPO branch failed the exact "
-                    "small-NLHE hardening gate, while R-NaD reduced exact "
-                    "NashConv reliably. The next work should scale the aligned "
-                    "regularized self-play learner rather than continue broad "
-                    "method-shopping or solver-label target fitting."
+                    "The latest uniform-support compiled Rainbow response beat "
+                    "the current incumbent and most controls, but failed the "
+                    "prior-support lower95 tie-break. That is the population-"
+                    "weak failure class. AlphaHoldem-style historical/K-best "
+                    "training attacks this directly without Slumbot data, "
+                    "solver-label imitation, or poker tactics."
                 ),
                 "decision_object": (
                     "stochastic neural policies, native empirical-game payoffs, "
-                    "meta-strategy support, parent/population H2H lower bounds, "
+                    "K-best/historical archive support, parent/prior-support/"
+                    "population H2H lower bounds, multi-seed transition gates, "
                     "and small-game exact NashConv diagnostics"
                 ),
             },
@@ -852,55 +860,68 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "imitation."
             ),
             "active_method_target": (
-                "R-NaD-style tabula-rasa neural self-play scaled to the native "
-                "full-deck 9-action game: start from fresh policy/value networks, "
-                "train through self-play trajectories using simulator observations, "
-                "legal actions, and rewards, compare against parent/population H2H "
-                "gates, and keep Slumbot as held-out evaluation after internal "
-                "progress."
+                "AlphaHoldem-faithful K-best/historical population learning "
+                "scaled to the native full-deck 9-action game: start from fresh "
+                "stochastic policy/value networks or same-environment local "
+                "continuations, train through self-play trajectories against the "
+                "full archive/meta-strategy using simulator observations, legal "
+                "actions, and rewards, compare against parent, prior-support, "
+                "population H2H, multi-seed, and empirical-game gates, and keep "
+                "Slumbot as held-out evaluation after internal progress."
             ),
             "learning_philosophy": (
                 "Prefer tabula-rasa neural self-play adapted to imperfect "
                 "information. A stochastic neural policy should remain the "
-                "deployable player. R-NaD/NashPG/MMD-style regularized self-play "
-                "is aligned because it learns from self-play trajectories while "
-                "controlling multi-agent cycling. CFR/resolving remain acceptable "
-                "as evaluators, diagnostics, or optional general search controls, "
-                "but not as the default supervised target source or a Slumbot-"
-                "specific fitting path."
+                "deployable player. The immediate loop should mimic AlphaHoldem's "
+                "historical/K-best population pressure while staying native to our "
+                "9-action simulator. R-NaD/NashPG/MMD-style regularized self-play "
+                "and DeepNash-style dynamics remain reviewed successors if the "
+                "historical population learner fails. CFR/resolving remain "
+                "acceptable as evaluators, diagnostics, or optional general search "
+                "controls, but not as the default supervised target source or a "
+                "Slumbot-specific fitting path."
             ),
             "population_improvement_policy": {
-                "active_loop": "tabula_rasa_regularized_self_play_population_league",
+                "active_loop": "alphaholdem_faithful_historical_k_best_population_learning",
                 "current_local_incumbent_source": "autoresearch-session/poker_state.json.incumbent_checkpoint",
-                "response_oracle_rule": "maintained-library response oracles are controls or reviewed successors, not the default mainline learner",
-                "meta_policy_rule": "use the native empirical game to judge population support after self-play training, not as a Slumbot selector",
+                "archive_policy": "maintain_k_best_and_historical_checkpoint_archive",
+                "selection_rule": "train_against_full_archive_or_meta_strategy_not_single_parent",
+                "response_oracle_rule": "single best-response oracles are diagnostics unless they are embedded in the historical/K-best population loop and pass prior-support gates",
+                "meta_policy_rule": "use the native empirical game to judge population support and build archive pressure after self-play training, not as a Slumbot selector",
                 "drift_guard": (
                     "Run the research-log drift guard before every queued "
                     "experiment; repeated local target-consumer/search-label "
-                    "transfer failures require review, and the mainline should "
-                    "return to tabula-rasa self-play instead of another detached "
-                    "label-fitting variant."
+                    "transfer failures require review, and population-weak "
+                    "failures require archive/meta-strategy pressure instead of "
+                    "another detached label-fitting variant or single-parent "
+                    "response run."
                 ),
                 "slumbot_rule": "tiny smoke only until repeated parent/population gates pass; never use Slumbot as training data or selector",
                 "required_ladder": [
                     "candidate versus parent/incumbent",
+                    "candidate versus prior support member that caused the last lower95 failure",
                     "candidate versus empirical-game population/meta-policy",
                     "candidate versus saved local controls such as NFSP, NPI, and Rainbow variants",
+                    "multi-seed generation transition with positive lower95 or predeclared failure synthesis",
                     "complete empirical-game matrix with no missing required pairs",
                     "tiny held-out Slumbot smoke only after local promotion, then larger Slumbot confidence only after repeat progress",
                 ],
                 "blocked_drift": [
                     "do not repeat identical single-checkpoint response-oracle training",
                     "do not ignore a parent-gate failure from the previous response-oracle generation",
-                "do not train from Slumbot hands, traces, or revealed cards",
-                "do not adapt checkpoints across card/action environments for promotion; train fresh per environment and transfer only the general learning schema",
-                "do not replace maintained RL learners with local PPO/Rainbow/NFSP/PSRO internals without methodology review",
+                    "do not repeat uniform-support response training without a new empirical-game objective",
+                    "do not train from Slumbot hands, traces, or revealed cards",
+                    "do not adapt checkpoints across card/action environments for promotion; train fresh per environment and transfer only the general learning schema",
+                    "do not replace maintained RL learners with local PPO/Rainbow/NFSP/PSRO internals without methodology review",
                     "do not promote a checkpoint that only beats one frozen target but fails the broader population",
                 ],
                 "current_negative_evidence": (
-                    "The second same-style Tianshou Rainbow response oracle lost "
-                    "to its parent; population exposure or meta-policy training "
-                    "must change before another response-oracle attempt."
+                    "The latest compiled Rainbow uniform-support response beat "
+                    "the current incumbent and most controls, but failed the "
+                    "prior-131k lower95 tie-break. The next run must solve "
+                    "this population-weak failure with archive/K-best pressure, "
+                    "multi-seed evidence, or a reviewed game-dynamics pivot; it "
+                    "must not just retune mixture weights."
                 ),
             },
             "neural_policy_iteration_policy": {
@@ -928,8 +949,8 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "training_loop": [
                     "fresh stochastic neural policy/value networks play local self-play trajectories",
                     "learner receives simulator observations, legal action masks, and terminal rewards",
-                    "R-NaD/NashPG/MMD-style regularized self-play update improves the network without Slumbot or human data",
-                    "updated stochastic network returns to self-play and is judged by parent/population gates",
+                    "historical/K-best archive or empirical-game support supplies population pressure without Slumbot or human data",
+                    "updated stochastic network returns to self-play and is judged by parent, prior-support, and population gates",
                 ],
                 "blocked_drift": [
                     "always run fixed-budget CFR as the entire player",

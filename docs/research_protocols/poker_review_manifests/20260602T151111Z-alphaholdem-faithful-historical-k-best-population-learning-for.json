@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1315,
+      "path": "benchmark_audit.md",
+      "sha256": "1a7ed88fcdeb7e437cdff0441cf20973fbdaed6c220f9537d9f8341ebe2ac053"
+    },
+    {
+      "bytes": 852,
+      "path": "decision.json",
+      "sha256": "35143ac325c5c5792ee84f8dcada1e74b751e1ce6f3af765d43411bca5e4827c"
+    },
+    {
+      "bytes": 1694,
+      "path": "mechanism_review.md",
+      "sha256": "b9998a871c6bea34065ff4a58a731e4c6485b6033797f68a6379c106717ad01c"
+    },
+    {
+      "bytes": 2405,
+      "path": "related_work.md",
+      "sha256": "ce5a04be4ba2fb956bb683e5c7e220840bb487836e4ea0d8ccc36eb6a5c914cb"
+    },
+    {
+      "bytes": 1328,
+      "path": "review.md",
+      "sha256": "88d3d83f1b2810db8481b8aca8249cfa161ddd4c93bfa343983c91589a9fe47f"
+    },
+    {
+      "bytes": 3260,
+      "path": "review_scope.json",
+      "sha256": "8eb1d06ad91f6acd2b42522de8be61dd78764398ae526e5df3e5f53b71054002"
+    },
+    {
+      "bytes": 659,
+      "path": "team_review.md",
+      "sha256": "84c5720876a38660741515ba8bb3708edb7e7e981a70b874e22a4242a59cf078"
+    }
+  ],
+  "reason": "Proceed to one bounded AlphaHoldem-faithful archive/K-best population gate. The prior uniform-support response showed the population-weak failure by beating the incumbent but failing the prior-support lower95 tie-break, so the next experiment must change opponent-population pressure and keep the stronger gate intact.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T151111Z-alphaholdem-faithful-historical-k-best-population-learning-for",
+  "review_id": "20260602T151111Z-alphaholdem-faithful-historical-k-best-population-learning-for",
+  "sources": [
+    "autoresearch-session/native_rollout_substrate/compiled_rainbow_uniform_support_response_vs_prior_131k_h2h_20000_seed20260837.json",
+    "autoresearch-session/native_rollout_substrate/compiled_rainbow_uniform_support_response_local_precheck_20260602.json",
+    "https://mlanthology.org/aaai/2022/zhao2022aaai-alphaholdem/",
+    "https://arxiv.org/abs/2206.15378",
+    "https://arxiv.org/abs/2112.03178",
+    "https://arxiv.org/abs/1603.01121"
+  ],
+  "written_at": "2026-06-02T15:18:49Z"
+}

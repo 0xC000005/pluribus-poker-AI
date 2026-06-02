@@ -300,15 +300,20 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "stochastic neural policy" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
     assert "r-nad/nashpg/mmd-style regularized self-play" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
     assert "not as the default supervised target source" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
-    assert "fresh policy/value networks" in goal["objective_alignment_policy"]["active_method_target"].lower()
+    assert "k-best/historical population learning" in goal["objective_alignment_policy"]["active_method_target"].lower()
+    assert "fresh stochastic policy/value networks" in goal["objective_alignment_policy"]["active_method_target"].lower()
     population_policy = goal["objective_alignment_policy"]["population_improvement_policy"]
-    assert population_policy["active_loop"] == "tabula_rasa_regularized_self_play_population_league"
+    assert population_policy["active_loop"] == "alphaholdem_faithful_historical_k_best_population_learning"
     assert population_policy["current_local_incumbent_source"] == "autoresearch-session/poker_state.json.incumbent_checkpoint"
+    assert population_policy["archive_policy"] == "maintain_k_best_and_historical_checkpoint_archive"
+    assert population_policy["selection_rule"] == "train_against_full_archive_or_meta_strategy_not_single_parent"
     assert "do not repeat identical single-checkpoint response-oracle training" in population_policy["blocked_drift"]
+    assert "do not repeat uniform-support response training without a new empirical-game objective" in population_policy["blocked_drift"]
     assert "research-log drift guard" in population_policy["drift_guard"].lower()
     assert "local target-consumer" in population_policy["drift_guard"].lower()
-    assert "tabula-rasa self-play" in population_policy["drift_guard"].lower()
+    assert "population-weak" in population_policy["drift_guard"].lower()
     assert "candidate versus empirical-game population/meta-policy" in population_policy["required_ladder"]
+    assert "candidate versus prior support member that caused the last lower95 failure" in population_policy["required_ladder"]
     neural_policy = goal["objective_alignment_policy"]["neural_policy_iteration_policy"]
     assert neural_policy["current_status"] == "active_as_tabula_rasa_regularized_self_play"
     assert neural_policy["neural_policy_role"] == "main_stochastic_actor"
@@ -377,7 +382,7 @@ def test_default_goal_contract_names_current_frontier_and_mechanism_brief(tmp_pa
 
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     contract = goal["agent_goal_contract"]
-    assert "r-nad-style tabula-rasa neural self-play" in contract["current_frontier"]["mechanism"].lower()
+    assert "alphaholdem-faithful historical/k-best population learning" in contract["current_frontier"]["mechanism"].lower()
     assert "small-game exact nashconv diagnostics" in contract["current_frontier"]["decision_object"].lower()
     assert "self-play checkpoint" in " ".join(contract["success_criteria"]).lower()
     assert "empirical game" in " ".join(contract["success_criteria"]).lower()

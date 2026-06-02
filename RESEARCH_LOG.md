@@ -19730,3 +19730,55 @@
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py <15 h2h records> --policy <six fixed policies> --solve-meta-strategy --output-json autoresearch-session/native_rollout_substrate/compiled_rainbow_uniform_support_response_expanded_empirical_game_seed20260830.json` -> complete matrix, pure candidate support.
   - `python scripts/eval_native_candidate_local_precheck.py --candidate-checkpoint autoresearch-session/native_rollout_substrate/compiled_rainbow_uniform_support_response_h256_16x4096_upc16_seed20260830.pt --native-h2h-json <five population h2h artifacts> --empirical-game-json autoresearch-session/native_rollout_substrate/compiled_rainbow_uniform_support_response_expanded_empirical_game_seed20260830.json --min-lower95 0.0 --output-json autoresearch-session/native_rollout_substrate/compiled_rainbow_uniform_support_response_local_precheck_20260602.json` -> failed for `native_h2h_lower95_below_threshold`.
 - Decision: Do not set this checkpoint as incumbent or run Slumbot/RLCard. The population-objective direction is not falsified wholesale because it beat the current incumbent and entered empirical support by mean, but the exact uniform-support response is too close to the prior 131k Rainbow response to satisfy the required population lower-bound gate. The next test should not be another mixture-weight retune; it should either increase the response budget under the same fixed support as a compute/coverage check or move to a stronger reviewed population objective that optimizes the empirical-game support criterion directly.
+
+## 20260602T151313Z-methodology-review-historical-kbest-population-mainline - passed
+
+- Timestamp: 2026-06-02T15:13:13Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T151111Z-alphaholdem-faithful-historical-k-best-population-learning-for
+- Hypothesis: The next mainline should solve the population-weak failure by training stochastic neural policies against a historical/K-best archive or empirical-game support, not another single-parent or uniform-support response run.
+- Failure class: none
+- Summary: Updated the durable goal/workflow direction to make AlphaHoldem-faithful historical/K-best population learning the immediate mainline. The review grounds this in AlphaHoldem's historical-version self-play, keeps DeepNash/R-NaD, Student of Games, and NFSP as successors or controls, and blocks another uniform-support response retry unless the objective genuinely changes. The prior failing 131k support member is now an explicit gate target.
+- Manifest: docs/research_protocols/poker_review_manifests/20260602T151111Z-alphaholdem-faithful-historical-k-best-population-learning-for.json
+- Key metrics: `{"decision": "proceed", "active_loop": "alphaholdem_faithful_historical_k_best_population_learning", "primary_gate": "positive_lower95_vs_parent_and_prior_support_then_empirical_game_support", "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T151111Z-alphaholdem-faithful-historical-k-best-population-learning-for --require-complete` -> passed with decision `proceed`.
+  - `python scripts/poker_autoresearch.py write-review-manifest --review-dir autoresearch-session/poker_reviews/20260602T151111Z-alphaholdem-faithful-historical-k-best-population-learning-for` -> wrote the tracked manifest.
+- Decision: Run one bounded archive/K-best population gate against the current incumbent, the prior-131k support member, saved local controls, and the empirical game. If it fails the same prior-support or population lower95 gate, document the failure and pivot to R-NaD/NashPG/MMD/DeepNash-style dynamics or another reviewed tabula-rasa game-theoretic learner rather than retuning mixture weights.
+
+## 20260602T151714Z-kbest2-archive-response-prior-support-gate - failed
+
+- Timestamp: 2026-06-02T15:17:14Z
+- Type: experiment
+- Gate: compiled-rainbow-kbest2-archive-response-20260602
+- Hypothesis: Training the compiled Rainbow response against a fixed K=2 historical archive of the current incumbent plus the prior 131k support member should solve the previous population-weak lower95 failure better than the uniform five-policy response.
+- Failure class: population_weak_prior_support
+- Summary: The K=2 archive response trained cleanly on CUDA from local simulator data only and beat the current fast-state shared-MARL incumbent with positive lower95, but it still failed the decisive prior-131k support H2H gate. Action sanity passed, so the failure is not simple action collapse. This is not promotable and does not authorize Slumbot/RLCard evaluation.
+- Artifacts:
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest2_archive_response_h256_16x4096_upc16_seed20260840.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest2_archive_response_vs_incumbent_h2h_5000_seed20260841.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest2_archive_response_vs_prior_131k_h2h_5000_seed20260842.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest2_archive_response_action_distribution_seed20260843.json
+- Key metrics: `{"passed": false, "collector_transitions": 167310, "collector_transitions_per_second": 59444.136, "updates_per_second": 30.901, "incumbent_h2h_mean": 0.024000, "incumbent_h2h_lower95": 0.015679, "prior_131k_h2h_mean": 0.005870, "prior_131k_h2h_lower95": -0.001563, "action_gate_passed": true, "distinct_actions": 5, "top_action_fraction": 0.681383, "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --collect-iterations 16 --games-per-iteration 4096 --opponent-policy <current> --opponent-policy <prior_131k> --opponent-meta-strategy 0.5,0.5 ...` -> passed training.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <kbest2_candidate> --baseline <current_incumbent> --n-games 5000 --initial-chips 20000 --eval-state-backend fast-state-canonical-deal --min-lower95-candidate-payoff 0.0 ...` -> passed.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <kbest2_candidate> --baseline <prior_131k> --n-games 5000 --initial-chips 20000 --eval-state-backend fast-state-canonical-deal --min-lower95-candidate-payoff 0.0 ...` -> failed lower95.
+  - `uv run --with tianshou python scripts/eval_native_policy_action_distribution.py --checkpoint <kbest2_candidate> --kind tianshou-rainbow ...` -> passed action sanity.
+- Decision: Do not set this checkpoint as incumbent and do not run Slumbot/RLCard. The next mechanism must optimize population robustness more directly than fixed-mixture replay opponent selection, or pivot through reviewed R-NaD/NashPG/MMD/DeepNash-style dynamics.
+
+## 20260602T151714Z-synthesis-population-weak-response-failures - passed
+
+- Timestamp: 2026-06-02T15:17:14Z
+- Type: failure_synthesis
+- Gate: failure-synthesis-20260602T151623Z-population-weak-archive-and-uniform-support-response-failures
+- Hypothesis: Uniform-support and K-best archive compiled Rainbow responses improve against the current incumbent but fail the prior-support lower95 gate, so the next mechanism must optimize population robustness rather than repeat support-weight or budget changes.
+- Failure class: population_weak_prior_support
+- Summary: The synthesis causal model is that fixed-mixture replay Q-learning can improve against a visible incumbent while failing the full empirical-game support criterion. It retires single-parent, uniform-support, fixed K=2 archive, and budget/seed/mixture-only response retries. The live branch is empirical-game-aware population regret/support optimization, with R-NaD/NashPG/MMD/DeepNash-style dynamics as the reviewed pivot if that cannot be implemented cleanly.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T151623Z-population-weak-archive-and-uniform-support-response-failures-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T151623Z-population-weak-archive-and-uniform-support-response-failures-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "retired_fixed_mixture_response_retries": true, "next_required_family": "empirical_game_aware_population_objective_or_regularized_game_dynamics", "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `python - <<'PY' ... validate_failure_synthesis(...) ... PY` -> passed with decision `revise`.
+- Decision: Continue autoresearch with an empirical-game-aware population objective or a reviewed regularized game-dynamics pivot. Do not repeat fixed-mixture replay response runs without a new objective.

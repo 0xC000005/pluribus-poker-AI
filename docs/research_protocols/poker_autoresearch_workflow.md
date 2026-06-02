@@ -101,41 +101,34 @@ Use `python scripts/poker_autoresearch.py enqueue-promotion-gate ...` for the
 normal autoresearch path so the evidence check is queued, logged, and available
 to Slumbot confidence gating.
 
-The current frontier is **scaling the validated R-NaD-style tabula-rasa
-self-play learner to the native full-deck 9-action game**. Exact CUDA CFR and
-small-game NashConv remain evaluators/frontiers when applied to local states,
-but the next learned object must improve the self-play learner itself:
-successive checkpoint strength, empirical-game support, counterfactual action
-values, or full-game league strength under matched controls. Detached
-Slumbot-trace policy fitting, response-range replacement, post-hoc calibration,
-and solver-label imitation are diagnostic evidence, not mainline methods.
+The current frontier is **solving the population-weak failure with
+AlphaHoldem-faithful historical/K-best population learning** in the native
+full-deck 9-action game. Exact CUDA CFR, small-game NashConv, R-NaD/NashPG/MMD,
+and DeepNash-style regularized dynamics remain evaluators or reviewed pivots,
+but the immediate learned object must improve the stochastic self-play policy
+under archive pressure. The candidate must beat its parent, the prior support
+member that caused the last lower95 failure, saved local controls, multi-seed
+transition gates, and the complete empirical game before any Slumbot confidence
+run.
 
-The first native scaling bridge is the compiled R-NaD trajectory-contract
-smoke: fresh R-NaD policy/value networks now consume compiled 9-action
-full-deck self-play trajectories and take finite updates without Slumbot data
-or solver labels. The second bridge exports the R-NaD target policy as a
-native-policy-compatible checkpoint, so parent/child generations can enter the
-existing duplicate-swapped H2H and league gates. Treat both bridges as plumbing
-evidence only. The next promotion question is whether a scaled native R-NaD
-run improves against parents/population controls in H2H and empirical-game
-gates. The first scaled probe (`500x512`, seed `20260605`) cleared the parent
-H2H lower95 gate but failed the required population gate: it lost to saved
-native NFSP and Rainbow controls, and the child/parent/NFSP empirical game
-solved to pure NFSP support. This makes the candidate non-promotable. The next
-R-NaD step must change the population/self-play regime or train
-multi-generation candidates that beat saved native controls before Slumbot or
-RLCard evaluation.
+The current local incumbent is
+`autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt`.
+The latest compiled Rainbow uniform-support response trained cleanly on CUDA
+from local simulator data and beat that incumbent plus most controls, but it
+failed the 20k tie-break against the prior 131k Rainbow support member
+(`mean=+0.000206`, lower95 `-0.003930`). This is the live population-weak
+blocker: a candidate can look good against the current lead while remaining too
+close to, or exploitable by, an older support member. Do not repeat
+uniform-support response training by changing only seed, budget, or mixture
+weights. The next native experiment must add real archive/K-best pressure,
+optimize the empirical-game support criterion more directly, or pivot through a
+completed methodology review to R-NaD/NashPG/MMD/DeepNash-style dynamics.
 
-A direct checkpoint-continuation version was then tested: gen2 initialized from
-gen1, trained another `500x512` native compiled R-NaD update budget, and beat
-gen1 in duplicate-swapped H2H. This validates generation-to-generation
-continuation, but it still failed saved native NFSP and Rainbow controls, and
-the gen2/gen1/NFSP empirical game again solved to pure NFSP support. Do not
-repeat same-budget R-NaD continuation unchanged. The next R-NaD-family step
-must train against empirical-game/meta-policy support, add a principled
-historical/average population objective, or pivot to another tabula-rasa
-game-theoretic learner that can beat saved native controls before any
-Slumbot/RLCard gate.
+Historical R-NaD and R-NaD continuation work remain important falsification
+evidence. The first scaled native R-NaD generation beat its parent but lost to
+saved NFSP/Rainbow controls; the direct continuation beat gen1 but again failed
+population support. These results justify keeping regularized self-play as a
+reviewed successor, but they no longer define the active mainline.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
@@ -295,19 +288,20 @@ vacuously.
 The durable `poker_goal.json` records this same rule under
 `neural_policy_iteration_policy`, and the NPI loop plus mixed H2H evaluator are
 protected objective-audit surfaces.
-Before training another population response oracle, build the native empirical
-game with `uv run --with nashpy python scripts/analyze_poker_empirical_game.py
-<h2h.json>... --solve-meta-strategy --output-json
-autoresearch-session/empirical_game/<name>.json`. If coverage is incomplete,
-queue the missing duplicate-swapped native H2H pairs or move to a maintained
-PSRO backend; do not train from an arbitrary uniform/sampled population and
-call it PSRO evidence. The active objective is now PSRO/XDO-style local
-population improvement: freeze the local incumbent recorded in
-`autoresearch-session/poker_state.json`, solve the native empirical game,
-train maintained-library response oracles against the empirical-game
-meta-policy or a reviewed population approximation, and add a candidate only
-after parent and population lower-bound gates pass. Slumbot remains held out
-except tiny smoke checks for integration or catastrophic transfer.
+Before training another population learner, build or refresh the native
+empirical game with `uv run --with nashpy python
+scripts/analyze_poker_empirical_game.py <h2h.json>... --solve-meta-strategy
+--output-json autoresearch-session/empirical_game/<name>.json`. If coverage is
+incomplete, queue the missing duplicate-swapped native H2H pairs or move to a
+maintained PSRO backend; do not train from an arbitrary uniform/sampled
+population and call it support evidence. The active objective is now
+AlphaHoldem-faithful historical/K-best local population learning: resolve the
+local incumbent from `autoresearch-session/poker_state.json`, maintain the
+K-best/historical archive, train stochastic policy/value networks against the
+archive or empirical-game meta-strategy, and add a candidate only after parent,
+prior-support, multi-seed, and population lower-bound gates pass. Slumbot
+remains held out except tiny smoke checks for integration or catastrophic
+transfer.
 Use `python scripts/poker_autoresearch.py drift-status` before resuming a stale
 queue; `continuous` runs the same check before starting the next experiment.
 OpenSpiel is installable and exposes `universal_poker` plus PSRO v2 modules, so
