@@ -155,7 +155,8 @@ def _load_compiled_rollout_opponents(
         for parameter in policy.parameters():
             parameter.requires_grad_(False)
         opponents.append(policy)
-        kinds.append("native-ppo")
+        algorithm = str(_payload.get("algorithm", ""))
+        kinds.append("native-nfsp" if algorithm.startswith("native_nfsp") else "native-ppo")
     return opponents, kinds
 
 

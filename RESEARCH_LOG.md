@@ -18943,3 +18943,25 @@
 - Synthesis: The current evidence says scaling the PPO-inner mechanism from 8x to 64x worked and one continuation to gen2 worked, but the same update did not compound across three independent gen3 seeds. Since all gen3 policies remained legal and broad, the failure is not action collapse. The root issue is population/repeatability: the update needs a stronger opponent distribution or empirical-game pressure, not a hand-coded poker feature, Slumbot trace, or smaller H2H sample.
 - Predeclared next experiment: train one `64x2048` native PPO-inner population-response candidate from gen2 with `--reference-policy-checkpoint gen2` and frozen local opponents `[gen2, gen1, Rainbow, NFSP]`. This keeps the update local and tabula-rasa: the learner sees only simulator observations, legal masks, and rewards. Gate it by 10k parent H2H versus gen2, 3k controls versus Rainbow/NFSP, action-distribution sanity, and complete empirical-game support. If it fails, do not repeat unchanged; pivot to a stronger empirical-game objective or larger multi-seed schedule.
 - Decision: run the local population-response gate next. Slumbot/RLCard remain blocked.
+
+## 20260602T103000Z-native-ppo-inner-population-response-from-gen2 - failed
+
+- Timestamp: 2026-06-02T10:30:00Z
+- Type: experiment
+- Gate: native_ppo_inner_population_response_from_gen2
+- Hypothesis: Freezing a local population `[gen2, gen1, Rainbow, NFSP]` as the non-learner opponent distribution, initializing from gen2, and KL-regularizing to gen2 should provide PSRO/MAIO-like population pressure that improves over gen2 more reliably than plain self-play continuation.
+- Failure class: native_population_strength
+- Summary: Ran the predeclared `64x2048` native PPO-inner population-response candidate from gen2. Training stayed local and CUDA-backed (`255079` learner samples, `13898.164` samples/sec, zero illegal action probability, zero Python showdown fallback). Throughput was lower than pure self-play because frozen population inference increases collection cost. The first promotion gate failed clearly: over 10k duplicate-swapped H2H versus gen2, the candidate lost with `mean=-0.003799`, lower95 `-0.007323`, upper95 `-0.000274`. Action-distribution sanity passed with all 9 actions selected, top-action fraction `0.288298`, and mean entropy `1.499347`; this is not action collapse. Control H2H and empirical-game support were skipped because the parent gate failed.
+- Metadata fix: during this run, the rollout-opponent loader correctly loaded the NFSP average policy but mislabeled non-Rainbow opponents as `native-ppo` in metrics. Added a regression test and fixed the label so NFSP payloads now report `native-nfsp`. The old training artifact still contains the pre-fix label, but a real population loader check after the fix reports `['native-ppo', 'native-ppo', 'tianshou-rainbow', 'native-nfsp']`.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_response_from_gen2_64x2048_seed20260706.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_response_vs_gen2_h2h_10k_seed20260707.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_response_action_distribution_seed20260706.json
+- Key metrics: `{"train_samples": 255079, "samples_per_second": 13898.164, "population_training": true, "opponent_population_size": 4, "h2h_vs_gen2_10k_mean": -0.003799, "h2h_vs_gen2_10k_lower95": -0.007323, "h2h_vs_gen2_10k_upper95": -0.000274, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.288298, "uses_slumbot_training_data": false}`
+- Verification:
+  - Population-response training command -> passed and wrote CUDA metrics/checkpoint.
+  - 10k parent H2H command -> completed and failed promotion.
+  - Action-distribution diagnostic -> passed.
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py` -> `8 passed`.
+  - Real population loader check with `uv run --with tianshou` -> `['native-ppo', 'native-ppo', 'tianshou-rainbow', 'native-nfsp']`.
+- Decision: keep gen2 as local incumbent. Do not repeat this frozen-population response recipe unchanged. The next principled branch should either use a stronger empirical-game objective that directly optimizes support/payoff against a population, or return to a more theoretically grounded R-NaD/MMD/NashPG update with a larger predeclared multi-seed gate. Slumbot/RLCard remain blocked.

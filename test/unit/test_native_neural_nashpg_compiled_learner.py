@@ -248,3 +248,35 @@ def test_compiled_rollout_opponent_loads_online_rainbow_response_payload(tmp_pat
     assert kinds == ["tianshou-rainbow"]
     q_values = opponents[0](torch.zeros((1, N_FEATURES), dtype=torch.float32))
     assert q_values.shape == (1, N_ACTIONS)
+
+
+def test_compiled_rollout_opponent_reports_native_nfsp_payload_kind(tmp_path):
+    from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
+    from poker_ai.research.native_ppo_policy import _PolicyMLP
+    from scripts.run_local_vtrace_compiled_native_learner import (
+        _load_compiled_rollout_opponents,
+    )
+
+    checkpoint = tmp_path / "native_nfsp.pt"
+    avg_net = _PolicyMLP(8, input_dim=N_FEATURES)
+    torch.save(
+        {
+            "algorithm": "native_nfsp_dqn",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": 8,
+            "config": {"feature_mode": "flat", "fsp_average_policy": True},
+            "avg_net_state_dict": avg_net.state_dict(),
+        },
+        checkpoint,
+    )
+
+    opponents, kinds = _load_compiled_rollout_opponents(
+        [checkpoint],
+        torch.device("cpu"),
+    )
+
+    assert kinds == ["native-nfsp"]
+    logits = opponents[0](torch.zeros((1, N_FEATURES), dtype=torch.float32))
+    assert logits.shape == (1, N_ACTIONS)

@@ -484,6 +484,11 @@ local opponent population `[gen2, gen1, Rainbow, NFSP]`, regularize to gen2,
 train from local simulator rewards only, and judge by parent H2H, control H2H,
 action sanity, and empirical-game support. This is PSRO/MAIO-like local
 population pressure, not Slumbot adaptation.
+That exact population-response gate failed: it trained cleanly and kept broad
+action use, but lost to gen2 over 10k duplicate-swapped H2H with upper95 still
+negative. Do not repeat the frozen-population response recipe unchanged. Future
+population work needs a stronger empirical-game objective, not just fixed
+opponent sampling.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
