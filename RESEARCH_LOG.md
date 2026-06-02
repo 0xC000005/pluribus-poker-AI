@@ -18212,3 +18212,31 @@
   - autoresearch-session/empirical_game/native_20k_support_matrix_seed20260828_32.json
 - Key metrics: `{"q_lambda_train_resolved_device": "cuda", "q_lambda_train_steps_per_second": 311.81, "q_lambda_vs_20k_support_lower95": -0.038066, "q_lambda_vs_old_support_lower95": -0.041119, "q_lambda_vs_iter2_lower95": -0.057272, "q_lambda_vs_gen3_lower95": -0.032944, "new_20k_vs_old_support_lower95": 0.000121, "empirical_covered_pairs": 10, "empirical_support_policy": "online_response_20k_iter4_support_h256_32x2048_u4096_seed20260822.pt", "empirical_meta_strategy": [0.0, 0.0, 1.0, 0.0, 0.0]}`
 - Decision: The active local support is now the 20k online compiled response, but it remains a deterministic value-policy response, not the final stochastic tabula-rasa policy. The next reviewed mechanism should train a stochastic/regularized population learner against this 20k empirical-game support or a larger 20k self-play population; do not repeat singleton 2k PPO/q-lambda responses unchanged.
+## 20260602T050949Z-failure-synthesis-for-20k-r-nad-population-response - passed
+
+- Timestamp: 2026-06-02T05:09:49Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T050906Z-20k-r-nad-population-response-failed-current-20k
+- Hypothesis: Failure synthesis for 20k R-NaD population response failed current 20k support bar should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T050906Z-20k-r-nad-population-response-failed-current-20k passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T050949Z-failure-synthesis-for-20k-r-nad-population-response/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T050906Z-20k-r-nad-population-response-failed-current-20k", "passed": true}`
+
+## 20260602T052000Z-native-20k-stochastic-policy-distribution-diagnostic - failed
+
+- Timestamp: 2026-06-02T05:20:00Z
+- Type: policy_distribution_diagnostic
+- Gate: native_20k_stochastic_policy_distribution
+- Hypothesis: If the 20k stochastic learner failures are caused by action collapse, the failed R-NaD or q-lambda checkpoints should show a dominant top action or illegal/narrow support under local 20k sampled states.
+- Failure class: strategy_quality
+- Summary: Added a generic `scripts/eval_native_policy_action_distribution.py` diagnostic that uses the existing mixed-policy adapter and local full-deck simulator, then ran it on the failed 20k R-NaD checkpoint, failed 20k q-lambda checkpoint, and current 20k online response support. The weak stochastic checkpoints passed the action-collapse gate: R-NaD used all 9 actions with top action fraction 0.2043 and mean entropy 1.7730; q-lambda used all 9 actions with top action fraction 0.2801. The current 20k Rainbow support is deterministic per state but diverse across local states: top action fraction 0.2002 and all-in fraction 0.1131. Therefore the stochastic failures are not simple collapse; they are strategy-quality/calibration failures against the current support.
+- Metrics files:
+  - autoresearch-session/native_rnad/rnad_20k_vs_support_action_distribution_20k_seed20260835.json
+  - autoresearch-session/native_ppo/raw_sequence_20k_support_qexpected_lambda_action_distribution_20k_seed20260836.json
+  - autoresearch-session/native_neural_nashpg/online_response_20k_support_action_distribution_20k_seed20260837.json
+- Key metrics: `{"rnad_top_action_fraction": 0.204255, "rnad_all_in_fraction": 0.131383, "rnad_mean_entropy": 1.773020, "qlambda_top_action_fraction": 0.280085, "qlambda_all_in_fraction": 0.127263, "support_top_action_fraction": 0.200212, "support_all_in_fraction": 0.113117, "all_gates_passed": true}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_policy_action_distribution.py test/unit/test_policy_action_collapse_gate.py` -> `4 passed`.
+  - `python -m py_compile scripts/eval_native_policy_action_distribution.py` -> passed.
+- Decision: Do not fix this branch with anti-collapse patches or entropy tweaks. The next mechanism needs better strategic learning from the 20k population, not more action-distribution regularization.
