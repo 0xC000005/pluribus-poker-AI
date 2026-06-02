@@ -18829,3 +18829,24 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_seed20260682.pt --candidate-kind native-ppo --baseline autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt --baseline-kind tianshou-rainbow --n-games 2000 --initial-chips 20000 --max-steps-per-hand 256 --device auto --seed 20260683 --eval-state-backend fast-state-canonical-deal --output-json autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_vs_incumbent_h2h_2k_seed20260683.json` -> passed, candidate lost.
   - Action distribution command above -> passed and wrote diagnostic.
 - Decision: keep PPO-inner NashPG as the current small-game lead and native-capable mechanism, but this moderate native run is not promotable. Do not run Slumbot. The next native attempt needs stronger population pressure, a longer reviewed generation with parent/control gates, or empirical-game-aware opponent sampling; do not reinterpret this as a compute-only or action-collapse failure.
+
+## 20260602T094000Z-native-ppo-inner-nashpg-population-pressure - failed
+
+- Timestamp: 2026-06-02T09:40:00Z
+- Type: experiment
+- Gate: native_ppo_inner_nashpg_population_pressure_h2h
+- Hypothesis: The fresh native PPO-inner NashPG run failed because it lacked local opponent-population pressure. Training the same PPO-inner learner against the current local Rainbow incumbent as a frozen opponent should improve H2H transfer versus the incumbent without changing the self-play/reward-only contract.
+- Failure class: native_population_strength
+- Summary: Ran the same 8x2048 20k-chip PPO-inner NashPG configuration, changing only the collection regime by adding the current local Rainbow incumbent as a frozen opponent checkpoint. Training remained CUDA-backed and legal (`31533` learner samples, `5760.786` samples/sec, zero illegal probability, zero Python showdown fallback). The candidate still failed the incumbent H2H gate: mean payoff `-0.033635`, lower95 `-0.052321`. It passed action-distribution sanity with all 9 actions selected and top-action fraction `0.238298`, so the failure is not collapse. A direct H2H against the prior fresh 8x2048 PPO-inner candidate was neutral/slightly negative (`mean=-0.003662`, lower95 `-0.010685`), so same-budget frozen-incumbent pressure did not materially improve the mechanism.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_incumbent_8x2048_seed20260684.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_incumbent_8x2048_vs_incumbent_h2h_2k_seed20260685.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_incumbent_8x2048_action_distribution_seed20260684.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_pop_vs_fresh_8x2048_h2h_2k_seed20260686.json
+- Key metrics: `{"train_samples": 31533, "samples_per_second": 5760.786, "h2h_vs_incumbent_mean": -0.033635, "h2h_vs_incumbent_lower95": -0.052321, "h2h_vs_fresh_mean": -0.003662, "h2h_vs_fresh_lower95": -0.010685, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.238298, "mean_entropy": 1.700227, "promotion": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - Population-pressure train command above -> passed and wrote checkpoint/metrics.
+  - Incumbent H2H command above -> passed, candidate lost.
+  - Action distribution command above -> passed.
+  - Population-vs-fresh H2H command above -> passed, candidate was neutral/slightly negative.
+- Decision: frozen-incumbent opponent pressure alone is not enough at this budget. Do not run Slumbot. Continue within the same tabula-rasa PPO-inner NashPG direction by scaling the mechanism or adding a more principled empirical-game/population objective; require positive parent/control H2H lower bounds and empirical-game support before promotion.

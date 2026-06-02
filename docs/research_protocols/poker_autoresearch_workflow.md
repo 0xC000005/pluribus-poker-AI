@@ -445,10 +445,13 @@ contract (`3754` samples, finite loss, zero illegal probability, zero compiled
 showdown fallback). A moderate 8x2048 generation then trained quickly on CUDA
 but failed the first control H2H against the current Rainbow incumbent
 (`mean=-0.035716`, lower95 `-0.054535` over 2k games). The action distribution
-gate passed, so the failure is not a simple action-collapse bug. This is not
-population strength. Slumbot remains blocked; the next native step must add
-population/self-play pressure or a larger reviewed PPO-inner generation and then
-re-test parent/control H2H plus empirical-game support.
+gate passed, so the failure is not a simple action-collapse bug. A same-budget
+frozen-incumbent opponent-pressure run was also not enough: it stayed broad, but
+lost to Rainbow (`mean=-0.033635`, lower95 `-0.052321`) and was neutral versus
+the fresh PPO-inner run (`mean=-0.003662`, lower95 `-0.010685`). This is not
+population strength. Slumbot remains blocked; the next native step should scale
+the same PPO-inner mechanism or add a more principled empirical-game/population
+objective and then re-test parent/control H2H plus empirical-game support.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
