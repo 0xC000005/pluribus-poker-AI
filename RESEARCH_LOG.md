@@ -18674,3 +18674,32 @@
   - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_mmd_update_fidelity_bridge.py test/unit/test_small_nlhe_neural_nashpg_gate.py` -> `8 passed`.
   - `python -m py_compile scripts/analyze_small_nlhe_mmd_policy_fit.py scripts/analyze_small_nlhe_mmd_update_fidelity.py` -> passed.
 - Decision: pivot from one-step exact-MMD imitation toward a larger-horizon or lower-variance update object: either multi-step exact target deltas on the small game, exact counterfactual/reach table targets for a full local update batch, or a maintained policy-gradient IIG reproduction before another native 20k stochastic actor run. Keep the current 20k online Rainbow/PSRO lead as local deterministic support only.
+
+## 20260602T074122Z-small-nlhe-multistep-exact-infostate-bridge - failed
+
+- Timestamp: 2026-06-02T07:41:22Z
+- Type: experiment
+- Gate: small_nlhe_multistep_exact_infostate_mmd_bridge
+- Hypothesis: If one exact MMD step is too small relative to neural fit and optimizer noise, then larger exact target deltas (`target_mmd_delta=5,10,25`) should give the exact information-state CE bridge a clearer policy-improvement direction from the same fitted near-policy start.
+- Failure class: estimator_fidelity
+- Summary: Reused the exact information-state CE bridge without new code, using the stable 10k fit (`fit_lr=0.001`), `lr=0.00005`, parent-sequence weights, and the same deterministic seed. Delta 5 barely reduced target KL but still had strongly negative update-direction cosine. Delta 10 and delta 25 both worsened target KL, even though each update continued to reduce KL back toward the current fitted policy. This falsifies the narrow "one-step signal is merely too tiny" explanation. The stronger causal model is that supervised CE to exact MMD snapshots is not the right update object near a strong policy: it mostly corrects neural fit residuals and can move opposite the exact game-theoretic vector. Do not scale another MMD-snapshot imitation bridge unchanged.
+- Metrics files:
+  - autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_exact_infostate_start200_delta5_lr5e5_fit10k_lr001_seed20260692.json
+  - autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_exact_infostate_start200_delta10_lr5e5_fit10k_lr001_seed20260692.json
+  - autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_exact_infostate_start200_delta25_lr5e5_fit10k_lr001_seed20260692.json
+- Key metrics: `{"delta5_target_kl_reduction": 0.0000017907, "delta5_update_delta_cosine": -0.5833550, "delta10_target_kl_reduction": -0.0000117556, "delta10_update_delta_cosine": -0.4194791, "delta25_target_kl_reduction": -0.0000331590, "delta25_update_delta_cosine": -0.3027662, "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: This result is consistent with recent imperfect-information policy-gradient work arguing that sound large-scale learning needs policy-gradient or counterfactual-value-compatible game objectives rather than naive Q/trajectory or snapshot imitation targets (https://arxiv.org/abs/2408.00751), and with NashPG-style reference-policy refinement as a direct game objective rather than a one-step supervised target (https://papers.cool/arxiv/2510.18183).
+- Decision: pivot to a game-objective learner/control that updates the neural policy through self-play payoff gradients or counterfactual-compatible objectives directly. The next small step should be a reviewed small-game reproduction/control of policy-gradient IIG/NashPG-style behavior, then only scale to native 9-action HUNL if it beats the exact small-game gates and parent/population H2H gates.
+
+## 20260602T075202Z-small-nlhe-gae-entropy-pg-control - failed
+
+- Timestamp: 2026-06-02T07:52:02Z
+- Type: experiment
+- Gate: small_nlhe_neural_pg_gae_entropy_control
+- Hypothesis: A more standard policy-gradient-style small-game control, using GAE (`gamma=0.99`, `gae_lambda=0.95`) and the high-entropy coefficient suggested by recent IIG policy-gradient benchmarks (`entropy_weight=0.05`), should beat the prior R-NaD small-NLHE baseline under exact NashConv before any native HUNL scale-up.
+- Failure class: small_game_pg_control
+- Summary: Audited the public `IIG-RL-Benchmark` and `exp-a-spiel` reference checkouts under ignored `reference_code/` (`IIG-RL-Benchmark@591d35d`, `exp-a-spiel@9412882`). The benchmark uses OpenSpiel vector environments, GAE PPO, high entropy (`ent_coef=0.05`), and exact exploitability where available; `exp-a-spiel` emphasizes sequence-form averaging/evaluation. Reused the existing repo small-NLHE neural PG gate with GAE/high entropy and compared against the prior 3-seed R-NaD exact-NashConv baseline. The control improved from uniform but failed the promotion gate: mean best NashConv `0.754637` was worse than R-NaD mean last `0.664478`, and mean last NashConv drifted to `1.652462`. Seed 2 briefly reached `0.176851`, but seeds 1 and 3 did not, so this is not stable enough to authorize native scaling.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_pg_gae_entropy005_1200_seed1_3_vs_rnad_baseline.json
+- Key metrics: `{"mean_start_nashconv": 1.719228, "mean_best_nashconv": 0.754637, "mean_last_nashconv": 1.652462, "baseline_rnad_mean_last_nashconv": 0.664478, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: The control was motivated by `Reevaluating Policy Gradient Methods for Imperfect-Information Games` (https://arxiv.org/abs/2502.08938) and its public benchmark code (https://github.com/nathanlct/IIG-RL-Benchmark), plus the sequence-form/exploitability evaluator surface (https://github.com/gabrfarina/exp-a-spiel).
+- Decision: do not scale the current GAE/high-entropy PG translation into native HUNL unchanged. The remaining principled path is not a larger PPO run; it is a learner whose objective is closer to the exact game-theoretic object: sequence-form/counterfactual-compatible policy-gradient targets, maintained R-NaD/MMD primitives, or a population/PSRO objective that learns an explicit stochastic policy rather than a post-hoc Q softmax.
