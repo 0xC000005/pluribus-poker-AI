@@ -19378,3 +19378,47 @@
   - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 1 --games-per-iteration 64 --collector-batch-size 32 --max-steps-per-game 32 --hidden-dim 32 --decision-weight-mode inverse-own-reach --max-decision-weight 16 --device cpu --seed 20260696 --checkpoint-out autoresearch-session/native_neural_nashpg/native_inverse_reach_smoke_seed20260696.pt --output-json autoresearch-session/native_neural_nashpg/native_inverse_reach_smoke_seed20260696.json` -> passed.
   - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 1 --games-per-iteration 128 --collector-batch-size 64 --max-steps-per-game 32 --hidden-dim 64 --decision-weight-mode inverse-own-reach --max-decision-weight 16 --device cuda --seed 20260697 --checkpoint-out autoresearch-session/native_neural_nashpg/native_inverse_reach_cuda_smoke_seed20260697.pt --output-json autoresearch-session/native_neural_nashpg/native_inverse_reach_cuda_smoke_seed20260697.json` -> passed.
 - Decision: Proceed to a matched native strength gate only after predeclaring the comparison: inverse-own-reach plus reference regularization versus the current uniform-row native learner under the same GPU budget, then native parent/control H2H and empirical-game insertion. Slumbot/RLCard evaluation remains blocked.
+
+## 20260602T155000Z-native-inverse-reach-matched-gpu-gate-plan - planned
+
+- Timestamp: 2026-06-02T15:50:00Z
+- Type: predeclared_experiment
+- Gate: native_inverse_reach_matched_gpu_gate
+- Hypothesis: Under the same native compiled CUDA budget, inverse-own-reach row weighting should produce a stronger stochastic policy than uniform row weighting because later decisions no longer lose credit simply because the same player sampled a low-probability earlier action. This tests the native sampled approximation of the exact small-game counterfactual signal.
+- Controls: train two fresh native 9-action policy/value checkpoints from the local simulator only, with identical architecture, seed, rollout budget, reference KL, GAE, PPO inner update, and CUDA device. The only intended difference is `decision_weight_mode`. Slumbot/RLCard/solver labels remain blocked.
+- Decision rule: pass the smoke-strength gate only if the inverse-own-reach checkpoint beats the uniform-row checkpoint in duplicate-swapped H2H with non-negative lower95 at the predeclared game count. If it fails, synthesize whether the remaining gap is sampled all-action counterfactual estimation, trajectory-return objective weakness, or proximal/reference dynamics.
+
+## 20260602T160000Z-native-inverse-reach-matched-gpu-gate - failed
+
+- Timestamp: 2026-06-02T16:00:00Z
+- Type: experiment
+- Gate: native_inverse_reach_matched_gpu_gate
+- Hypothesis: Under the same native compiled CUDA budget, inverse-own-reach row weighting should produce a stronger stochastic policy than uniform row weighting.
+- Failure class: estimator_incompleteness
+- Summary: Trained a uniform-row control and inverse-own-reach candidate from fresh native 9-action policy/value networks with identical seed, rollout budget, architecture, PPO inner update, GAE, reference KL, and CUDA device. Both training runs were mechanically clean with zero illegal-action probability and zero Python-showdown fallback. The predeclared 2k duplicate-swapped H2H gate failed: inverse-own-reach had mean payoff `-0.0015575` and lower95 `-0.006798` versus uniform. This rejects inverse-own-reach row reweighting alone as the native translation of the exact small-game counterfactual pass.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/matched_gate_uniform_8x2048_seed20260701.json
+  - autoresearch-session/native_neural_nashpg/matched_gate_inverse_reach_8x2048_seed20260701.json
+  - autoresearch-session/native_neural_nashpg/matched_gate_inverse_vs_uniform_h2h_2k_seed20260702.json
+- Key metrics: `{"uniform_samples": 60473, "inverse_samples": 59921, "uniform_samples_per_second": 9980.593836, "inverse_samples_per_second": 22574.606901, "h2h_n_games": 2000, "mean_candidate_payoff": -0.0015575, "lower95_candidate_payoff": -0.0067978, "upper95_candidate_payoff": 0.0036828, "passed": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 8 --games-per-iteration 2048 --collector-batch-size 128 --max-steps-per-game 64 --hidden-dim 256 --inner-update ppo --ppo-epochs 4 --ppo-minibatches 4 --advantage-target gae --gamma 0.99 --gae-lambda 0.95 --reference-kl-weight 0.05 --reference-update-every 4 --decision-weight-mode uniform --max-decision-weight 16 --device cuda --seed 20260701 --checkpoint-out autoresearch-session/native_neural_nashpg/matched_gate_uniform_8x2048_seed20260701.pt --output-json autoresearch-session/native_neural_nashpg/matched_gate_uniform_8x2048_seed20260701.json` -> passed.
+  - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 8 --games-per-iteration 2048 --collector-batch-size 128 --max-steps-per-game 64 --hidden-dim 256 --inner-update ppo --ppo-epochs 4 --ppo-minibatches 4 --advantage-target gae --gamma 0.99 --gae-lambda 0.95 --reference-kl-weight 0.05 --reference-update-every 4 --decision-weight-mode inverse-own-reach --max-decision-weight 16 --device cuda --seed 20260701 --checkpoint-out autoresearch-session/native_neural_nashpg/matched_gate_inverse_reach_8x2048_seed20260701.pt --output-json autoresearch-session/native_neural_nashpg/matched_gate_inverse_reach_8x2048_seed20260701.json` -> passed.
+  - `python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_neural_nashpg/matched_gate_inverse_reach_8x2048_seed20260701.pt --candidate-kind native-ppo --baseline autoresearch-session/native_neural_nashpg/matched_gate_uniform_8x2048_seed20260701.pt --baseline-kind native-ppo --n-games 2000 --device cuda --seed 20260702 --eval-state-backend fast-state-canonical-deal --min-lower95-candidate-payoff 0.0 --output-json autoresearch-session/native_neural_nashpg/matched_gate_inverse_vs_uniform_h2h_2k_seed20260702.json` -> failed as intended by gate threshold.
+- Decision: Do not run larger inverse-own-reach-only training. Synthesize the failure and pivot to a native all-action counterfactual target builder or another reviewed policy-gradient objective that estimates legal-action improvements, not only sampled row weights.
+
+## 20260602T160500Z-failure-synthesis-for-native-inverse-reach-matched-gate - passed
+
+- Timestamp: 2026-06-02T16:05:00Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T155500Z-native-inverse-reach-matched-gate-failed
+- Hypothesis: The failed matched native gate should identify whether the blocker is compute, Slumbot leakage, action mapping, row weighting, or missing action-wise counterfactual estimation before the next branch.
+- Failure class: none
+- Summary: Completed the synthesis bundle. The causal model is that inverse-own-reach fixes one occupancy factor but the native learner still observes only the sampled action return at each decision; it does not estimate action-wise counterfactual advantages for all legal actions like the exact small-game row builder did. Related work remains consistent with this: CFR-style updates rely on counterfactual action values and reach probabilities, while policy-gradient IIG work separates Q-style PG from counterfactual-value methods and emphasizes regularized dynamics.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T155500Z-native-inverse-reach-matched-gate-failed-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T155500Z-native-inverse-reach-matched-gate-failed-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "matched_h2h_mean": -0.0015575, "matched_h2h_lower95": -0.0067978, "next_required_gate": "native_all_action_counterfactual_rollout_target_builder", "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T155500Z-native-inverse-reach-matched-gate-failed-synthesis --require-complete` -> passed with decision `revise`.
+- Decision: The next branch should build and falsify a small native all-action counterfactual rollout target builder for selected decision states. It must use only the local simulator and compare target action preferences against higher-budget local continuation evaluation before any new checkpoint training.
