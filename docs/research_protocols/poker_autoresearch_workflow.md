@@ -1154,6 +1154,14 @@ policy warm start. Canonical R-NaD continuation must use
 which preserve the learner net, target net, previous-reference nets, optimizer
 state, and learner step.
 
+The first matched native R-NaD check confirmed this distinction matters but does
+not solve strength alone. A 100x512 full-state continuation beat its base parent
+and the matched policy-warm-start child with positive lower95 H2H bounds, while
+the same full-state child still lost to saved NFSP and Rainbow controls. Future
+R-NaD-family work should therefore keep full-state continuation but focus on the
+population/objective estimator rather than treating checkpoint semantics as a
+promotion mechanism.
+
 GPU training scripts call `scripts/cuda_env.py` before importing Numba so the
 process can discover the pip NVVM package and force the local GPU compute
 capability. This avoids shell-level `LD_LIBRARY_PATH` overrides, which can hide

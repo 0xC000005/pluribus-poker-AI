@@ -19019,3 +19019,38 @@
   - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
   - CUDA smoke and resume commands above -> passed and wrote artifacts.
 - Decision: future native R-NaD continuation experiments must use full training-state continuation when claiming continuous R-NaD learning. The next falsifier should compare full-state R-NaD continuation against the prior policy-warm-start evidence under matched local H2H/population gates before any Slumbot/RLCard evaluation.
+
+## 20260602T113500Z-native-rnad-full-state-vs-policy-warm-start-plan - planned
+
+- Timestamp: 2026-06-02T11:35:00Z
+- Type: predeclared_experiment
+- Gate: native_rnad_full_state_vs_policy_warm_start_continuation
+- Hypothesis: If prior native R-NaD scaling was weakened by restarting all R-NaD copies from a single deployable policy, then a matched full-training-state continuation should beat the base parent and the matched policy-warm-start continuation more reliably than the warm-start child.
+- Controls: train one base native R-NaD self-play state locally, then run two same-budget children from that base: one via `--rnad-training-state-in` and one via `--checkpoint-in`. Evaluate both against the base parent and each other with duplicate-swapped native H2H. Slumbot, AlphaNLHoldem, solver labels, and human poker tactics remain excluded.
+- Decision rule: full-state continuation is promotable only if it has a positive lower95 H2H bound versus the base parent and a positive lower95 bound versus the matched policy-warm-start child. If not, full-state checkpointing remains infrastructure only and the next branch should focus on the R-NaD objective/population estimator rather than checkpoint semantics.
+
+## 20260602T120000Z-native-rnad-full-state-vs-policy-warm-start - mixed
+
+- Timestamp: 2026-06-02T12:00:00Z
+- Type: experiment
+- Gate: native_rnad_full_state_vs_policy_warm_start_continuation
+- Hypothesis: Full native R-NaD training-state continuation should preserve the learner/target/reference/optimizer dynamics and outperform a matched single-policy warm start if checkpoint semantics were a causal part of the native R-NaD scaling gap.
+- Failure class: saved_control_strength
+- Summary: Ran the predeclared local 100x512 native R-NaD base/child comparison. Base training saved both a full R-NaD state and learner export. The full-state child resumed from learner step `100` and saved step `200`; the policy-warm child loaded the base learner export through `--checkpoint-in`, which initializes all R-NaD copies from one policy. Both children beat the base learner, and the full-state child beat the matched warm-start child with a positive lower95 H2H bound. This validates full-state continuation as a real mechanism improvement. However, the full-state child still lost decisively to the saved native NFSP and Rainbow controls, so it is not a promotion path by itself.
+- Metrics files:
+  - autoresearch-session/native_rnad/full_state_base_100x512_seed20260714.json
+  - autoresearch-session/native_rnad/full_state_child_100x512_seed20260715.json
+  - autoresearch-session/native_rnad/policy_warm_child_100x512_seed20260716.json
+  - autoresearch-session/native_rnad/full_state_child_vs_base_h2h_3000_seed20260717.json
+  - autoresearch-session/native_rnad/policy_warm_child_vs_base_h2h_3000_seed20260718.json
+  - autoresearch-session/native_rnad/full_state_child_vs_policy_warm_child_h2h_3000_seed20260719.json
+  - autoresearch-session/native_rnad/full_state_child_action_distribution_seed20260720.json
+  - autoresearch-session/native_rnad/full_state_child_vs_nfsp_h2h_3000_seed20260721.json
+  - autoresearch-session/native_rnad/full_state_child_vs_rainbow_h2h_3000_seed20260722.json
+- Key metrics: `{"base_samples": 166515, "base_samples_per_second": 25681.800, "full_state_child_samples": 174035, "full_state_child_samples_per_second": 26281.221, "policy_warm_child_samples": 173092, "policy_warm_child_samples_per_second": 26095.199, "full_state_vs_base_mean": 0.044703, "full_state_vs_base_lower95": 0.033130, "warm_start_vs_base_mean": 0.032360, "warm_start_vs_base_lower95": 0.021933, "full_state_vs_warm_mean": 0.012577, "full_state_vs_warm_lower95": 0.007096, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.263190, "full_state_vs_nfsp_lower95": -0.058533, "full_state_vs_rainbow_lower95": -0.114408, "uses_slumbot_training_data": false}`
+- Verification:
+  - Base, full-state child, and policy-warm child training commands -> passed on CUDA and wrote artifacts.
+  - Three matched H2H commands -> passed and wrote artifacts; full-state child cleared the predeclared parent and warm-start lower95 tests.
+  - Action-distribution diagnostic -> passed with all 9 actions and top action `call` at `0.263190`.
+  - Saved-control H2H versus NFSP and Rainbow -> completed; both failed with negative lower95.
+- Decision: keep full-state R-NaD continuation infrastructure, and require it for future R-NaD continuation claims. Do not scale checkpoint semantics alone as the mainline. The remaining R-NaD blocker is objective/population strength: full-state continuation preserves dynamics and improves locally, but the regularized learner still does not produce a policy that beats stronger saved controls. The next branch should modify the R-NaD/MMD population estimator or empirical-game objective, not checkpoint semantics.
