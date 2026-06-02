@@ -397,6 +397,16 @@ debuggable mechanism surface and collector robustness improvement, but do not
 tune `reference_kl_weight`, LR, or V-trace scale to rescue it. The next
 policy-gradient branch needs stronger reviewed game dynamics, exact small-game
 PG reproduction, or failure synthesis before another native scaling attempt.
+The exact small-NLHE MMD truth gate now exists as that reproduction check:
+OpenSpiel `MMDDilatedEnt` with `alpha=0.01` on the locked 637-node small-NLHE
+harness reached best current exact NashConv `0.066154` and last average
+NashConv `0.118786` in `1000` iterations, beating the prior R-NaD hardening
+baseline (`0.664478` mean last NashConv). This revives the
+MMD/NashPG-family update as a principled exact-game reference, but it still
+does not train a native neural HUNL checkpoint. The next native branch must
+translate this regularized policy-dynamics lesson into a tabula-rasa neural
+self-play learner and pass parent/population H2H, not reuse the tabular solver
+as the player.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
