@@ -19989,3 +19989,14 @@
 - Summary: State-conditioned policy router passed the first population-weak gate: trained only from local compiled joint experience, beat incumbent/K-best2/previous/off-support policies with positive lower95, tied scaled response within 20k CI, and entered the augmented empirical game as pure support. Next work must validate seed robustness and train the next generation against the router/archive, not retune fixed mixtures.
 - Metrics file: autoresearch-session/policy_router/boundary4_router_augmented_empirical_game_seed20260991.json
 - Key metrics: `{"gate": null, "passed": true}`
+
+## 20260602T172802Z-an-independent-state-conditioned-policy-router-seed-trained - passed
+
+- Timestamp: 2026-06-02T17:34:32Z
+- Type: experiment
+- Gate: policy-router-seed-robustness
+- Hypothesis: An independent state-conditioned policy-router seed trained from fresh local compiled joint experience over the same boundary archive should reproduce the first router result: no clear H2H loss to support/boundary policies, positive lower95 versus off-support controls, and empirical-game support without Slumbot data or solver labels.
+- Failure class: population_weak_policy_support
+- Summary: Independent policy-router seed replicated the first router result: trained from fresh local compiled joint experience only, beat incumbent/K-best2/previous with positive 20k lower95, tied scaled response within 20k CI, beat all six off-support archive policies with positive lower95, and solved the augmented empirical game to pure router support. This makes the local population-router mechanism seed-robust across two seeds, but it is still not Slumbot/SOTA evidence; next step is training the next generation against router/archive pressure.
+- Metrics file: autoresearch-session/policy_router/boundary4_router_seed2_augmented_empirical_game_seed20261011.json
+- Key metrics: `{"gate": null, "passed": true}`
