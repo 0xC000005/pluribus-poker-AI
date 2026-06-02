@@ -762,18 +762,21 @@ class TianshouRainbowSlumbotPolicy(nn.Module):
         self.model = model
         self.num_atoms = int(num_atoms)
 
+    def forward(self, features):
+        distribution = self.model(features)
+        support = torch.linspace(
+            -1.0,
+            1.0,
+            int(self.num_atoms),
+            dtype=torch.float32,
+            device=distribution.device,
+        )
+        return torch.sum(distribution * support.view(1, 1, -1), dim=-1)
+
     def slumbot_policy_strategy(self, features, legal_mask, device):
         x = torch.as_tensor(features, dtype=torch.float32, device=device).unsqueeze(0)
         with torch.no_grad():
-            distribution = self.model(x)
-            support = torch.linspace(
-                -1.0,
-                1.0,
-                int(self.num_atoms),
-                dtype=torch.float32,
-                device=device,
-            )
-            q_values = torch.sum(distribution * support.view(1, 1, -1), dim=-1)
+            q_values = self.forward(x)
         advantages = q_values.detach().cpu().numpy()[0].astype(np.float64)
         legal = np.asarray(legal_mask, dtype=np.float64)
         if float(legal.sum()) <= 0.0:
@@ -1590,12 +1593,57 @@ def _load_single_model_choice(path, device, *, strategy_source, model_kind="auto
     return SlumbotModelChoice(value_net=loaded.value_net, metadata=loaded.metadata)
 
 
+def _parse_model_mixture_weights(text, n_choices):
+    if text is None:
+        return None
+    weights = np.asarray([float(part.strip()) for part in text.split(",") if part.strip()], dtype=np.float64)
+    if weights.shape != (int(n_choices),):
+        raise ValueError("--model-mixture-weights length must match checkpoint count")
+    if not np.isfinite(weights).all() or np.any(weights < 0.0):
+        raise ValueError("--model-mixture-weights must be finite and non-negative")
+    if float(weights.sum()) <= 0.0:
+        raise ValueError("--model-mixture-weights must have positive mass")
+    return weights
+
+
 def _load_model_selector(args, device):
     """Build a per-hand model selector for either single-checkpoint or SD-CFR mixture play."""
     patterns = [*args.model_glob, *args.model_checkpoint]
     if patterns:
         if args.model_kind == "tianshou-rainbow":
-            raise ValueError("tianshou-rainbow Slumbot adapter currently supports only --model")
+            from poker_ai.research.sd_cfr_mixture import discover_checkpoint_paths
+
+            paths = discover_checkpoint_paths(patterns)
+            choices = [
+                _load_single_model_choice(
+                    path,
+                    device,
+                    strategy_source=args.strategy_source,
+                    model_kind="tianshou-rainbow",
+                )
+                for path in paths
+            ]
+            weights = _parse_model_mixture_weights(args.model_mixture_weights, len(choices))
+            normalized = (
+                np.ones(len(choices), dtype=np.float64) / float(len(choices))
+                if weights is None
+                else weights / float(weights.sum())
+            )
+            choices = [
+                SlumbotModelChoice(
+                    value_net=choice.value_net,
+                    metadata=choice.metadata,
+                    mixture_index=index,
+                    mixture_weight=float(normalized[index]),
+                    mixture_size=len(choices),
+                )
+                for index, choice in enumerate(choices)
+            ]
+            return PerHandCheckpointSelector(
+                choices,
+                weights=normalized,
+                seed=args.mixture_seed,
+            )
         from poker_ai.research.sd_cfr_mixture import (
             discover_checkpoint_paths,
             load_checkpoint_policy_set,
@@ -1654,6 +1702,10 @@ def main():
         action='append',
         default=[],
         help='Opt-in explicit SD-CFR mixture checkpoint path. Repeat for multiple checkpoints.',
+    )
+    parser.add_argument(
+        '--model-mixture-weights',
+        help='Comma-separated fixed per-hand checkpoint mixture weights for --model-checkpoint/--model-glob.',
     )
     parser.add_argument(
         '--mixture-seed',

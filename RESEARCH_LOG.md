@@ -19849,3 +19849,26 @@
   - `uv run pytest -q test/unit/test_empirical_meta_strategy_gate.py` -> passed.
   - `python scripts/eval_empirical_meta_strategy_gate.py --empirical-game-json autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest_worstgap_expanded_empirical_game_seed20260848.json --h2h-record <seven meta-vs-pure records> --max-support-abs-mean 0.01 --max-support-lower95-loss 0.01 --min-off-support-lower95 0.0 --output-json autoresearch-session/native_rollout_substrate/empirical_meta_strategy_h2h_gate_seed20260848.json` -> passed.
 - Decision: Treat the local population-weak issue as solved at the empirical-game meta-strategy level. Do not claim SOTA or Slumbot strength. The next principled branch is to either run the fixed population policy through local-to-external integration gates or distill the local meta-strategy into one stochastic neural policy, then require the same support/off-support gate again before any Slumbot/RLCard confidence run.
+
+## 20260602T160926Z-meta-strategy-distillation-and-slumbot-smoke - failed
+
+- Timestamp: 2026-06-02T16:09:26Z
+- Type: experiment
+- Gate: meta-strategy-distillation-support-preservation-20260602
+- Hypothesis: A single state-only native policy distilled from the solved three-checkpoint empirical-game meta-strategy can preserve the population strategy well enough to tie support members and beat off-support controls.
+- Failure class: distillation_support_misalignment
+- Summary: Built a compiled joint-experience dataset from the solved meta-strategy over current incumbent, K-best2, and worst-gap continuation, then trained a native-ppo-compatible supervised student. The student fit behavior labels well and beat all off-support controls, but it failed support preservation versus K-best2 with the confidence interval excluding zero. This suggests naive state-only behavioral distillation loses important per-hand mixture correlation or rare support behavior. The exact fixed population policy remains the robust local object. Wired native Rainbow checkpoint mixtures into `play_slumbot.py` and ran a 5-hand Slumbot integration smoke; it completed with zero fallbacks, parse errors, or API errors, but the sample is not strength evidence.
+- Artifacts:
+  - autoresearch-session/meta_strategy_distillation/support3_meta_dataset_65536_seed20260890.json
+  - autoresearch-session/meta_strategy_distillation/support3_meta_dataset_65536_seed20260890.npz
+  - autoresearch-session/meta_strategy_distillation/support3_meta_student_h256_8k_seed20260891.json
+  - autoresearch-session/meta_strategy_distillation/support3_meta_student_h256_8k_seed20260891.pt
+  - autoresearch-session/meta_strategy_distillation/support3_meta_student_h2h_gate_seed20260891.json
+  - autoresearch-session/slumbot_traces/meta_strategy_smoke_5_seed20260899.jsonl
+- Key metrics: `{"dataset_transitions": 391271, "dataset_transitions_per_second": 219594.719, "student_accuracy": 0.895045, "student_loss": 0.193945, "student_vs_incumbent_mean": -0.005848, "student_vs_incumbent_lower95": -0.014401, "student_vs_kbest_mean": -0.010185, "student_vs_kbest_lower95": -0.020039, "student_vs_kbest_upper95": -0.000331, "off_prior_lower95": 0.010894, "off_psro_lower95": 0.024339, "off_shared_lower95": 0.030753, "off_nfsp_lower95": 0.029343, "gate_passed": false, "slumbot_smoke_hands": 5, "slumbot_smoke_chips": 900, "slumbot_fallback": 0, "slumbot_parse_errors": 0, "slumbot_api_errors": 0, "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_meta_strategy_distillation.py` -> passed.
+  - `uv run pytest -q test/unit/test_slumbot_rainbow_adapter.py` -> passed.
+  - `python scripts/eval_empirical_meta_strategy_gate.py --empirical-game-json <seven_policy_empirical_game> --h2h-record <student_vs_all_policies> --max-support-abs-mean 0.01 --max-support-lower95-loss 0.01 --min-off-support-lower95 0.0 --output-json autoresearch-session/meta_strategy_distillation/support3_meta_student_h2h_gate_seed20260891.json` -> failed as intended.
+  - `python scripts/play_slumbot.py --model-kind tianshou-rainbow --model-checkpoint <current> --model-checkpoint <kbest2> --model-checkpoint <worstgap> --model-mixture-weights 0.4311249014981,0.0461365692632254,0.5227385292386746 --hands 5 --greedy --no-allin --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --trace-jsonl autoresearch-session/slumbot_traces/meta_strategy_smoke_5_seed20260899.jsonl` -> passed integration smoke.
+- Decision: Do not promote the state-only distilled student. Continue with the exact fixed population policy as the local robust object, or review a latent-conditioned distillation that preserves the per-hand policy identity/correlation. A larger Slumbot run is allowed only as held-out evaluation of the fixed population after documenting the smoke; it must not train, select, or tune weights.

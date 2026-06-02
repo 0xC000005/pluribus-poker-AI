@@ -140,9 +140,14 @@ per-hand meta-strategy gate passed: 20k H2H tied all support members near zero,
 and 5k H2H beat all off-support controls with positive lower95. This means the
 population-weak issue is solved at the local empirical-game strategy level, but
 not yet as one deployable/distilled neural policy or as Slumbot/RLCard evidence.
-The next branch should either evaluate/deploy the fixed local population policy
-through the normal local-to-external gates, or distill the meta-strategy into a
-single stochastic network and re-run the same support/off-support gate.
+The first state-only single-network distillation did not preserve support: it
+fit behavior labels well but lost to K-best2 with upper95 still below zero. The
+direct fixed-population Slumbot path is now wired for native Rainbow checkpoints
+and passed a 5-hand integration smoke with no fallbacks, parse errors, or API
+errors. The next branch should either evaluate the fixed local population policy
+through a higher-confidence held-out Slumbot ladder, or use a reviewed
+latent-conditioned distillation that preserves per-hand correlation before
+re-running the same support/off-support gate.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
