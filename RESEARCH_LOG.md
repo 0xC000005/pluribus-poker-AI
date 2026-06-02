@@ -19000,3 +19000,22 @@
   - Harness fingerprint passed: `actions=4`, `max_len=7`, `nodes=637`, `uniform_nashconv=1.7000`.
   - Decision block reports `candidate_truth_gate_passed=false`, `best_beats_baseline=false`, `last_beats_baseline=false`.
 - Decision: do not integrate inverse-own-reach decision weighting into the native 9-action PPO-inner learner. The sampled reach correction is directionally motivated by CFR/MCCFR but empirically worsens the only small-game neural gate that had passed. The next objective should be either a maintained/faithful R-NaD or MMD implementation, an exact sequence-form-compatible small-game bridge, or an empirical-game/meta-policy learner that directly optimizes population support rather than reweighting sampled PPO rows.
+
+## 20260602T113000Z-native-rnad-full-state-continuation - passed
+
+- Timestamp: 2026-06-02T11:30:00Z
+- Type: infrastructure
+- Gate: native_rnad_full_training_state_resume_contract
+- Hypothesis: Before another native R-NaD-family scaling run, the learner should distinguish deployable policy warm starts from canonical R-NaD training continuation, because R-NaD depends on learner/target/previous-reference networks, optimizer state, and learner-step schedule continuity.
+- Failure class: none
+- Summary: Added full native R-NaD training-state save/resume support. `--rnad-training-state-out` now saves the learner net, target net, previous-reference nets, optimizer state, and learner step; `--rnad-training-state-in` restores that full state. This is separate from `--checkpoint-in`, which remains a single-policy warm start and must not be used as evidence of canonical R-NaD continuation. A CUDA command-level smoke saved a state at learner step `2`, resumed it, and saved step `3`, with finite loss, zero illegal records, zero Python-showdown fallback, native 9-action training, and no Slumbot/AlphaNLHoldem data.
+- Metrics files:
+  - autoresearch-session/native_rnad/full_state_resume_smoke_seed20260712.json
+  - autoresearch-session/native_rnad/full_state_resume_smoke_resumed_seed20260713.json
+- Key metrics: `{"first_smoke_resolved_device": "cuda", "first_smoke_passed": true, "first_smoke_training_state_steps": 2, "resume_smoke_resolved_device": "cuda", "resume_smoke_passed": true, "resume_steps_before": 2, "resume_steps_after": 3, "compiled_needs_python_showdown": 0, "illegal_records": 0, "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py::test_rnad_compiled_native_learner_can_resume_full_training_state` -> `1 passed`.
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py test/unit/test_rnad_compiled_native_smoke.py test/unit/test_rnad_torch.py` -> `14 passed, 1 warning`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
+  - CUDA smoke and resume commands above -> passed and wrote artifacts.
+- Decision: future native R-NaD continuation experiments must use full training-state continuation when claiming continuous R-NaD learning. The next falsifier should compare full-state R-NaD continuation against the prior policy-warm-start evidence under matched local H2H/population gates before any Slumbot/RLCard evaluation.

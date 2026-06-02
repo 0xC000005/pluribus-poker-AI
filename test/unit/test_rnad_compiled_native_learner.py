@@ -138,6 +138,61 @@ def test_rnad_compiled_native_learner_can_continue_from_prior_checkpoint(tmp_pat
         assert torch.equal(tensor, parent_payload["rnad_net_state_dict"][key])
 
 
+def test_rnad_compiled_native_learner_can_resume_full_training_state(tmp_path):
+    from scripts.run_rnad_compiled_native_learner import run_learner
+
+    state_1 = tmp_path / "rnad_training_state_1.pt"
+    state_2 = tmp_path / "rnad_training_state_2.pt"
+    checkpoint = tmp_path / "rnad_policy.pt"
+
+    first = run_learner(
+        train_iterations=2,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260710,
+        device="cpu",
+        rnad_training_state_out=state_1,
+    )
+    assert first["rnad_training_state_path"] == str(state_1)
+    assert first["rnad_training_state_learner_steps"] == 2
+    assert state_1.exists()
+
+    saved = torch.load(state_1, map_location="cpu", weights_only=False)
+    assert saved["algorithm"] == "rnad_compiled_native_training_state"
+    assert saved["learner_steps"] == 2
+    assert "net_state_dict" in saved
+    assert "net_target_state_dict" in saved
+    assert "net_prev_state_dict" in saved
+    assert "net_prev__state_dict" in saved
+    assert "optimizer_state_dict" in saved
+
+    resumed = run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260711,
+        device="cpu",
+        rnad_training_state_in=state_1,
+        rnad_training_state_out=state_2,
+        checkpoint_out=checkpoint,
+    )
+
+    assert resumed["continued_from_rnad_training_state"] is True
+    assert resumed["rnad_training_state_in"] == str(state_1)
+    assert resumed["rnad_training_state_learner_steps_before"] == 2
+    assert resumed["rnad_training_state_learner_steps"] == 3
+    assert state_2.exists()
+    assert checkpoint.exists()
+
+    saved_2 = torch.load(state_2, map_location="cpu", weights_only=False)
+    assert saved_2["learner_steps"] == 3
+    assert saved_2["optimizer_state_dict"]
+
+
 def test_rnad_compiled_native_learner_accepts_population_opponent(tmp_path):
     from scripts.run_rnad_compiled_native_learner import run_learner
 

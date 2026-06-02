@@ -1147,6 +1147,13 @@ model warm start, not true Deep CFR continuation. Training metrics now emit
 claims require restored replay buffers or must be reported as warm-start
 diagnostics only.
 
+Native R-NaD has the same distinction. `--checkpoint-in <policy.pt>` initializes
+all R-NaD network copies from one deployable policy and is a fresh-generation
+policy warm start. Canonical R-NaD continuation must use
+`--rnad-training-state-out <state.pt>` and `--rnad-training-state-in <state.pt>`,
+which preserve the learner net, target net, previous-reference nets, optimizer
+state, and learner step.
+
 GPU training scripts call `scripts/cuda_env.py` before importing Numba so the
 process can discover the pip NVVM package and force the local GPU compute
 capability. This avoids shell-level `LD_LIBRARY_PATH` overrides, which can hide

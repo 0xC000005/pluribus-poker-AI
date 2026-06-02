@@ -461,6 +461,93 @@ def _save_native_rnad_checkpoint(
     )
 
 
+def _save_native_rnad_training_state(
+    *,
+    path: str | Path,
+    solver: RNaDSolver,
+    hidden_dim: int,
+    initial_chips: int,
+    max_steps_per_game: int,
+    metrics: dict[str, Any],
+) -> None:
+    """Save the canonical R-NaD learner state, not just a deployable policy export."""
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "algorithm": "rnad_compiled_native_training_state",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": int(hidden_dim),
+            "initial_chips": int(initial_chips),
+            "max_steps_per_game": int(max_steps_per_game),
+            "learner_steps": int(solver.learner_steps),
+            "net_state_dict": solver.net.state_dict(),
+            "net_target_state_dict": solver.net_target.state_dict(),
+            "net_prev_state_dict": solver.net_prev.state_dict(),
+            "net_prev__state_dict": solver.net_prev_.state_dict(),
+            "optimizer_state_dict": solver.optimizer.state_dict(),
+            "config": {
+                "feature_mode": "flat",
+                "hidden_dim": int(hidden_dim),
+                "initial_chips": int(initial_chips),
+                "max_steps_per_hand": int(max_steps_per_game),
+                "rollout_backend": "compiled-fast-state",
+                "train_environment": "poker_ai:full_deck_hu_nlhe",
+                "continuation_semantics": "full_rnad_training_state",
+            },
+            "metrics": metrics,
+            "trained_environment_native": True,
+            "native_action_projection": False,
+            "rlcard_candidate": False,
+            "uses_slumbot_data": False,
+            "uses_alphanlholdem_training_data": False,
+        },
+        output,
+    )
+
+
+def _load_native_rnad_training_state(
+    *,
+    path: str | Path,
+    solver: RNaDSolver,
+    hidden_dim: int,
+) -> dict[str, Any]:
+    payload = torch.load(Path(path), map_location=solver.device, weights_only=False)
+    if payload.get("algorithm") != "rnad_compiled_native_training_state":
+        raise ValueError("rnad_training_state_in must be a native R-NaD training-state checkpoint")
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("training-state action count does not match native R-NaD")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("training-state feature count does not match native R-NaD")
+    if int(payload.get("hidden_dim", -1)) != int(hidden_dim):
+        raise ValueError("training-state hidden_dim does not match the requested learner")
+
+    required = (
+        "net_state_dict",
+        "net_target_state_dict",
+        "net_prev_state_dict",
+        "net_prev__state_dict",
+        "optimizer_state_dict",
+    )
+    missing = [key for key in required if key not in payload]
+    if missing:
+        raise ValueError(f"training-state checkpoint is missing keys: {missing}")
+
+    solver.net.load_state_dict(payload["net_state_dict"])
+    solver.net_target.load_state_dict(payload["net_target_state_dict"])
+    solver.net_prev.load_state_dict(payload["net_prev_state_dict"])
+    solver.net_prev_.load_state_dict(payload["net_prev__state_dict"])
+    solver.optimizer.load_state_dict(payload["optimizer_state_dict"])
+    solver.learner_steps = int(payload.get("learner_steps", 0))
+    return {
+        "rnad_training_state_in": str(path),
+        "continued_from_rnad_training_state": True,
+        "rnad_training_state_learner_steps_before": int(solver.learner_steps),
+    }
+
+
 def _load_native_rnad_checkpoint(
     *,
     path: str | Path,
@@ -504,6 +591,8 @@ def run_compiled_native_rnad_learner(
     seed: int = 20260602,
     device: str = "auto",
     checkpoint_in: str | Path | None = None,
+    rnad_training_state_in: str | Path | None = None,
+    rnad_training_state_out: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
     learner_checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
@@ -525,6 +614,8 @@ def run_compiled_native_rnad_learner(
 
     np.random.seed(int(seed))
     torch.manual_seed(int(seed))
+    if checkpoint_in is not None and rnad_training_state_in is not None:
+        raise ValueError("Use either checkpoint_in or rnad_training_state_in, not both")
     opponent_paths = [str(path) for path in (opponent_checkpoints or [])]
     opponent_kind_values = [str(kind) for kind in (opponent_kinds or [])]
     if opponent_paths and not opponent_kind_values:
@@ -562,8 +653,18 @@ def run_compiled_native_rnad_learner(
     resume_metrics: dict[str, Any] = {
         "checkpoint_in": str(checkpoint_in) if checkpoint_in is not None else None,
         "continued_from_checkpoint": False,
+        "rnad_training_state_in": str(rnad_training_state_in) if rnad_training_state_in is not None else None,
+        "continued_from_rnad_training_state": False,
+        "rnad_training_state_learner_steps_before": None,
     }
-    if checkpoint_in is not None:
+    if rnad_training_state_in is not None:
+        loaded = _load_native_rnad_training_state(
+            path=rnad_training_state_in,
+            solver=solver,
+            hidden_dim=int(hidden_dim),
+        )
+        resume_metrics.update(loaded)
+    elif checkpoint_in is not None:
         loaded = _load_native_rnad_checkpoint(
             path=checkpoint_in,
             solver=solver,
@@ -673,6 +774,10 @@ def run_compiled_native_rnad_learner(
         "learner_checkpoint_path": (
             str(learner_checkpoint_out) if learner_checkpoint_out is not None else None
         ),
+        "rnad_training_state_path": (
+            str(rnad_training_state_out) if rnad_training_state_out is not None else None
+        ),
+        "rnad_training_state_learner_steps": int(solver.learner_steps),
         "parent_checkpoint_path": (
             str(parent_checkpoint_out) if parent_checkpoint_out is not None else None
         ),
@@ -710,5 +815,14 @@ def run_compiled_native_rnad_learner(
             max_steps_per_game=int(max_steps_per_game),
             metrics=learner_metrics,
             export_source="learner",
+        )
+    if rnad_training_state_out is not None:
+        _save_native_rnad_training_state(
+            path=rnad_training_state_out,
+            solver=solver,
+            hidden_dim=int(hidden_dim),
+            initial_chips=int(initial_chips),
+            max_steps_per_game=int(max_steps_per_game),
+            metrics=metrics,
         )
     return metrics

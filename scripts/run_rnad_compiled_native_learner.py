@@ -38,6 +38,8 @@ def run_learner(
     seed: int = 20260602,
     device: str = "auto",
     checkpoint_in: str | Path | None = None,
+    rnad_training_state_in: str | Path | None = None,
+    rnad_training_state_out: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
     learner_checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
@@ -57,6 +59,8 @@ def run_learner(
         seed=int(seed),
         device=device,
         checkpoint_in=checkpoint_in,
+        rnad_training_state_in=rnad_training_state_in,
+        rnad_training_state_out=rnad_training_state_out,
         checkpoint_out=checkpoint_out,
         learner_checkpoint_out=learner_checkpoint_out,
         parent_checkpoint_out=parent_checkpoint_out,
@@ -79,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=20260602)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--checkpoint-in", type=Path)
+    parser.add_argument("--rnad-training-state-in", type=Path)
+    parser.add_argument("--rnad-training-state-out", type=Path)
     parser.add_argument("--checkpoint-out", type=Path)
     parser.add_argument("--learner-checkpoint-out", type=Path)
     parser.add_argument("--parent-checkpoint-out", type=Path)
@@ -98,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         device=args.device,
         checkpoint_in=args.checkpoint_in,
+        rnad_training_state_in=args.rnad_training_state_in,
+        rnad_training_state_out=args.rnad_training_state_out,
         checkpoint_out=args.checkpoint_out,
         learner_checkpoint_out=args.learner_checkpoint_out,
         parent_checkpoint_out=args.parent_checkpoint_out,
