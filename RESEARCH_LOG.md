@@ -17908,3 +17908,19 @@
   - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --collect-iterations 32 --games-per-iteration 2048 --updates-per-collect 128 --epsilon 0.20 --seed 20260724 ...` -> passed on CUDA with zero Python-showdown fallback.
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus gen3 and iter2; negative lower bound versus the current support response.
 - Decision: keep `online_response_iter4_support_h256_32x2048_u4096_seed20260717.pt` as the best local candidate. Do not queue Slumbot yet. The next local gate should either run a small league/promotion precheck around this best candidate or synthesize whether more online response iterations are likely to overfit the current matrix.
+## 20260602T034700Z-native-candidate-local-precheck - passed
+
+- Timestamp: 2026-06-02T03:47:00Z
+- Type: native_candidate_local_precheck
+- Gate: native_only_pre_slumbot_local_gate
+- Hypothesis: The best local online response candidate should clear a native-only evidence precheck while exposing missing external promotion blockers explicitly.
+- Failure class: eval_invalid
+- Summary: Added a native-only local precheck that verifies H2H lower bounds, empirical-game support, native environment, no action projection, and no Slumbot/AlphaHoldem training-data leakage. The best checkpoint cleared all local checks: positive lower bounds versus iter2, gen3, Rainbow, NFSP, and the online pivot, plus 1.0 empirical-game support. The artifact correctly keeps `promotion=false` and `slumbot_confidence_eligible=false` because this is not the dual-surface promotion gate; RLCard reference evidence and a Slumbot adapter for `tianshou-rainbow` are still missing.
+- Artifact:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_native_local_precheck_seed20260723.json
+- Key metrics: `{"local_precheck_passed": true, "candidate_support_probability": 1.0, "min_candidate_support": 0.999, "h2h_lower95_values": [0.008962435322469535, 0.019191000314893028, 0.009561042938292368, 0.011685790943722374, 0.00086664810969065], "external_promotion_blockers": ["rlcard_reference_evidence_missing", "slumbot_confidence_not_authorized_by_native_only_precheck", "slumbot_adapter_missing_for_tianshou_rainbow"], "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_candidate_precheck.py test/unit/test_candidate_promotion_gate.py` -> `8 passed`.
+  - `python -m py_compile poker_ai/research/native_candidate_precheck.py scripts/eval_native_candidate_local_precheck.py` -> passed.
+  - `python scripts/eval_native_candidate_local_precheck.py --candidate-checkpoint <online_iter4_support> --native-h2h-json <iter2/gen3/rainbow/nfsp/online_pivot_h2h> --empirical-game-json <confidence_matrix> --min-candidate-support 0.999 ...` -> passed locally.
+- Decision: native evidence is strong enough to justify resolving external-evaluation plumbing, not strong enough to claim Slumbot readiness. The next concrete blocker is a Slumbot-compatible policy adapter for `tianshou-rainbow`; RLCard AlphaHoldem evidence remains a separate same-philosophy benchmark requirement.
