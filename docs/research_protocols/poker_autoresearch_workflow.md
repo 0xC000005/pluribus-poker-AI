@@ -1162,6 +1162,13 @@ R-NaD-family work should therefore keep full-state continuation but focus on the
 population/objective estimator rather than treating checkpoint semantics as a
 promotion mechanism.
 
+Native R-NaD population collection can now consume an explicit opponent
+meta-strategy through `--opponent-meta-strategy <p0,p1,...>`. This preserves the
+old round-robin opponent assignment when omitted, but allows PSRO-style
+experiments to train the frozen non-learner seat from a solved empirical-game
+distribution. Any such run still needs parent/control H2H and empirical-game
+support before promotion.
+
 GPU training scripts call `scripts/cuda_env.py` before importing Numba so the
 process can discover the pip NVVM package and force the local GPU compute
 capability. This avoids shell-level `LD_LIBRARY_PATH` overrides, which can hide

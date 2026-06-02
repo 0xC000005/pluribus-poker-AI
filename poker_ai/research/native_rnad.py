@@ -47,6 +47,27 @@ def _sample_actions(policy: np.ndarray, rng) -> np.ndarray:
     return (draws < cdf).argmax(axis=1).astype(np.int16, copy=False)
 
 
+def _normalize_opponent_meta_strategy(
+    opponent_meta_strategy: Sequence[float] | None,
+    n_opponents: int,
+) -> np.ndarray:
+    if int(n_opponents) <= 0:
+        if opponent_meta_strategy is not None:
+            raise ValueError("opponent_meta_strategy requires opponent_checkpoints")
+        return np.zeros(0, dtype=np.float64)
+    if opponent_meta_strategy is None:
+        return np.full(int(n_opponents), 1.0 / float(n_opponents), dtype=np.float64)
+    probs = np.asarray(list(opponent_meta_strategy), dtype=np.float64)
+    if probs.shape != (int(n_opponents),):
+        raise ValueError("opponent_meta_strategy must match opponent_checkpoints")
+    if not np.all(np.isfinite(probs)) or np.any(probs < 0.0):
+        raise ValueError("opponent_meta_strategy must contain finite nonnegative values")
+    total = float(probs.sum())
+    if total <= 0.0:
+        raise ValueError("opponent_meta_strategy must have positive mass")
+    return probs / total
+
+
 def _adapter_policy_batch(
     adapter: Any,
     features: np.ndarray,
@@ -80,6 +101,7 @@ class CompiledNativeRNaDCollector:
     n_players: int = 2
     obs_dim: int = N_FEATURES
     opponent_policies: list[Any] | None = None
+    opponent_meta_strategy: Sequence[float] | None = None
     opponent_device: torch.device | str | None = None
     last_metrics: dict[str, Any] = field(default_factory=dict)
 
@@ -95,6 +117,28 @@ class CompiledNativeRNaDCollector:
         seed = int(self.seed) + int(rng.randint(0, 2**30 - 1))
         opponents = list(self.opponent_policies or [])
         use_population = len(opponents) > 0
+        opponent_probs = _normalize_opponent_meta_strategy(
+            self.opponent_meta_strategy,
+            len(opponents),
+        )
+        if use_population and self.opponent_meta_strategy is not None:
+            opponent_assignments = rng.choice(
+                len(opponents),
+                size=n_games,
+                p=opponent_probs,
+            ).astype(np.int32, copy=False)
+        elif use_population:
+            opponent_assignments = (
+                np.arange(n_games, dtype=np.int32) % int(len(opponents))
+            )
+        else:
+            opponent_assignments = np.zeros(n_games, dtype=np.int32)
+        opponent_game_counts = (
+            np.bincount(opponent_assignments, minlength=len(opponents)).astype(np.int64)
+            if use_population
+            else np.zeros(0, dtype=np.int64)
+        )
+        opponent_steps_by_policy = np.zeros(len(opponents), dtype=np.int64)
         opponent_device = torch.device(self.opponent_device or self.device)
         learner_seats = np.arange(n_games, dtype=np.int32) % int(self.n_players)
         states = [
@@ -131,7 +175,7 @@ class CompiledNativeRNaDCollector:
                 for game_i in group:
                     player_i = int(current_players[int(game_i)])
                     if use_population and player_i != int(learner_seats[int(game_i)]):
-                        key = int(game_i) % len(opponents)
+                        key = int(opponent_assignments[int(game_i)])
                     else:
                         key = -1
                     grouped_indices.setdefault(key, []).append(int(game_i))
@@ -160,6 +204,7 @@ class CompiledNativeRNaDCollector:
                             learner_controlled_steps += 1
                         else:
                             opponent_controlled_steps += 1
+                            opponent_steps_by_policy[int(key)] += 1
                         records.append(
                             (
                                 int(game_i),
@@ -204,6 +249,9 @@ class CompiledNativeRNaDCollector:
             "learner_controlled_steps": int(learner_controlled_steps),
             "opponent_controlled_steps": int(opponent_controlled_steps),
             "population_opponent_size": int(len(opponents)),
+            "population_opponent_meta_strategy": opponent_probs.tolist(),
+            "population_opponent_game_counts": opponent_game_counts.astype(int).tolist(),
+            "opponent_controlled_steps_by_policy": opponent_steps_by_policy.astype(int).tolist(),
             "train_opponent_mode": "population" if use_population else "self_play",
             "truncated_games": int(truncated_games),
             "needs_python_showdown": int(needs_python_showdown),
@@ -598,6 +646,7 @@ def run_compiled_native_rnad_learner(
     parent_checkpoint_out: str | Path | None = None,
     opponent_checkpoints: Sequence[str | Path] | None = None,
     opponent_kinds: Sequence[str] | None = None,
+    opponent_meta_strategy: Sequence[float] | None = None,
 ) -> dict[str, Any]:
     """Train and optionally export a native-policy-compatible R-NaD checkpoint."""
     requested_device = str(device).strip().lower()
@@ -622,6 +671,10 @@ def run_compiled_native_rnad_learner(
         opponent_kind_values = ["native-ppo"] * len(opponent_paths)
     if len(opponent_paths) != len(opponent_kind_values):
         raise ValueError("opponent_checkpoints and opponent_kinds must have the same length")
+    opponent_probs = _normalize_opponent_meta_strategy(
+        opponent_meta_strategy,
+        len(opponent_paths),
+    )
     opponent_policies: list[Any] = []
     if opponent_paths:
         from poker_ai.research.mixed_policy_h2h import load_policy_adapter  # noqa: PLC0415
@@ -637,6 +690,7 @@ def run_compiled_native_rnad_learner(
         seed=int(seed),
         device="cpu",
         opponent_policies=opponent_policies,
+        opponent_meta_strategy=opponent_probs.tolist() if opponent_policies else None,
         opponent_device=torch.device(resolved_device),
     )
     config = RNaDConfig(
@@ -720,6 +774,24 @@ def run_compiled_native_rnad_learner(
     opponent_forward_calls = int(
         sum(int(m.get("opponent_policy_forward_calls", 0)) for m in collector_metrics)
     )
+    population_opponent_game_counts = [0] * int(len(opponent_policies))
+    opponent_controlled_steps_by_policy = [0] * int(len(opponent_policies))
+    for metric in collector_metrics:
+        for idx, value in enumerate(metric.get("population_opponent_game_counts", [])):
+            if idx < len(population_opponent_game_counts):
+                population_opponent_game_counts[idx] += int(value)
+        for idx, value in enumerate(metric.get("opponent_controlled_steps_by_policy", [])):
+            if idx < len(opponent_controlled_steps_by_policy):
+                opponent_controlled_steps_by_policy[idx] += int(value)
+    # Game counts are per collected trajectory batch. Report mean assigned games per
+    # training iteration so a degenerate meta-strategy remains easy to inspect.
+    if collector_metrics and population_opponent_game_counts:
+        population_opponent_game_counts_metric = [
+            int(round(value / float(len(collector_metrics))))
+            for value in population_opponent_game_counts
+        ]
+    else:
+        population_opponent_game_counts_metric = population_opponent_game_counts
     finite_loss = bool(losses and np.all(np.isfinite(losses)))
     metrics: dict[str, Any] = {
         "algorithm": "rnad_compiled_native",
@@ -759,6 +831,9 @@ def run_compiled_native_rnad_learner(
         "population_opponent_size": int(len(opponent_policies)),
         "population_opponent_checkpoints": opponent_paths,
         "population_opponent_kinds": opponent_kind_values,
+        "population_opponent_meta_strategy": opponent_probs.tolist(),
+        "population_opponent_game_counts": population_opponent_game_counts_metric,
+        "opponent_controlled_steps_by_policy": opponent_controlled_steps_by_policy,
         "learner_controlled_steps": learner_controlled_steps,
         "opponent_controlled_steps": opponent_controlled_steps,
         "learner_policy_forward_calls": learner_forward_calls,

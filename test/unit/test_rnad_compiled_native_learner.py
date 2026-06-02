@@ -233,6 +233,57 @@ def test_rnad_compiled_native_learner_accepts_population_opponent(tmp_path):
     assert metrics["illegal_records"] == 0
 
 
+def test_rnad_compiled_native_learner_accepts_population_meta_strategy(tmp_path):
+    from scripts.run_rnad_compiled_native_learner import run_learner
+
+    opponent_a = tmp_path / "rnad_opponent_a.pt"
+    opponent_b = tmp_path / "rnad_opponent_b.pt"
+    child = tmp_path / "rnad_meta_child.pt"
+
+    run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260723,
+        device="cpu",
+        checkpoint_out=opponent_a,
+    )
+    run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260724,
+        device="cpu",
+        checkpoint_out=opponent_b,
+    )
+    metrics = run_learner(
+        train_iterations=1,
+        n_games=8,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260725,
+        device="cpu",
+        checkpoint_out=child,
+        opponent_checkpoints=[opponent_a, opponent_b],
+        opponent_kinds=["native-ppo", "native-ppo"],
+        opponent_meta_strategy=[1.0, 0.0],
+    )
+
+    assert child.exists()
+    assert metrics["train_opponent_mode"] == "population"
+    assert metrics["population_opponent_size"] == 2
+    assert metrics["population_opponent_meta_strategy"] == [1.0, 0.0]
+    assert metrics["population_opponent_game_counts"][0] > 0
+    assert metrics["population_opponent_game_counts"][1] == 0
+    assert metrics["opponent_controlled_steps_by_policy"][0] > 0
+    assert metrics["opponent_controlled_steps_by_policy"][1] == 0
+
+
 def test_rnad_compiled_native_checkpoint_h2h_self_smoke(tmp_path):
     from poker_ai.research.mixed_policy_h2h import evaluate_mixed_policy_head_to_head
     from scripts.run_rnad_compiled_native_learner import run_learner

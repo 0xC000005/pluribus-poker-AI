@@ -45,6 +45,7 @@ def run_learner(
     parent_checkpoint_out: str | Path | None = None,
     opponent_checkpoints: Sequence[str | Path] | None = None,
     opponent_kinds: Sequence[str] | None = None,
+    opponent_meta_strategy: Sequence[float] | None = None,
     output_json: str | Path | None = None,
 ) -> dict[str, Any]:
     metrics = run_compiled_native_rnad_learner(
@@ -66,8 +67,15 @@ def run_learner(
         parent_checkpoint_out=parent_checkpoint_out,
         opponent_checkpoints=opponent_checkpoints,
         opponent_kinds=opponent_kinds,
+        opponent_meta_strategy=opponent_meta_strategy,
     )
     return _write_metrics(metrics, Path(output_json) if output_json is not None else None)
+
+
+def _parse_meta_strategy(text: str | None) -> list[float] | None:
+    if text is None:
+        return None
+    return [float(item.strip()) for item in text.split(",") if item.strip()]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -90,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--parent-checkpoint-out", type=Path)
     parser.add_argument("--opponent-checkpoint", type=Path, action="append", default=[])
     parser.add_argument("--opponent-kind", action="append", default=[])
+    parser.add_argument("--opponent-meta-strategy")
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args(argv)
     metrics = run_learner(
@@ -111,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         parent_checkpoint_out=args.parent_checkpoint_out,
         opponent_checkpoints=args.opponent_checkpoint,
         opponent_kinds=args.opponent_kind,
+        opponent_meta_strategy=_parse_meta_strategy(args.opponent_meta_strategy),
         output_json=args.output_json,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))

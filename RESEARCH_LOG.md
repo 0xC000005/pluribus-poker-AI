@@ -19054,3 +19054,20 @@
   - Action-distribution diagnostic -> passed with all 9 actions and top action `call` at `0.263190`.
   - Saved-control H2H versus NFSP and Rainbow -> completed; both failed with negative lower95.
 - Decision: keep full-state R-NaD continuation infrastructure, and require it for future R-NaD continuation claims. Do not scale checkpoint semantics alone as the mainline. The remaining R-NaD blocker is objective/population strength: full-state continuation preserves dynamics and improves locally, but the regularized learner still does not produce a policy that beats stronger saved controls. The next branch should modify the R-NaD/MMD population estimator or empirical-game objective, not checkpoint semantics.
+
+## 20260602T121500Z-native-rnad-opponent-meta-strategy - passed
+
+- Timestamp: 2026-06-02T12:15:00Z
+- Type: infrastructure
+- Gate: native_rnad_empirical_game_opponent_sampling
+- Hypothesis: Native R-NaD population training should be able to sample frozen opponents from an explicit empirical-game/meta-strategy distribution instead of only round-robin population assignment, so future R-NaD-family responses can train against solved local population support without Slumbot data or hand-coded poker rules.
+- Failure class: none
+- Summary: Added `opponent_meta_strategy` support to the native R-NaD compiled collector, runner, and CLI. When supplied, each game assigns the frozen non-learner seat by sampling from the normalized meta-strategy; when omitted, the previous round-robin behavior is preserved. Metrics now report `population_opponent_meta_strategy`, per-policy assigned game counts, and per-policy opponent-controlled steps. A CUDA CLI smoke with two local R-NaD policies and meta-strategy `[1.0, 0.0]` assigned all `16` games and all `28` frozen-opponent steps to policy 0, with finite loss and zero illegal records.
+- Metrics file: autoresearch-session/native_rnad/rnad_meta_strategy_smoke_seed20260726.json
+- Key metrics: `{"resolved_device": "cuda", "passed": true, "population_opponent_meta_strategy": [1.0, 0.0], "population_opponent_game_counts": [16, 0], "opponent_controlled_steps_by_policy": [28, 0], "illegal_records": 0, "compiled_needs_python_showdown": 0, "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py::test_rnad_compiled_native_learner_accepts_population_meta_strategy` -> `1 passed`.
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py test/unit/test_rnad_compiled_native_smoke.py` -> `8 passed`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
+  - CUDA CLI smoke above -> passed and wrote metrics.
+- Decision: this closes the immediate population-sampling infrastructure gap. The next falsifier can train a full-state native R-NaD response against a solved local empirical-game meta-strategy, then require parent/control H2H and empirical-game support. If that still loses to NFSP/Rainbow, the remaining blocker is the R-NaD/MMD objective estimator itself, not population assignment or checkpoint semantics.
