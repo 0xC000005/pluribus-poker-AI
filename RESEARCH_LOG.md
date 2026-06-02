@@ -19476,3 +19476,19 @@
   - `python scripts/train_native_all_action_target_policy.py --n-train-states 64 --n-eval-states 32 --rollouts-per-action 8 --max-steps-per-rollout 64 --hidden-dim 128 --n-steps 500 --batch-size 64 --target-temperature 0.1 --device cuda --seed 20260721 --checkpoint-out autoresearch-session/native_neural_nashpg/all_action_target_policy_64x32_r8_seed20260721.pt --output-json autoresearch-session/native_neural_nashpg/all_action_target_policy_64x32_r8_seed20260721.json` -> failed the improvement gate.
   - `python scripts/train_native_all_action_target_policy.py --n-train-states 256 --n-eval-states 64 --rollouts-per-action 8 --max-steps-per-rollout 64 --hidden-dim 128 --n-steps 800 --batch-size 128 --target-temperature 0.5 --device cuda --seed 20260722 --checkpoint-out autoresearch-session/native_neural_nashpg/all_action_target_policy_256x64_r8_temp05_seed20260722.pt --output-json autoresearch-session/native_neural_nashpg/all_action_target_policy_256x64_r8_temp05_seed20260722.json` -> failed the improvement gate.
 - Decision: Do not train full policies from single-world all-action targets. The next branch must average action values over multiple hidden worlds compatible with the player's observation/public state, or otherwise learn a belief/state representation that makes the target observable, before another policy-consumer gate.
+
+## 20260602T164500Z-failure-synthesis-for-single-world-all-action-target-policy - passed
+
+- Timestamp: 2026-06-02T16:45:00Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T164500Z-single-world-all-action-target-policy-failed
+- Hypothesis: The failed all-action target policy gate should identify whether the blocker is policy capacity, target smoothing, compute, or hidden-world label noise before another learner-consumer branch.
+- Failure class: none
+- Summary: Completed the synthesis bundle. The causal model is hidden-world label noise: the target builder evaluates a sampled complete world, but the policy observation does not contain opponent private cards or future deck order. That makes single-world targets non-observation-compatible. This aligns with counterfactual-value definitions over information sets using opponent/chance reach, and with the policy-gradient related work warning that imperfect-information PG needs the right value object/dynamics.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T164500Z-single-world-all-action-target-policy-failed-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T164500Z-single-world-all-action-target-policy-failed-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "retired_single_world_target_training": true, "next_required_gate": "world_averaged_all_action_target_builder", "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T164500Z-single-world-all-action-target-policy-failed-synthesis --require-complete` -> passed with decision `revise`.
+- Decision: Build a world-averaged all-action target gate that resamples hidden worlds compatible with the acting player's observation/public state and compares learnability against the failed single-world target before another policy-consumer run.
