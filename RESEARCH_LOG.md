@@ -17889,3 +17889,22 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus online pivot, iter2, gen3, Rainbow, and NFSP.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete six-policy matrix with pure support on the new online response.
 - Decision: promote this candidate only to the next local gate, not to Slumbot. The next principled test is an independent same-budget online-response replication from the same support mixture, followed by a direct H2H/empirical check against this support response. If it replicates, queue the formal pre-Slumbot candidate promotion gate; if it fails, synthesize whether online response is overfitting to the current matrix.
+## 20260602T034128Z-online-response-support-replication - passed
+
+- Timestamp: 2026-06-02T03:41:28Z
+- Type: online_compiled_rainbow_response_oracle_support_replication
+- Gate: online_response_support_independent_replication_gate
+- Hypothesis: An independent same-budget online response from the same support mixture should reproduce the key local wins and either match or beat the current support response.
+- Failure class: strategy_quality
+- Summary: Ran an independent same-budget online support-response replication with a fresh seed. The replica beat gen3 over 20k games and beat iter2 over 5k games, so the online response family replicated the important local control wins. It lost directly to the current support response over 20k games, so the seed-20260717 support candidate remains the best local checkpoint and the replica is not a replacement champion. This is partial replication rather than a pre-Slumbot promotion trigger.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_replica_h256_32x2048_u4096_seed20260724.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_replica_vs_support_h2h_20000_fast_seed20260725.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_replica_vs_gen3_h2h_20000_fast_seed20260726.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_replica_vs_iter2_h2h_5000_fast_seed20260727.json
+- Key metrics: `{"collector_hands": 65536, "collector_transitions": 177165, "epsilon": 0.2, "updates": 4096, "collector_transitions_per_second": 60420.66674024229, "updates_per_second": 153.06665649944958, "replica_vs_support_20k_mean": -0.00529315, "replica_vs_support_20k_lower95": -0.010445419954392153, "replica_vs_gen3_20k_mean": 0.0176434, "replica_vs_gen3_20k_lower95": 0.013004532064781877, "replica_vs_iter2_mean": 0.0135974, "replica_vs_iter2_lower95": 0.004153818021478333, "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --collect-iterations 32 --games-per-iteration 2048 --updates-per-collect 128 --epsilon 0.20 --seed 20260724 ...` -> passed on CUDA with zero Python-showdown fallback.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus gen3 and iter2; negative lower bound versus the current support response.
+- Decision: keep `online_response_iter4_support_h256_32x2048_u4096_seed20260717.pt` as the best local candidate. Do not queue Slumbot yet. The next local gate should either run a small league/promotion precheck around this best candidate or synthesize whether more online response iterations are likely to overfit the current matrix.
