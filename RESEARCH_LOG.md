@@ -18435,3 +18435,14 @@
 - Summary: Gate failure-synthesis-20260602T061103Z-20k-meta-policy-response-failed-after-psro-iteration2 passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T061350Z-failure-synthesis-for-20k-meta-policy-response-failed/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T061103Z-20k-meta-policy-response-failed-after-psro-iteration2", "passed": true}`
+
+## 20260602T061613Z-slumbot-smoke-unavailable-local-substitute - passed
+
+- Timestamp: 2026-06-02T06:16:13Z
+- Type: experiment
+- Gate: heldout_slumbot_smoke_or_local_substitute
+- Hypothesis: The current local 20k lead should at least load through the Slumbot-facing Rainbow policy path; if the held-out Slumbot endpoint is unavailable, a local duplicate-swapped H2H substitute should confirm the lead still beats the previous native support without using Slumbot data.
+- Failure class: none
+- Summary: The iteration-2 local lead loaded through `play_slumbot.py --model-kind tianshou-rainbow --no-solver`, but the held-out Slumbot API refused the first `new_hand` connection, so this produced zero Slumbot hands and no Slumbot strength evidence. The controlled local substitute passed: 2,000 duplicate-swapped native 9-action fast-state games versus the previous 20k support, mean=+0.031932, lower95=+0.015432, upper95=+0.048433, CUDA evaluation at 263.86 games/sec, uses_slumbot_training_data=false. This keeps iteration 2 as the local lead and does not change the next research branch: avoid another same-recipe response retry and use a reviewed expansion-quality selector or principled population-learning mechanism.
+- Metrics file: autoresearch-session/native_neural_nashpg/global_psro_iter2_vs_prev_support_local_substitute_h2h_2000_seed20260873.json
+- Key metrics: `{"slumbot_hands": 0, "slumbot_available": false, "local_substitute_passed": true, "mean_candidate_payoff": 0.031932375, "lower95_candidate_payoff": 0.015431997638283061}`
