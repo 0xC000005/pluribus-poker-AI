@@ -55,13 +55,19 @@ class NeuralReferencePGSolver:
         advantage_target: str = "terminal",
         gamma: float = 1.0,
         gae_lambda: float = 0.95,
+        decision_weight_mode: str = "uniform",
+        max_decision_weight: float = 10.0,
     ) -> None:
         if str(advantage_target) not in {"terminal", "gae"}:
             raise ValueError("advantage_target must be one of: terminal, gae")
+        if str(decision_weight_mode) not in {"uniform", "inverse-own-reach"}:
+            raise ValueError("decision_weight_mode must be one of: uniform, inverse-own-reach")
         if not (0.0 <= float(gamma) <= 1.0):
             raise ValueError("gamma must be in [0, 1]")
         if not (0.0 <= float(gae_lambda) <= 1.0):
             raise ValueError("gae_lambda must be in [0, 1]")
+        if float(max_decision_weight) <= 0.0:
+            raise ValueError("max_decision_weight must be positive")
         self.collector = collector
         self.device = torch.device("cpu")
         self.n_actions = int(collector.n_actions)
@@ -81,6 +87,8 @@ class NeuralReferencePGSolver:
         self.advantage_target = str(advantage_target)
         self.gamma = float(gamma)
         self.gae_lambda = float(gae_lambda)
+        self.decision_weight_mode = str(decision_weight_mode)
+        self.max_decision_weight = float(max_decision_weight)
         self._rng = np.random.RandomState(int(seed))
         self.learner_steps = 0
 
@@ -106,8 +114,16 @@ class NeuralReferencePGSolver:
             ref_pi, _, _, _ = self.reference_net(traj.obs, safe_legal)
 
         valid = traj.valid.to(pi.dtype)
-        mask = valid > 0
-        denom = valid.sum().clamp_min(1.0)
+        decision_weights = _decision_weights(
+            mode=self.decision_weight_mode,
+            action_oh=traj.action_oh,
+            behavior_policy=traj.policy,
+            valid=valid,
+            max_decision_weight=self.max_decision_weight,
+        ).to(pi.dtype)
+        weighted_valid = valid * decision_weights
+        mask = weighted_valid > 0
+        denom = weighted_valid.sum().clamp_min(1.0)
         logp_action = (traj.action_oh * log_pi).sum(-1)
 
         returns = traj.rewards[-1]
@@ -132,18 +148,29 @@ class NeuralReferencePGSolver:
         if bool(mask.any()):
             adv_valid = advantage[mask]
             advantage = (advantage - adv_valid.mean()) / (adv_valid.std(unbiased=False) + 1e-5)
-        policy_loss = -((logp_action * advantage) * valid).sum() / denom
+        policy_loss = -((logp_action * advantage) * weighted_valid).sum() / denom
 
-        value_loss = (((value_flat - value_target) ** 2) * valid).sum() / denom
-        entropy = -((pi.clamp_min(1e-9).log() * pi * safe_legal).sum(-1) * valid).sum() / denom
+        value_loss = (((value_flat - value_target) ** 2) * weighted_valid).sum() / denom
+        entropy = -((pi.clamp_min(1e-9).log() * pi * safe_legal).sum(-1) * weighted_valid).sum() / denom
         kl = (
             (
                 pi
                 * (pi.clamp_min(1e-9).log() - ref_pi.clamp_min(1e-9).log())
                 * safe_legal
             ).sum(-1)
-            * valid
+            * weighted_valid
         ).sum() / denom
+        observed_weights = decision_weights[valid > 0]
+        mean_weight = (
+            float(observed_weights.detach().mean().cpu())
+            if int(observed_weights.numel()) > 0
+            else 0.0
+        )
+        max_weight = (
+            float(observed_weights.detach().max().cpu())
+            if int(observed_weights.numel()) > 0
+            else 0.0
+        )
         loss = policy_loss + self.value_weight * value_loss + self.reference_kl_weight * kl - self.entropy_weight * entropy
         logs = {
             "loss": float(loss.detach().cpu()),
@@ -154,6 +181,9 @@ class NeuralReferencePGSolver:
             "advantage_target": self.advantage_target,
             "gamma": self.gamma,
             "gae_lambda": self.gae_lambda,
+            "decision_weight_mode": self.decision_weight_mode,
+            "mean_decision_weight": mean_weight,
+            "max_decision_weight": max_weight,
         }
         return loss, logs
 
@@ -212,6 +242,60 @@ def _linked_bootstrap_targets_and_advantages(
     return targets.detach(), advantages.detach()
 
 
+def _decision_weights(
+    *,
+    mode: str,
+    action_oh: torch.Tensor,
+    behavior_policy: torch.Tensor,
+    valid: torch.Tensor,
+    max_decision_weight: float,
+) -> torch.Tensor:
+    if str(mode) == "uniform":
+        return torch.where(valid > 0, torch.ones_like(valid), torch.zeros_like(valid))
+    if str(mode) != "inverse-own-reach":
+        raise ValueError("decision_weight_mode must be one of: uniform, inverse-own-reach")
+    return _decision_weights_from_own_reach(
+        action_oh=action_oh,
+        behavior_policy=behavior_policy,
+        valid=valid,
+        max_decision_weight=float(max_decision_weight),
+    )
+
+
+def _decision_weights_from_own_reach(
+    *,
+    action_oh: torch.Tensor,
+    behavior_policy: torch.Tensor,
+    valid: torch.Tensor,
+    max_decision_weight: float,
+) -> torch.Tensor:
+    """Approximate counterfactual occupancy by removing sampled learner reach."""
+    if action_oh.shape != behavior_policy.shape:
+        raise ValueError("action_oh and behavior_policy must have matching shapes")
+    if action_oh.shape[:2] != valid.shape:
+        raise ValueError("valid must match the [time, batch] trajectory shape")
+    if float(max_decision_weight) <= 0.0:
+        raise ValueError("max_decision_weight must be positive")
+    weights = torch.zeros_like(valid, dtype=behavior_policy.dtype, device=behavior_policy.device)
+    valid_bool = valid > 0
+    eps = torch.tensor(1.0e-8, dtype=behavior_policy.dtype, device=behavior_policy.device)
+    cap = torch.tensor(float(max_decision_weight), dtype=behavior_policy.dtype, device=behavior_policy.device)
+    for batch_i in range(valid.shape[1]):
+        own_reach = torch.ones((), dtype=behavior_policy.dtype, device=behavior_policy.device)
+        for time_i in range(valid.shape[0]):
+            if not bool(valid_bool[time_i, batch_i]):
+                continue
+            weights[time_i, batch_i] = torch.minimum(1.0 / torch.maximum(own_reach, eps), cap)
+            action_prob = torch.sum(
+                action_oh[time_i, batch_i] * behavior_policy[time_i, batch_i]
+            )
+            own_reach = own_reach * torch.maximum(action_prob, eps)
+    observed = weights[valid_bool]
+    if int(observed.numel()) > 0:
+        weights = weights / observed.mean().clamp_min(1.0e-8)
+    return torch.where(valid_bool, weights, torch.zeros_like(weights))
+
+
 def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
     from poker_ai.rnad.seat_collector import SeatAwarePyspielCollector
 
@@ -228,6 +312,8 @@ def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
         advantage_target=str(args.advantage_target),
         gamma=float(args.gamma),
         gae_lambda=float(args.gae_lambda),
+        decision_weight_mode=str(args.decision_weight_mode),
+        max_decision_weight=float(args.max_decision_weight),
     )
     trajectory_max = max(8, game.max_game_length() + 1)
     history = [(0, _nashconv_from_solver(game, by, solver, policy_lib, exploitability))]
@@ -285,6 +371,12 @@ def main(argv=None) -> int:
     parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
+    parser.add_argument(
+        "--decision-weight-mode",
+        choices=("uniform", "inverse-own-reach"),
+        default="uniform",
+    )
+    parser.add_argument("--max-decision-weight", type=float, default=10.0)
     parser.add_argument("--baseline-json")
     parser.add_argument("--baseline-arm", default="rnad")
     parser.add_argument("--output-json")
@@ -304,6 +396,8 @@ def main(argv=None) -> int:
         raise ValueError("--gamma must be in [0, 1]")
     if not (0.0 <= float(args.gae_lambda) <= 1.0):
         raise ValueError("--gae-lambda must be in [0, 1]")
+    if float(args.max_decision_weight) <= 0.0:
+        raise ValueError("--max-decision-weight must be positive")
 
     from open_spiel.python import policy as policy_lib
     from open_spiel.python.algorithms import exploitability
@@ -379,6 +473,8 @@ def main(argv=None) -> int:
             "advantage_target": str(args.advantage_target),
             "gamma": float(args.gamma),
             "gae_lambda": float(args.gae_lambda),
+            "decision_weight_mode": str(args.decision_weight_mode),
+            "max_decision_weight": float(args.max_decision_weight),
             "baseline_json": args.baseline_json,
             "baseline_arm": args.baseline_arm,
         },

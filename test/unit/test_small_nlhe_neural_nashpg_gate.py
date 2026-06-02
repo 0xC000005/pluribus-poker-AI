@@ -133,3 +133,36 @@ def test_neural_reference_pg_solver_seed_controls_torch_initialization():
 
     for left, right in zip(first.net.parameters(), second.net.parameters(), strict=True):
         assert torch.equal(left, right)
+
+
+def test_inverse_own_reach_decision_weights_use_prior_learner_reach():
+    repo = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo / "scripts"))
+    from scripts.run_small_nlhe_neural_nashpg_gate import _decision_weights_from_own_reach
+
+    valid = torch.tensor([[1.0], [1.0], [0.0]])
+    action_oh = torch.tensor(
+        [
+            [[1.0, 0.0]],
+            [[0.0, 1.0]],
+            [[0.0, 0.0]],
+        ]
+    )
+    policy = torch.tensor(
+        [
+            [[0.25, 0.75]],
+            [[0.50, 0.50]],
+            [[0.50, 0.50]],
+        ]
+    )
+
+    weights = _decision_weights_from_own_reach(
+        action_oh=action_oh,
+        behavior_policy=policy,
+        valid=valid,
+        max_decision_weight=10.0,
+    )
+
+    assert torch.isclose(weights[0, 0], torch.tensor(0.4))
+    assert torch.isclose(weights[1, 0], torch.tensor(1.6))
+    assert weights[2, 0] == 0.0

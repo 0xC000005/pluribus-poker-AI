@@ -116,6 +116,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
+    parser.add_argument(
+        "--decision-weight-mode",
+        choices=("uniform", "inverse-own-reach"),
+        default="uniform",
+    )
+    parser.add_argument("--max-decision-weight", type=float, default=10.0)
     parser.add_argument("--seed", type=int, default=20260602)
     parser.add_argument("--max-fit-current-kl", type=float, default=0.02)
     parser.add_argument("--min-target-kl-reduction", type=float, default=1e-5)
@@ -133,6 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise ValueError("--gamma must be in [0, 1]")
     if not (0.0 <= float(args.gae_lambda) <= 1.0):
         raise ValueError("--gae-lambda must be in [0, 1]")
+    if float(args.max_decision_weight) <= 0.0:
+        raise ValueError("--max-decision-weight must be positive")
 
     from open_spiel.python import policy as policy_lib
     from open_spiel.python.algorithms import exploitability
@@ -171,6 +179,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         advantage_target=str(args.advantage_target),
         gamma=float(args.gamma),
         gae_lambda=float(args.gae_lambda),
+        decision_weight_mode=str(args.decision_weight_mode),
+        max_decision_weight=float(args.max_decision_weight),
     )
     fit_stats = _fit_solver_policy(
         solver,
@@ -248,6 +258,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "advantage_target": str(args.advantage_target),
             "gamma": float(args.gamma),
             "gae_lambda": float(args.gae_lambda),
+            "decision_weight_mode": str(args.decision_weight_mode),
+            "max_decision_weight": float(args.max_decision_weight),
             "seed": int(args.seed),
             "max_fit_current_kl": float(args.max_fit_current_kl),
             "min_target_kl_reduction": float(args.min_target_kl_reduction),

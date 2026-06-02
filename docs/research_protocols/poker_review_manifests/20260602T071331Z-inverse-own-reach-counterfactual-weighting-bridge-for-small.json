@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1223,
+      "path": "benchmark_audit.md",
+      "sha256": "6d435f2abb96cebd270a51040e8d351e1676da7100053db4ca5a202608aa5594"
+    },
+    {
+      "bytes": 955,
+      "path": "decision.json",
+      "sha256": "6664a879249dfe47fa4bc6c906022cf7be34d25666e753fd152e7ce13b328261"
+    },
+    {
+      "bytes": 1613,
+      "path": "mechanism_review.md",
+      "sha256": "80375077cecdceaec69eb6a108b31a6e31c6301a7bea60deeb568bda670ed2d2"
+    },
+    {
+      "bytes": 2394,
+      "path": "related_work.md",
+      "sha256": "7fe24464076e5d65f4f9774461de590497d62e9e9b2b4208bc056f5bcac81c03"
+    },
+    {
+      "bytes": 1638,
+      "path": "review.md",
+      "sha256": "ab710f93abebd24b2ecd23962a8ec6161a14e0a8367c77ed03dd91cca0044eaa"
+    },
+    {
+      "bytes": 2653,
+      "path": "review_scope.json",
+      "sha256": "9f3a42f36acfea7ebfbd6eb27f5c3b6daa3947f7d9f3de69cd44a688a3dd1c94"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed narrowly with a small-game inverse-own-reach diagnostic because terminal and GAE sampled actor-critic estimators failed the exact MMD update-fidelity bridge, while CFR/MCCFR related work identifies counterfactual occupancy as the missing structure. This is not promotion evidence and does not authorize native HUNL training.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T071331Z-inverse-own-reach-counterfactual-weighting-bridge-for-small",
+  "review_id": "20260602T071331Z-inverse-own-reach-counterfactual-weighting-bridge-for-small",
+  "sources": [
+    "autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_terminal_start200_lr5e4_seed20260692_deterministic.json",
+    "autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_gae_start200_lr5e4_seed20260692_deterministic.json",
+    "poker_ai/rnad/seat_collector.py",
+    "https://papers.nips.cc/paper/3306-regret-minimization-in-games-with-incomplete-information",
+    "https://papers.nips.cc/paper/3712-monte-carlo-sampling-for-regret-minimization-in-extensive-games",
+    "https://arxiv.org/abs/2206.05825"
+  ],
+  "written_at": "2026-06-02T07:18:45Z"
+}

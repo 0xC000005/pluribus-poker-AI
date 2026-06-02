@@ -18622,3 +18622,36 @@
 - Summary: Gate failure-synthesis-20260602T071115Z-bootstrapped-gae-small-nlhe-update-estimator-failed-to passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T071156Z-failure-synthesis-for-bootstrapped-gae-small-nlhe-update/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T071115Z-bootstrapped-gae-small-nlhe-update-estimator-failed-to", "passed": true}`
+
+## 20260602T071850Z-methodology-review-for-inverse-own-reach-counterfactual-weighting - passed
+
+- Timestamp: 2026-06-02T07:18:50Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T071331Z-inverse-own-reach-counterfactual-weighting-bridge-for-small
+- Hypothesis: Methodology review for Inverse-own-reach counterfactual weighting bridge for small-NLHE NashPG should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T071331Z-inverse-own-reach-counterfactual-weighting-bridge-for-small passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T071850Z-methodology-review-for-inverse-own-reach-counterfactual-weighting/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T071331Z-inverse-own-reach-counterfactual-weighting-bridge-for-small", "passed": true}`
+
+## 20260602T071913Z-small-nlhe-inverse-own-reach-bridge - failed
+
+- Timestamp: 2026-06-02T07:19:13Z
+- Type: experiment
+- Gate: matched_small_nlhe_inverse_own_reach_update_fidelity_bridge
+- Hypothesis: Reweighting sampled learner decisions by inverse own reach should better approximate counterfactual occupancy and improve exact small-NLHE MMD update fidelity versus terminal/GAE trajectory-return estimators.
+- Failure class: estimator_fidelity
+- Summary: Added `decision_weight_mode=uniform|inverse-own-reach` to the small-NLHE neural NashPG loss and MMD update-fidelity bridge. The inverse-own-reach helper uses the recorded behavior policy and sampled learner actions to remove prior learner reach, clips raw weights, and normalizes observed weights to mean one. Focused OpenSpiel tests passed. On the deterministic near-policy bridge at `lr=0.0005`, inverse-own-reach was active (`mean_decision_weight=1.0`, `max_decision_weight=9.157`) and reduced the overshoot relative to terminal/GAE (`target_kl_reduction=-0.0000385` versus terminal `-0.0001379` and GAE `-0.0001448`), but it still failed the gate and had lower cosine (`0.5274`). This is useful evidence that reach correction is directionally relevant, but the sampled approximation is still not faithful enough. Do not tune the cap for promotion; next step is true exact-tree information-set/reach bookkeeping or maintained MCCFR/MMD/R-NaD primitives.
+- Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_inverse_own_reach_start200_lr5e4_seed20260692_deterministic.json
+- Key metrics: `{"inverse_target_kl_reduction": -3.850984715360059e-05, "inverse_update_delta_cosine": 0.52735035560727, "terminal_target_kl_reduction": -0.0001379259471010388, "gae_target_kl_reduction": -0.00014477182459539614, "mean_decision_weight": 0.9999998211860657, "max_decision_weight": 9.157088279724121, "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T071954Z-failure-synthesis-for-inverse-own-reach-small-nlhe - passed
+
+- Timestamp: 2026-06-02T07:19:55Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T071922Z-inverse-own-reach-small-nlhe-bridge-improved-but
+- Hypothesis: Failure synthesis for Inverse-own-reach small-NLHE bridge improved but failed MMD fidelity should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T071922Z-inverse-own-reach-small-nlhe-bridge-improved-but passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T071954Z-failure-synthesis-for-inverse-own-reach-small-nlhe/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T071922Z-inverse-own-reach-small-nlhe-bridge-improved-but", "passed": true}`
