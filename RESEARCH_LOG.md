@@ -18761,3 +18761,19 @@
   - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_baseline_hardening_gate.py` -> `2 passed`.
   - `uv run --no-project --with open-spiel python scripts/run_small_nlhe_baseline_hardening_gate.py --steps 1200 --eval-every 400 --batch-size 256 --seeds 1,2,3 --layers 128 128 --rnad-policy-source learner --snapshot-every 200 --pool-size 3 --output-json autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json` -> passed.
 - Decision: future small-game neural PG/R-NaD-family promotion claims must compare against learner-source R-NaD or explicitly justify why the target/EMA policy is the deployed comparator. The current player-GAE and GAE PG variants remain failed, and the earlier neural NashPG gate is provisional rather than promotion evidence.
+
+## 20260602T084500Z-small-nlhe-neural-nashpg-corrected-comparator - failed
+
+- Timestamp: 2026-06-02T08:45:00Z
+- Type: experiment
+- Gate: small_nlhe_neural_nashpg_corrected_comparator
+- Hypothesis: The prior neural NashPG small-game pass should survive a corrected learner-source R-NaD baseline and a deployable-policy pass rule if it is a real policy-improvement mechanism rather than a best-curve artifact.
+- Failure class: small_game_pg_control
+- Summary: Tightened `scripts/run_small_nlhe_neural_nashpg_gate.py` so `candidate_truth_gate_passed` requires the final/last neural policy to beat the matched baseline; best-over-training is still recorded but no longer sufficient. A focused test covers the edge case where best NashConv beats baseline but last NashConv does not. Re-running the original 3-seed neural NashPG settings against learner-source R-NaD failed decisively: mean best NashConv `0.496696` and mean last `1.131906`, versus learner-source R-NaD mean last `0.211838`. The older artifact (`mean best=0.206352`, `mean last=0.239625`) used the weaker target-source comparator and predates the stricter deployable-policy gate, so it must not authorize native HUNL scale-up.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_1200_seed1_3_vs_rnad_learner_baseline.json
+- Key metrics: `{"mean_start_nashconv": 1.719228, "mean_best_nashconv": 0.496696, "mean_last_nashconv": 1.131906, "baseline_rnad_learner_mean_last_nashconv": 0.211838, "best_beats_baseline": false, "last_beats_baseline": false, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py::test_neural_nashpg_truth_gate_rejects_best_only_baseline_win` -> `1 passed`.
+  - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
+  - Corrected gate command above -> passed and wrote the metrics file.
+- Decision: retire the earlier neural NashPG pass as stale comparator evidence. Do not scale the current neural PG/R-NaD-family objective into native 9-action HUNL. The next mechanism must either reproduce a stronger counterfactual/sequence-form-compatible objective on small-NLHE or pivot to a population/empirical-game learner that beats the corrected learner-source R-NaD baseline before any native scale-up.

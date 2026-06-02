@@ -442,13 +442,14 @@ build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
 another native 9-action HUNL learner.
 That neural truth gate now exists, but its first apparent pass used the weaker
-target-source R-NaD comparator. Re-scoring R-NaD with the learner policy gives a
-stronger mean last NashConv `0.211838`; the neural gate's `mean best=0.206352`
-and `mean last=0.239625` are near that comparator, not a clean promotion pass.
-Later full-self-play terminal, GAE, and player-perspective GAE controls failed
-even the weaker target-source comparator. This keeps the neural update family as
-a research lead, but it does not authorize Slumbot evaluation, full-HUNL
-strength claims, or another native scale-up without a stronger small-game gate.
+target-source R-NaD comparator and a best-over-training pass rule. Re-scoring
+R-NaD with the learner policy gives a stronger mean last NashConv `0.211838`.
+The gate now requires the deployable last policy to beat the baseline. The
+corrected seeded rerun failed (`mean best=0.496696`, `mean last=1.131906`), and
+later full-self-play terminal, GAE, and player-perspective GAE controls also
+failed. This keeps the neural update family as a research lead, but it does not
+authorize Slumbot evaluation, full-HUNL strength claims, or another native
+scale-up without a stronger small-game gate.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
@@ -1187,9 +1188,9 @@ Required A/B before native 9-action scale-up:
 Current retired/falsified variants include post-hoc Rainbow Q-softmax, unchanged
 terminal-return NashPG/MMD response, unchanged V-trace actor, unchanged GAE
 compiled actor, and the small-NLHE GAE/high-entropy PG control that failed the
-R-NaD exact-NashConv baseline. The earlier neural NashPG "pass" must be treated
-as provisional because it used target-source R-NaD; learner-source R-NaD is the
-current small-game comparator. The active pivot is a reviewed
+R-NaD exact-NashConv baseline. The earlier neural NashPG "pass" is retired
+because it used target-source R-NaD and a best-over-training pass rule; the
+current corrected rerun against learner-source R-NaD fails. The active pivot is a reviewed
 counterfactual/sequence-form-compatible policy-gradient or population objective.
 
 ## Legacy Resolver Diagnostics

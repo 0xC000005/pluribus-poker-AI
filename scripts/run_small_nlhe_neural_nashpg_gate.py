@@ -432,6 +432,25 @@ def _finite_values(values: Sequence[float]) -> bool:
     return all(math.isfinite(float(value)) for value in values)
 
 
+def _candidate_truth_gate_passed(
+    *,
+    harness_passed: bool,
+    all_metrics_finite: bool,
+    improved_from_uniform: bool,
+    mean_best_nashconv: float,
+    mean_last_nashconv: float,
+    baseline_mean_last_nashconv: float | None,
+) -> bool:
+    if not (bool(harness_passed) and bool(all_metrics_finite) and bool(improved_from_uniform)):
+        return False
+    if baseline_mean_last_nashconv is None:
+        return True
+    return bool(
+        float(mean_best_nashconv) < float(baseline_mean_last_nashconv)
+        and float(mean_last_nashconv) < float(baseline_mean_last_nashconv)
+    )
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--steps", type=int, default=1200)
@@ -511,33 +530,45 @@ def main(argv=None) -> int:
     )
     improved_from_uniform = bool(arm["mean_best_nashconv"] < fp["uniform_nashconv"])
     compared_to_baseline = None
-    beats_baseline = None
+    best_beats_baseline = None
+    last_beats_baseline = None
+    baseline_mean_last = None
     if baseline is not None:
-        beats_baseline = bool(arm["mean_best_nashconv"] < baseline["mean_last_nashconv"])
+        baseline_mean_last = float(baseline["mean_last_nashconv"])
+        best_beats_baseline = bool(arm["mean_best_nashconv"] < baseline_mean_last)
+        last_beats_baseline = bool(arm["mean_last_nashconv"] < baseline_mean_last)
         compared_to_baseline = {
             "baseline_arm": baseline["arm"],
-            "baseline_mean_last_nashconv": baseline["mean_last_nashconv"],
-            "neural_best_beats_baseline_last": beats_baseline,
+            "baseline_mean_last_nashconv": baseline_mean_last,
+            "neural_best_beats_baseline_last": best_beats_baseline,
+            "neural_last_beats_baseline_last": last_beats_baseline,
         }
+    all_metrics_finite = _finite_values(all_values)
+    candidate_passed = _candidate_truth_gate_passed(
+        harness_passed=harness_passed,
+        all_metrics_finite=all_metrics_finite,
+        improved_from_uniform=improved_from_uniform,
+        mean_best_nashconv=arm["mean_best_nashconv"],
+        mean_last_nashconv=arm["mean_last_nashconv"],
+        baseline_mean_last_nashconv=baseline_mean_last,
+    )
     decision = {
         "primary_metric": "exact_open_spiel_nashconv_lower_is_better",
         "harness_passed": harness_passed,
-        "all_metrics_finite": _finite_values(all_values),
+        "all_metrics_finite": all_metrics_finite,
         "small_game_exact_only": True,
         "improved_from_uniform": improved_from_uniform,
-        "beats_baseline": beats_baseline,
-        "candidate_truth_gate_passed": bool(
-            harness_passed
-            and _finite_values(all_values)
-            and improved_from_uniform
-            and (beats_baseline is not False)
-        ),
+        "beats_baseline": last_beats_baseline,
+        "best_beats_baseline": best_beats_baseline,
+        "last_beats_baseline": last_beats_baseline,
+        "candidate_truth_gate_passed": candidate_passed,
         "slumbot_full_hunl_blocked": True,
         "compared_to_baseline": compared_to_baseline,
         "interpretation": (
             "Neural reference-regularized policy gradient is a small-game truth gate "
-            "for a NashPG/MMD-style update. Passing authorizes native mechanism work; "
-            "it does not promote any HUNL checkpoint."
+            "for a NashPG/MMD-style update. Passing requires the deployable last "
+            "policy, not only a best training-curve point, to beat the matched "
+            "baseline before native mechanism work; it does not promote any HUNL checkpoint."
         ),
     }
     out = {

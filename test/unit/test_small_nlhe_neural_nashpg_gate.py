@@ -295,3 +295,21 @@ def test_inverse_own_reach_decision_weights_use_prior_learner_reach():
     assert torch.isclose(weights[0, 0], torch.tensor(0.4))
     assert torch.isclose(weights[1, 0], torch.tensor(1.6))
     assert weights[2, 0] == 0.0
+
+
+def test_neural_nashpg_truth_gate_rejects_best_only_baseline_win():
+    repo = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo / "scripts"))
+    from scripts.run_small_nlhe_neural_nashpg_gate import _candidate_truth_gate_passed
+
+    assert (
+        _candidate_truth_gate_passed(
+            harness_passed=True,
+            all_metrics_finite=True,
+            improved_from_uniform=True,
+            mean_best_nashconv=0.20,
+            mean_last_nashconv=0.24,
+            baseline_mean_last_nashconv=0.21,
+        )
+        is False
+    )
