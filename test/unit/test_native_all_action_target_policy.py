@@ -56,3 +56,38 @@ def test_native_all_action_target_policy_training_writes_checkpoint(tmp_path):
     )
     assert np.isclose(float(probs.sum()), 1.0)
     assert probs[2] == 0.0
+
+
+def test_native_all_action_target_policy_supports_world_averaged_margin_gate(tmp_path):
+    from scripts.train_native_all_action_target_policy import run_training_gate
+
+    checkpoint = tmp_path / "world_margin.pt"
+    metrics = run_training_gate(
+        n_train_states=4,
+        n_eval_states=3,
+        n_worlds=2,
+        rollouts_per_action=1,
+        max_steps_per_rollout=12,
+        hidden_dim=16,
+        n_steps=10,
+        batch_size=4,
+        target_temperature=0.5,
+        min_target_margin=0.0,
+        margin_weight_power=1.0,
+        seed=20260740,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["n_worlds"] == 2
+    assert metrics["world_averaged_targets"] is True
+    assert metrics["min_target_margin"] == 0.0
+    assert metrics["margin_weight_power"] == 1.0
+    assert metrics["train_retained_states"] == 4
+    assert metrics["eval_retained_states"] == 3
+    assert metrics["mean_eval_target_margin"] >= 0.0
+
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["n_worlds"] == 2
+    assert payload["config"]["min_target_margin"] == 0.0

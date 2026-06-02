@@ -28,8 +28,10 @@ from poker_ai.research.local_vtrace import masked_log_probs  # noqa: E402
 from poker_ai.research.native_nfsp import resolve_device  # noqa: E402
 from poker_ai.research.native_ppo_policy import _PolicyMLP  # noqa: E402
 from scripts.build_native_all_action_counterfactual_targets import (  # noqa: E402
+    _top_legal_margin,
     _sample_decision_states,
     estimate_all_action_rollout_values,
+    estimate_world_averaged_all_action_values,
 )
 
 
@@ -58,14 +60,17 @@ def target_policy_from_values(
 def _build_dataset(
     *,
     n_states: int,
+    n_worlds: int,
     rollouts_per_action: int,
     max_steps_per_rollout: int,
     initial_chips: int,
     seed: int,
     target_temperature: float,
+    min_target_margin: float,
+    margin_weight_power: float,
 ) -> dict[str, np.ndarray]:
     states = _sample_decision_states(
-        n_states=int(n_states),
+        n_states=max(int(n_states), 1) * (8 if float(min_target_margin) > 0.0 else 1),
         initial_chips=int(initial_chips),
         seed=int(seed),
         max_steps_per_hand=max(int(max_steps_per_rollout), 1),
@@ -75,14 +80,28 @@ def _build_dataset(
     targets: list[np.ndarray] = []
     values: list[np.ndarray] = []
     top_actions: list[int] = []
+    margins: list[float] = []
     for state_i, state in enumerate(states):
-        estimate = estimate_all_action_rollout_values(
-            state,
-            n_rollouts_per_action=int(rollouts_per_action),
-            max_steps_per_rollout=int(max_steps_per_rollout),
-            seed=int(seed) + 50_000 + state_i,
-            paired_rollout_seeds=True,
-        )
+        if int(n_worlds) > 1:
+            estimate = estimate_world_averaged_all_action_values(
+                state,
+                n_worlds=int(n_worlds),
+                n_rollouts_per_action=int(rollouts_per_action),
+                max_steps_per_rollout=int(max_steps_per_rollout),
+                seed=int(seed) + 50_000 + state_i,
+                paired_rollout_seeds=True,
+            )
+        else:
+            estimate = estimate_all_action_rollout_values(
+                state,
+                n_rollouts_per_action=int(rollouts_per_action),
+                max_steps_per_rollout=int(max_steps_per_rollout),
+                seed=int(seed) + 50_000 + state_i,
+                paired_rollout_seeds=True,
+            )
+        margin = _top_legal_margin(estimate["values"], estimate["legal_mask"])
+        if float(margin) < float(min_target_margin):
+            continue
         target = target_policy_from_values(
             estimate["values"],
             estimate["legal_mask"],
@@ -93,12 +112,32 @@ def _build_dataset(
         targets.append(target.astype(np.float32, copy=False))
         values.append(np.asarray(estimate["values"], dtype=np.float32))
         top_actions.append(int(np.argmax(target)))
+        margins.append(float(margin))
+        if len(features) >= int(n_states):
+            break
+    if len(features) < int(n_states):
+        raise ValueError(
+            "not enough target states met min_target_margin; lower the margin or increase sampling"
+        )
+    margin_array = np.asarray(margins, dtype=np.float32)
+    if float(margin_weight_power) > 0.0:
+        weights = np.power(
+            np.maximum(margin_array, 0.0),
+            float(margin_weight_power),
+        ).astype(np.float32)
+        if float(weights.sum()) <= 1e-8:
+            weights = np.ones_like(margin_array, dtype=np.float32)
+    else:
+        weights = np.ones_like(margin_array, dtype=np.float32)
+    weights = weights / max(float(weights.mean()), 1e-8)
     return {
         "features": np.stack(features).astype(np.float32, copy=False),
         "legal_masks": np.stack(legal_masks).astype(np.float32, copy=False),
         "targets": np.stack(targets).astype(np.float32, copy=False),
         "values": np.stack(values).astype(np.float32, copy=False),
         "top_actions": np.asarray(top_actions, dtype=np.int64),
+        "target_margins": margin_array,
+        "sample_weights": weights.astype(np.float32, copy=False),
     }
 
 
@@ -107,10 +146,15 @@ def _cross_entropy_to_targets(
     features: torch.Tensor,
     legal_masks: torch.Tensor,
     targets: torch.Tensor,
+    sample_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     log_probs = masked_log_probs(policy_net(features), legal_masks > 0)
     safe_log_probs = torch.where(targets > 0, log_probs, torch.zeros_like(log_probs))
-    return -torch.sum(targets * safe_log_probs, dim=1).mean()
+    row_loss = -torch.sum(targets * safe_log_probs, dim=1)
+    if sample_weights is None:
+        return row_loss.mean()
+    weights = sample_weights.to(dtype=row_loss.dtype, device=row_loss.device)
+    return torch.sum(row_loss * weights) / weights.sum().clamp_min(1e-8)
 
 
 @torch.no_grad()
@@ -122,6 +166,7 @@ def _evaluate_policy_targets(
     features = torch.as_tensor(dataset["features"], dtype=torch.float32, device=device)
     legal_masks = torch.as_tensor(dataset["legal_masks"], dtype=torch.float32, device=device)
     targets = torch.as_tensor(dataset["targets"], dtype=torch.float32, device=device)
+    sample_weights = torch.as_tensor(dataset["sample_weights"], dtype=torch.float32, device=device)
     log_probs = masked_log_probs(policy_net(features), legal_masks > 0)
     safe_log_probs = torch.where(targets > 0, log_probs, torch.zeros_like(log_probs))
     ce = -torch.sum(targets * safe_log_probs, dim=1)
@@ -133,10 +178,18 @@ def _evaluate_policy_targets(
     )
     target_top = torch.as_tensor(dataset["top_actions"], dtype=torch.long, device=device)
     agreement = (pred_top == target_top).to(dtype=torch.float32).mean()
+    weighted_ce = torch.sum(ce * sample_weights) / sample_weights.sum().clamp_min(1e-8)
+    weighted_uniform_ce = (
+        torch.sum(uniform_ce * sample_weights) / sample_weights.sum().clamp_min(1e-8)
+    )
     return {
         "cross_entropy": float(ce.mean().detach().cpu()),
         "uniform_cross_entropy": float(uniform_ce.mean().detach().cpu()),
+        "weighted_cross_entropy": float(weighted_ce.detach().cpu()),
+        "weighted_uniform_cross_entropy": float(weighted_uniform_ce.detach().cpu()),
         "top_action_agreement": float(agreement.detach().cpu()),
+        "mean_target_margin": float(np.mean(dataset["target_margins"])),
+        "mean_sample_weight": float(np.mean(dataset["sample_weights"])),
     }
 
 
@@ -144,6 +197,7 @@ def run_training_gate(
     *,
     n_train_states: int = 64,
     n_eval_states: int = 32,
+    n_worlds: int = 1,
     rollouts_per_action: int = 16,
     max_steps_per_rollout: int = 64,
     initial_chips: int = 1000,
@@ -152,6 +206,8 @@ def run_training_gate(
     batch_size: int = 64,
     lr: float = 1e-3,
     target_temperature: float = 0.1,
+    min_target_margin: float = 0.0,
+    margin_weight_power: float = 0.0,
     seed: int = 20260720,
     device: str = "auto",
     checkpoint_out: str | Path | None = None,
@@ -161,6 +217,8 @@ def run_training_gate(
         raise ValueError("n_train_states and n_eval_states must be positive")
     if int(rollouts_per_action) <= 0:
         raise ValueError("rollouts_per_action must be positive")
+    if int(n_worlds) <= 0:
+        raise ValueError("n_worlds must be positive")
     if int(n_steps) <= 0:
         raise ValueError("n_steps must be positive")
     if int(batch_size) <= 0:
@@ -173,25 +231,32 @@ def run_training_gate(
     resolved_device = torch.device(device_info["resolved_device"])
     train = _build_dataset(
         n_states=int(n_train_states),
+        n_worlds=int(n_worlds),
         rollouts_per_action=int(rollouts_per_action),
         max_steps_per_rollout=int(max_steps_per_rollout),
         initial_chips=int(initial_chips),
         seed=int(seed),
         target_temperature=float(target_temperature),
+        min_target_margin=float(min_target_margin),
+        margin_weight_power=float(margin_weight_power),
     )
     eval_data = _build_dataset(
         n_states=int(n_eval_states),
+        n_worlds=int(n_worlds),
         rollouts_per_action=int(rollouts_per_action),
         max_steps_per_rollout=int(max_steps_per_rollout),
         initial_chips=int(initial_chips),
         seed=int(seed) + 100_000,
         target_temperature=float(target_temperature),
+        min_target_margin=float(min_target_margin),
+        margin_weight_power=float(margin_weight_power),
     )
     policy_net = _PolicyMLP(int(hidden_dim), input_dim=N_FEATURES).to(resolved_device)
     optimizer = torch.optim.Adam(policy_net.parameters(), lr=float(lr))
     train_features = torch.as_tensor(train["features"], dtype=torch.float32, device=resolved_device)
     train_masks = torch.as_tensor(train["legal_masks"], dtype=torch.float32, device=resolved_device)
     train_targets = torch.as_tensor(train["targets"], dtype=torch.float32, device=resolved_device)
+    train_weights = torch.as_tensor(train["sample_weights"], dtype=torch.float32, device=resolved_device)
     generator = torch.Generator(device=resolved_device)
     generator.manual_seed(int(seed))
     losses: list[float] = []
@@ -212,6 +277,7 @@ def run_training_gate(
             train_features[indices],
             train_masks[indices],
             train_targets[indices],
+            train_weights[indices],
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -222,6 +288,9 @@ def run_training_gate(
     train_eval = _evaluate_policy_targets(policy_net, train, resolved_device)
     holdout_eval = _evaluate_policy_targets(policy_net, eval_data, resolved_device)
     improvement = float(holdout_eval["uniform_cross_entropy"] - holdout_eval["cross_entropy"])
+    weighted_improvement = float(
+        holdout_eval["weighted_uniform_cross_entropy"] - holdout_eval["weighted_cross_entropy"]
+    )
     checkpoint_path = None if checkpoint_out is None else str(Path(checkpoint_out))
     metrics: dict[str, Any] = {
         "algorithm": "native_all_action_target_policy",
@@ -232,6 +301,10 @@ def run_training_gate(
         "seed": int(seed),
         "n_train_states": int(n_train_states),
         "n_eval_states": int(n_eval_states),
+        "train_retained_states": int(train["features"].shape[0]),
+        "eval_retained_states": int(eval_data["features"].shape[0]),
+        "n_worlds": int(n_worlds),
+        "world_averaged_targets": bool(int(n_worlds) > 1),
         "rollouts_per_action": int(rollouts_per_action),
         "max_steps_per_rollout": int(max_steps_per_rollout),
         "initial_chips": int(initial_chips),
@@ -240,14 +313,23 @@ def run_training_gate(
         "batch_size": int(batch_size),
         "lr": float(lr),
         "target_temperature": float(target_temperature),
+        "min_target_margin": float(min_target_margin),
+        "margin_weight_power": float(margin_weight_power),
         "last_train_loss": float(losses[-1]) if losses else None,
         "train_cross_entropy": float(train_eval["cross_entropy"]),
         "train_uniform_cross_entropy": float(train_eval["uniform_cross_entropy"]),
+        "train_weighted_cross_entropy": float(train_eval["weighted_cross_entropy"]),
+        "train_weighted_uniform_cross_entropy": float(train_eval["weighted_uniform_cross_entropy"]),
         "train_top_action_agreement": float(train_eval["top_action_agreement"]),
+        "mean_train_target_margin": float(train_eval["mean_target_margin"]),
         "eval_cross_entropy": float(holdout_eval["cross_entropy"]),
         "uniform_eval_cross_entropy": float(holdout_eval["uniform_cross_entropy"]),
+        "eval_weighted_cross_entropy": float(holdout_eval["weighted_cross_entropy"]),
+        "eval_weighted_uniform_cross_entropy": float(holdout_eval["weighted_uniform_cross_entropy"]),
         "target_kl_improvement_over_uniform": improvement,
+        "weighted_target_kl_improvement_over_uniform": weighted_improvement,
         "eval_top_action_agreement": float(holdout_eval["top_action_agreement"]),
+        "mean_eval_target_margin": float(holdout_eval["mean_target_margin"]),
         "num_actions": N_ACTIONS,
         "num_features": N_FEATURES,
         "trained_environment_native": True,
@@ -258,7 +340,8 @@ def run_training_gate(
         "promotion": False,
         "checkpoint_path": checkpoint_path,
     }
-    metrics["passed"] = bool(np.isfinite(improvement) and improvement > 0.0)
+    gate_improvement = weighted_improvement if float(margin_weight_power) > 0.0 else improvement
+    metrics["passed"] = bool(np.isfinite(gate_improvement) and gate_improvement > 0.0)
 
     if checkpoint_out is not None:
         path = Path(checkpoint_out)
@@ -280,6 +363,9 @@ def run_training_gate(
                     "train_environment": "poker_ai:full_deck_hu_nlhe",
                     "target_source": "local_all_action_rollout",
                     "target_temperature": float(target_temperature),
+                    "n_worlds": int(n_worlds),
+                    "min_target_margin": float(min_target_margin),
+                    "margin_weight_power": float(margin_weight_power),
                 },
                 "metrics": metrics,
                 "trained_environment_native": True,
@@ -302,6 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n-train-states", type=int, default=64)
     parser.add_argument("--n-eval-states", type=int, default=32)
+    parser.add_argument("--n-worlds", type=int, default=1)
     parser.add_argument("--rollouts-per-action", type=int, default=16)
     parser.add_argument("--max-steps-per-rollout", type=int, default=64)
     parser.add_argument("--initial-chips", type=int, default=1000)
@@ -310,6 +397,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--target-temperature", type=float, default=0.1)
+    parser.add_argument("--min-target-margin", type=float, default=0.0)
+    parser.add_argument("--margin-weight-power", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=20260720)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--checkpoint-out", type=Path)
@@ -318,6 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     metrics = run_training_gate(
         n_train_states=args.n_train_states,
         n_eval_states=args.n_eval_states,
+        n_worlds=args.n_worlds,
         rollouts_per_action=args.rollouts_per_action,
         max_steps_per_rollout=args.max_steps_per_rollout,
         initial_chips=args.initial_chips,
@@ -326,6 +416,8 @@ def main(argv: list[str] | None = None) -> int:
         batch_size=args.batch_size,
         lr=args.lr,
         target_temperature=args.target_temperature,
+        min_target_margin=args.min_target_margin,
+        margin_weight_power=args.margin_weight_power,
         seed=args.seed,
         device=args.device,
         checkpoint_out=args.checkpoint_out,

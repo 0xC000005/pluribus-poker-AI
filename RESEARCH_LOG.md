@@ -19513,3 +19513,22 @@
   - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 16 --n-worlds 8 --low-rollouts-per-action 8 --high-rollouts-per-action 32 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260734 --output-json autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_16_w8_low8_high32_seed20260734.json` -> passed.
   - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --n-worlds 4 --low-rollouts-per-action 4 --high-rollouts-per-action 16 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260735 --output-json autoresearch-session/native_neural_nashpg/world_avg_all_action_targets_margin_32_w4_low4_high16_seed20260735.json` -> passed.
 - Decision: Do not train from cheap world-averaged all-action targets yet. The next branch should either increase target efficiency with batched/vectorized world-action rollout evaluation or change the target to a value/ranking objective that is robust to close action margins before policy training.
+
+## 20260602T171500Z-world-averaged-margin-target-policy-gate - mixed
+
+- Timestamp: 2026-06-02T17:15:00Z
+- Type: experiment
+- Gate: native_all_action_target_policy_root_preference
+- Hypothesis: A stochastic native policy head trained on world-averaged all-action targets with margin filtering and margin-weighted loss should avoid near-tie label noise and improve held-out root-preference prediction over uniform.
+- Failure class: repeatability
+- Summary: Extended `scripts/train_native_all_action_target_policy.py` to support world-averaged targets, minimum target margins, and margin-weighted cross-entropy. The implementation is mechanically valid and writes adapter-compatible native checkpoints. One CUDA gate seed passed: seed `20260741` had positive held-out unweighted improvement `0.02168` and weighted improvement `0.09386`. A same-shape repeat seed failed: seed `20260742` had unweighted improvement `-0.03141` and weighted improvement `-0.04993`. This means margin weighting partially addresses the single-world label-noise failure, but the target-consumer signal is not repeatable enough for H2H or policy promotion.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/world_margin_target_policy_128x64_w4_r8_margin002_seed20260741.json
+  - autoresearch-session/native_neural_nashpg/world_margin_target_policy_128x64_w4_r8_margin002_seed20260742.json
+- Key metrics: `{"seed20260741_passed": true, "seed20260741_weighted_improvement": 0.093863, "seed20260741_eval_top_action_agreement": 0.40625, "seed20260742_passed": false, "seed20260742_weighted_improvement": -0.049933, "seed20260742_eval_top_action_agreement": 0.40625, "uses_slumbot_training_data": false, "uses_solver_labels": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_all_action_target_policy.py` -> `3 passed`.
+  - `python -m py_compile scripts/train_native_all_action_target_policy.py scripts/build_native_all_action_counterfactual_targets.py` -> passed.
+  - `python scripts/train_native_all_action_target_policy.py --n-train-states 128 --n-eval-states 64 --n-worlds 4 --rollouts-per-action 8 --max-steps-per-rollout 64 --hidden-dim 128 --n-steps 800 --batch-size 128 --target-temperature 0.5 --min-target-margin 0.02 --margin-weight-power 1.0 --device cuda --seed 20260741 --checkpoint-out autoresearch-session/native_neural_nashpg/world_margin_target_policy_128x64_w4_r8_margin002_seed20260741.pt --output-json autoresearch-session/native_neural_nashpg/world_margin_target_policy_128x64_w4_r8_margin002_seed20260741.json` -> passed.
+  - `python scripts/train_native_all_action_target_policy.py --n-train-states 128 --n-eval-states 64 --n-worlds 4 --rollouts-per-action 8 --max-steps-per-rollout 64 --hidden-dim 128 --n-steps 800 --batch-size 128 --target-temperature 0.5 --min-target-margin 0.02 --margin-weight-power 1.0 --device cuda --seed 20260742 --checkpoint-out autoresearch-session/native_neural_nashpg/world_margin_target_policy_128x64_w4_r8_margin002_seed20260742.pt --output-json autoresearch-session/native_neural_nashpg/world_margin_target_policy_128x64_w4_r8_margin002_seed20260742.json` -> failed repeatability gate.
+- Decision: Do not promote the world-margin target policy or run H2H from it. The next branch should improve target efficiency/repeatability, preferably by batching/vectorizing world-action rollouts enough to increase worlds/actions per state, or by switching the consumer to a pairwise ranking objective that is less sensitive to calibrated probability labels.
