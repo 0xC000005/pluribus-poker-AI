@@ -57,6 +57,7 @@ def estimate_all_action_rollout_values(
     n_rollouts_per_action: int,
     max_steps_per_rollout: int,
     seed: int,
+    paired_rollout_seeds: bool = True,
 ) -> dict[str, Any]:
     """Estimate legal action values by forcing each root action then rolling out."""
     if state.is_terminal:
@@ -66,7 +67,6 @@ def estimate_all_action_rollout_values(
     if int(max_steps_per_rollout) < 0:
         raise ValueError("max_steps_per_rollout must be non-negative")
 
-    rng = np.random.default_rng(int(seed))
     player = int(state.current_player_i)
     legal_mask = state.get_legal_mask().astype(np.float32, copy=True)
     values = np.full(N_ACTIONS, np.nan, dtype=np.float32)
@@ -76,6 +76,10 @@ def estimate_all_action_rollout_values(
     for action in np.flatnonzero(legal_mask > 0):
         samples: list[float] = []
         for _rollout_i in range(int(n_rollouts_per_action)):
+            if bool(paired_rollout_seeds):
+                rng = np.random.default_rng(int(seed) + int(_rollout_i))
+            else:
+                rng = np.random.default_rng(int(seed) + int(action) * 100_000 + int(_rollout_i))
             child = state.copy()
             child.apply_action(int(action))
             payoff, truncated = _rollout_payoff(
@@ -101,6 +105,7 @@ def estimate_all_action_rollout_values(
         "truncations": truncations,
         "n_rollouts_per_action": int(n_rollouts_per_action),
         "max_steps_per_rollout": int(max_steps_per_rollout),
+        "paired_rollout_seeds": bool(paired_rollout_seeds),
     }
 
 
@@ -151,6 +156,7 @@ def run_gate(
     max_steps_per_rollout: int = 64,
     initial_chips: int = 1000,
     seed: int = 20260711,
+    paired_rollout_seeds: bool = True,
     output_json: str | Path | None = None,
 ) -> dict[str, Any]:
     if int(n_states) <= 0:
@@ -174,17 +180,20 @@ def run_gate(
     total_truncations = 0
 
     for state_i, state in enumerate(states):
+        target_seed = int(seed) + 10_000 + state_i
         low = estimate_all_action_rollout_values(
             state,
             n_rollouts_per_action=int(low_rollouts_per_action),
             max_steps_per_rollout=int(max_steps_per_rollout),
-            seed=int(seed) + 10_000 + state_i,
+            seed=target_seed,
+            paired_rollout_seeds=bool(paired_rollout_seeds),
         )
         high = estimate_all_action_rollout_values(
             state,
             n_rollouts_per_action=int(high_rollouts_per_action),
             max_steps_per_rollout=int(max_steps_per_rollout),
-            seed=int(seed) + 20_000 + state_i,
+            seed=target_seed if bool(paired_rollout_seeds) else int(seed) + 20_000 + state_i,
+            paired_rollout_seeds=bool(paired_rollout_seeds),
         )
         legal_mask = low["legal_mask"]
         legal = legal_mask > 0
@@ -210,6 +219,7 @@ def run_gate(
         "max_steps_per_rollout": int(max_steps_per_rollout),
         "initial_chips": int(initial_chips),
         "seed": int(seed),
+        "paired_rollout_seeds": bool(paired_rollout_seeds),
         "top_action_agreement": float(agreements / max(len(states), 1)),
         "mean_legal_l1": float(np.mean(legal_l1s)) if legal_l1s else None,
         "mean_legal_action_count": float(np.mean(legal_counts)) if legal_counts else 0.0,
@@ -238,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-steps-per-rollout", type=int, default=64)
     parser.add_argument("--initial-chips", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=20260711)
+    parser.add_argument(
+        "--independent-rollout-seeds",
+        action="store_true",
+        help="Disable paired/common-random continuation seeds for low-vs-high target comparison.",
+    )
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args(argv)
     metrics = run_gate(
@@ -247,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         max_steps_per_rollout=args.max_steps_per_rollout,
         initial_chips=args.initial_chips,
         seed=args.seed,
+        paired_rollout_seeds=not bool(args.independent_rollout_seeds),
         output_json=args.output_json,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))

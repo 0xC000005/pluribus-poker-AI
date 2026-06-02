@@ -13,9 +13,11 @@ def test_all_action_rollout_values_score_forced_fold_payoff():
         n_rollouts_per_action=1,
         max_steps_per_rollout=8,
         seed=20260710,
+        paired_rollout_seeds=True,
     )
 
     assert result["player"] == 0
+    assert result["paired_rollout_seeds"] is True
     assert result["legal_mask"].shape == (9,)
     assert result["values"].shape == (9,)
     assert result["legal_mask"][0] == 1.0
@@ -35,6 +37,7 @@ def test_native_all_action_target_gate_compares_low_to_high_budget(tmp_path):
         max_steps_per_rollout=16,
         initial_chips=1000,
         seed=20260711,
+        paired_rollout_seeds=True,
         output_json=output,
     )
 
@@ -44,6 +47,7 @@ def test_native_all_action_target_gate_compares_low_to_high_budget(tmp_path):
     assert metrics["n_states"] == 3
     assert metrics["low_rollouts_per_action"] == 1
     assert metrics["high_rollouts_per_action"] == 2
+    assert metrics["paired_rollout_seeds"] is True
     assert 0.0 <= metrics["top_action_agreement"] <= 1.0
     assert metrics["mean_legal_action_count"] >= 2.0
     assert metrics["uses_slumbot_training_data"] is False

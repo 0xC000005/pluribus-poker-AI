@@ -19441,3 +19441,19 @@
   - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 16 --low-rollouts-per-action 2 --high-rollouts-per-action 8 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260712 --output-json autoresearch-session/native_neural_nashpg/all_action_targets_consistency_16_low2_high8_seed20260712.json` -> passed.
   - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --low-rollouts-per-action 8 --high-rollouts-per-action 32 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260713 --output-json autoresearch-session/native_neural_nashpg/all_action_targets_consistency_32_low8_high32_seed20260713.json` -> passed.
 - Decision: Do not train from naive all-action targets yet. The next small step should add variance reduction, starting with paired/common-random continuation seeds and margin-aware reporting, then require stronger low-vs-high action-preference agreement before learner integration.
+
+## 20260602T162500Z-native-all-action-target-paired-seed-variance-reduction - passed
+
+- Timestamp: 2026-06-02T16:25:00Z
+- Type: experiment
+- Gate: native_all_action_counterfactual_target_consistency
+- Hypothesis: Paired/common-random continuation seeds and nested low/high rollout budgets should reduce avoidable Monte Carlo noise in native all-action target comparisons without adding poker-specific heuristics.
+- Failure class: none
+- Summary: Added paired rollout seed support to the native all-action target builder. In paired mode, each rollout index uses the same continuation RNG stream across legal root actions, and the high-budget estimate shares the low-budget seed prefix. The repeated 32-state low8/high32 target-consistency smoke improved from `0.6875` to `0.90625` top-action agreement and reduced mean legal L1 from `0.123379` to `0.099057`, with zero truncations. This makes the target builder coherent enough for a small learner-integration gate, while still not being checkpoint or Slumbot strength evidence.
+- Artifact: autoresearch-session/native_neural_nashpg/all_action_targets_paired_32_low8_high32_seed20260714.json
+- Key metrics: `{"paired_rollout_seeds": true, "top_action_agreement": 0.90625, "mean_legal_l1": 0.099057, "mean_legal_action_count": 5.25, "total_truncations": 0, "uses_slumbot_training_data": false, "uses_solver_labels": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_all_action_counterfactual_targets.py` -> `2 passed`.
+  - `python -m py_compile scripts/build_native_all_action_counterfactual_targets.py` -> passed.
+  - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --low-rollouts-per-action 8 --high-rollouts-per-action 32 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260714 --output-json autoresearch-session/native_neural_nashpg/all_action_targets_paired_32_low8_high32_seed20260714.json` -> passed.
+- Decision: Proceed to a small learner-integration gate: train a stochastic policy head on paired all-action local-simulator targets and require root/action-preference improvement against same-budget uniform-row or trajectory-PG controls before any H2H training claim.
