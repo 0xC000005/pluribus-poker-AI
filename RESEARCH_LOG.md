@@ -19071,3 +19071,33 @@
   - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
   - CUDA CLI smoke above -> passed and wrote metrics.
 - Decision: this closes the immediate population-sampling infrastructure gap. The next falsifier can train a full-state native R-NaD response against a solved local empirical-game meta-strategy, then require parent/control H2H and empirical-game support. If that still loses to NFSP/Rainbow, the remaining blocker is the R-NaD/MMD objective estimator itself, not population assignment or checkpoint semantics.
+
+## 20260602T123000Z-native-20k-rnad-full-state-meta-response-plan - planned
+
+- Timestamp: 2026-06-02T12:30:00Z
+- Type: predeclared_experiment
+- Gate: native_20k_rnad_full_state_empirical_meta_response
+- Hypothesis: If full-state R-NaD continuation plus empirical-game opponent sampling is enough to repair the native R-NaD scaling gap, then a 20k-chip R-NaD base followed by a same-budget full-state continuation against the solved local 20k meta-strategy should beat its base parent and the current 20k support under duplicate-swapped H2H.
+- Controls: use the latest solved 20k empirical-game support from `autoresearch-session/empirical_game/native_20k_support_matrix_seed20260828_32.json`, whose row strategy is pure on `online_response_20k_iter4_support_h256_32x2048_u4096_seed20260822.pt`. Train only from local simulator observations, legal masks, and rewards. Slumbot, AlphaNLHoldem, solver labels, and human poker tactics remain excluded.
+- Decision rule: the branch is promotable only if the response has positive lower95 H2H versus the 20k R-NaD base and the current 20k support, while passing action sanity. If it beats only the base but loses to support, record it as an objective/population-estimator failure and pivot away from checkpoint/population plumbing.
+
+## 20260602T130000Z-native-20k-rnad-full-state-meta-response - failed
+
+- Timestamp: 2026-06-02T13:00:00Z
+- Type: experiment
+- Gate: native_20k_rnad_full_state_empirical_meta_response
+- Hypothesis: Full-state native R-NaD continuation against the solved local 20k empirical-game support should beat both its R-NaD base parent and the current 20k support if checkpoint continuity plus empirical-game opponent sampling are sufficient to repair native R-NaD scaling.
+- Failure class: rnad_objective_population_estimator
+- Summary: Ran the predeclared 20k-chip R-NaD base and full-state meta-response. The base self-play run trained on CUDA with `197619` local samples at `9879.052` samples/sec and saved a full state at step `100`. The meta-response resumed that state to step `200`, trained against the solved 20k support policy with `--opponent-meta-strategy 1.0`, collected `246462` samples at `5695.716` samples/sec, and recorded all opponent games/steps against the intended support policy. The response failed the promotion decision rule: versus its R-NaD base it was neutral/inconclusive (`mean=+0.000828`, lower95 `-0.003185` over 2k), and versus the current 20k support it lost decisively (`mean=-0.085942`, lower95 `-0.107490`). Action sanity passed with all 9 actions and top action fraction `0.195213`, so this is not action collapse.
+- Metrics files:
+  - autoresearch-session/native_rnad/rnad_20k_full_state_base_100x512_seed20260727.json
+  - autoresearch-session/native_rnad/rnad_20k_meta_response_100x512_seed20260728.json
+  - autoresearch-session/native_rnad/rnad_20k_meta_response_vs_base_h2h_2000_seed20260729.json
+  - autoresearch-session/native_rnad/rnad_20k_meta_response_vs_support_h2h_2000_seed20260730.json
+  - autoresearch-session/native_rnad/rnad_20k_meta_response_action_distribution_seed20260731.json
+- Key metrics: `{"base_samples": 197619, "base_samples_per_second": 9879.052, "response_samples": 246462, "response_samples_per_second": 5695.716, "response_meta_strategy": [1.0], "response_opponent_steps": [119004], "response_vs_base_mean": 0.000828, "response_vs_base_lower95": -0.003185, "response_vs_support_mean": -0.085942, "response_vs_support_lower95": -0.107490, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.195213, "uses_slumbot_training_data": false}`
+- Verification:
+  - Base and response training commands -> passed on CUDA and wrote artifacts.
+  - Parent H2H and 20k support H2H -> completed; both failed the positive-lower95 decision rule.
+  - Action-distribution diagnostic -> passed with all 9 actions.
+- Decision: full-state continuation plus empirical-game opponent sampling is useful infrastructure but does not solve native R-NaD strength. The remaining blocker is the R-NaD/MMD objective/estimator under large native HUNL sampling. Do not run another R-NaD response by changing only checkpoint semantics, opponent assignment, or small budget. The next branch should change the estimator/objective itself, such as a lower-variance counterfactual/sequence-form-compatible learner, or return to the stronger local Rainbow/online-response PSRO path while keeping it tabula-rasa and locally trained.

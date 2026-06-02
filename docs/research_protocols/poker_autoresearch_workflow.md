@@ -1169,6 +1169,14 @@ experiments to train the frozen non-learner seat from a solved empirical-game
 distribution. Any such run still needs parent/control H2H and empirical-game
 support before promotion.
 
+The 20k-chip full-state R-NaD meta-response falsified checkpoint/population
+plumbing as the sufficient fix: it resumed correctly, trained against the solved
+20k support policy, and passed action sanity, but stayed neutral against its
+R-NaD base and lost hard to the current 20k support. Future work should not
+repeat this family by changing only checkpoint semantics, opponent assignment,
+or small budget; the next R-NaD/MMD branch must change the objective/estimator
+or defer to the stronger local PSRO/Rainbow response path.
+
 GPU training scripts call `scripts/cuda_env.py` before importing Numba so the
 process can discover the pip NVVM package and force the local GPU compute
 capability. This avoids shell-level `LD_LIBRARY_PATH` overrides, which can hide
