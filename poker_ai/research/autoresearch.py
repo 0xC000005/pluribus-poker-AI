@@ -3553,6 +3553,7 @@ def enqueue_slumbot_smoke(
     root: str | Path,
     model: str | Path,
     *,
+    model_kind: str = "auto",
     hands: int = 5,
     greedy: bool = True,
     no_allin: bool = True,
@@ -3605,6 +3606,8 @@ def enqueue_slumbot_smoke(
         "--trace-jsonl",
         str(trace_path),
     ]
+    if model_kind != "auto":
+        command.extend(["--model-kind", str(model_kind)])
     if greedy:
         command.append("--greedy")
     if no_allin:
@@ -3631,6 +3634,7 @@ def enqueue_slumbot_smoke(
             if requires_internal_league
             else "integration_smoke_only"
         ),
+        "model_kind": str(model_kind),
         "requires_internal_league_pass": requires_internal_league,
         "internal_league_evidence": internal_league_evidence,
         "candidate_promotion_evidence": candidate_promotion_evidence,

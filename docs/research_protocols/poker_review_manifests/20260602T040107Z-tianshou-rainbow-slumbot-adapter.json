@@ -2,19 +2,19 @@
   "decision": "proceed",
   "files": [
     {
-      "bytes": 1524,
+      "bytes": 1771,
       "path": "benchmark_audit.md",
-      "sha256": "055f5b2918c1c77aa4305bee76a4ea82123bb4cf62d87c788586d74d9f5391c3"
+      "sha256": "e169ceac6e3bbc136ede14ffc00ffeb0e417f573ffcaec475472324b0291807d"
     },
     {
-      "bytes": 736,
+      "bytes": 895,
       "path": "decision.json",
-      "sha256": "e9508220ce5282355f16714d6764ec4a725412d7be31c8545b2fc0d40b8d6dac"
+      "sha256": "8144f4ac9af7ddbe1b297aba12d070f09f78142bbf6fd1e314539f32bf3c38c5"
     },
     {
-      "bytes": 1407,
+      "bytes": 1470,
       "path": "mechanism_review.md",
-      "sha256": "9da1d63ca69a0757d40f8251382cdef37ede08e2bbd9b8739af07c1e8f264caa"
+      "sha256": "6cb8f6a91bd22ff8724c6aa0b30508f61032b6a9ef5c2742a5eb7524aba26090"
     },
     {
       "bytes": 1771,
@@ -22,14 +22,14 @@
       "sha256": "4f5af0824c195665a009507284cc16288825ebb06c9b1cc6b7a96456a2c4eda5"
     },
     {
-      "bytes": 2112,
+      "bytes": 2430,
       "path": "review.md",
-      "sha256": "9e00ec3a0dabf733add9043f66b79995f649a8b5dd637f58f475aac28403e107"
+      "sha256": "b48060ccf66831fb9d41c77805788221961e969440b96290e377bcfa0421ada8"
     },
     {
-      "bytes": 2884,
+      "bytes": 3224,
       "path": "review_scope.json",
-      "sha256": "f152c288cb675b242641a7342607ff5b9c1a0f7144ebbac03d8f4f626272982d"
+      "sha256": "a507c9eef98a21c2a27927537ba45a0e8877b964d92f0d11167b96d42c07bf93"
     },
     {
       "bytes": 396,
@@ -37,17 +37,20 @@
       "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
     }
   ],
-  "reason": "Approve the protected-surface change as narrow held-out evaluation plumbing only. The adapter preserves the native 126-feature/9-action contract, passes load/mask tests, and does not loosen promotion blockers or use Slumbot data.",
+  "reason": "Approve the protected-surface change as narrow held-out evaluation plumbing only. The adapter and queue helper preserve the native 126-feature/9-action contract, pass load/mask and command-construction tests, and do not loosen promotion blockers or use Slumbot data.",
   "review_dir": "autoresearch-session/poker_reviews/20260602T040107Z-tianshou-rainbow-slumbot-adapter",
   "review_id": "20260602T040107Z-tianshou-rainbow-slumbot-adapter",
   "sources": [
+    "poker_ai/research/autoresearch.py",
+    "scripts/poker_autoresearch.py",
     "scripts/play_slumbot.py",
     "scripts/poker_autoresearch_slumbot.py",
+    "test/unit/test_poker_autoresearch.py",
     "poker_ai/research/native_candidate_precheck.py",
     "test/unit/test_slumbot_rainbow_adapter.py",
     "autoresearch-session/native_neural_nashpg/online_response_iter4_support_native_local_precheck_seed20260723.json",
     "https://proceedings.mlr.press/v70/bellemare17a.html",
     "https://github.com/thu-ml/tianshou/blob/master/README.md"
   ],
-  "written_at": "2026-06-02T04:04:18Z"
+  "written_at": "2026-06-02T04:06:53Z"
 }

@@ -1828,6 +1828,7 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     queued = enqueue_slumbot_smoke(
         tmp_path,
         model,
+        model_kind="tianshou-rainbow",
         hands=7,
         greedy=True,
         no_allin=True,
@@ -1844,6 +1845,8 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     assert state["hypothesis_queue"][-1]["gate"] == queued["gate"]
     assert str(model) in command
     assert "7" in command
+    assert "--model-kind" in command
+    assert "tianshou-rainbow" in command
     assert "--greedy" in command
     assert "--no-allin" in command
     assert "--no-solver" in command
@@ -1855,6 +1858,7 @@ def test_enqueue_slumbot_smoke_creates_candidate_live_gate(tmp_path):
     assert "slumbot_traces" in trace_path
     assert "123" in command
     assert gate["promotion_role"] == "integration_smoke_only"
+    assert gate["model_kind"] == "tianshou-rainbow"
     assert gate["requires_internal_league_pass"] is False
 
 
@@ -2700,6 +2704,8 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
             "enqueue-slumbot",
             "--model",
             str(model),
+            "--model-kind",
+            "tianshou-rainbow",
             "--hands",
             "3",
             "--greedy",
@@ -2717,8 +2723,11 @@ def test_cli_enqueue_slumbot_creates_gate(tmp_path):
     queued = json.loads(result.stdout)
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     assert queued["gate"] in goal["gates"]
-    assert "--no-solver" in goal["gates"][queued["gate"]]["commands"][0]
-    assert "policy-head" in goal["gates"][queued["gate"]]["commands"][0]
+    command = goal["gates"][queued["gate"]]["commands"][0]
+    assert "--model-kind" in command
+    assert "tianshou-rainbow" in command
+    assert "--no-solver" in command
+    assert "policy-head" in command
 
 
 def test_cli_enqueue_slumbot_accepts_torch_levelsync_cuda_backend(tmp_path):

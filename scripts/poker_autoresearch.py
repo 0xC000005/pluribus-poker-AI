@@ -146,6 +146,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create and queue a sparse live Slumbot smoke gate for one model.",
     )
     slumbot.add_argument("--model", required=True)
+    slumbot.add_argument(
+        "--model-kind",
+        choices=("auto", "deep-cfr", "tianshou-rainbow"),
+        default="auto",
+    )
     slumbot.add_argument("--hands", type=int, default=5)
     slumbot.add_argument("--greedy", action="store_true")
     slumbot.add_argument("--no-allin", action="store_true")
@@ -596,6 +601,7 @@ def main(argv: list[str] | None = None) -> int:
             enqueue_slumbot_smoke(
                 root,
                 args.model,
+                model_kind=args.model_kind,
                 hands=args.hands,
                 greedy=args.greedy,
                 no_allin=args.no_allin,
