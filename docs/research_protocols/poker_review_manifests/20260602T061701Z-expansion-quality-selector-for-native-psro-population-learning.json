@@ -1,0 +1,56 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1803,
+      "path": "benchmark_audit.md",
+      "sha256": "16142d895ac9b02e3a89be13689391d4fb054e514133d64747513debe015721c"
+    },
+    {
+      "bytes": 1147,
+      "path": "decision.json",
+      "sha256": "438ffbc39fd6d17505099e521f131a2b33b38e99b7631864e306f5e054316063"
+    },
+    {
+      "bytes": 1624,
+      "path": "mechanism_review.md",
+      "sha256": "61b80cb3d5c417b49bbab53027abd516776538f3d3bc962c9cbd24abbd9a97e1"
+    },
+    {
+      "bytes": 3168,
+      "path": "related_work.md",
+      "sha256": "5b6ff5f351ad3f7bb12ce97a5d7f772d46337a2519aa95802502702671cf3b88"
+    },
+    {
+      "bytes": 2473,
+      "path": "review.md",
+      "sha256": "d80a0d35725214423dee97eb5f82f04df10fa30d7cda0bfbf722df78e46bc027"
+    },
+    {
+      "bytes": 3113,
+      "path": "review_scope.json",
+      "sha256": "7aac1ea064ca1674d467d5bf94fbeae2e4e29b996d3badf4231edfe34358338f"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed to one bounded expansion-quality selector falsifier. Related work and local artifacts support the hypothesis that parent-only response insertion is saturated, but the claim is not proven and must be judged by fixed-slate post-expansion empirical-game support plus a post-selection H2H confirmation. Slumbot data remains excluded.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning",
+  "review_id": "20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning",
+  "sources": [
+    "https://arxiv.org/abs/2605.28273",
+    "https://arxiv.org/abs/2403.02227",
+    "https://arxiv.org/abs/2602.06599",
+    "https://arxiv.org/abs/2510.18183",
+    "autoresearch-session/native_neural_nashpg/global_psro_response_iter2_to_support_vs_current_h2h_10000_seed20260868.json",
+    "autoresearch-session/empirical_game/native_20k_global_psro_iter2_expansion_seed20260867.json",
+    "autoresearch-session/native_neural_nashpg/global_psro_response_iter3_to_support_vs_current_h2h_2000_seed20260870.json",
+    "autoresearch-session/native_neural_nashpg/global_psro_meta_response_20k_vs_iter2_h2h_2000_seed20260872.json",
+    "scripts/run_compiled_rainbow_response_oracle.py",
+    "poker_ai/research/empirical_game.py"
+  ],
+  "written_at": "2026-06-02T06:24:34Z"
+}

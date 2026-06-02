@@ -18457,3 +18457,14 @@
 - Summary: Gate methodology-review-20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T061940Z-methodology-review-for-expansion-quality-selector-for-native/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning", "passed": true}`
+
+## 20260602T062307Z-native-expansion-quality-selector-failed-existing-slate - failed
+
+- Timestamp: 2026-06-02T06:23:07Z
+- Type: experiment
+- Gate: native_20k_expansion_quality_selector_existing_slate
+- Hypothesis: A fixed-slate expansion-quality selector should prevent low-quality population insertions by selecting only candidates with empirical-game support and positive direct H2H lower95 against the active support.
+- Failure class: strategy_quality
+- Summary: Implemented a read-only native expansion-quality selector (`poker_ai/research/expansion_quality_selector.py`, `scripts/eval_expansion_quality_selector.py`) with tests. On the existing slate of the third single-support response and the equal-mixture response, the selector correctly selected no candidate. Both candidates had zero empirical-game support against the active iteration-2 support and negative direct H2H lower95 (`-0.013115` and `-0.031493`). This validates the guardrail and confirms the current slate should not be inserted; the next useful research step is to generate a new predeclared fixed slate or pivot to a stronger tabula-rasa population learner, not tune the failed slate.
+- Metrics file: autoresearch-session/native_neural_nashpg/expansion_quality_selector_failed_slate_iter3_meta_seed20260874.json
+- Key metrics: `{"passed": false, "selected_candidate": null, "candidate_count": 2, "uses_slumbot_training_data": false}`
