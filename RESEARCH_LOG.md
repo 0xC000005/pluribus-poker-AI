@@ -18054,3 +18054,17 @@
   - `uv run pytest -q test/unit/test_mixed_policy_h2h.py::test_load_policy_adapter_supports_tianshou_rainbow_one_hot test/unit/test_mixed_policy_h2h.py::test_load_policy_adapter_supports_tianshou_rainbow_softmax test/unit/test_mixed_policy_h2h.py::test_eval_mixed_policy_h2h_cli_writes_json` -> `3 passed`.
   - `python -m py_compile poker_ai/research/mixed_policy_h2h.py scripts/eval_mixed_policy_h2h.py` -> passed.
 - Decision: do not use Q-softmax for external Slumbot evaluation or promotion. The next tabula-rasa step should train an explicit stochastic policy objective and test it against the same local parent/population H2H truth gate.
+## 20260602T043034Z-failure-synthesis-for-post-hoc-rainbow-q-softmax - passed
+
+- Timestamp: 2026-06-02T04:30:34Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T042956Z-post-hoc-rainbow-q-softmax-failed-local-stochastic
+- Hypothesis: Failure synthesis for Post-hoc Rainbow Q-softmax failed local stochastic policy gate should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: The synthesis revises away from wrapper-level stochastic deployment. The causal model is that the online compiled Rainbow response learner produced useful deterministic response evidence, but its C51 Q head is not a calibrated mixed strategy. Local Q-softmax lost to greedy semantics, so stochasticity must be learned as the policy object through a tabula-rasa actor/regularized self-play objective rather than reconstructed after training.
+- Metrics file: autoresearch-session/poker_runs/20260602T043034Z-failure-synthesis-for-post-hoc-rainbow-q-softmax/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T042956Z-post-hoc-rainbow-q-softmax-failed-local-stochastic", "passed": true}`
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T042956Z-post-hoc-rainbow-q-softmax-failed-local-stochastic-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T042956Z-post-hoc-rainbow-q-softmax-failed-local-stochastic-synthesis/decision.json
+- Decision: train one fresh native neural NashPG/MMD-style stochastic policy/value checkpoint against the current local support population using only the compiled native 9-action simulator, then test it by matched local H2H and empirical-game insertion. Do not use Slumbot feedback, post-hoc Q-softmax, or `--no-allin` patches.
