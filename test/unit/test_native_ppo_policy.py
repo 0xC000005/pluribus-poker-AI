@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from poker_ai.games.full_deck.state import N_ACTIONS
+from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
 import poker_ai.research.native_ppo_policy as native_ppo_policy
 from poker_ai.research.native_ppo_policy import (
     NativePPOConfig,
@@ -405,6 +405,118 @@ def test_native_ppo_policy_k_best_historical_opponent_pool_exports_config(tmp_pa
     assert metrics["historical_opponent_selection"] == "k_best"
     assert metrics["historical_policy_pool_size"] == 2
     assert payload["config"]["historical_opponent_selection"] == "k_best"
+
+
+def test_native_ppo_policy_external_native_opponent_exports_config(tmp_path):
+    opponent_path = tmp_path / "opponent.pt"
+    checkpoint_path = tmp_path / "native_ppo_external_opponent_policy.pt"
+    run_native_ppo_policy_pilot(
+        NativePPOConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=8,
+            ppo_epochs=1,
+            device="cpu",
+            seed=2039,
+            checkpoint_path=str(opponent_path),
+        )
+    )
+
+    metrics = run_native_ppo_policy_pilot(
+        NativePPOConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=32,
+            rollout_episodes_per_update=2,
+            ppo_epochs=1,
+            advantage_mode="q_expected_lambda",
+            feature_mode="raw_sequence",
+            external_opponent_checkpoint=str(opponent_path),
+            external_opponent_kind="native-ppo",
+            device="cpu",
+            seed=2041,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    assert metrics["uses_external_opponent"] is True
+    assert metrics["external_opponent_checkpoint"] == str(opponent_path)
+    assert metrics["external_opponent_kind"] == "native-ppo"
+    assert metrics["external_opponent_algorithm"] == "native_ppo_policy"
+    assert metrics["uses_historical_opponents"] is False
+    assert metrics["fsp_average_policy"] is False
+    assert payload["config"]["uses_external_opponent"] is True
+    assert payload["config"]["external_opponent_checkpoint"] == str(opponent_path)
+    assert payload["config"]["external_opponent_kind"] == "native-ppo"
+
+
+def test_native_ppo_policy_external_rainbow_response_opponent_exports_config(tmp_path):
+    from poker_ai.research.native_ppo_policy import _RainbowDistributionNet
+
+    opponent_path = tmp_path / "compiled_rainbow_response.pt"
+    checkpoint_path = tmp_path / "native_ppo_external_rainbow_policy.pt"
+    model = _RainbowDistributionNet(
+        hidden_dim=8,
+        num_atoms=3,
+        device=torch.device("cpu"),
+    )
+    torch.save(
+        {
+            "algorithm": "compiled_tianshou_rainbow_response_oracle",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": 8,
+            "num_atoms": 3,
+            "model_state_dict": model.state_dict(),
+        },
+        opponent_path,
+    )
+
+    metrics = run_native_ppo_policy_pilot(
+        NativePPOConfig(
+            train_episodes=2,
+            eval_games=1,
+            hidden_dim=16,
+            batch_size=32,
+            rollout_episodes_per_update=2,
+            ppo_epochs=1,
+            advantage_mode="q_expected_lambda",
+            feature_mode="raw_sequence",
+            external_opponent_checkpoint=str(opponent_path),
+            external_opponent_kind="auto",
+            device="cpu",
+            seed=2042,
+            checkpoint_path=str(checkpoint_path),
+        )
+    )
+    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+
+    assert metrics["uses_external_opponent"] is True
+    assert metrics["external_opponent_kind"] == "tianshou-rainbow"
+    assert metrics["external_opponent_algorithm"] == "compiled_tianshou_rainbow_response_oracle"
+    assert payload["config"]["external_opponent_kind"] == "tianshou-rainbow"
+
+
+def test_native_ppo_policy_external_opponent_rejects_combined_modes(tmp_path):
+    opponent_path = tmp_path / "missing.pt"
+
+    with np.testing.assert_raises_regex(
+        ValueError,
+        "external_opponent_checkpoint cannot be combined with fsp_average_policy",
+    ):
+        run_native_ppo_policy_pilot(
+            NativePPOConfig(
+                train_episodes=1,
+                eval_games=1,
+                external_opponent_checkpoint=str(opponent_path),
+                fsp_average_policy=True,
+                device="cpu",
+            )
+        )
 
 
 def test_trinal_clip_caps_large_negative_advantage_policy_loss():

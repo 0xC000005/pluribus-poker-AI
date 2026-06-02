@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import random
 import time
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -56,6 +57,8 @@ class NativePPOConfig:
     historical_opponent_interval: int = 0
     historical_opponent_capacity: int = 8
     historical_opponent_selection: str = "fifo"
+    external_opponent_checkpoint: str | None = None
+    external_opponent_kind: str = "auto"
     ppo_loss_mode: str = "standard"
     actor_update_mode: str = "ppo"
     behavior_mode: str = "policy"
@@ -122,6 +125,41 @@ class _QMLP(nn.Module):
         return self.net(x)
 
 
+class _RainbowDistributionNet(nn.Module):
+    def __init__(self, *, hidden_dim: int, num_atoms: int, device: torch.device) -> None:
+        super().__init__()
+        self.num_atoms = int(num_atoms)
+        self.device = device
+        self.net = nn.Sequential(
+            nn.Linear(N_FEATURES, int(hidden_dim)),
+            nn.ReLU(),
+            nn.Linear(int(hidden_dim), int(hidden_dim)),
+            nn.ReLU(),
+            nn.Linear(int(hidden_dim), N_ACTIONS * int(num_atoms)),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        obs = torch.as_tensor(x, dtype=torch.float32, device=self.device)
+        if obs.dim() == 1:
+            obs = obs.unsqueeze(0)
+        logits = self.net(obs).view(-1, N_ACTIONS, self.num_atoms)
+        return torch.softmax(logits, dim=-1)
+
+
+class _RainbowQPolicy(nn.Module):
+    def __init__(self, model: nn.Module, *, num_atoms: int) -> None:
+        super().__init__()
+        self.model = model
+        self.register_buffer(
+            "support",
+            torch.linspace(-1.0, 1.0, int(num_atoms), dtype=torch.float32),
+        )
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        distribution = self.model(features)
+        return torch.sum(distribution * self.support.view(1, 1, -1), dim=-1)
+
+
 def _feature_dim_for_mode(feature_mode: str) -> int:
     mode = str(feature_mode)
     if mode == "flat":
@@ -154,6 +192,14 @@ class _DecisionRecord:
     old_log_prob: float
     value: float
     expected_q: float | None = None
+
+
+@dataclass(frozen=True)
+class _ExternalOpponentPolicy:
+    checkpoint_path: str
+    kind: str
+    algorithm: str
+    action_fn: Callable[[object, np.ndarray, torch.device, np.random.Generator], int]
 
 
 def _centralized_q_feature_vector(state, observation: np.ndarray) -> np.ndarray:
@@ -456,6 +502,58 @@ def _play_historical_opponent_hand(
     return records, payouts, n_steps
 
 
+def _play_external_opponent_hand(
+    policy_net: nn.Module,
+    value_net: nn.Module,
+    q_net: nn.Module | None,
+    opponent: _ExternalOpponentPolicy,
+    cfg: NativePPOConfig,
+    rng: np.random.Generator,
+    device: torch.device,
+    *,
+    learner_seat: int,
+) -> tuple[list[_DecisionRecord], list[float], int]:
+    state = new_game(2, initial_chips=cfg.initial_chips)
+    records: list[_DecisionRecord] = []
+    n_steps = 0
+    while not state.is_terminal and n_steps < cfg.max_steps_per_hand:
+        player = int(state.player_i)
+        legal_mask = get_legal_mask(state)
+        if player == int(learner_seat):
+            features = _policy_feature_vector(state, cfg.feature_mode)
+            critic_features = _critic_feature_vector(state, cfg, features)
+            probs, value, expected_q = _behavior_step(
+                policy_net,
+                value_net,
+                q_net,
+                features,
+                critic_features,
+                legal_mask,
+                cfg,
+                device,
+            )
+            action_idx = select_action(probs, legal_mask, rng=rng)
+            old_log_prob = float(np.log(max(float(probs[action_idx]), 1e-8)))
+            records.append(
+                _DecisionRecord(
+                    player=player,
+                    features=np.asarray(features, dtype=np.float32),
+                    critic_features=np.asarray(critic_features, dtype=np.float32),
+                    legal_mask=np.asarray(legal_mask, dtype=np.float32),
+                    action=int(action_idx),
+                    old_log_prob=float(old_log_prob),
+                    value=float(value),
+                    expected_q=expected_q,
+                )
+            )
+        else:
+            action_idx = int(opponent.action_fn(state, legal_mask, device, rng))
+        state = state.apply_action(INDEX_TO_ACTION[action_idx])
+        n_steps += 1
+    payouts = [float(state.payout.get(i, 0)) / float(cfg.initial_chips) for i in range(2)]
+    return records, payouts, n_steps
+
+
 def _train_average_policy_batch(
     avg_net: nn.Module,
     optimizer: optim.Optimizer,
@@ -712,6 +810,120 @@ def _trim_historical_policy_pool(pool: list[dict], capacity: int, selection: str
     raise ValueError("historical_opponent_selection must be one of: fifo, k_best")
 
 
+def _is_external_rainbow_payload(payload: dict[str, Any]) -> bool:
+    return str(payload.get("algorithm", "")) in {
+        "tianshou_rainbow_dqn",
+        "tianshou_marl_rainbow_dqn",
+        "compiled_tianshou_rainbow_response_oracle",
+    }
+
+
+def _rainbow_state_dicts_by_seat_from_payload(payload: dict[str, Any]) -> dict[int, dict]:
+    if payload.get("shared_model_state_dict") is not None:
+        shared = payload["shared_model_state_dict"]
+        return {0: shared, 1: shared}
+    if "agent_model_state_dicts" in payload:
+        agent_state_dicts = payload["agent_model_state_dicts"]
+        fallback_key = "player_0" if "player_0" in agent_state_dicts else sorted(agent_state_dicts)[0]
+        return {
+            seat: agent_state_dicts.get(f"player_{seat}", agent_state_dicts[fallback_key])
+            for seat in (0, 1)
+        }
+    if "model_state_dict" in payload:
+        shared = payload["model_state_dict"]
+        return {0: shared, 1: shared}
+    raise ValueError("Rainbow checkpoint is missing a loadable model state dict")
+
+
+def _load_external_rainbow_opponent(
+    checkpoint_path: str | Path,
+    payload: dict[str, Any],
+    device: torch.device,
+) -> _ExternalOpponentPolicy:
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("external Rainbow opponent action count does not match native contract")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("external Rainbow opponent feature count does not match native contract")
+    hidden_dim = int(payload.get("hidden_dim", 128))
+    num_atoms = int(payload.get("num_atoms", 51))
+    model = _RainbowDistributionNet(
+        hidden_dim=hidden_dim,
+        num_atoms=num_atoms,
+        device=device,
+    ).to(device)
+    state_dicts = _rainbow_state_dicts_by_seat_from_payload(payload)
+    model.load_state_dict(state_dicts.get(0, state_dicts[sorted(state_dicts)[0]]))
+    policy = _RainbowQPolicy(model, num_atoms=num_atoms).to(device)
+    policy.eval()
+    for parameter in policy.parameters():
+        parameter.requires_grad_(False)
+
+    def _act(
+        state: object,
+        legal_mask: np.ndarray,
+        resolved_device: torch.device,
+        _rng: np.random.Generator,
+    ) -> int:
+        features = state.to_feature_vector().astype(np.float32, copy=False)
+        legal = np.asarray(legal_mask, dtype=np.float32)
+        with torch.no_grad():
+            q_values = policy(
+                torch.as_tensor(features, dtype=torch.float32, device=resolved_device).unsqueeze(0)
+            ).detach().reshape(-1)
+            mask = torch.as_tensor(legal > 0, dtype=torch.bool, device=q_values.device)
+            q_values = q_values.masked_fill(~mask, -1.0e30)
+            return int(torch.argmax(q_values).detach().cpu())
+
+    return _ExternalOpponentPolicy(
+        checkpoint_path=str(checkpoint_path),
+        kind="tianshou-rainbow",
+        algorithm=str(payload.get("algorithm", "tianshou_rainbow_dqn")),
+        action_fn=_act,
+    )
+
+
+def _load_external_opponent_policy(
+    checkpoint_path: str | Path,
+    *,
+    kind: str,
+    device: torch.device,
+) -> _ExternalOpponentPolicy:
+    requested_kind = str(kind)
+    if requested_kind not in {"auto", "native-ppo", "tianshou-rainbow"}:
+        raise ValueError("external_opponent_kind must be one of: auto, native-ppo, tianshou-rainbow")
+    payload = torch.load(str(checkpoint_path), map_location=device, weights_only=False)
+    resolved_kind = requested_kind
+    if resolved_kind == "auto":
+        resolved_kind = "tianshou-rainbow" if _is_external_rainbow_payload(payload) else "native-ppo"
+    if resolved_kind == "tianshou-rainbow":
+        if not _is_external_rainbow_payload(payload):
+            raise ValueError("external_opponent_kind='tianshou-rainbow' requires a Rainbow payload")
+        return _load_external_rainbow_opponent(checkpoint_path, payload, device)
+
+    native_payload, policy_net, feature_mode = _load_policy_network(
+        str(checkpoint_path),
+        device,
+        strategy_source="auto",
+    )
+
+    def _act(
+        state: object,
+        legal_mask: np.ndarray,
+        resolved_device: torch.device,
+        rng: np.random.Generator,
+    ) -> int:
+        features = _policy_feature_vector(state, feature_mode)
+        probs = _network_probs(policy_net, features, legal_mask, resolved_device)
+        return select_action(probs, legal_mask, rng=rng)
+
+    return _ExternalOpponentPolicy(
+        checkpoint_path=str(checkpoint_path),
+        kind="native-ppo",
+        algorithm=str(native_payload.get("algorithm", "native_ppo_policy")),
+        action_fn=_act,
+    )
+
+
 def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
     cfg = cfg or NativePPOConfig()
     random.seed(cfg.seed)
@@ -722,6 +934,7 @@ def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
     device = torch.device(device_info["resolved_device"])
     feature_dim = _feature_dim_for_mode(cfg.feature_mode)
     historical_enabled = int(cfg.historical_opponent_interval) > 0
+    external_enabled = cfg.external_opponent_checkpoint is not None
     historical_selection = str(cfg.historical_opponent_selection)
     if historical_selection not in {"fifo", "k_best"}:
         raise ValueError("historical_opponent_selection must be one of: fifo, k_best")
@@ -736,6 +949,10 @@ def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
         raise ValueError("behavior_mode must be one of: policy, q_boosted")
     if historical_enabled and cfg.fsp_average_policy:
         raise ValueError("historical_opponent_interval cannot be combined with fsp_average_policy")
+    if external_enabled and cfg.fsp_average_policy:
+        raise ValueError("external_opponent_checkpoint cannot be combined with fsp_average_policy")
+    if external_enabled and historical_enabled:
+        raise ValueError("external_opponent_checkpoint cannot be combined with historical_opponent_interval")
 
     policy_net = _PolicyMLP(cfg.hidden_dim, input_dim=feature_dim).to(device)
     value_net = _ValueMLP(cfg.hidden_dim, input_dim=feature_dim).to(device)
@@ -772,6 +989,15 @@ def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
         target_q_net.eval()
     if behavior_mode == "q_boosted" and q_net is None:
         raise ValueError("behavior_mode='q_boosted' requires a q_expected_* advantage mode")
+    external_opponent = (
+        _load_external_opponent_policy(
+            cfg.external_opponent_checkpoint,
+            kind=cfg.external_opponent_kind,
+            device=device,
+        )
+        if external_enabled
+        else None
+    )
     optimizer_params = list(policy_net.parameters()) + list(value_net.parameters())
     if q_net is not None:
         optimizer_params += list(q_net.parameters())
@@ -811,7 +1037,19 @@ def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
                 historical_selection,
             )
 
-        if historical_enabled:
+        if external_opponent is not None:
+            learner_seat = episode_idx % 2
+            records, payouts, steps = _play_external_opponent_hand(
+                policy_net,
+                value_net,
+                q_net,
+                external_opponent,
+                cfg,
+                rng,
+                device,
+                learner_seat=learner_seat,
+            )
+        elif historical_enabled:
             opponent_idx = int(rng.integers(len(historical_policy_pool)))
             opponent_item = historical_policy_pool[opponent_idx]
             records, payouts, steps = _play_historical_opponent_hand(
@@ -970,6 +1208,16 @@ def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
         "q_boost_beta": float(cfg.q_boost_beta),
         "q_boost_min_prior": float(cfg.q_boost_min_prior),
         "feature_mode": str(cfg.feature_mode),
+        "uses_external_opponent": bool(external_opponent is not None),
+        "external_opponent_checkpoint": (
+            external_opponent.checkpoint_path if external_opponent is not None else None
+        ),
+        "external_opponent_kind": (
+            external_opponent.kind if external_opponent is not None else None
+        ),
+        "external_opponent_algorithm": (
+            external_opponent.algorithm if external_opponent is not None else None
+        ),
         "uses_historical_opponents": bool(historical_enabled),
         "historical_opponent_interval": int(cfg.historical_opponent_interval),
         "historical_opponent_capacity": int(cfg.historical_opponent_capacity),
@@ -1022,6 +1270,16 @@ def run_native_ppo_policy_pilot(cfg: NativePPOConfig | None = None) -> dict:
                     "q_boost_beta": float(cfg.q_boost_beta),
                     "q_boost_min_prior": float(cfg.q_boost_min_prior),
                     "feature_mode": str(cfg.feature_mode),
+                    "uses_external_opponent": bool(external_opponent is not None),
+                    "external_opponent_checkpoint": (
+                        external_opponent.checkpoint_path if external_opponent is not None else None
+                    ),
+                    "external_opponent_kind": (
+                        external_opponent.kind if external_opponent is not None else None
+                    ),
+                    "external_opponent_algorithm": (
+                        external_opponent.algorithm if external_opponent is not None else None
+                    ),
                     "historical_opponent_interval": int(cfg.historical_opponent_interval),
                     "historical_opponent_capacity": int(cfg.historical_opponent_capacity),
                     "historical_opponent_selection": historical_selection,

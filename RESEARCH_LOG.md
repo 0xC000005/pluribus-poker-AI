@@ -18135,3 +18135,19 @@
 - Manifest:
   - docs/research_protocols/poker_review_manifests/20260602T044029Z-support-conditioned-native-q-lambda-actor-training.json
 - Decision: implement the opt-in support-conditioned q-lambda training mode, preserve default self-play behavior, then run one raw-sequence q-lambda response against the current support checkpoint.
+## 20260602T044813Z-a-support-conditioned-raw-sequence-q-lambda-stochastic - failed
+
+- Timestamp: 2026-06-02T04:49:24Z
+- Type: experiment
+- Gate: support_conditioned_qlambda_actor_vs_online_support
+- Hypothesis: A support-conditioned raw-sequence q-lambda stochastic actor trained against the current online-response support checkpoint should beat that support checkpoint under full-deck local H2H.
+- Failure class: strategy_quality
+- Summary: Support-conditioned raw-sequence q-lambda actor training against the current online-response support checkpoint ran on CUDA and wrote a valid local native checkpoint, but the full-deck 2000-game H2H gate failed versus the support checkpoint: mean=-0.023000, lower95=-0.043071, upper95=-0.002929. This falsifies the reviewed support-conditioned q-lambda branch at the small 2k budget and blocks promotion.
+- Metrics files:
+  - autoresearch-session/native_ppo/raw_sequence_support_qexpected_lambda_h512_2k_seed20260818.json
+  - autoresearch-session/native_ppo/raw_sequence_support_qexpected_lambda_h512_2k_vs_online_support_h2h_2000_seed20260819.json
+- Key metrics: `{"train_resolved_device": "cuda", "train_episodes": 2000, "train_episodes_per_second": 118.17329699972314, "train_policy_updates": 500, "train_external_opponent_kind": "tianshou-rainbow", "train_external_opponent_algorithm": "compiled_tianshou_rainbow_response_oracle", "train_feature_mode": "raw_sequence", "h2h_eval_state_backend": "full-deck", "h2h_n_games": 2000, "h2h_mean_candidate_payoff": -0.022999999999999993, "h2h_lower95_candidate_payoff": -0.04307119105360492, "h2h_upper95_candidate_payoff": -0.002928808946395068, "h2h_eval_games_per_second": 126.46360745698432, "h2h_passed": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_ppo_policy.py::test_native_ppo_policy_external_native_opponent_exports_config test/unit/test_native_ppo_policy.py::test_native_ppo_policy_external_rainbow_response_opponent_exports_config test/unit/test_native_ppo_policy.py::test_native_ppo_policy_external_opponent_rejects_combined_modes test/unit/test_native_ppo_policy.py::test_native_ppo_policy_q_expected_lambda_advantage_smoke` -> `4 passed`.
+  - `python -m py_compile poker_ai/research/native_ppo_policy.py scripts/run_native_ppo_policy_pilot.py` -> passed.
+- Decision: keep the support-conditioned checkpoint as falsification evidence only. The current local bar remains the deterministic online compiled Rainbow response support checkpoint; the next step should synthesize this failure before adding another actor-loss variant or scaling this q-lambda run.

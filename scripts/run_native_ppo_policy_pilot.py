@@ -88,6 +88,16 @@ def _parser() -> argparse.ArgumentParser:
         default="fifo",
         help="How to trim the historical opponent pool when it exceeds capacity.",
     )
+    parser.add_argument(
+        "--external-opponent-checkpoint",
+        help="Frozen local checkpoint controlling the non-learner seat during training.",
+    )
+    parser.add_argument(
+        "--external-opponent-kind",
+        choices=("auto", "native-ppo", "tianshou-rainbow"),
+        default="auto",
+        help="Kind of --external-opponent-checkpoint. Auto detects local native/Rainbow checkpoints.",
+    )
     parser.add_argument("--initial-chips", type=int, default=1000)
     parser.add_argument("--max-steps-per-hand", type=int, default=256)
     parser.add_argument("--seed", type=int, default=20260515)
@@ -140,6 +150,8 @@ def build_config(argv: list[str] | None = None) -> NativePPOConfig:
         historical_opponent_interval=args.historical_opponent_interval,
         historical_opponent_capacity=args.historical_opponent_capacity,
         historical_opponent_selection=args.historical_opponent_selection,
+        external_opponent_checkpoint=args.external_opponent_checkpoint,
+        external_opponent_kind=args.external_opponent_kind,
         initial_chips=args.initial_chips,
         max_steps_per_hand=args.max_steps_per_hand,
         seed=args.seed,
