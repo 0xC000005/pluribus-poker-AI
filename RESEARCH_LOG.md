@@ -19457,3 +19457,22 @@
   - `python -m py_compile scripts/build_native_all_action_counterfactual_targets.py` -> passed.
   - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --low-rollouts-per-action 8 --high-rollouts-per-action 32 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260714 --output-json autoresearch-session/native_neural_nashpg/all_action_targets_paired_32_low8_high32_seed20260714.json` -> passed.
 - Decision: Proceed to a small learner-integration gate: train a stochastic policy head on paired all-action local-simulator targets and require root/action-preference improvement against same-budget uniform-row or trajectory-PG controls before any H2H training claim.
+
+## 20260602T164000Z-native-all-action-target-policy-learner - failed
+
+- Timestamp: 2026-06-02T16:40:00Z
+- Type: experiment
+- Gate: native_all_action_target_policy_root_preference
+- Hypothesis: A stochastic native policy head trained on paired all-action local-simulator rollout targets should predict held-out target preferences better than uniform, proving the all-action target can be consumed by a neural policy before any H2H claim.
+- Failure class: hidden_world_label_noise
+- Summary: Added `scripts/train_native_all_action_target_policy.py`, which builds paired all-action rollout targets, converts legal action values into masked stochastic policy targets, trains a native `_PolicyMLP`, and writes a `native-ppo` adapter-compatible checkpoint. The implementation and checkpoint plumbing passed tests, but the learner gate failed twice. The 64/32-state sharp-target run overfit training (`train_top_action_agreement=0.953125`) and was much worse than uniform on held-out targets (`target_kl_improvement_over_uniform=-1.521862`). A larger smoothed 256/64 run reduced the gap but still failed (`target_kl_improvement_over_uniform=-0.097968`, `eval_top_action_agreement=0.296875`). This suggests single-world rollout targets depend on hidden opponent cards/future deck samples that are not present in the policy observation.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/all_action_target_policy_64x32_r8_seed20260721.json
+  - autoresearch-session/native_neural_nashpg/all_action_target_policy_256x64_r8_temp05_seed20260722.json
+- Key metrics: `{"sharp_train_top_action_agreement": 0.953125, "sharp_eval_top_action_agreement": 0.34375, "sharp_target_kl_improvement_over_uniform": -1.521862, "smooth_train_top_action_agreement": 0.90625, "smooth_eval_top_action_agreement": 0.296875, "smooth_target_kl_improvement_over_uniform": -0.097968, "uses_slumbot_training_data": false, "uses_solver_labels": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_all_action_target_policy.py` -> `2 passed`.
+  - `python -m py_compile scripts/train_native_all_action_target_policy.py` -> passed.
+  - `python scripts/train_native_all_action_target_policy.py --n-train-states 64 --n-eval-states 32 --rollouts-per-action 8 --max-steps-per-rollout 64 --hidden-dim 128 --n-steps 500 --batch-size 64 --target-temperature 0.1 --device cuda --seed 20260721 --checkpoint-out autoresearch-session/native_neural_nashpg/all_action_target_policy_64x32_r8_seed20260721.pt --output-json autoresearch-session/native_neural_nashpg/all_action_target_policy_64x32_r8_seed20260721.json` -> failed the improvement gate.
+  - `python scripts/train_native_all_action_target_policy.py --n-train-states 256 --n-eval-states 64 --rollouts-per-action 8 --max-steps-per-rollout 64 --hidden-dim 128 --n-steps 800 --batch-size 128 --target-temperature 0.5 --device cuda --seed 20260722 --checkpoint-out autoresearch-session/native_neural_nashpg/all_action_target_policy_256x64_r8_temp05_seed20260722.pt --output-json autoresearch-session/native_neural_nashpg/all_action_target_policy_256x64_r8_temp05_seed20260722.json` -> failed the improvement gate.
+- Decision: Do not train full policies from single-world all-action targets. The next branch must average action values over multiple hidden worlds compatible with the player's observation/public state, or otherwise learn a belief/state representation that makes the target observable, before another policy-consumer gate.
