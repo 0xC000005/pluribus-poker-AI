@@ -160,3 +160,51 @@ def test_small_nlhe_mmd_update_fidelity_bridge_supports_inverse_own_reach_weight
     assert data["config"]["max_decision_weight"] == 8.0
     assert data["summary"]["last_step_logs"]["decision_weight_mode"] == "inverse-own-reach"
     assert data["summary"]["last_step_logs"]["max_decision_weight"] >= 1.0
+
+
+def test_small_nlhe_mmd_update_fidelity_bridge_supports_exact_infostate_update(tmp_path):
+    pytest.importorskip("pyspiel")
+    out = tmp_path / "bridge_exact_infostate.json"
+    repo = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/analyze_small_nlhe_mmd_update_fidelity.py",
+            "--start-mmd-steps",
+            "0",
+            "--target-mmd-delta",
+            "1",
+            "--fit-steps",
+            "4",
+            "--update-steps",
+            "1",
+            "--layers",
+            "8",
+            "--bridge-update-mode",
+            "exact-infostate-ce",
+            "--infostate-weight-mode",
+            "parent-sequence",
+            "--max-fit-current-kl",
+            "10.0",
+            "--min-target-kl-reduction",
+            "-10.0",
+            "--min-update-delta-cosine",
+            "-1.0",
+            "--output-json",
+            str(out),
+        ],
+        check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(out.read_text())
+
+    assert data["config"]["bridge_update_mode"] == "exact-infostate-ce"
+    assert data["config"]["infostate_weight_mode"] == "parent-sequence"
+    assert data["summary"]["last_step_logs"]["bridge_update_mode"] == "exact-infostate-ce"
+    assert data["summary"]["last_step_logs"]["n_information_states"] > 0
+    assert data["summary"]["last_step_logs"]["mean_infostate_weight"] > 0.0

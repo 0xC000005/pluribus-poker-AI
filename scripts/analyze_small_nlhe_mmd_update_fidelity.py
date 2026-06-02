@@ -60,6 +60,95 @@ def _delta_cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(av, bv) / denom)
 
 
+def _infostate_player_lookup(game) -> dict[str, int]:
+    by: dict[str, int] = {}
+    stack = [game.new_initial_state()]
+    seen = set()
+    while stack:
+        state = stack.pop()
+        if state.is_terminal():
+            continue
+        if state.is_chance_node():
+            for action, _prob in state.chance_outcomes():
+                child = state.clone()
+                child.apply_action(action)
+                key = child.history_str()
+                if key not in seen:
+                    seen.add(key)
+                    stack.append(child)
+            continue
+        player = int(state.current_player())
+        by.setdefault(str(state.information_state_string(player)), player)
+        for action in state.legal_actions():
+            child = state.clone()
+            child.apply_action(action)
+            key = child.history_str()
+            if key not in seen:
+                seen.add(key)
+                stack.append(child)
+    return by
+
+
+def _infostate_weights(
+    *,
+    game,
+    solver,
+    keys: Sequence[str],
+    mode: str,
+) -> np.ndarray:
+    if mode == "uniform":
+        return np.ones(len(keys), dtype=np.float32)
+    if mode != "parent-sequence":
+        raise ValueError("infostate_weight_mode must be one of: uniform, parent-sequence")
+    player_by_key = _infostate_player_lookup(game)
+    weights: list[float] = []
+    for key in keys:
+        player = player_by_key.get(str(key))
+        if player is None:
+            weights.append(1.0)
+            continue
+        if str(key) not in solver.infoset_action_maps[player]:
+            weights.append(1.0)
+            continue
+        weights.append(max(float(solver.get_parent_seq(player, str(key))), 0.0))
+    arr = np.asarray(weights, dtype=np.float64)
+    mean = float(arr.mean()) if arr.size else 0.0
+    if mean > 0.0:
+        arr = arr / mean
+    return arr.astype(np.float32, copy=False)
+
+
+def _apply_exact_infostate_ce_update(
+    solver: NeuralReferencePGSolver,
+    dataset: dict[str, np.ndarray],
+    target: np.ndarray,
+    weights: np.ndarray,
+) -> dict[str, float | int | str]:
+    obs = torch.as_tensor(dataset["obs"], dtype=torch.float32, device=solver.device)
+    legal = torch.as_tensor(dataset["legal"], dtype=torch.float32, device=solver.device)
+    target_t = torch.as_tensor(target, dtype=torch.float32, device=solver.device)
+    weight_t = torch.as_tensor(weights, dtype=torch.float32, device=solver.device)
+    if obs.shape[0] != target_t.shape[0] or obs.shape[0] != weight_t.shape[0]:
+        raise ValueError("exact infostate update tensors must share the same row count")
+    denom = weight_t.sum().clamp_min(1.0)
+    pi, _value, _log_pi, _logits = solver.net(obs, legal)
+    row_ce = -(target_t * torch.log(pi.clamp_min(1e-9))).sum(dim=1)
+    loss = (row_ce * weight_t).sum() / denom
+    solver.optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(solver.net.parameters(), 10.0)
+    solver.optimizer.step()
+    solver.learner_steps += 1
+    return {
+        "bridge_update_mode": "exact-infostate-ce",
+        "loss": float(loss.detach().cpu()),
+        "n_information_states": int(obs.shape[0]),
+        "mean_infostate_weight": float(weight_t.detach().mean().cpu()) if int(weight_t.numel()) else 0.0,
+        "max_infostate_weight": float(weight_t.detach().max().cpu()) if int(weight_t.numel()) else 0.0,
+        "learner_steps": int(solver.learner_steps),
+    }
+
+
 def _fit_solver_policy(
     solver: NeuralReferencePGSolver,
     dataset: dict[str, np.ndarray],
@@ -116,6 +205,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
+    parser.add_argument(
+        "--bridge-update-mode",
+        choices=("rollout", "exact-infostate-ce"),
+        default="rollout",
+    )
+    parser.add_argument(
+        "--infostate-weight-mode",
+        choices=("uniform", "parent-sequence"),
+        default="parent-sequence",
+    )
     parser.add_argument(
         "--decision-weight-mode",
         choices=("uniform", "inverse-own-reach"),
@@ -196,12 +295,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     trajectory_max = max(8, game.max_game_length() + 1)
     step_logs = []
     for _ in range(int(args.update_steps)):
-        step_logs.append(
-            solver.step(
-                batch_size=int(args.batch_size),
-                trajectory_max=trajectory_max,
+        if args.bridge_update_mode == "rollout":
+            step_logs.append(
+                solver.step(
+                    batch_size=int(args.batch_size),
+                    trajectory_max=trajectory_max,
+                )
             )
-        )
+        else:
+            weights = _infostate_weights(
+                game=game,
+                solver=current_solver,
+                keys=[str(key) for key in current_data["keys"]],
+                mode=str(args.infostate_weight_mode),
+            )
+            step_logs.append(
+                _apply_exact_infostate_ce_update(
+                    solver,
+                    current_data,
+                    target,
+                    weights,
+                )
+            )
     after = _policy_arrays(solver.net, current_data)
     after_target_kl = _target_kl(target, after)
     after_current_kl = _target_kl(current, after)
@@ -255,6 +370,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "reference_kl_weight": float(args.reference_kl_weight),
             "entropy_weight": float(args.entropy_weight),
             "value_weight": float(args.value_weight),
+            "bridge_update_mode": str(args.bridge_update_mode),
+            "infostate_weight_mode": str(args.infostate_weight_mode),
             "advantage_target": str(args.advantage_target),
             "gamma": float(args.gamma),
             "gae_lambda": float(args.gae_lambda),

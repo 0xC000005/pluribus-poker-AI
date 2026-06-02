@@ -50,6 +50,7 @@ def _dataset_from_tabular_policy(game, by: dict, tabular_policy) -> dict[str, np
     obs_rows: list[np.ndarray] = []
     legal_rows: list[np.ndarray] = []
     target_rows: list[np.ndarray] = []
+    keys: list[str] = []
     for key, row_idx in tabular_policy.state_lookup.items():
         if key not in by:
             continue
@@ -65,12 +66,14 @@ def _dataset_from_tabular_policy(game, by: dict, tabular_policy) -> dict[str, np
         obs_rows.append(np.asarray(obs, dtype=np.float32))
         legal_rows.append(legal)
         target_rows.append(target.astype(np.float32, copy=False))
+        keys.append(str(key))
     if not obs_rows:
         raise ValueError("empty policy-fit dataset")
     return {
         "obs": np.stack(obs_rows).astype(np.float32),
         "legal": np.stack(legal_rows).astype(np.float32),
         "target": np.stack(target_rows).astype(np.float32),
+        "keys": np.asarray(keys, dtype=object),
     }
 
 

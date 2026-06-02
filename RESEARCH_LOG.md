@@ -18655,3 +18655,22 @@
 - Summary: Gate failure-synthesis-20260602T071922Z-inverse-own-reach-small-nlhe-bridge-improved-but passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T071954Z-failure-synthesis-for-inverse-own-reach-small-nlhe/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T071922Z-inverse-own-reach-small-nlhe-bridge-improved-but", "passed": true}`
+
+## 20260602T073201Z-small-nlhe-exact-infostate-bridge - failed
+
+- Timestamp: 2026-06-02T07:32:01Z
+- Type: experiment
+- Gate: small_nlhe_exact_infostate_mmd_update_bridge
+- Hypothesis: If the sampled rollout estimator is the only missing piece, then an exact information-state CE update using OpenSpiel MMD target policies and parent-sequence weights should move a fitted neural policy toward the next exact MMD step at the same near-policy bridge setting.
+- Failure class: estimator_fidelity
+- Summary: Added an opt-in `--bridge-update-mode exact-infostate-ce` diagnostic to `scripts/analyze_small_nlhe_mmd_update_fidelity.py`, plus information-state keys in the exact MMD policy-fit dataset and a focused OpenSpiel regression test. The maintained OpenSpiel audit showed why this matters: MMD uses full sequence-form payoffs and MCCFR carries my/opp/sample reach, while the sampled bridge only saw learner-seat trajectory decisions. On the locked small-NLHE near-policy bridge (`start_mmd_steps=200`), exact CE with parent-sequence weights still overshot at `lr=0.0005` (`target_kl_reduction=-0.0002937`) and slightly worsened at `lr=0.00005` with the original 1k fit (`-0.00000036`). A more stable 10k fit at `lr=0.001` reduced target KL strongly (`+0.00006595`) but the delta cosine remained negative (`-0.6149`) because the neural update corrected fit residuals larger than the one-step MMD delta. This means the bottleneck is not only missing sampled reach correction; the exact one-step game-theoretic signal is too small relative to neural fit/optimizer noise near a strong policy. Do not scale another native NashPG actor from this unchanged one-step imitation objective.
+- Metrics files:
+  - autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_exact_infostate_start200_lr5e4_seed20260692.json
+  - autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_exact_infostate_start200_lr5e5_seed20260692.json
+  - autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_exact_infostate_start200_lr5e5_fit10k_lr001_seed20260692.json
+- Key metrics: `{"lr5e4_target_kl_reduction": -0.0002937388, "lr5e5_target_kl_reduction": -0.0000003602, "fit10k_target_kl_reduction": 0.0000659464, "fit10k_update_delta_cosine": -0.6149249, "n_information_states": 48, "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: OpenSpiel MMD follows sequence-form magnetic mirror descent with dilated entropy (https://arxiv.org/abs/2206.05825); modern policy-gradient IIG work notes the tension between trajectory PG and counterfactual values (https://arxiv.org/abs/2408.00751); NashPG motivates iteratively refined reference policies rather than one-step tiny target imitation (https://arxiv.org/abs/2510.18183).
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_mmd_update_fidelity_bridge.py test/unit/test_small_nlhe_neural_nashpg_gate.py` -> `8 passed`.
+  - `python -m py_compile scripts/analyze_small_nlhe_mmd_policy_fit.py scripts/analyze_small_nlhe_mmd_update_fidelity.py` -> passed.
+- Decision: pivot from one-step exact-MMD imitation toward a larger-horizon or lower-variance update object: either multi-step exact target deltas on the small game, exact counterfactual/reach table targets for a full local update batch, or a maintained policy-gradient IIG reproduction before another native 20k stochastic actor run. Keep the current 20k online Rainbow/PSRO lead as local deterministic support only.
