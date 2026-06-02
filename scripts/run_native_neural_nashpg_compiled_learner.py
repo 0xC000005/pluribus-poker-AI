@@ -73,6 +73,52 @@ def _load_checkpoint_in(
     return dict(payload)
 
 
+def _sampled_counterfactual_decision_weights(
+    batch: dict[str, np.ndarray],
+    *,
+    mode: str,
+    max_decision_weight: float,
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    """Approximate counterfactual occupancy by removing prior same-player reach.
+
+    This is still a sampled full-game approximation, not exact tree CFR. It makes
+    the native learner's row weights closer to the small-game counterfactual
+    signal: a player's earlier sampled action probability should not suppress
+    later feedback for that same player's information-set trajectory.
+    """
+    n_rows = int(np.asarray(batch["old_log_probs"]).shape[0])
+    if str(mode) == "uniform":
+        return torch.ones(n_rows, dtype=torch.float32, device=device)
+    if str(mode) != "inverse-own-reach":
+        raise ValueError("decision_weight_mode must be one of: uniform, inverse-own-reach")
+    if float(max_decision_weight) <= 0.0:
+        raise ValueError("max_decision_weight must be positive")
+
+    old_probs = np.exp(np.asarray(batch["old_log_probs"], dtype=np.float64))
+    game_indices = np.asarray(batch["game_indices"], dtype=np.int64)
+    players = np.asarray(batch["players"], dtype=np.int64)
+    step_indices = np.asarray(batch["step_indices"], dtype=np.int64)
+    weights = np.ones(n_rows, dtype=np.float64)
+    grouped: dict[tuple[int, int], list[int]] = {}
+    for record_i, (game_i, player_i) in enumerate(zip(game_indices, players, strict=False)):
+        grouped.setdefault((int(game_i), int(player_i)), []).append(int(record_i))
+
+    for indices in grouped.values():
+        own_reach = 1.0
+        for record_i in sorted(indices, key=lambda idx: int(step_indices[idx])):
+            weights[record_i] = min(
+                1.0 / max(float(own_reach), 1e-8),
+                float(max_decision_weight),
+            )
+            own_reach *= max(float(old_probs[record_i]), 1e-8)
+
+    observed_mean = float(weights.mean()) if weights.size else 1.0
+    if observed_mean > 0.0:
+        weights = weights / observed_mean
+    return torch.as_tensor(weights, dtype=torch.float32, device=device)
+
+
 def _policy_value_reference_loss(
     *,
     policy_net: torch.nn.Module,
@@ -86,6 +132,8 @@ def _policy_value_reference_loss(
     advantage_target: str,
     gamma: float,
     gae_lambda: float,
+    decision_weight_mode: str,
+    max_decision_weight: float,
 ) -> tuple[torch.Tensor, dict[str, float], int]:
     if int(batch["actions"].shape[0]) <= 0:
         return torch.zeros((), dtype=torch.float32, device=device), {}, 0
@@ -94,6 +142,13 @@ def _policy_value_reference_loss(
     legal_masks = torch.as_tensor(batch["legal_masks"] > 0, dtype=torch.bool, device=device)
     actions = torch.as_tensor(batch["actions"], dtype=torch.long, device=device)
     returns = torch.as_tensor(batch["rewards"], dtype=torch.float32, device=device)
+    decision_weights = _sampled_counterfactual_decision_weights(
+        batch,
+        mode=str(decision_weight_mode),
+        max_decision_weight=float(max_decision_weight),
+        device=device,
+    )
+    weight_denom = decision_weights.sum().clamp_min(1e-6)
 
     logits = policy_net(features)
     log_probs = masked_log_probs(logits, legal_masks)
@@ -117,9 +172,10 @@ def _policy_value_reference_loss(
         raise ValueError("advantage_target must be one of: terminal, gae")
     if int(advantages.numel()) > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-5)
-    policy_loss = -(action_log_probs * advantages).mean()
-    value_loss = torch.mean(torch.square(values - value_targets))
-    entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1).mean()
+    policy_loss = -torch.sum(decision_weights * action_log_probs * advantages) / weight_denom
+    value_loss = torch.sum(decision_weights * torch.square(values - value_targets)) / weight_denom
+    per_row_entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1)
+    entropy = torch.sum(decision_weights * per_row_entropy) / weight_denom
 
     reference_kl = torch.zeros((), dtype=torch.float32, device=device)
     if reference_policy is not None and float(reference_kl_weight) > 0.0:
@@ -131,7 +187,8 @@ def _policy_value_reference_loss(
             - torch.nan_to_num(reference_log_probs, neginf=0.0)
         )
         kl_terms = torch.where(legal_masks, kl_terms, torch.zeros_like(kl_terms))
-        reference_kl = torch.sum(kl_terms, dim=1).mean()
+        per_row_reference_kl = torch.sum(kl_terms, dim=1)
+        reference_kl = torch.sum(decision_weights * per_row_reference_kl) / weight_denom
 
     illegal_probability = torch.where(
         legal_masks,
@@ -157,6 +214,10 @@ def _policy_value_reference_loss(
         "advantage_target": target_mode,
         "mean_value_target": float(value_targets.detach().mean().cpu()),
         "std_value_target": float(value_targets.detach().std(unbiased=False).cpu()),
+        "decision_weight_mode": str(decision_weight_mode),
+        "max_decision_weight": float(max_decision_weight),
+        "mean_decision_weight": float(decision_weights.detach().mean().cpu()),
+        "max_observed_decision_weight": float(decision_weights.detach().max().cpu()),
     }
     return loss, stats, int(actions.numel())
 
@@ -170,6 +231,8 @@ def _prepare_ppo_fixed_rows(
     advantage_target: str,
     gamma: float,
     gae_lambda: float,
+    decision_weight_mode: str,
+    max_decision_weight: float,
 ) -> tuple[dict[str, torch.Tensor], dict[str, float], int]:
     if int(batch["actions"].shape[0]) <= 0:
         return {}, {}, 0
@@ -178,6 +241,12 @@ def _prepare_ppo_fixed_rows(
     actions = torch.as_tensor(batch["actions"], dtype=torch.long, device=device)
     old_log_probs = torch.as_tensor(batch["old_log_probs"], dtype=torch.float32, device=device)
     returns = torch.as_tensor(batch["rewards"], dtype=torch.float32, device=device)
+    decision_weights = _sampled_counterfactual_decision_weights(
+        batch,
+        mode=str(decision_weight_mode),
+        max_decision_weight=float(max_decision_weight),
+        device=device,
+    )
     with torch.no_grad():
         values = value_net(features).reshape(-1)
     target_mode = str(advantage_target)
@@ -203,6 +272,7 @@ def _prepare_ppo_fixed_rows(
         "old_log_probs": old_log_probs.detach(),
         "value_targets": value_targets.detach(),
         "advantages": advantages.detach(),
+        "decision_weights": decision_weights.detach(),
     }
     stats = {
         "advantage_target": target_mode,
@@ -210,6 +280,10 @@ def _prepare_ppo_fixed_rows(
         "std_value_target": float(value_targets.detach().std(unbiased=False).cpu()),
         "mean_return": float(returns.detach().mean().cpu()),
         "std_return": float(returns.detach().std(unbiased=False).cpu()),
+        "decision_weight_mode": str(decision_weight_mode),
+        "max_decision_weight": float(max_decision_weight),
+        "mean_decision_weight": float(decision_weights.detach().mean().cpu()),
+        "max_observed_decision_weight": float(decision_weights.detach().max().cpu()),
     }
     return rows, stats, int(actions.numel())
 
@@ -232,6 +306,8 @@ def _policy_value_reference_ppo_loss_on_rows(
     old_log_probs = rows["old_log_probs"][indices]
     value_targets = rows["value_targets"][indices]
     advantages = rows["advantages"][indices]
+    decision_weights = rows["decision_weights"][indices]
+    weight_denom = decision_weights.sum().clamp_min(1e-6)
 
     logits = policy_net(features)
     log_probs = masked_log_probs(logits, legal_masks)
@@ -240,12 +316,14 @@ def _policy_value_reference_ppo_loss_on_rows(
     action_log_probs = log_probs.gather(1, actions.view(-1, 1)).squeeze(1)
     ratio = torch.exp(action_log_probs - old_log_probs)
     clipped_ratio = torch.clamp(ratio, 1.0 - float(clip_coef), 1.0 + float(clip_coef))
-    policy_loss = torch.maximum(
+    per_row_policy_loss = torch.maximum(
         -advantages * ratio,
         -advantages * clipped_ratio,
-    ).mean()
-    value_loss = torch.mean(torch.square(values - value_targets))
-    entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1).mean()
+    )
+    policy_loss = torch.sum(decision_weights * per_row_policy_loss) / weight_denom
+    value_loss = torch.sum(decision_weights * torch.square(values - value_targets)) / weight_denom
+    per_row_entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1)
+    entropy = torch.sum(decision_weights * per_row_entropy) / weight_denom
 
     reference_kl = torch.zeros((), dtype=torch.float32, device=features.device)
     if reference_policy is not None and float(reference_kl_weight) > 0.0:
@@ -257,7 +335,8 @@ def _policy_value_reference_ppo_loss_on_rows(
             - torch.nan_to_num(reference_log_probs, neginf=0.0)
         )
         kl_terms = torch.where(legal_masks, kl_terms, torch.zeros_like(kl_terms))
-        reference_kl = torch.sum(kl_terms, dim=1).mean()
+        per_row_reference_kl = torch.sum(kl_terms, dim=1)
+        reference_kl = torch.sum(decision_weights * per_row_reference_kl) / weight_denom
 
     illegal_probability = torch.where(
         legal_masks,
@@ -271,12 +350,13 @@ def _policy_value_reference_ppo_loss_on_rows(
         - float(entropy_weight) * entropy
     )
     with torch.no_grad():
-        approx_kl = ((ratio - 1.0) - torch.log(ratio.clamp_min(1e-9))).mean()
+        per_row_approx_kl = (ratio - 1.0) - torch.log(ratio.clamp_min(1e-9))
+        approx_kl = torch.sum(decision_weights * per_row_approx_kl) / weight_denom
         clip_fraction = (
             (torch.abs(ratio - 1.0) > float(clip_coef))
             .to(dtype=ratio.dtype)
-            .mean()
-        )
+            * decision_weights
+        ).sum() / weight_denom
     stats = {
         "loss": float(loss.detach().cpu()),
         "policy_loss": float(policy_loss.detach().cpu()),
@@ -287,6 +367,8 @@ def _policy_value_reference_ppo_loss_on_rows(
         "illegal_action_probability": float(illegal_probability.detach().cpu()),
         "approx_kl": float(approx_kl.detach().cpu()),
         "clip_fraction": float(clip_fraction.detach().cpu()),
+        "mean_decision_weight": float(decision_weights.detach().mean().cpu()),
+        "max_observed_decision_weight": float(decision_weights.detach().max().cpu()),
     }
     return loss, stats
 
@@ -484,6 +566,8 @@ def run_learner(
     advantage_target: str = "terminal",
     gamma: float = 1.0,
     gae_lambda: float = 0.95,
+    decision_weight_mode: str = "uniform",
+    max_decision_weight: float = 64.0,
     seed: int = 20260661,
     device: str = "auto",
     checkpoint_in: str | Path | None = None,
@@ -522,6 +606,10 @@ def run_learner(
         raise ValueError("gamma must be in [0, 1]")
     if not (0.0 <= float(gae_lambda) <= 1.0):
         raise ValueError("gae_lambda must be in [0, 1]")
+    if str(decision_weight_mode) not in {"uniform", "inverse-own-reach"}:
+        raise ValueError("decision_weight_mode must be one of: uniform, inverse-own-reach")
+    if float(max_decision_weight) <= 0.0:
+        raise ValueError("max_decision_weight must be positive")
 
     random.seed(seed)
     np.random.seed(seed)
@@ -568,6 +656,8 @@ def run_learner(
     policy_update_kls: list[float] = []
     policy_update_backtracks: list[int] = []
     policy_update_lr_scales: list[float] = []
+    mean_decision_weights: list[float] = []
+    max_observed_decision_weights: list[float] = []
     policy_update_accepted = 0
     policy_update_skipped = 0
     n_samples = 0
@@ -603,6 +693,8 @@ def run_learner(
                 advantage_target=str(advantage_target),
                 gamma=float(gamma),
                 gae_lambda=float(gae_lambda),
+                decision_weight_mode=str(decision_weight_mode),
+                max_decision_weight=float(max_decision_weight),
             )
             if batch_samples <= 0:
                 continue
@@ -653,6 +745,8 @@ def run_learner(
                 advantage_target=str(advantage_target),
                 gamma=float(gamma),
                 gae_lambda=float(gae_lambda),
+                decision_weight_mode=str(decision_weight_mode),
+                max_decision_weight=float(max_decision_weight),
             )
             if batch_samples <= 0:
                 continue
@@ -676,6 +770,8 @@ def run_learner(
                     advantage_target=str(advantage_target),
                     gamma=float(gamma),
                     gae_lambda=float(gae_lambda),
+                    decision_weight_mode=str(decision_weight_mode),
+                    max_decision_weight=float(max_decision_weight),
                 )
                 return rebuilt_loss
 
@@ -696,6 +792,10 @@ def run_learner(
         entropy_values.append(float(stats["entropy"]))
         reference_kls.append(float(stats["reference_kl"]))
         illegal_probabilities.append(float(stats["illegal_action_probability"]))
+        if "mean_decision_weight" in stats:
+            mean_decision_weights.append(float(stats["mean_decision_weight"]))
+        if "max_observed_decision_weight" in stats:
+            max_observed_decision_weights.append(float(stats["max_observed_decision_weight"]))
         if step_stats["policy_update_kl"] is not None:
             policy_update_kls.append(float(step_stats["policy_update_kl"]))
         policy_update_backtracks.append(int(step_stats["policy_update_backtracks"]))
@@ -760,6 +860,14 @@ def run_learner(
         "advantage_target": str(advantage_target),
         "gamma": float(gamma),
         "gae_lambda": float(gae_lambda),
+        "decision_weight_mode": str(decision_weight_mode),
+        "max_decision_weight": float(max_decision_weight),
+        "mean_decision_weight": (
+            float(np.mean(mean_decision_weights)) if mean_decision_weights else None
+        ),
+        "max_observed_decision_weight": (
+            float(max(max_observed_decision_weights)) if max_observed_decision_weights else None
+        ),
         "moving_reference": bool(moving_reference),
         "reference_updates": int(reference_updates),
         "reference_policy_checkpoint": (
@@ -848,6 +956,8 @@ def run_learner(
                     "advantage_target": str(advantage_target),
                     "gamma": float(gamma),
                     "gae_lambda": float(gae_lambda),
+                    "decision_weight_mode": str(decision_weight_mode),
+                    "max_decision_weight": float(max_decision_weight),
                     "moving_reference": bool(moving_reference),
                     "opponent_population_size": int(len(opponent_policies)),
                     "opponent_kinds": list(opponent_kinds),
@@ -894,6 +1004,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
+    parser.add_argument(
+        "--decision-weight-mode",
+        choices=("uniform", "inverse-own-reach"),
+        default="uniform",
+        help=(
+            "Opt-in sampled counterfactual row weighting. inverse-own-reach removes "
+            "prior same-player sampled action reach from later decision feedback."
+        ),
+    )
+    parser.add_argument("--max-decision-weight", type=float, default=64.0)
     parser.add_argument("--seed", type=int, default=20260661)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--checkpoint-in", type=Path)
@@ -933,6 +1053,8 @@ def main(argv: list[str] | None = None) -> int:
         advantage_target=args.advantage_target,
         gamma=args.gamma,
         gae_lambda=args.gae_lambda,
+        decision_weight_mode=args.decision_weight_mode,
+        max_decision_weight=args.max_decision_weight,
         seed=args.seed,
         device=args.device,
         checkpoint_in=args.checkpoint_in,

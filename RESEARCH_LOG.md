@@ -19358,3 +19358,23 @@
 - Verification:
   - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient --require-complete` -> passed with decision `proceed`.
 - Decision: Proceed to native sampled/vectorized reference-regularized counterfactual PG prototype design. Do not run Slumbot/RLCard or claim SOTA until the native self-play league gates pass.
+
+## 20260602T154500Z-native-sampled-inverse-reach-cfpg-prototype - passed
+
+- Timestamp: 2026-06-02T15:45:00Z
+- Type: implementation_smoke
+- Gate: native_sampled_inverse_reach_cfpg_prototype
+- Hypothesis: The native 9-action learner can carry a sampled approximation of the exact small-game counterfactual signal by weighting each decision row by inverse prior same-player reach while preserving local-simulator-only training and reference-regularized policy learning.
+- Failure class: none
+- Summary: Added opt-in `decision_weight_mode=inverse-own-reach` to `scripts/run_native_neural_nashpg_compiled_learner.py`. The implementation normalizes sampled row weights to mean 1, caps the inverse-reach multiplier, applies weights to policy, value, entropy, reference-KL, and PPO inner losses, and records weight stats in metrics/checkpoints. This is a prototype bridge from the exact small-game counterfactual pass to native full-deck learning; it is not strength evidence.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/native_inverse_reach_smoke_seed20260696.json
+  - autoresearch-session/native_neural_nashpg/native_inverse_reach_cuda_smoke_seed20260697.json
+- Key metrics: `{"cpu_passed": true, "cuda_passed": true, "cuda_resolved_device": "cuda", "cuda_samples_per_second": 916.660844, "cpu_samples_per_second": 50.514172, "cuda_mean_decision_weight": 1.0, "cuda_max_observed_decision_weight": 3.565626, "compiled_needs_python_showdown": 0, "uses_slumbot_training_data": false, "uses_solver_labels": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py::test_sampled_counterfactual_decision_weights_remove_prior_own_reach test/unit/test_native_neural_nashpg_compiled_learner.py::test_native_neural_nashpg_compiled_learner_supports_inverse_own_reach_weights` -> `2 passed`.
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py` -> `10 passed`.
+  - `python -m py_compile scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
+  - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 1 --games-per-iteration 64 --collector-batch-size 32 --max-steps-per-game 32 --hidden-dim 32 --decision-weight-mode inverse-own-reach --max-decision-weight 16 --device cpu --seed 20260696 --checkpoint-out autoresearch-session/native_neural_nashpg/native_inverse_reach_smoke_seed20260696.pt --output-json autoresearch-session/native_neural_nashpg/native_inverse_reach_smoke_seed20260696.json` -> passed.
+  - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 1 --games-per-iteration 128 --collector-batch-size 64 --max-steps-per-game 32 --hidden-dim 64 --decision-weight-mode inverse-own-reach --max-decision-weight 16 --device cuda --seed 20260697 --checkpoint-out autoresearch-session/native_neural_nashpg/native_inverse_reach_cuda_smoke_seed20260697.pt --output-json autoresearch-session/native_neural_nashpg/native_inverse_reach_cuda_smoke_seed20260697.json` -> passed.
+- Decision: Proceed to a matched native strength gate only after predeclaring the comparison: inverse-own-reach plus reference regularization versus the current uniform-row native learner under the same GPU budget, then native parent/control H2H and empirical-game insertion. Slumbot/RLCard evaluation remains blocked.

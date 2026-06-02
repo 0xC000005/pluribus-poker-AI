@@ -4,6 +4,31 @@ import numpy as np
 import torch
 
 
+def test_sampled_counterfactual_decision_weights_remove_prior_own_reach():
+    from scripts.run_native_neural_nashpg_compiled_learner import (
+        _sampled_counterfactual_decision_weights,
+    )
+
+    batch = {
+        "game_indices": np.asarray([0, 0, 0, 0], dtype=np.int64),
+        "players": np.asarray([0, 1, 0, 0], dtype=np.int64),
+        "step_indices": np.asarray([0, 1, 2, 3], dtype=np.int64),
+        "old_log_probs": np.log(np.asarray([0.5, 0.25, 0.25, 0.5], dtype=np.float32)),
+    }
+
+    weights = _sampled_counterfactual_decision_weights(
+        batch,
+        mode="inverse-own-reach",
+        max_decision_weight=10.0,
+    )
+
+    assert torch.allclose(
+        weights,
+        torch.tensor([1.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0, 8.0 / 3.0]),
+        atol=1e-6,
+    )
+
+
 def test_native_neural_nashpg_compiled_learner_writes_native_checkpoint(tmp_path):
     from poker_ai.research.mixed_policy_h2h import load_policy_adapter
     from scripts.run_native_neural_nashpg_compiled_learner import run_learner
@@ -206,6 +231,33 @@ def test_native_neural_nashpg_compiled_learner_supports_ppo_inner_update(tmp_pat
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     assert payload["config"]["inner_update"] == "ppo"
     assert payload["metrics"]["inner_update"] == "ppo"
+
+
+def test_native_neural_nashpg_compiled_learner_supports_inverse_own_reach_weights(tmp_path):
+    from scripts.run_native_neural_nashpg_compiled_learner import run_learner
+
+    checkpoint = tmp_path / "inverse_reach.pt"
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=8,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        decision_weight_mode="inverse-own-reach",
+        max_decision_weight=10.0,
+        seed=20260695,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["decision_weight_mode"] == "inverse-own-reach"
+    assert metrics["max_decision_weight"] == 10.0
+    assert metrics["mean_decision_weight"] > 0.0
+    assert metrics["max_observed_decision_weight"] >= metrics["mean_decision_weight"]
+    assert metrics["passed"] is True
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["decision_weight_mode"] == "inverse-own-reach"
 
 
 def test_compiled_rollout_opponent_recognizes_online_rainbow_response_payload():
