@@ -18567,3 +18567,25 @@
 - Summary: Gate methodology-review-20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T065712Z-methodology-review-for-adaptive-proximal-step-control-for/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg", "passed": true}`
+
+## 20260602T065943Z-adaptive-proximal-native-nashpg-stress-h2h - failed
+
+- Timestamp: 2026-06-02T06:59:43Z
+- Type: experiment
+- Gate: matched_native_neural_nashpg_proximal_ab_h2h
+- Hypothesis: Under a same-budget elevated-LR native NashPG/MMD stress test, the opt-in adaptive legal-action policy-KL controller should prevent harmful oversized updates and improve whole-game duplicate-swapped H2H versus the identical no-controller learner.
+- Failure class: strategy_quality
+- Summary: Trained two fresh native 9-action CUDA checkpoints with the same seed, `16x2048` compiled local self-play budget, h128 network, and `lr=0.003`. The no-controller arm passed mechanically at `67,182` samples/sec. The proximal arm also passed mechanically and actively constrained updates (`target=1e-4`, `mean_policy_update_kl=5.826e-5`, `max_policy_update_kl=8.662e-5`, `mean_backtracks=2.5625`, `mean_lr_scale=0.1797`), but it stayed very close to the moving reference and high entropy. In 2,000 duplicate-swapped native H2H games, the proximal candidate lost clearly to the no-controller arm (`mean=-0.07848`, lower95 `-0.10006`). This falsifies policy-KL control alone as the next promotable mechanism; do not tune this threshold for promotion. The next branch should improve the game-theoretic update estimator, such as counterfactual/reach-weighted or bootstrapped sequence-form/MMD-style updates.
+- Metrics file: autoresearch-session/native_neural_nashpg/proximal_ab_candidate_vs_no_kl_h2h_2000_seed20260689.json
+- Key metrics: `{"control_samples_per_second": 67181.62088061303, "candidate_samples_per_second": 58622.12942501057, "candidate_mean_policy_update_kl": 5.825981372709066e-05, "candidate_mean_policy_update_backtracks": 2.5625, "mean_candidate_payoff": -0.07848, "lower95_candidate_payoff": -0.10005935508303154, "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T070030Z-failure-synthesis-for-adaptive-proximal-native-nashpg-stress - passed
+
+- Timestamp: 2026-06-02T07:00:30Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T065943Z-adaptive-proximal-native-nashpg-stress-test-h2h-lost
+- Hypothesis: Failure synthesis for Adaptive proximal native NashPG stress-test H2H lost to no-controller should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T065943Z-adaptive-proximal-native-nashpg-stress-test-h2h-lost passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T070030Z-failure-synthesis-for-adaptive-proximal-native-nashpg-stress/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T065943Z-adaptive-proximal-native-nashpg-stress-test-h2h-lost", "passed": true}`
