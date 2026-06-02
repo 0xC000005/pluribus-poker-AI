@@ -17395,3 +17395,17 @@
   - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py scripts/run_rnad_compiled_native_smoke.py` -> passed.
 - Key metrics: `{"passed": true, "resolved_device": "cuda", "num_actions": 9, "num_features": 126, "train_iterations": 4, "n_samples": 851, "rnad_loss_is_finite": true, "compiled_needs_python_showdown": 0, "illegal_records": 0, "samples_per_second": 1504.5141506215566, "h2h_mean_candidate_payoff": 0.0, "h2h_lower95_candidate_payoff": 0.0, "promotion": false}`
 - Decision: checkpoint export and native H2H plumbing are validated. Strength is not shown; the next gate needs a larger native R-NaD generation run and a positive child-vs-parent/population lower95 before empirical-game or Slumbot evaluation.
+
+## 20260602T001904Z-a-modest-native-9-action-r-nad-generation - passed
+
+- Timestamp: 2026-06-02T00:21:43Z
+- Type: experiment
+- Gate: native_rnad_child_vs_parent_scale_probe
+- Hypothesis: A modest native 9-action R-NaD generation run should produce measurable child-vs-parent H2H movement under the existing duplicate-swapped native league; if not, the blocker is self-play update strength/scale rather than checkpoint plumbing.
+- Failure class: self_play_strength
+- Summary: Scaled native R-NaD generation probe passed its first internal child-vs-parent gate. A 500x512 CUDA-resolved local self-play run produced 888090 samples in 31.95s with finite loss, zero illegal records, and zero Python-showdown fallbacks. The exported target policy moved materially from parent (random-feature mean L1 about 0.084). Duplicate-swapped H2H versus the initial parent was neutral at 20 games and inconclusive-positive at 1000 games, then positive at 5000 games: mean_candidate_payoff=0.0183978, lower95=0.0116231. This is local generation-over-generation evidence only; next gate is population/empirical-game support before any Slumbot or RLCard public-reference claim.
+- Metrics file: autoresearch-session/native_rnad/rnad_compiled_native_child_vs_parent_h2h_5000_seed20260606.json
+- Training file: autoresearch-session/native_rnad/rnad_compiled_native_child_500x512_seed20260605.json
+- Inconclusive H2H file: autoresearch-session/native_rnad/rnad_compiled_native_child_vs_parent_h2h_1000_seed20260605.json
+- Key metrics: `{"passed": true, "resolved_device": "cuda", "train_iterations": 500, "n_samples": 888090, "train_seconds": 31.94649854000454, "samples_per_second": 27799.29070749028, "rnad_loss_is_finite": true, "compiled_needs_python_showdown": 0, "illegal_records": 0, "target_policy_mean_l1_vs_parent": 0.08422026038169861, "h2h_1000_mean_candidate_payoff": 0.015772, "h2h_1000_lower95_candidate_payoff": -0.0001357044512131124, "h2h_5000_mean_candidate_payoff": 0.018397800000000002, "h2h_5000_lower95_candidate_payoff": 0.011623093375971349, "promotion": false}`
+- Decision: first native R-NaD generation-over-generation gate is positive. Do not evaluate Slumbot yet; require population/empirical-game support and at least one comparison against saved native controls before public or held-out evaluation.

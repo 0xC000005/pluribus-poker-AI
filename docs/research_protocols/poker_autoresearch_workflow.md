@@ -118,7 +118,9 @@ native-policy-compatible checkpoint, so parent/child generations can enter the
 existing duplicate-swapped H2H and league gates. Treat both bridges as plumbing
 evidence only. The next promotion question is whether a scaled native R-NaD
 run improves against parents/population controls in H2H and empirical-game
-gates.
+gates. The first scaled probe (`500x512`, seed `20260605`) cleared the parent
+H2H lower95 gate, so the immediate next gate is population/empirical-game
+support, not Slumbot.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
