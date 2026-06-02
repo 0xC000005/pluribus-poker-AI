@@ -17757,3 +17757,15 @@
   - `uv run --with tianshou python scripts/train_joint_experience_response_oracle.py --dataset-npz <exploratory_dataset> --updates 2000 --batch-size 1024 --hidden-dim 256 --device auto ...` -> passed on CUDA.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_empirical_game_oracle_gen3_rainbow_nfsp_seed20260694.json` -> solved complete four-policy matrix with oracle support.
 - Decision: keep exploratory joint-experience response-oracle training as the live native population-improvement mechanism. The next gate should replicate or strengthen this result, ideally with a larger exploratory dataset or online exploratory response collection, and require candidate support plus positive H2H against Rainbow before any Slumbot/RLCard promotion path.
+## 20260602T030024Z-native-nashpg-and-exploratory-response-oracle-synthesis - passed
+
+- Timestamp: 2026-06-02T03:00:24Z
+- Type: failure_synthesis
+- Gate: failure-synthesis-20260602T030024Z-native-nashpg-and-exploratory-response-oracle-scaling-cycle
+- Hypothesis: The native NashPG and response-oracle cycle needs a causal synthesis before adding another mechanism variant, so the workflow should retire repeated failures and choose one next falsifier.
+- Failure class: eval_invalid
+- Summary: Synthesis identified action coverage as the clearest causal difference in the cycle. Native NashPG/MMD produced real generation-over-generation improvement but remained below the saved Rainbow control; GAE credit assignment did not fix that; deterministic joint replay trained a weak response oracle; adding local legal exploration to the compiled joint-experience collector produced the first candidate in this cycle to beat Rainbow and earn empirical-game support. This keeps the project inside the local tabula-rasa/self-play population philosophy while avoiding Slumbot adaptation or solver-label imitation.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T030024Z-native-nashpg-and-exploratory-response-oracle-scaling-cycle-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T030024Z-native-nashpg-and-exploratory-response-oracle-scaling-cycle-synthesis/decision.json
+- Decision: proceed with exactly one next test: replicate or strengthen exploratory joint-experience response-oracle training on an independent or larger exploratory dataset, then require positive lower95 versus Rainbow plus nonzero empirical-game support before any promotion queue. If replication fails, pivot to online exploratory response collection instead of adding more offline updates on the same replay.
