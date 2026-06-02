@@ -17591,3 +17591,24 @@
   - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py` -> `4 passed`.
   - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
 - Decision: keep learner export available and use it for future native R-NaD diagnostics. Do not promote this candidate: Rainbow remains the empirical-game support policy. The next principled branch must address population/meta-policy training or a stronger MMD/NashPG-style neural update, not just target-vs-learner export.
+## 20260602T015954Z-continuing-native-r-nad-from-the-stronger-learner - failed
+
+- Timestamp: 2026-06-02T02:03:45Z
+- Type: native_rnad_learner_export_continuation
+- Gate: native_rnad_learner_export_continuation_saved_control_gate
+- Hypothesis: Continuing native R-NaD from the stronger learner-export checkpoint and exporting the next learner policy should preserve parent improvement while closing the saved Rainbow control gap.
+- Failure class: strategy_quality
+- Summary: Continuation from the stronger learner-export R-NaD checkpoint improved over NFSP and only slightly over gen1, but still lost to saved Rainbow; the four-policy empirical game again solved to pure Rainbow support. Parent-only continuation is not sufficient; next native R-NaD work must train against population/meta-policy support or translate the exact MMD/NashPG update more faithfully.
+- Metrics file: autoresearch-session/native_rnad/export_source_gen2_empirical_game_learner_gen1_nfsp_rainbow_seed20260656.json
+- Training file: autoresearch-session/native_rnad/export_source_gen2_500x512_seed20260653.json
+- H2H files:
+  - autoresearch-session/native_rnad/export_source_gen2_learner_vs_gen1_learner_h2h_2000_seed20260654.json
+  - autoresearch-session/native_rnad/export_source_gen2_learner_vs_nfsp_h2h_5000_seed20260655.json
+  - autoresearch-session/native_rnad/export_source_gen2_learner_vs_rainbow_h2h_2000_seed20260656.json
+- Key metrics: `{"gen2_vs_gen1_mean": 0.009993000000000002, "gen2_vs_gen1_lower95": -0.0004860687657042267, "gen2_vs_nfsp_mean": 0.0454426, "gen2_vs_nfsp_lower95": 0.03260062401905711, "gen2_vs_rainbow_mean": -0.015905000000000002, "gen2_vs_rainbow_lower95": -0.02818913788957329, "gen2_vs_rainbow_upper95": -0.0036208621104267154, "empirical_meta_strategy": [0.0, 0.0, 0.0, 1.0], "promotion": false}`
+- Verification:
+  - `python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_rnad/export_source_gen2_learner_500x512_seed20260653.pt --candidate-kind native-ppo --baseline autoresearch-session/native_rnad/export_source_learner_500x512_seed20260644.pt --baseline-kind native-ppo --n-games 2000 --device auto --seed 20260654 --eval-state-backend fast-state-canonical-deal --output-json autoresearch-session/native_rnad/export_source_gen2_learner_vs_gen1_learner_h2h_2000_seed20260654.json` -> passed and wrote metrics.
+  - `python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_rnad/export_source_gen2_learner_500x512_seed20260653.pt --candidate-kind native-ppo --baseline autoresearch-session/native_nfsp/nfsp_fast_state_population_dueling_h256_5k_seed20260803.pt --baseline-kind native-nfsp --n-games 5000 --device auto --seed 20260655 --eval-state-backend fast-state-canonical-deal --output-json autoresearch-session/native_rnad/export_source_gen2_learner_vs_nfsp_h2h_5000_seed20260655.json` -> passed and wrote metrics.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_rnad/export_source_gen2_learner_500x512_seed20260653.pt --candidate-kind native-ppo --baseline autoresearch-session/native_rollout_substrate/fast_state_population_rainbow_h256_131k_upc16_dummy8_seed20260757.pt --baseline-kind tianshou-rainbow --n-games 2000 --device auto --seed 20260656 --eval-state-backend fast-state-canonical-deal --output-json autoresearch-session/native_rnad/export_source_gen2_learner_vs_rainbow_h2h_2000_seed20260656.json` -> passed and wrote metrics.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_rnad/export_source_gen2_empirical_game_learner_gen1_nfsp_rainbow_seed20260656.json` -> solved complete four-policy matrix with pure Rainbow support.
+- Decision: do not continue parent-only native R-NaD from learner-export checkpoints unchanged. The next R-NaD-family test must introduce empirical-game/meta-policy pressure or a closer neural translation of the exact MMD/NashPG update before another same-budget continuation.

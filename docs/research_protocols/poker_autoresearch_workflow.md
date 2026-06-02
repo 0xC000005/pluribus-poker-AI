@@ -416,6 +416,15 @@ matters. It still lost to the saved Rainbow control, and the empirical game
 assigned all support to Rainbow. This narrows the failure: native R-NaD is not
 blocked only by target-vs-current export, but still lacks a population objective
 strong enough to beat the best saved local control.
+A second 500x512 continuation from that stronger learner export confirmed the
+same boundary. The gen2 learner beat NFSP (`mean=+0.045443`, lower95
+`+0.032601`) and was only weakly ahead of gen1 (`mean=+0.009993`, lower95
+`-0.000486`), but it still lost to Rainbow (`mean=-0.015905`, upper95
+`-0.003621`), and the gen2/gen1/NFSP/Rainbow empirical game again solved to
+pure Rainbow support. Parent-only native R-NaD continuation is therefore retired
+unchanged; future R-NaD-family work must add empirical-game/meta-policy pressure
+or a closer neural translation of the exact MMD/NashPG update before another
+same-budget continuation.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
