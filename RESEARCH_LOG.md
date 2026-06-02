@@ -18512,3 +18512,14 @@
 - Summary: Ran a one-seed 400-step neural NashPG/MMD small-game sanity check through transient `uv run --with open-spiel`. The gate passed because exact NashConv improved from `1.795672` to best `0.478310`, but it was unstable: final NashConv drifted back to `1.076027`, and exact MMD on the same harness reached `0.084198` in 200 steps. This says the regularized-dynamics idea is valid, but the current neural translation is still weak and may explain why native HUNL NashPG/MMD variants failed against the local Rainbow/PSRO support.
 - Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_400_seed1_20260602T0631.json
 - Key metrics: `{"candidate_truth_gate_passed": true, "mean_best_nashconv": 0.47831018634481637, "mean_last_nashconv": 1.076027404737046, "small_game_exact_only": true}`
+
+## 20260602T063548Z-small-nlhe-mmd-policy-fit-probe - passed
+
+- Timestamp: 2026-06-02T06:35:48Z
+- Type: experiment
+- Gate: small_nlhe_mmd_policy_fit_probe
+- Hypothesis: A neural policy with the existing small-game architecture should be able to represent the exact MMD policy on the locked small-NLHE harness; if so, native NashPG/MMD failures are more likely update/trajectory-fidelity failures than small-game representation-capacity failures.
+- Failure class: none
+- Summary: Added `scripts/analyze_small_nlhe_mmd_policy_fit.py` and a tiny OpenSpiel-skipping test. The h128 neural fit to the 200-step exact MMD policy passed decisively: target exact MMD NashConv `0.084198`, fitted neural policy NashConv `0.084179`, mean target KL `1.423e-6`, max action-probability error `0.000243`, over 48 information states. This rules out small-game neural representation capacity as the immediate bottleneck and focuses the next native work on matching the sequence-form/regularized update dynamics, not increasing model size or adding anti-collapse patches.
+- Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_policy_fit_200steps_h128_seed20260602.json
+- Key metrics: `{"policy_fit_probe_passed": true, "target_mmd_nashconv": 0.08419827983160522, "fit_policy_nashconv": 0.08417868510498469, "mean_target_kl_to_fit": 1.4234420859793318e-06}`
