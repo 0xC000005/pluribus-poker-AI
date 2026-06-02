@@ -110,6 +110,13 @@ values, or full-game league strength under matched controls. Detached
 Slumbot-trace policy fitting, response-range replacement, post-hoc calibration,
 and solver-label imitation are diagnostic evidence, not mainline methods.
 
+The first native scaling bridge is the compiled R-NaD trajectory-contract
+smoke: fresh R-NaD policy/value networks now consume compiled 9-action
+full-deck self-play trajectories and take finite updates without Slumbot data
+or solver labels. Treat this as plumbing evidence only. The next promotion
+question is whether a scaled native R-NaD checkpoint learner improves against
+parents/population controls in H2H and empirical-game gates.
+
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
 

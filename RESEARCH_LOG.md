@@ -17362,3 +17362,19 @@
 - Summary: Revised the workflow objective from search-improved/PSRO-XDO framing toward tabula-rasa game-theoretic neural self-play. Updated `docs/research_protocols/poker_autoresearch_workflow.md`, `AGENTS.md`, and the default/autudit objective contract in `poker_ai/research/autoresearch.py`. The new framing says: environment rules, legal masks, rewards, and self-play are allowed; human strategy, Slumbot data, hand-coded poker tactics, and default solver-label imitation are not. The current lead is R-NaD-style regularized neural self-play scaled to native full-deck 9-action HUNL, with NashPG/MMD-style successors allowed after review. Exact small-game NashConv remains a truth meter after training, not the training signal.
 - Metrics file: not recorded
 - Key metrics: `{"mainline": "tabula_rasa_regularized_neural_self_play", "rnad_aligned": true, "solver_labels_default_mainline": false, "slumbot_training_data_allowed": false, "next_big_step": "scale_rnad_style_self_play_to_native_full_deck_9_action_hunl"}`
+
+## 20260602T000815Z-compiled-native-9-action-full-deck-trajectories-can - passed
+
+- Timestamp: 2026-06-02T00:08:21Z
+- Type: method_change
+- Gate: native_rnad_compiled_smoke
+- Hypothesis: Compiled native 9-action full-deck trajectories can satisfy the existing R-NaD Trajectory contract and support finite tabula-rasa self-play updates without Slumbot data or solver labels.
+- Failure class: scaling_bridge
+- Summary: Added a compiled native full-deck R-NaD collector and smoke runner. The CUDA-resolved smoke passed with 2 finite R-NaD updates on native 9-action self-play trajectories, 213 samples, zero illegal records, zero Python-showdown fallbacks, and no Slumbot/AlphaNLHoldem training data. This is trajectory-contract plumbing only, not strength evidence.
+- Metrics file: autoresearch-session/native_rnad/rnad_compiled_native_smoke_seed20260601.json
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_smoke.py` -> `1 passed`.
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_smoke.py test/unit/test_local_vtrace_compiled_native_smoke.py test/unit/test_compiled_fast_rollout.py` -> `8 passed`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_smoke.py` -> passed.
+- Key metrics: `{"passed": true, "resolved_device": "cuda", "num_actions": 9, "num_features": 126, "updates": 2, "n_samples": 213, "rnad_loss_is_finite": true, "compiled_needs_python_showdown": 0, "illegal_records": 0, "truncated_games": 0, "samples_per_second": 439.84629631611284, "promotion": false}`
+- Decision: native R-NaD trajectory plumbing is validated. The next step is a scaled native R-NaD checkpoint learner with same-environment parent/population H2H and empirical-game gates; do not use this smoke as Slumbot or SOTA evidence.
