@@ -18349,3 +18349,25 @@
 - Summary: Gate failure-synthesis-20260602T054746Z-20k-compiled-replay-nfsp-average-response-failed-support passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T054839Z-failure-synthesis-for-20k-compiled-replay-nfsp-average/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T054746Z-20k-compiled-replay-nfsp-average-response-failed-support", "passed": true}`
+
+## 20260602T055334Z-methodology-review-for-20k-global-psro-style-population - passed
+
+- Timestamp: 2026-06-02T05:53:34Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T055156Z-20k-global-psro-style-population-expansion
+- Hypothesis: Methodology review for 20k Global-PSRO-style population expansion should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T055156Z-20k-global-psro-style-population-expansion passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T055334Z-methodology-review-for-20k-global-psro-style-population/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T055156Z-20k-global-psro-style-population-expansion", "passed": true}`
+
+## 20260602T055756Z-a-bounded-global-psro-style-compiled-rainbow-response - passed
+
+- Timestamp: 2026-06-02T05:58:04Z
+- Type: experiment
+- Gate: 20k_global_psro_population_expansion_falsifier
+- Hypothesis: A bounded Global-PSRO-style compiled Rainbow response trained against the active 20k support should improve the 20k local empirical-game population under matched H2H and complete post-expansion matrix gates.
+- Failure class: none
+- Summary: The reviewed Global-PSRO-style population-expansion falsifier passed. A fresh compiled online Rainbow response trained on CUDA from the local 20k simulator against active support only, collecting 84,703 transitions in 7.72s with zero Python-showdown fallback. It passed all 2,000-game 20k H2H support edges: vs active 20k support mean=+0.036804 lower95=+0.017545; vs iter2 lower95=+0.015719; vs iter3 lower95=+0.028086; vs old iter4 lower95=+0.008823; vs raw-sequence PPO lower95=+0.014515. The complete six-policy empirical game solved to pure support on the new candidate. Action-distribution diagnostic used all 9 actions with top action call at 0.4106 and all-in fraction 0.0639. This is local 20k population progress, not Slumbot or SOTA proof.
+- Metrics file: autoresearch-session/empirical_game/native_20k_global_psro_response_expansion_seed20260858.json
+- Key metrics: `{"gate": null, "passed": null}`
