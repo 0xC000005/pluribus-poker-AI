@@ -16,13 +16,15 @@ information. The standard is a method that would be defensible as a
 NeurIPS/AAAI/ICLR-style contribution: a clear mechanism, root-cause diagnosis,
 related-work grounding, falsifiers, and transfer evidence.
 
-The active direction is **AlphaZero-style neural self-play policy iteration for
+The active direction is **tabula-rasa game-theoretic neural self-play for
 poker**. The mainline should be describable as one loop: a stochastic neural
-policy/value network plays full local self-play hands, public-belief
-CFR/resolving improves sampled states into mixed-strategy/value targets, the
-network trains on those improved targets and realized outcomes, and the updated
-network returns to self-play. This keeps the project AlphaZero-like in spirit
-while respecting imperfect-information constraints.
+policy/value learner starts from fresh weights, plays full local self-play
+hands in a rules simulator, receives only observations, legal actions, and
+terminal rewards, updates through an equilibrium-oriented RL rule such as
+R-NaD/NashPG/MMD-style regularized self-play, and returns the updated network
+to self-play. This is the poker analogue of AlphaZero/Atari-style learning:
+the simulator and reward function are allowed; human strategy, Slumbot traces,
+hand-coded poker tactics, and detached solver labels are not the mainline.
 
 Slumbot is evaluation-only. Do not use Slumbot hands, traces, action
 likelihoods, response ranges, revealed cards, or trace-start states as training
@@ -30,19 +32,22 @@ data, target generation, curriculum, opponent model, checkpoint selector, or
 hyperparameter signal. Slumbot artifacts may be used only after evaluation to
 diagnose why a locally promoted self-play candidate failed transfer.
 
-CFR/search is allowed only when it acts as a general game-theoretic
-policy-improvement teacher or evaluation operator across local self-play states.
-It must not become the whole deterministic player, a Slumbot-specific patch, a
-street-specific hand rule, or a way to fit visible benchmark quirks.
-Public-belief representations, equilibrium-oriented RL dynamics, mixed-policy
-targets, regret/policy initializers, and learned search corrections are allowed
-when they are trained and evaluated under the same local self-play contract.
+CFR/search is allowed when it acts as a general game-theoretic evaluator,
+sanity-check, or optional policy-improvement operator across local self-play
+states. It must not become the default training-label source, the whole
+deterministic player, a Slumbot-specific patch, a street-specific hand rule, or
+a way to fit visible benchmark quirks. Exact NashConv/CFR on small games is a
+truth meter after training, not the training signal itself. Public-belief
+representations, mixed policies, regret/policy initializers, and learned search
+corrections are allowed only when they preserve the same local tabula-rasa
+self-play contract.
 
 The goal is not “fewer research knobs.” Knobs are acceptable when they isolate a
 mechanism. The workflow rejects knob sweeps that substitute for understanding.
-Every major cycle should ask whether it attacks the root problem: learned
-objects have fit value/policy targets but have not yet improved search decisions
-on unseen public states.
+Every major cycle should ask whether it attacks the root problem: the current
+system has not yet produced a full-game native self-play learner whose
+successive neural policies reliably improve generation over generation and then
+transfer to held-out Slumbot evaluation.
 
 The workflow must deliberately allocate time to paradigm creation, not only
 paradigm exploitation. Major AI advances often combine a simplifying mechanism
@@ -96,25 +101,26 @@ Use `python scripts/poker_autoresearch.py enqueue-promotion-gate ...` for the
 normal autoresearch path so the evidence check is queued, logged, and available
 to Slumbot confidence gating.
 
-The current frontier is **minimal self-play plus general search improvement**.
-Exact CUDA CFR remains a teacher/frontier when it is applied to local self-play
-states, but the next learned object must improve the decision process itself:
-root decisions, counterfactual action values, regret/search-state updates, or
-league strength under matched controls. Detached Slumbot-trace policy fitting,
-response-range replacement, and post-hoc calibration are diagnostic evidence,
-not mainline methods.
+The current frontier is **scaling the validated R-NaD-style tabula-rasa
+self-play learner to the native full-deck 9-action game**. Exact CUDA CFR and
+small-game NashConv remain evaluators/frontiers when applied to local states,
+but the next learned object must improve the self-play learner itself:
+successive checkpoint strength, empirical-game support, counterfactual action
+values, or full-game league strength under matched controls. Detached
+Slumbot-trace policy fitting, response-range replacement, post-hoc calibration,
+and solver-label imitation are diagnostic evidence, not mainline methods.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
 
 - **North star:** build a locally trained self-play poker method whose
   stochastic neural policy/value networks improve through self-play,
-  population learning, and optional public-belief search targets, then train
+  population learning, and equilibrium-oriented RL dynamics, then train
   environment-native candidates that beat both the RLCard AlphaNLHoldem
   reference surface and the native Slumbot-facing 9-action evaluation path.
-- **Internal success:** root-disjoint decision quality improves against
-  same-budget controls, then same-budget checkpoint-league lower95 turns
-  positive.
+- **Internal success:** same-budget checkpoint-league lower95 turns positive
+  across generations, empirical-game support includes the candidate, and
+  root-disjoint decision diagnostics do not contradict the league result.
 - **Public-reference success:** an isolated RLCard/AlphaNLHoldem benchmark
   shows positive lower-bound H2H for an RLCard-native candidate against the
   unofficial reference checkpoint or source-controlled reproduction.

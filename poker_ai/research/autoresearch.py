@@ -445,20 +445,22 @@ def _default_goal(root: str | Path | None = None) -> dict:
         "objective": (
             "Continuously run the poker autoresearch outer loop until explicit "
             "user stop or real promotion evidence is achieved. Develop and "
-            "falsify a PSRO/XDO-style local population improvement method for "
-            "full-deck heads-up no-limit hold'em: freeze the current local "
-            "incumbent, solve the native empirical game, train maintained "
-            "neural response oracles against the empirical-game meta-policy, "
+            "falsify a tabula-rasa game-theoretic neural self-play method for "
+            "full-deck heads-up no-limit hold'em: train stochastic policy/value "
+            "networks from fresh weights using only the simulator, observations, "
+            "legal actions, and rewards; prefer R-NaD/NashPG/MMD-style "
+            "regularized self-play when plain policy-gradient learners cycle; "
             "and add a candidate only if it beats parent and population gates "
             "before any Slumbot confidence run. Slumbot remains held-out "
             "evaluation only, with tiny smoke allowed for integration and "
             "catastrophic-transfer checks. The method must stay elegant, "
             "novel, bitter lesson aligned, personal-PC trainable, and free of "
-            "hand-crafted poker-strategy rules."
+            "hand-crafted poker-strategy rules or default solver-label imitation."
         ),
         "constraints": [
             "keep generated checkpoints and raw run artifacts out of git",
             "do not add opponent-specific or street-specific human strategy rules",
+            "do not use solver-generated policy labels as the default training target for the mainline learner",
             "do not use Slumbot as a primary promotion signal before self-play league gates pass",
             "train a fresh environment-native model per card/action environment; transfer the training schema, not checkpoints or action mappings",
             "treat explicit opponent ranges as diagnostic scaffolding unless a counterfactual-EV gate passes",
@@ -471,32 +473,32 @@ def _default_goal(root: str | Path | None = None) -> dict:
         "agent_goal_contract": {
             "north_star": (
                 "Build a heads-up no-limit hold'em agent whose stochastic neural "
-                "policy improves through local self-play/population competition, "
+                "policy improves through tabula-rasa local self-play/population competition, "
                 "then validates externally on Slumbot only after internal parent "
                 "and empirical-game population gates pass."
             ),
             "current_frontier": {
                 "mechanism": (
-                    "Neural self-play policy iteration through PSRO/XDO-style "
-                    "plug-in population improvement with maintained neural "
-                    "response-oracle learners"
+                    "R-NaD-style tabula-rasa neural self-play scaled from exact "
+                    "small poker games to the native full-deck 9-action game, "
+                    "with NashPG/MMD-style regularized policy-gradient variants "
+                    "allowed as reviewed successors"
                 ),
                 "why_now": (
-                    "The current Tianshou Rainbow response oracle became the best "
-                    "local plug-in RL incumbent in the complete empirical game, "
-                    "but the next identical response-oracle generation failed its "
-                    "parent gate; the next work must make population improvement "
-                    "repeatable rather than repeat the same oracle recipe."
+                    "The current AlphaHoldem-style PPO branch failed the exact "
+                    "small-NLHE hardening gate, while R-NaD reduced exact "
+                    "NashConv reliably. The next work should scale the aligned "
+                    "regularized self-play learner rather than continue broad "
+                    "method-shopping or solver-label target fitting."
                 ),
                 "decision_object": (
-                    "stochastic neural policies, CFR-improved mixed strategies, "
-                    "native empirical-game payoffs, meta-strategy support, and "
-                    "parent/population H2H lower bounds"
+                    "stochastic neural policies, native empirical-game payoffs, "
+                    "meta-strategy support, parent/population H2H lower bounds, "
+                    "and small-game exact NashConv diagnostics"
                 ),
             },
             "success_criteria": [
-                "candidate response oracle beats its parent/incumbent with positive lower95",
-                "root-disjoint same-budget controls show decision impact before promotion",
+                "candidate self-play checkpoint beats its parent/incumbent with positive lower95",
                 "complete native empirical game keeps the candidate in meta-strategy support",
                 "candidate does not lose to saved local controls with positive-confidence evidence",
                 "candidate remains legal and traversal-valid with zero rejected chunks in fidelity-gated runs",
@@ -529,7 +531,7 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "blocked_pivots": [
                 "do not tune loss-weight, target count, hidden size, or selector thresholds after a failed mechanism without a positive root-decision gate",
                 "do not weaken evaluation, parser, legal-mask, or promotion surfaces to improve visible metrics",
-                "do not promote policy patches that only fit supervised labels without self-play decision impact",
+                "do not promote policy patches that only fit supervised or solver labels without self-play league impact",
             ],
             "hard_stop_rules": [
                 "stop only for explicit user STOP, readiness failure, invalid evaluation, benchmark hacking, or unsafe objective drift",
@@ -845,37 +847,39 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "whose self-play checkpoint league strength improves over time on "
                 "personal-PC hardware, then transfers to SOTA-style Slumbot and "
                 "public baseline performance by using the available GPU for local "
-                "self-play, neural learning, and general search improvement rather "
-                "than Slumbot-specific fitting."
+                "tabula-rasa self-play, neural learning, and equilibrium-oriented "
+                "regularized RL rather than Slumbot-specific fitting or solver-label "
+                "imitation."
             ),
             "active_method_target": (
-                "PSRO/XDO-style local population improvement: use the current "
-                "local incumbent from the native empirical game, train maintained-"
-                "library neural response oracles against the empirical-game "
-                "meta-policy or reviewed population approximation, add candidates "
-                "only after parent/population H2H gates pass, and keep Slumbot as "
-                "held-out evaluation after internal progress."
+                "R-NaD-style tabula-rasa neural self-play scaled to the native "
+                "full-deck 9-action game: start from fresh policy/value networks, "
+                "train through self-play trajectories using simulator observations, "
+                "legal actions, and rewards, compare against parent/population H2H "
+                "gates, and keep Slumbot as held-out evaluation after internal "
+                "progress."
             ),
             "learning_philosophy": (
-                "Prefer neural self-play/population improvement adapted to "
-                "imperfect information. A stochastic neural policy should remain "
-                "the deployable player, while maintained-"
-                "library response oracles should do the learning. CFR/resolving "
-                "remain acceptable as principled evaluators, teachers, or search "
-                "controls, but the active loop is population improvement through "
-                "native empirical-game gates, not Slumbot-specific fitting or "
-                "hand-crafted poker rules."
+                "Prefer tabula-rasa neural self-play adapted to imperfect "
+                "information. A stochastic neural policy should remain the "
+                "deployable player. R-NaD/NashPG/MMD-style regularized self-play "
+                "is aligned because it learns from self-play trajectories while "
+                "controlling multi-agent cycling. CFR/resolving remain acceptable "
+                "as evaluators, diagnostics, or optional general search controls, "
+                "but not as the default supervised target source or a Slumbot-"
+                "specific fitting path."
             ),
             "population_improvement_policy": {
-                "active_loop": "psro_xdo_plug_in_population_improvement",
+                "active_loop": "tabula_rasa_regularized_self_play_population_league",
                 "current_local_incumbent_source": "autoresearch-session/poker_state.json.incumbent_checkpoint",
-                "response_oracle_rule": "use maintained libraries through native 9-action adapters",
-                "meta_policy_rule": "solve the native empirical game before choosing the next response-oracle training distribution",
+                "response_oracle_rule": "maintained-library response oracles are controls or reviewed successors, not the default mainline learner",
+                "meta_policy_rule": "use the native empirical game to judge population support after self-play training, not as a Slumbot selector",
                 "drift_guard": (
                     "Run the research-log drift guard before every queued "
                     "experiment; repeated local target-consumer/search-label "
-                    "transfer failures require review instead of another small "
-                    "variant."
+                    "transfer failures require review, and the mainline should "
+                    "return to tabula-rasa self-play instead of another detached "
+                    "label-fitting variant."
                 ),
                 "slumbot_rule": "tiny smoke only until repeated parent/population gates pass; never use Slumbot as training data or selector",
                 "required_ladder": [
@@ -900,9 +904,9 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 ),
             },
             "neural_policy_iteration_policy": {
-                "current_status": "paused_until_target_collapse_resolved",
+                "current_status": "active_as_tabula_rasa_regularized_self_play",
                 "neural_policy_role": "main_stochastic_actor",
-                "cfr_role": "policy_improvement_teacher",
+                "cfr_role": "evaluator_or_optional_policy_improvement_control_not_default_teacher",
                 "deploy_policy_rule": "sample_mixed_strategy_not_argmax_by_default",
                 "generic_rl_algorithm_policy": "plug_in_maintained_libraries_only",
                 "local_code_boundary": (
@@ -922,13 +926,14 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "tianshou-ppo",
                 ],
                 "training_loop": [
-                    "stochastic neural policy/value self-play generates trajectories",
-                    "public-belief CFR improves sampled states into mixed-strategy/value targets",
-                    "policy/value network trains on improved targets and realized outcomes",
-                    "updated stochastic network returns to self-play",
+                    "fresh stochastic neural policy/value networks play local self-play trajectories",
+                    "learner receives simulator observations, legal action masks, and terminal rewards",
+                    "R-NaD/NashPG/MMD-style regularized self-play update improves the network without Slumbot or human data",
+                    "updated stochastic network returns to self-play and is judged by parent/population gates",
                 ],
                 "blocked_drift": [
                     "always run fixed-budget CFR as the entire player",
+                    "treat detached solver labels as the main training objective",
                     "deploy deterministic argmax policy without a reviewed exploitability gate",
                     "use PPO/Rainbow/Gym/PettingZoo as benchmark tuning detached from poker equilibrium pressure",
                     "hand-roll generic PPO/Rainbow/NFSP/PSRO internals when Tianshou/RLCard/OpenSpiel/AgileRL can be adapted",

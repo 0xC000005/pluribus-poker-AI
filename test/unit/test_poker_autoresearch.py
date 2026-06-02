@@ -295,27 +295,31 @@ def test_init_state_creates_resumable_files_and_initial_queue(tmp_path):
     assert "scripts/play_slumbot.py" in goal["objective_alignment_policy"]["protected_surfaces"]
     assert "scripts/eval_*.py" in goal["objective_alignment_policy"]["protected_surface_patterns"]
     assert "bitter lesson" in goal["objective"].lower()
-    assert "psro/xdo-style local population improvement" in goal["objective"].lower()
+    assert "tabula-rasa game-theoretic neural self-play" in goal["objective"].lower()
+    assert "default solver-label imitation" in goal["objective"].lower()
     assert "stochastic neural policy" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
-    assert "maintained-library response oracles" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
-    assert "empirical-game meta-policy" in goal["objective_alignment_policy"]["active_method_target"].lower()
+    assert "r-nad/nashpg/mmd-style regularized self-play" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
+    assert "not as the default supervised target source" in goal["objective_alignment_policy"]["learning_philosophy"].lower()
+    assert "fresh policy/value networks" in goal["objective_alignment_policy"]["active_method_target"].lower()
     population_policy = goal["objective_alignment_policy"]["population_improvement_policy"]
-    assert population_policy["active_loop"] == "psro_xdo_plug_in_population_improvement"
+    assert population_policy["active_loop"] == "tabula_rasa_regularized_self_play_population_league"
     assert population_policy["current_local_incumbent_source"] == "autoresearch-session/poker_state.json.incumbent_checkpoint"
     assert "do not repeat identical single-checkpoint response-oracle training" in population_policy["blocked_drift"]
     assert "research-log drift guard" in population_policy["drift_guard"].lower()
     assert "local target-consumer" in population_policy["drift_guard"].lower()
+    assert "tabula-rasa self-play" in population_policy["drift_guard"].lower()
     assert "candidate versus empirical-game population/meta-policy" in population_policy["required_ladder"]
     neural_policy = goal["objective_alignment_policy"]["neural_policy_iteration_policy"]
-    assert neural_policy["current_status"] == "paused_until_target_collapse_resolved"
+    assert neural_policy["current_status"] == "active_as_tabula_rasa_regularized_self_play"
     assert neural_policy["neural_policy_role"] == "main_stochastic_actor"
-    assert neural_policy["cfr_role"] == "policy_improvement_teacher"
+    assert neural_policy["cfr_role"] == "evaluator_or_optional_policy_improvement_control_not_default_teacher"
     assert neural_policy["deploy_policy_rule"] == "sample_mixed_strategy_not_argmax_by_default"
     assert neural_policy["generic_rl_algorithm_policy"] == "plug_in_maintained_libraries_only"
     assert "do not implement generic" in neural_policy["local_code_boundary"]
     assert neural_policy["control_gate_rule"] == "require_fixed_or_mixed_controls_per_generation"
     assert neural_policy["required_loop_flag"] == "--require-control-gate"
     assert "tianshou-rainbow" in neural_policy["required_control_kinds"]
+    assert any("detached solver labels" in drift for drift in neural_policy["blocked_drift"])
     assert any("hand-roll generic" in drift for drift in neural_policy["blocked_drift"])
     assert "Tianshou PPO/Rainbow" in neural_policy["allowed_infrastructure"]
     league_policy = goal["objective_alignment_policy"]["self_play_league_policy"]
@@ -373,10 +377,10 @@ def test_default_goal_contract_names_current_frontier_and_mechanism_brief(tmp_pa
 
     goal = _read_json(tmp_path / "autoresearch-session" / "poker_goal.json")
     contract = goal["agent_goal_contract"]
-    assert "neural self-play policy iteration" in contract["current_frontier"]["mechanism"].lower()
-    assert "cfr-improved mixed strategies" in contract["current_frontier"]["decision_object"].lower()
-    assert "root-disjoint" in " ".join(contract["success_criteria"]).lower()
-    assert "same-budget" in " ".join(contract["success_criteria"]).lower()
+    assert "r-nad-style tabula-rasa neural self-play" in contract["current_frontier"]["mechanism"].lower()
+    assert "small-game exact nashconv diagnostics" in contract["current_frontier"]["decision_object"].lower()
+    assert "self-play checkpoint" in " ".join(contract["success_criteria"]).lower()
+    assert "empirical game" in " ".join(contract["success_criteria"]).lower()
     assert "slumbot" in " ".join(contract["held_out_validation"]).lower()
     assert "loss-weight" in " ".join(contract["blocked_pivots"]).lower()
     assert "benchmark" in " ".join(contract["hard_stop_rules"]).lower()
