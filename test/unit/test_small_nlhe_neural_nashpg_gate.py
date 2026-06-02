@@ -105,6 +105,68 @@ def test_small_nlhe_neural_nashpg_gate_supports_gae_targets(tmp_path):
     assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["advantage_target"] == "gae"
 
 
+def test_small_nlhe_neural_nashpg_gate_supports_full_self_play_collector(tmp_path):
+    pytest.importorskip("pyspiel")
+    out = tmp_path / "neural_nashpg_gate_full_self_play.json"
+    repo = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_small_nlhe_neural_nashpg_gate.py",
+            "--steps",
+            "1",
+            "--eval-every",
+            "1",
+            "--batch-size",
+            "8",
+            "--seeds",
+            "1",
+            "--layers",
+            "8",
+            "--collector-mode",
+            "full-self-play",
+            "--output-json",
+            str(out),
+        ],
+        check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(out.read_text())
+
+    assert data["config"]["collector_mode"] == "full-self-play"
+    assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["collector_mode"] == "full-self-play"
+    assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["mean_valid_decisions"] > 0.0
+
+
+def test_small_nlhe_neural_nashpg_gate_rejects_full_self_play_gae():
+    repo = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_small_nlhe_neural_nashpg_gate.py",
+            "--steps",
+            "0",
+            "--collector-mode",
+            "full-self-play",
+            "--advantage-target",
+            "gae",
+        ],
+        check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "full-self-play GAE is unsupported" in result.stderr
+
+
 def test_neural_reference_pg_solver_seed_controls_torch_initialization():
     repo = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo / "scripts"))

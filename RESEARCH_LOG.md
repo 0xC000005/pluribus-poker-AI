@@ -18714,3 +18714,20 @@
 - Summary: Completed the review bundle with independent-verifier, related-work, benchmark-audit, mechanism-review, structured-scope, and decision artifacts. The decision is `revise`: the high-level pivot away from solver-snapshot imitation and post-hoc Q softmax is supported, but plain GAE/high-entropy PG is not enough because it failed the R-NaD small-NLHE exact-NashConv comparator. The next learner must be counterfactual/sequence-form-compatible or population-objective based, train only from local simulator trajectories, and pass exact small-game plus native 20k parent/population gates before any Slumbot evaluation.
 - Review manifest: docs/research_protocols/poker_review_manifests/20260602T074559Z-counterfactual-compatible-neural-policy-gradient-learner-after-small.json
 - Key decision: `{"decision": "revise", "next_mechanism": "counterfactual-compatible stochastic policy/value self-play learner", "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T081030Z-small-nlhe-full-self-play-pg-collector-falsifier - failed
+
+- Timestamp: 2026-06-02T08:10:30Z
+- Type: experiment
+- Gate: small_nlhe_full_self_play_pg_collector_falsifier
+- Hypothesis: The failed GAE/high-entropy small-NLHE PG control might be caused by the seat-aware response collector rather than the objective; switching to the full self-play tree collector should recover the stronger small-game neural PG behavior if collector semantics were the main issue.
+- Failure class: small_game_pg_control
+- Summary: Added an opt-in `--collector-mode seat-aware|full-self-play` to `scripts/run_small_nlhe_neural_nashpg_gate.py` with focused regression tests. The default remains `seat-aware`. Full self-play uses the existing vectorized `LeducTreeCollector` and records all acting-player decisions. The first GAE/full-self-play run failed worse (`mean_best_nashconv=1.719228`, `mean_last_nashconv=2.310017`), which exposed a correctness boundary: this script's GAE target bootstraps through consecutive decisions, but full self-play alternates players while the value target is current-player returns. Added a fail-closed validation so `--collector-mode full-self-play --advantage-target gae` is now rejected until player-perspective bootstrapping is implemented. A valid terminal-return full-self-play control improved from uniform but still failed the R-NaD comparator (`mean_best_nashconv=0.723963` versus R-NaD `0.664478`, `mean_last_nashconv=1.033474`). Therefore the seat-aware collector was not the main blocker; the current sampled neural PG objective remains weaker/less stable than exact MMD and R-NaD on this small poker gate.
+- Metrics files:
+  - autoresearch-session/small_nlhe_neural_nashpg/neural_pg_gae_entropy005_full_self_play_1200_seed1_3_vs_rnad_baseline.json
+  - autoresearch-session/small_nlhe_neural_nashpg/neural_pg_terminal_entropy005_full_self_play_1200_seed1_3_vs_rnad_baseline.json
+- Key metrics: `{"gae_full_self_play_validity": "now rejected by CLI", "terminal_full_self_play_mean_best_nashconv": 0.723963, "terminal_full_self_play_mean_last_nashconv": 1.033474, "baseline_rnad_mean_last_nashconv": 0.664478, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py test/unit/test_small_nlhe_mmd_update_fidelity_bridge.py test/unit/test_small_nlhe.py` -> `12 passed`.
+  - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
+- Decision: keep `full-self-play` collector mode as a correctness diagnostic, but do not scale the current sampled terminal/GAE PG objective. The next mechanism must change the update target itself, most likely toward player-perspective/counterfactual bootstrapping or a maintained R-NaD/NashPG-style objective, not another collector-mode or entropy run.

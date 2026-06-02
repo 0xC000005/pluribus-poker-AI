@@ -57,6 +57,7 @@ class NeuralReferencePGSolver:
         gae_lambda: float = 0.95,
         decision_weight_mode: str = "uniform",
         max_decision_weight: float = 10.0,
+        collector_mode: str = "seat-aware",
     ) -> None:
         if str(advantage_target) not in {"terminal", "gae"}:
             raise ValueError("advantage_target must be one of: terminal, gae")
@@ -89,6 +90,7 @@ class NeuralReferencePGSolver:
         self.gae_lambda = float(gae_lambda)
         self.decision_weight_mode = str(decision_weight_mode)
         self.max_decision_weight = float(max_decision_weight)
+        self.collector_mode = str(collector_mode)
         self._rng = np.random.RandomState(int(seed))
         self.learner_steps = 0
 
@@ -178,6 +180,8 @@ class NeuralReferencePGSolver:
             "value_loss": float(value_loss.detach().cpu()),
             "reference_kl": float(kl.detach().cpu()),
             "entropy": float(entropy.detach().cpu()),
+            "collector_mode": self.collector_mode,
+            "mean_valid_decisions": float(valid.sum().detach().cpu()) / max(1, int(valid.shape[1])),
             "advantage_target": self.advantage_target,
             "gamma": self.gamma,
             "gae_lambda": self.gae_lambda,
@@ -297,9 +301,16 @@ def _decision_weights_from_own_reach(
 
 
 def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
-    from poker_ai.rnad.seat_collector import SeatAwarePyspielCollector
+    if args.collector_mode == "seat-aware":
+        from poker_ai.rnad.seat_collector import SeatAwarePyspielCollector
 
-    collector = SeatAwarePyspielCollector(game, device="cpu")
+        collector = SeatAwarePyspielCollector(game, device="cpu")
+    elif args.collector_mode == "full-self-play":
+        from poker_ai.rnad import LeducTreeCollector
+
+        collector = LeducTreeCollector(game, device="cpu")
+    else:
+        raise ValueError("--collector-mode must be one of: seat-aware, full-self-play")
     solver = NeuralReferencePGSolver(
         collector=collector,
         layers=_parse_layers(args.layers),
@@ -314,6 +325,7 @@ def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
         gae_lambda=float(args.gae_lambda),
         decision_weight_mode=str(args.decision_weight_mode),
         max_decision_weight=float(args.max_decision_weight),
+        collector_mode=str(args.collector_mode),
     )
     trajectory_max = max(8, game.max_game_length() + 1)
     history = [(0, _nashconv_from_solver(game, by, solver, policy_lib, exploitability))]
@@ -377,6 +389,15 @@ def main(argv=None) -> int:
         default="uniform",
     )
     parser.add_argument("--max-decision-weight", type=float, default=10.0)
+    parser.add_argument(
+        "--collector-mode",
+        choices=("seat-aware", "full-self-play"),
+        default="seat-aware",
+        help=(
+            "seat-aware trains only the selected learner seat; full-self-play "
+            "uses the vectorized tree collector and trains all acting-player decisions."
+        ),
+    )
     parser.add_argument("--baseline-json")
     parser.add_argument("--baseline-arm", default="rnad")
     parser.add_argument("--output-json")
@@ -398,6 +419,11 @@ def main(argv=None) -> int:
         raise ValueError("--gae-lambda must be in [0, 1]")
     if float(args.max_decision_weight) <= 0.0:
         raise ValueError("--max-decision-weight must be positive")
+    if args.collector_mode == "full-self-play" and args.advantage_target == "gae":
+        parser.error(
+            "full-self-play GAE is unsupported by this current-player value convention; "
+            "use terminal returns or implement player-perspective bootstrapping first"
+        )
 
     from open_spiel.python import policy as policy_lib
     from open_spiel.python.algorithms import exploitability
@@ -475,6 +501,7 @@ def main(argv=None) -> int:
             "gae_lambda": float(args.gae_lambda),
             "decision_weight_mode": str(args.decision_weight_mode),
             "max_decision_weight": float(args.max_decision_weight),
+            "collector_mode": str(args.collector_mode),
             "baseline_json": args.baseline_json,
             "baseline_arm": args.baseline_arm,
         },
