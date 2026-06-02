@@ -18703,3 +18703,14 @@
 - Key metrics: `{"mean_start_nashconv": 1.719228, "mean_best_nashconv": 0.754637, "mean_last_nashconv": 1.652462, "baseline_rnad_mean_last_nashconv": 0.664478, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false, "promotion": false}`
 - Related work grounding: The control was motivated by `Reevaluating Policy Gradient Methods for Imperfect-Information Games` (https://arxiv.org/abs/2502.08938) and its public benchmark code (https://github.com/nathanlct/IIG-RL-Benchmark), plus the sequence-form/exploitability evaluator surface (https://github.com/gabrfarina/exp-a-spiel).
 - Decision: do not scale the current GAE/high-entropy PG translation into native HUNL unchanged. The remaining principled path is not a larger PPO run; it is a learner whose objective is closer to the exact game-theoretic object: sequence-form/counterfactual-compatible policy-gradient targets, maintained R-NaD/MMD primitives, or a population/PSRO objective that learns an explicit stochastic policy rather than a post-hoc Q softmax.
+
+## 20260602T075424Z-methodology-review-for-counterfactual-compatible-neural-pg - passed
+
+- Timestamp: 2026-06-02T07:54:24Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T074559Z-counterfactual-compatible-neural-policy-gradient-learner-after-small
+- Hypothesis: A methodology review should decide whether the next branch may continue as an explicit stochastic neural self-play learner after the small-game PG and MMD-bridge failures.
+- Failure class: none
+- Summary: Completed the review bundle with independent-verifier, related-work, benchmark-audit, mechanism-review, structured-scope, and decision artifacts. The decision is `revise`: the high-level pivot away from solver-snapshot imitation and post-hoc Q softmax is supported, but plain GAE/high-entropy PG is not enough because it failed the R-NaD small-NLHE exact-NashConv comparator. The next learner must be counterfactual/sequence-form-compatible or population-objective based, train only from local simulator trajectories, and pass exact small-game plus native 20k parent/population gates before any Slumbot evaluation.
+- Review manifest: docs/research_protocols/poker_review_manifests/20260602T074559Z-counterfactual-compatible-neural-policy-gradient-learner-after-small.json
+- Key decision: `{"decision": "revise", "next_mechanism": "counterfactual-compatible stochastic policy/value self-play learner", "uses_slumbot_training_data": false, "promotion": false}`

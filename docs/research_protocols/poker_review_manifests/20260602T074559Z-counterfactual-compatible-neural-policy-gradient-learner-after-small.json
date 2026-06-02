@@ -1,0 +1,53 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 1699,
+      "path": "benchmark_audit.md",
+      "sha256": "bab2266d06e467b7914999285d355a1faf04895ee9abf8219fa95c5c36077d11"
+    },
+    {
+      "bytes": 779,
+      "path": "decision.json",
+      "sha256": "a4bede54de8115622d2ebcea2d62caf56685e0b994250c079a76315dc30b9bb3"
+    },
+    {
+      "bytes": 1953,
+      "path": "mechanism_review.md",
+      "sha256": "9dcfc0d2bb7304a4885c7fe335d5a6b5e471201318fdad733ad27d5d33e49b34"
+    },
+    {
+      "bytes": 3264,
+      "path": "related_work.md",
+      "sha256": "935d78d85baf9a9bb3406e9f34af88797cafffb3de23f3a4f839b15e0e6830c6"
+    },
+    {
+      "bytes": 1843,
+      "path": "review.md",
+      "sha256": "092af558f3dafe646e818a9ed5c485568848dd4aaf9be5e5cc2128989a8f3509"
+    },
+    {
+      "bytes": 3205,
+      "path": "review_scope.json",
+      "sha256": "55592f4de931874485e32e3e0a073cf31fdfd038ebf84a9b6055d0aa7c65dc0f"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only after revising the next learner into a counterfactual/sequence-form-compatible stochastic policy objective. The high-level pivot away from solver-snapshot imitation and post-hoc Q softmax is supported, but the repo's GAE/high-entropy small-NLHE control failed the R-NaD exact-NashConv comparator, so plain PG is not enough.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T074559Z-counterfactual-compatible-neural-policy-gradient-learner-after-small",
+  "review_id": "20260602T074559Z-counterfactual-compatible-neural-policy-gradient-learner-after-small",
+  "sources": [
+    "https://arxiv.org/abs/2502.08938",
+    "https://github.com/nathanlct/IIG-RL-Benchmark",
+    "https://github.com/gabrfarina/exp-a-spiel",
+    "https://arxiv.org/abs/2408.00751",
+    "https://arxiv.org/abs/2510.18183",
+    "autoresearch-session/small_nlhe_neural_nashpg/neural_pg_gae_entropy005_1200_seed1_3_vs_rnad_baseline.json",
+    "RESEARCH_LOG.md"
+  ],
+  "written_at": "2026-06-02T07:48:24Z"
+}

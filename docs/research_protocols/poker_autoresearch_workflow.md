@@ -1114,11 +1114,12 @@ uncertainty heads, and mixed precision when they serve the learned-search
 mechanism.
 
 Architecture changes are not progress by themselves. A larger or newer network
-must name the learned object, the search boundary, and the local falsifier. For
-the current phase, that means improving a public-belief regret/policy
-initializer and passing the root-disjoint warm-start resolver gate. Offline
-target fit, local random wins, or a better-looking Slumbot smoke cannot justify
-mainline promotion without the search-behavior gate.
+must name the learned object, the game objective, and the local falsifier. For
+the current phase, that means improving a tabula-rasa neural self-play policy
+through rewards, legal actions, and local population pressure, then passing
+exact small-game sanity gates plus native parent/population H2H gates. Offline
+target fit, local random wins, solver-label imitation, or a better-looking
+Slumbot smoke cannot justify mainline promotion.
 
 ## Literature And Review Gate
 
@@ -1147,32 +1148,50 @@ Use `enqueue-review` for any change that needs independent verification or
 related work. This keeps review artifacts in the workflow queue instead of
 burying them in chat.
 
-## Neural Regret-Field Targets
+## Counterfactual-Compatible Neural Self-Play
 
-The approved next mechanism is not bounded policy imitation. It is a learned
-regret/policy field that initializes CFR+/resolving at public-belief states.
-The network may use stronger modern architecture, but its output must enter the
-search loop as an initializer or calibration signal that search can correct.
+The approved next mechanism is no longer a supervised regret-field or resolver
+warm-start target. That branch remains diagnostic, but the active objective is a
+tabula-rasa, game-theoretic neural self-play learner: fresh stochastic
+policy/value networks, local simulator observations, legal masks, actions, and
+rewards only. Slumbot, AlphaNLHoldem, exact CFR/MMD snapshots, and public
+resolver traces are evaluation or sanity references, not training labels.
 
-The smallest useful target artifact should contain root-disjoint public states,
-legal masks, public cards, private-hand set encodings, public action sequences,
-reach/belief summaries, low-budget vanilla solver output, and higher-budget
-teacher output. The first pass can train policy logits only if the evaluation
-turns them into CFR/regret initializers rather than final played actions.
+The next mechanism must update the neural policy through a game objective rather
+than imitating a solver snapshot. Acceptable candidates include R-NaD/MMD/NashPG
+style regularized self-play, counterfactual-compatible policy-gradient targets,
+or empirical-game/population objectives that learn an explicit stochastic actor.
+Generic PPO/Rainbow/NFSP controls may be used to falsify assumptions, preferably
+through maintained libraries, but they are controls unless they pass the exact
+small-game and native population gates.
 
-Required A/B:
+Required A/B before native 9-action scale-up:
 
-- vanilla low-budget CFR+ versus neural-warm-start low-budget CFR+;
-- both compared against the same higher-budget teacher;
-- metrics: root action L1/KL, top-action agreement, all-in probability/top rate,
-  illegal-action count, latency, and root-disjoint split identity;
-- for `regret_policy_warm_start_checkpoint` checkpoints, add
-  `--baseline-iterations <n>` to compare against a uniform CFR+ budget before
-  claiming the learned warm start is compute-efficient;
-- fail action: retire the learned object or change the target, not sweep
-  architecture size on the same holdout.
+- exact small-NLHE sanity: finite metrics, stable harness fingerprint, and
+  exact NashConv improvement that beats the current R-NaD baseline under matched
+  seeds or explains why the baseline is not the right comparator;
+- update-fidelity or mechanism check: evidence that the neural update is not
+  merely correcting fit residuals, overfitting one seed, or drifting back toward
+  uniform/high exploitability;
+- native 20k local gate: parent/support H2H lower bound above zero, legal action
+  distribution sanity, and empirical-game support insertion;
+- fail action: retire the objective or write a synthesis, not sweep entropy,
+  learning rate, model size, or action-specific patches on the same failure.
 
-Queue the implemented gate with:
+Current retired/falsified variants include post-hoc Rainbow Q-softmax, unchanged
+terminal-return NashPG/MMD response, unchanged V-trace actor, unchanged GAE
+compiled actor, and the small-NLHE GAE/high-entropy PG control that failed the
+R-NaD exact-NashConv baseline. The active pivot is a reviewed
+counterfactual/sequence-form-compatible policy-gradient or population objective.
+
+## Legacy Resolver Diagnostics
+
+The old supervised regret-field/warm-start resolver path is retained only as a
+diagnostic surface. Do not treat its target builders or root-disjoint warm-start
+gates as the approved mainline unless a new methodology review explicitly
+reopens that direction under the tabula-rasa objective.
+
+Queue the legacy warm-start gate with:
 
 ```bash
 python scripts/poker_autoresearch.py enqueue-warm-start-resolver \
