@@ -453,7 +453,10 @@ def _default_goal(root: str | Path | None = None) -> dict:
             "learning so each generation learns against the full local archive "
             "or solved support instead of one parent; and add a candidate only "
             "if it beats parent, prior-support, empirical-game, and multi-seed "
-            "population gates before any Slumbot confidence run. Slumbot "
+            "population gates before any Slumbot confidence run. If the "
+            "decision object is a solved empirical-game meta-strategy, require "
+            "support-member ties and off-support wins instead of positive "
+            "lower95 against every support member. Slumbot "
             "remains held-out evaluation only, with tiny smoke allowed for "
             "integration and catastrophic-transfer checks. The method must "
             "stay elegant, novel, bitter lesson aligned, personal-PC "
@@ -488,7 +491,9 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "of strong checkpoints, train fresh or continued stochastic "
                     "policy/value networks against the archive/meta-strategy, "
                     "and promote only when the candidate improves the whole "
-                    "population rather than exploiting one parent"
+                    "population rather than exploiting one parent; solved "
+                    "population meta-strategies must tie their support and beat "
+                    "off-support controls"
                 ),
                 "why_now": (
                     "The latest uniform-support compiled Rainbow response beat "
@@ -502,12 +507,14 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "stochastic neural policies, native empirical-game payoffs, "
                     "K-best/historical archive support, parent/prior-support/"
                     "population H2H lower bounds, multi-seed transition gates, "
-                    "and small-game exact NashConv diagnostics"
+                    "empirical meta-strategy support/off-support gates, and "
+                    "small-game exact NashConv diagnostics"
                 ),
             },
             "success_criteria": [
                 "candidate self-play checkpoint beats its parent/incumbent with positive lower95",
                 "complete native empirical game keeps the candidate in meta-strategy support",
+                "solved empirical-game meta-strategy ties support members and beats off-support controls",
                 "candidate does not lose to saved local controls with positive-confidence evidence",
                 "candidate remains legal and traversal-valid with zero rejected chunks in fidelity-gated runs",
                 "external Slumbot confidence validation is attempted only after repeated internal population gates pass",
@@ -887,7 +894,7 @@ def _default_goal(root: str | Path | None = None) -> dict:
                 "archive_policy": "maintain_k_best_and_historical_checkpoint_archive",
                 "selection_rule": "train_against_full_archive_or_meta_strategy_not_single_parent",
                 "response_oracle_rule": "single best-response oracles are diagnostics unless they are embedded in the historical/K-best population loop and pass prior-support gates",
-                "meta_policy_rule": "use the native empirical game to judge population support and build archive pressure after self-play training, not as a Slumbot selector",
+                "meta_policy_rule": "use the native empirical game to judge population support and build archive pressure after self-play training; a solved meta-strategy must tie support members and beat off-support controls, not serve as a Slumbot selector",
                 "drift_guard": (
                     "Run the research-log drift guard before every queued "
                     "experiment; repeated local target-consumer/search-label "
@@ -901,6 +908,8 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "candidate versus parent/incumbent",
                     "candidate versus prior support member that caused the last lower95 failure",
                     "candidate versus empirical-game population/meta-policy",
+                    "solved meta-strategy versus support members as statistical ties",
+                    "solved meta-strategy versus off-support controls with positive lower95",
                     "candidate versus saved local controls such as NFSP, NPI, and Rainbow variants",
                     "multi-seed generation transition with positive lower95 or predeclared failure synthesis",
                     "complete empirical-game matrix with no missing required pairs",
@@ -914,14 +923,17 @@ def _default_goal(root: str | Path | None = None) -> dict:
                     "do not adapt checkpoints across card/action environments for promotion; train fresh per environment and transfer only the general learning schema",
                     "do not replace maintained RL learners with local PPO/Rainbow/NFSP/PSRO internals without methodology review",
                     "do not promote a checkpoint that only beats one frozen target but fails the broader population",
+                    "do not treat an equilibrium support tie as a failed support H2H gate",
                 ],
                 "current_negative_evidence": (
-                    "The latest compiled Rainbow uniform-support response beat "
-                    "the current incumbent and most controls, but failed the "
-                    "prior-131k lower95 tie-break. The next run must solve "
-                    "this population-weak failure with archive/K-best pressure, "
-                    "multi-seed evidence, or a reviewed game-dynamics pivot; it "
-                    "must not just retune mixture weights."
+                    "Single compiled Rainbow responses cycle around the support "
+                    "set: K-best pressure repaired the prior-support issue but "
+                    "failed PSRO, while worst-gap continuation repaired PSRO "
+                    "and failed the incumbent. The expanded empirical-game "
+                    "meta-strategy passed a support/off-support gate, so the "
+                    "live blocker is converting that local population strategy "
+                    "into a deployable policy or distilling it without Slumbot "
+                    "data, not another single-parent response."
                 ),
             },
             "neural_policy_iteration_policy": {

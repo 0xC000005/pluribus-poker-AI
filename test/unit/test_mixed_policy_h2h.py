@@ -11,6 +11,7 @@ from poker_ai.research.mixed_policy_h2h import (
     PolicyAdapter,
     SUPPORTED_POLICY_KINDS,
     evaluate_loaded_policies_head_to_head,
+    make_policy_meta_strategy_adapter,
     load_policy_adapter,
     _resolve_rllib_module_checkpoint,
 )
@@ -125,6 +126,49 @@ def test_evaluate_loaded_policies_head_to_head_fast_canonical_matches_full_deck(
         full_deck["mean_candidate_payoff"]
     )
     assert fast_canonical["eval_steps"] == full_deck["eval_steps"]
+
+
+def test_evaluate_loaded_policies_head_to_head_reports_meta_strategy_samples():
+    first = PolicyAdapter(
+        kind="fake",
+        checkpoint_path="first.pt",
+        algorithm="first_policy",
+        action_probs_fn=_first_legal_policy,
+    )
+    second = PolicyAdapter(
+        kind="fake",
+        checkpoint_path="second.pt",
+        algorithm="second_policy",
+        action_probs_fn=_first_legal_policy,
+    )
+    candidate = make_policy_meta_strategy_adapter(
+        [first, second],
+        weights=[1.0, 0.0],
+        checkpoint_path="empirical-game-meta.json",
+    )
+    baseline = PolicyAdapter(
+        kind="fake",
+        checkpoint_path="baseline.pt",
+        algorithm="fake_policy",
+        action_probs_fn=_first_legal_policy,
+    )
+
+    metrics = evaluate_loaded_policies_head_to_head(
+        candidate,
+        baseline,
+        n_games=4,
+        seed=20260849,
+        initial_chips=100,
+        max_steps_per_hand=16,
+        device="cpu",
+    )
+
+    assert metrics["candidate_kind"] == "meta-strategy"
+    assert metrics["candidate_checkpoint"] == "empirical-game-meta.json"
+    assert metrics["candidate_mixture_size"] == 2
+    assert metrics["candidate_mixture_weights"] == [1.0, 0.0]
+    assert metrics["candidate_mixture_checkpoints"] == ["first.pt", "second.pt"]
+    assert metrics["candidate_mixture_sample_counts"] == [4, 0]
 
 
 def test_load_policy_adapter_supports_native_ppo_average_policy(monkeypatch):
@@ -520,3 +564,66 @@ def test_eval_mixed_policy_h2h_cli_returns_nonzero_on_failed_gate(monkeypatch, t
 
     assert exit_code == 1
     assert json.loads(output.read_text(encoding="utf-8"))["passed"] is False
+
+
+def test_eval_empirical_meta_strategy_h2h_cli_uses_nonzero_solved_support(
+    monkeypatch,
+    tmp_path,
+):
+    from scripts import eval_empirical_meta_strategy_h2h as cli
+
+    empirical = tmp_path / "empirical.json"
+    empirical.write_text(
+        json.dumps(
+            {
+                "policies": ["a.pt", "b.pt", "c.pt"],
+                "meta_strategy": {
+                    "solved": True,
+                    "row_strategy": [0.7, 0.0, 0.3],
+                    "column_strategy": [0.2, 0.0, 0.8],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "meta_h2h.json"
+    calls = []
+
+    def fake_eval(**kwargs):
+        calls.append(kwargs)
+        return {
+            "algorithm": "mixed_native_policy_h2h",
+            "candidate_kind": "meta-strategy",
+            "baseline_checkpoint": kwargs["baseline_checkpoint"],
+            "passed": True,
+        }
+
+    monkeypatch.setattr(cli, "evaluate_meta_strategy_head_to_head", fake_eval)
+
+    exit_code = cli.main(
+        [
+            "--empirical-game-json",
+            str(empirical),
+            "--default-policy-kind",
+            "tianshou-rainbow",
+            "--member-kind",
+            "2:native-ppo",
+            "--baseline-checkpoint",
+            "baseline.pt",
+            "--baseline-kind",
+            "native-nfsp",
+            "--n-games",
+            "12",
+            "--seed",
+            "99",
+            "--output-json",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls[0]["candidate_checkpoints"] == ["a.pt", "c.pt"]
+    assert calls[0]["candidate_kinds"] == ["tianshou-rainbow", "native-ppo"]
+    assert calls[0]["candidate_weights"] == [0.7, 0.3]
+    assert calls[0]["baseline_checkpoint"] == "baseline.pt"
+    assert json.loads(output.read_text(encoding="utf-8"))["candidate_kind"] == "meta-strategy"

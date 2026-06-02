@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1399,
+      "path": "benchmark_audit.md",
+      "sha256": "a15c02f36432b1301b48cece6e4ea80ad738db5c24145811cc9520ec28b3ff8b"
+    },
+    {
+      "bytes": 617,
+      "path": "decision.json",
+      "sha256": "bec9e147bd53fbe8317d216ad9c10e777070046f11705c103e36deb36cc35556"
+    },
+    {
+      "bytes": 1438,
+      "path": "mechanism_review.md",
+      "sha256": "76a3928f9d5d3f828e68775e0b74d2767551531d81a0e297719788e5ac857d96"
+    },
+    {
+      "bytes": 2443,
+      "path": "related_work.md",
+      "sha256": "3cf1a94e09f2cf1cc0d34e131c53ec8eab96efa48aaa378ec6c0307ef8e7aff1"
+    },
+    {
+      "bytes": 2086,
+      "path": "review.md",
+      "sha256": "fd142011eac894cda744a22ff8be60dfc197e97ae3f150a40b236bcb74157f6e"
+    },
+    {
+      "bytes": 3250,
+      "path": "review_scope.json",
+      "sha256": "eaadef90fcfee102fb9e04c537f0b7abd3e8c198b39301f9cfa5958a31fcc99d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with the empirical meta-strategy support/off-support gate as a local population metric. It correctly evaluates a solved population policy as support ties plus off-support wins, but it does not establish Slumbot, RLCard, or SOTA strength.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T155451Z-empirical-meta-strategy-support-off-support-gate",
+  "review_id": "20260602T155451Z-empirical-meta-strategy-support-off-support-gate",
+  "sources": [
+    "https://arxiv.org/abs/1711.00832",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/1811.00164",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/21242",
+    "autoresearch-session/native_rollout_substrate/empirical_meta_strategy_h2h_gate_seed20260848.json"
+  ],
+  "written_at": "2026-06-02T15:57:47Z"
+}

@@ -106,10 +106,12 @@ AlphaHoldem-faithful historical/K-best population learning** in the native
 full-deck 9-action game. Exact CUDA CFR, small-game NashConv, R-NaD/NashPG/MMD,
 and DeepNash-style regularized dynamics remain evaluators or reviewed pivots,
 but the immediate learned object must improve the stochastic self-play policy
-under archive pressure. The candidate must beat its parent, the prior support
-member that caused the last lower95 failure, saved local controls, multi-seed
-transition gates, and the complete empirical game before any Slumbot confidence
-run.
+under archive pressure. A single checkpoint must beat its parent, the prior
+support member that caused the last lower95 failure, saved local controls,
+multi-seed transition gates, and the complete empirical game before any Slumbot
+confidence run. A solved empirical-game population strategy is judged by a
+different game-theoretic gate: it should statistically tie its support policies
+and beat off-support controls.
 
 The current local incumbent is
 `autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt`.
@@ -129,6 +131,18 @@ evidence. The first scaled native R-NaD generation beat its parent but lost to
 saved NFSP/Rainbow controls; the direct continuation beat gen1 but again failed
 population support. These results justify keeping regularized self-play as a
 reviewed successor, but they no longer define the active mainline.
+
+The latest population result changes the live blocker. The expanded seven-policy
+empirical game over the current incumbent, prior 131k Rainbow, PSRO,
+shared-MARL18k, NFSP, K-best2, and worst-gap continuation solved to a three-member
+support `[current=0.4311, kbest2=0.0461, worstgap=0.5227]`. The fixed
+per-hand meta-strategy gate passed: 20k H2H tied all support members near zero,
+and 5k H2H beat all off-support controls with positive lower95. This means the
+population-weak issue is solved at the local empirical-game strategy level, but
+not yet as one deployable/distilled neural policy or as Slumbot/RLCard evidence.
+The next branch should either evaluate/deploy the fixed local population policy
+through the normal local-to-external gates, or distill the meta-strategy into a
+single stochastic network and re-run the same support/off-support gate.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
@@ -299,9 +313,19 @@ AlphaHoldem-faithful historical/K-best local population learning: resolve the
 local incumbent from `autoresearch-session/poker_state.json`, maintain the
 K-best/historical archive, train stochastic policy/value networks against the
 archive or empirical-game meta-strategy, and add a candidate only after parent,
-prior-support, multi-seed, and population lower-bound gates pass. Slumbot
-remains held out except tiny smoke checks for integration or catastrophic
-transfer.
+prior-support, multi-seed, and population lower-bound gates pass. If the
+empirical game solves to a non-pure meta-strategy, test the fixed population
+policy directly with:
+
+`uv run --with tianshou python scripts/eval_empirical_meta_strategy_h2h.py --empirical-game-json <empirical.json> --default-policy-kind tianshou-rainbow --baseline-checkpoint <policy.pt> --baseline-kind <kind> --n-games <N> --initial-chips 20000 --max-steps-per-hand 256 --device cuda --eval-state-backend fast-state-canonical-deal --output-json <meta_vs_policy.json>`.
+
+Then gate the set of H2H artifacts with:
+
+`python scripts/eval_empirical_meta_strategy_gate.py --empirical-game-json <empirical.json> --h2h-record <meta_vs_support_20k.json> --h2h-record <meta_vs_offsupport_5k.json> --max-support-abs-mean 0.01 --max-support-lower95-loss 0.01 --min-off-support-lower95 0.0 --output-json <meta_gate.json>`.
+
+Support members are expected ties, so do not require positive lower95 against
+them. Off-support controls still require positive lower95. Slumbot remains held
+out except tiny smoke checks for integration or catastrophic transfer.
 Use `python scripts/poker_autoresearch.py drift-status` before resuming a stale
 queue; `continuous` runs the same check before starting the next experiment.
 OpenSpiel is installable and exposes `universal_poker` plus PSRO v2 modules, so

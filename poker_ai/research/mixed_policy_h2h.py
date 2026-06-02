@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 import random
 import time
 
@@ -85,6 +85,86 @@ class PolicyAdapter:
             if 0 <= action_idx < N_ACTIONS and bool(legal_mask[action_idx]):
                 return action_idx
         return int(sample_action(self.probs(features, legal_mask, device), legal_mask, rng=rng))
+
+
+@dataclass(frozen=True)
+class PolicyMetaStrategyAdapter:
+    members: tuple[PolicyAdapter, ...]
+    weights: tuple[float, ...]
+    checkpoint_path: str
+    algorithm: str = "native_policy_meta_strategy"
+    kind: str = "meta-strategy"
+    initial_chips: int = 1000
+    max_steps_per_hand: int = 256
+
+    @property
+    def size(self) -> int:
+        return len(self.members)
+
+    def sample_member_index(self, rng: np.random.Generator) -> int:
+        return int(rng.choice(self.size, p=np.asarray(self.weights, dtype=np.float64)))
+
+    def probs(
+        self,
+        features: np.ndarray,
+        legal_mask: np.ndarray,
+        device: torch.device,
+    ) -> np.ndarray:
+        legal = np.asarray(legal_mask, dtype=np.float32)
+        if float(legal.sum()) <= 0.0:
+            return np.full(N_ACTIONS, 1.0 / N_ACTIONS, dtype=np.float32)
+        mixed = np.zeros(N_ACTIONS, dtype=np.float64)
+        for weight, member in zip(self.weights, self.members, strict=True):
+            if float(weight) <= 0.0:
+                continue
+            mixed += float(weight) * member.probs(features, legal, device).astype(np.float64)
+        mixed = mixed.astype(np.float32) * legal
+        total = float(mixed.sum())
+        return mixed / total if total > 0.0 else legal / float(legal.sum())
+
+    def select_action(
+        self,
+        *,
+        state: Any,
+        features: np.ndarray,
+        legal_mask: np.ndarray,
+        device: torch.device,
+        rng: np.random.Generator,
+    ) -> int:
+        return int(sample_action(self.probs(features, legal_mask, device), legal_mask, rng=rng))
+
+
+LoadedPolicyAdapter = PolicyAdapter | PolicyMetaStrategyAdapter
+
+
+def make_policy_meta_strategy_adapter(
+    members: Sequence[PolicyAdapter],
+    *,
+    weights: Sequence[float],
+    checkpoint_path: str = "native-policy-meta-strategy",
+) -> PolicyMetaStrategyAdapter:
+    """Create a normalized per-hand checkpoint-population policy adapter."""
+    member_tuple = tuple(members)
+    if not member_tuple:
+        raise ValueError("meta-strategy requires at least one member policy")
+    raw_weights = np.asarray(list(weights), dtype=np.float64)
+    if raw_weights.shape != (len(member_tuple),):
+        raise ValueError("meta-strategy weights must match member count")
+    if not np.isfinite(raw_weights).all() or np.any(raw_weights < 0.0):
+        raise ValueError("meta-strategy weights must be finite and non-negative")
+    total = float(raw_weights.sum())
+    if total <= 0.0:
+        raise ValueError("meta-strategy requires positive total weight")
+    normalized = raw_weights / total
+    initial_chips = int(member_tuple[0].initial_chips)
+    max_steps = int(max(member.max_steps_per_hand for member in member_tuple))
+    return PolicyMetaStrategyAdapter(
+        members=member_tuple,
+        weights=tuple(float(value) for value in normalized.tolist()),
+        checkpoint_path=str(checkpoint_path),
+        initial_chips=initial_chips,
+        max_steps_per_hand=max_steps,
+    )
 
 
 def _normalize_policy_kind(kind: str) -> str:
@@ -494,9 +574,45 @@ def load_policy_adapter(
     raise ValueError(f"kind must be one of: {', '.join(SUPPORTED_POLICY_KINDS)}")
 
 
+def _hand_policy(
+    adapter: LoadedPolicyAdapter,
+    rng: np.random.Generator,
+    sample_counts: list[int] | None,
+) -> PolicyAdapter:
+    if isinstance(adapter, PolicyMetaStrategyAdapter):
+        member_i = adapter.sample_member_index(rng)
+        if sample_counts is not None:
+            sample_counts[member_i] += 1
+        return adapter.members[member_i]
+    return adapter
+
+
+def _mixture_metric_fields(
+    prefix: str,
+    adapter: LoadedPolicyAdapter,
+    sample_counts: list[int] | None,
+) -> dict[str, Any]:
+    if not isinstance(adapter, PolicyMetaStrategyAdapter):
+        return {}
+    return {
+        f"{prefix}_mixture_size": int(adapter.size),
+        f"{prefix}_mixture_weights": [float(weight) for weight in adapter.weights],
+        f"{prefix}_mixture_checkpoints": [
+            str(member.checkpoint_path) for member in adapter.members
+        ],
+        f"{prefix}_mixture_kinds": [str(member.kind) for member in adapter.members],
+        f"{prefix}_mixture_algorithms": [str(member.algorithm) for member in adapter.members],
+        f"{prefix}_mixture_sample_counts": (
+            [int(count) for count in sample_counts]
+            if sample_counts is not None
+            else [0 for _member in adapter.members]
+        ),
+    }
+
+
 def evaluate_loaded_policies_head_to_head(
-    candidate: PolicyAdapter,
-    baseline: PolicyAdapter,
+    candidate: LoadedPolicyAdapter,
+    baseline: LoadedPolicyAdapter,
     *,
     n_games: int = 1000,
     device: str = "auto",
@@ -520,6 +636,16 @@ def evaluate_loaded_policies_head_to_head(
         raise ValueError("eval_state_backend must be one of: full-deck, fast-state-canonical-deal")
     pair_payoffs: list[float] = []
     candidate_payoffs: list[float] = []
+    candidate_sample_counts = (
+        [0 for _member in candidate.members]
+        if isinstance(candidate, PolicyMetaStrategyAdapter)
+        else None
+    )
+    baseline_sample_counts = (
+        [0 for _member in baseline.members]
+        if isinstance(baseline, PolicyMetaStrategyAdapter)
+        else None
+    )
     total_steps = 0
     started = time.perf_counter()
     pair_idx = 0
@@ -534,9 +660,11 @@ def evaluate_loaded_policies_head_to_head(
             np.random.seed(game_seed)
             torch.manual_seed(game_seed)
             rng = np.random.default_rng(action_seed)
+            candidate_policy = _hand_policy(candidate, rng, candidate_sample_counts)
+            baseline_policy = _hand_policy(baseline, rng, baseline_sample_counts)
             policies = {
-                int(candidate_seat): candidate,
-                int(1 - candidate_seat): baseline,
+                int(candidate_seat): candidate_policy,
+                int(1 - candidate_seat): baseline_policy,
             }
             state = new_game(2, initial_chips=chips)
             if eval_state_backend == "fast-state-canonical-deal":
@@ -614,6 +742,8 @@ def evaluate_loaded_policies_head_to_head(
         ),
         "passed": bool(passed),
         **device_info,
+        **_mixture_metric_fields("candidate", candidate, candidate_sample_counts),
+        **_mixture_metric_fields("baseline", baseline, baseline_sample_counts),
     }
 
 
@@ -654,3 +784,65 @@ def evaluate_mixed_policy_head_to_head(
         min_lower95_candidate_payoff=min_lower95_candidate_payoff,
         eval_state_backend=eval_state_backend,
     )
+
+
+def evaluate_meta_strategy_head_to_head(
+    *,
+    candidate_checkpoints: Sequence[str],
+    candidate_kinds: Sequence[str],
+    candidate_weights: Sequence[float],
+    baseline_checkpoint: str,
+    baseline_kind: str,
+    n_games: int = 1000,
+    device: str = "auto",
+    seed: int = 20260527,
+    initial_chips: int | None = None,
+    max_steps_per_hand: int | None = None,
+    min_lower95_candidate_payoff: float | None = None,
+    eval_state_backend: str = "full-deck",
+    meta_strategy_source: str = "empirical-game",
+) -> dict:
+    """Evaluate a fixed per-hand checkpoint meta-strategy against one baseline."""
+    if len(candidate_checkpoints) != len(candidate_kinds):
+        raise ValueError("candidate_checkpoints and candidate_kinds must have the same length")
+    if len(candidate_checkpoints) != len(candidate_weights):
+        raise ValueError("candidate_checkpoints and candidate_weights must have the same length")
+    device_info = resolve_device(device)
+    resolved_device = torch.device(device_info["resolved_device"])
+    members = [
+        load_policy_adapter(checkpoint, kind=kind, device=resolved_device)
+        for checkpoint, kind in zip(candidate_checkpoints, candidate_kinds, strict=True)
+    ]
+    candidate = make_policy_meta_strategy_adapter(
+        members,
+        weights=candidate_weights,
+        checkpoint_path=str(meta_strategy_source),
+    )
+    baseline = load_policy_adapter(
+        baseline_checkpoint,
+        kind=baseline_kind,
+        device=resolved_device,
+    )
+    metrics = evaluate_loaded_policies_head_to_head(
+        candidate,
+        baseline,
+        n_games=n_games,
+        device=device,
+        seed=seed,
+        initial_chips=initial_chips,
+        max_steps_per_hand=max_steps_per_hand,
+        min_lower95_candidate_payoff=min_lower95_candidate_payoff,
+        eval_state_backend=eval_state_backend,
+    )
+    metrics.update(
+        {
+            "candidate_meta_strategy_source": str(meta_strategy_source),
+            "candidate_meta_strategy_raw_weights": [
+                float(weight) for weight in candidate_weights
+            ],
+            "candidate_meta_strategy_normalized_weights": [
+                float(weight) for weight in candidate.weights
+            ],
+        }
+    )
+    return metrics

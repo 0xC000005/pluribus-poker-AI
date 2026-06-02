@@ -59,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Comma-separated probabilities matching --opponent-policy order.",
     )
+    parser.add_argument("--checkpoint-in", type=Path, default=None)
     parser.add_argument("--checkpoint-out", type=Path, default=None)
     parser.add_argument("--output-json", type=Path, default=None)
     return parser
@@ -87,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> dict:
         device=args.device,
         opponent_policy_specs=list(args.opponent_policy),
         opponent_meta_strategy=_parse_meta_strategy(args.opponent_meta_strategy),
+        checkpoint_in=args.checkpoint_in,
         checkpoint_out=args.checkpoint_out,
         output_json=args.output_json,
     )

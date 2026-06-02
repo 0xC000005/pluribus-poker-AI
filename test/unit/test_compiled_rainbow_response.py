@@ -84,6 +84,8 @@ def test_compiled_rainbow_response_oracle_cli_writes_metrics(monkeypatch, tmp_pa
             "tianshou-rainbow:parent.pt",
             "--opponent-meta-strategy",
             "1.0",
+            "--checkpoint-in",
+            "parent.pt",
             "--checkpoint-out",
             str(checkpoint),
             "--output-json",
@@ -96,5 +98,51 @@ def test_compiled_rainbow_response_oracle_cli_writes_metrics(monkeypatch, tmp_pa
     assert calls[0]["games_per_iteration"] == 16
     assert calls[0]["opponent_policy_specs"] == ["tianshou-rainbow:parent.pt"]
     assert calls[0]["opponent_meta_strategy"] == [1.0]
+    assert calls[0]["checkpoint_in"].name == "parent.pt"
     assert calls[0]["checkpoint_out"] == checkpoint
     assert calls[0]["output_json"] == output
+
+
+def test_compiled_rainbow_response_oracle_supports_checkpoint_continuation(tmp_path):
+    pytest.importorskip("tianshou")
+
+    from poker_ai.research.compiled_rainbow_response import run_compiled_rainbow_response_oracle
+
+    parent = tmp_path / "parent.pt"
+    child = tmp_path / "child.pt"
+
+    run_compiled_rainbow_response_oracle(
+        collect_iterations=1,
+        games_per_iteration=8,
+        collector_batch_size=8,
+        max_steps_per_game=32,
+        updates_per_collect=1,
+        batch_size=8,
+        hidden_dim=16,
+        num_atoms=11,
+        replay_size=256,
+        seed=20260625,
+        device="cpu",
+        checkpoint_out=parent,
+    )
+
+    metrics = run_compiled_rainbow_response_oracle(
+        collect_iterations=1,
+        games_per_iteration=8,
+        collector_batch_size=8,
+        max_steps_per_game=32,
+        updates_per_collect=1,
+        batch_size=8,
+        hidden_dim=16,
+        num_atoms=11,
+        replay_size=256,
+        seed=20260626,
+        device="cpu",
+        checkpoint_in=parent,
+        checkpoint_out=child,
+    )
+
+    payload = torch.load(child, map_location="cpu", weights_only=False)
+    assert metrics["checkpoint_in"] == str(parent)
+    assert metrics["checkpoint_in_algorithm"] == "compiled_tianshou_rainbow_response_oracle"
+    assert payload["parent_checkpoint"] == str(parent)

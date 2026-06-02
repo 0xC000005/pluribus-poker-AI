@@ -19782,3 +19782,70 @@
 - Verification:
   - `python - <<'PY' ... validate_failure_synthesis(...) ... PY` -> passed with decision `revise`.
 - Decision: Continue autoresearch with an empirical-game-aware population objective or a reviewed regularized game-dynamics pivot. Do not repeat fixed-mixture replay response runs without a new objective.
+
+## 20260602T152756Z-worst-gap-response-continuation-cycles-support - failed
+
+- Timestamp: 2026-06-02T15:27:56Z
+- Type: experiment
+- Gate: compiled-rainbow-worst-gap-continuation-20260602
+- Hypothesis: If the K=2 archive candidate only failed from insufficient confidence or missing PSRO pressure, then a checkpoint continuation trained against the current worst support member should fix the population gate while preserving incumbent/prior support strength.
+- Failure class: population_response_cycle
+- Summary: The K=2 candidate's 20k prior-support tie-break passed, but its saved-control ladder failed versus the PSRO response. Continuing that checkpoint against PSRO fixed the PSRO and prior gates, but then failed the current-incumbent gate. The complete 4-policy empirical game solved back to pure current incumbent support. This shows fixed and greedy worst-gap response learning is cycling around the support set instead of solving population robustness.
+- Artifacts:
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest2_archive_response_vs_prior_131k_h2h_20000_seed20260844.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest2_archive_response_vs_psro_h2h_5000_seed20260845.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_worstgap_psro_cont_from_kbest2_h256_16x4096_upc16_seed20260848.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_worstgap_psro_cont_vs_psro_h2h_5000_seed20260849.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_worstgap_psro_cont_vs_prior_131k_h2h_5000_seed20260850.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_worstgap_psro_cont_vs_incumbent_h2h_5000_seed20260851.json
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_worstgap_psro_cont_4policy_empirical_game_seed20260848.json
+- Key metrics: `{"passed": false, "kbest_prior_20k_lower95": 0.000183, "kbest_psro_5k_lower95": -0.014329, "worstgap_psro_lower95": 0.054267, "worstgap_prior_lower95": 0.021624, "worstgap_incumbent_lower95": -0.010931, "empirical_game_support": "pure_current_incumbent", "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <kbest2_candidate> --baseline <prior_131k> --n-games 20000 ...` -> passed lower95.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <kbest2_candidate> --baseline <psro_response> --n-games 5000 ...` -> failed lower95.
+  - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --checkpoint-in <kbest2_candidate> --opponent-policy <psro_response> --opponent-meta-strategy 1.0 ...` -> passed training.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <worstgap_continuation> --baseline <current_incumbent> --n-games 5000 ...` -> failed lower95.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py <six pair records> --solve-meta-strategy ...` -> complete matrix, pure current-incumbent support.
+- Decision: Retire fixed-mixture and greedy worst-gap compiled Rainbow response continuation as the immediate path. The next mechanism must be simultaneous/regularized population learning: either a true empirical-game-aware population objective that optimizes all support gaps together, or a reviewed R-NaD/NashPG/MMD/DeepNash-style dynamics branch.
+
+## 20260602T154020Z-native-nashpg-support3-playergae-control - failed
+
+- Timestamp: 2026-06-02T15:40:20Z
+- Type: experiment
+- Gate: native-nashpg-support3-playergae-control-20260602
+- Hypothesis: A bounded fresh stochastic NashPG/MMD-style learner trained against the current three-policy support with player-GAE and PPO inner updates should provide a cleaner tabula-rasa game-dynamics alternative to compiled Rainbow response cycles.
+- Failure class: weak_game_dynamics_scaling
+- Summary: The support-population NashPG control trained mechanically on CUDA from native simulator rewards only, used no Slumbot data or solver labels, and recorded clean legality. It failed decisively versus the current fast-state shared-MARL incumbent, so it is not a stronger immediate candidate than the Rainbow empirical-game branch at this budget.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/native_nashpg_support3_playergae_h256_16x4096_seed20260860.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_support3_playergae_h256_16x4096_seed20260860.pt
+  - autoresearch-session/native_neural_nashpg/native_nashpg_support3_playergae_vs_incumbent_h2h_5000_seed20260861.json
+- Key metrics: `{"samples": 138139, "samples_per_second": 12406, "population_size": 3, "vs_incumbent_mean": -0.033763, "vs_incumbent_lower95": -0.045187, "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: R-NaD/DeepNash, NFSP, PSRO, AlphaHoldem K-best self-play, and recent PSRO survey work all support population/self-play training, but this run shows this particular native NashPG translation is not yet competitive with the local Rainbow empirical-game population.
+- Decision: Do not promote or scale the same NashPG support3 recipe unchanged. Keep it as a clean negative control while prioritizing the empirical-game meta-strategy result and a possible distillation/deployment branch.
+
+## 20260602T155240Z-empirical-meta-strategy-population-gate - passed
+
+- Timestamp: 2026-06-02T15:52:40Z
+- Type: experiment
+- Gate: empirical-meta-strategy-support-offsupport-gate-20260602
+- Hypothesis: The population-weak failure may be caused by demanding one pure checkpoint beat every support member. If the complete local empirical game solves to a mixed population strategy, the correct object should tie its support policies and beat off-support controls.
+- Failure class: none
+- Summary: Added a per-hand native meta-strategy evaluator that samples one solved-support checkpoint per hand, plus a reusable empirical meta-strategy gate. The expanded seven-policy empirical game over current incumbent, prior 131k Rainbow, PSRO, shared-MARL18k, native NFSP, K-best2, and worst-gap continuation solved to support `[current=0.431125, kbest2=0.046137, worstgap=0.522739]`. Direct H2H confirmed the game-theoretic behavior: 20k checks tied all support members near zero, while 5k checks beat all off-support controls with positive lower95. This is local population evidence, not Slumbot/RLCard/SOTA evidence.
+- Artifacts:
+  - autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest_worstgap_expanded_empirical_game_seed20260848.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_incumbent_h2h_20000_seed20260880.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_kbest2_h2h_20000_seed20260881.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_worstgap_psro_cont_h2h_20000_seed20260882.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_prior_131k_h2h_5000_seed20260871.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_psro_h2h_5000_seed20260872.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_shared_marl18k_h2h_5000_seed20260873.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_vs_native_nfsp_h2h_5000_seed20260874.json
+  - autoresearch-session/native_rollout_substrate/empirical_meta_strategy_h2h_gate_seed20260848.json
+- Key metrics: `{"gate_passed": true, "support_weights": [0.431125, 0.046137, 0.522739], "support_incumbent_mean": -0.000403, "support_incumbent_lower95": -0.003703, "support_kbest_mean": -0.000013, "support_kbest_lower95": -0.004620, "support_worstgap_mean": -0.000629, "support_worstgap_lower95": -0.003757, "off_prior_lower95": 0.016878, "off_psro_lower95": 0.031286, "off_shared_lower95": 0.029515, "off_nfsp_lower95": 0.030256, "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: NFSP and Deep CFR deploy or approximate average strategies in imperfect-information self-play; PSRO uses an empirical-game meta-solver over a policy population; AlphaHoldem reports K-best/historical self-play. These support treating the solved local population strategy as the equilibrium object rather than cherry-picking a single response checkpoint.
+- Verification:
+  - `uv run --with tianshou pytest -q test/unit/test_mixed_policy_h2h.py::test_evaluate_loaded_policies_head_to_head_reports_meta_strategy_samples test/unit/test_mixed_policy_h2h.py::test_eval_empirical_meta_strategy_h2h_cli_uses_nonzero_solved_support` -> passed.
+  - `uv run pytest -q test/unit/test_empirical_meta_strategy_gate.py` -> passed.
+  - `python scripts/eval_empirical_meta_strategy_gate.py --empirical-game-json autoresearch-session/native_rollout_substrate/compiled_rainbow_kbest_worstgap_expanded_empirical_game_seed20260848.json --h2h-record <seven meta-vs-pure records> --max-support-abs-mean 0.01 --max-support-lower95-loss 0.01 --min-off-support-lower95 0.0 --output-json autoresearch-session/native_rollout_substrate/empirical_meta_strategy_h2h_gate_seed20260848.json` -> passed.
+- Decision: Treat the local population-weak issue as solved at the empirical-game meta-strategy level. Do not claim SOTA or Slumbot strength. The next principled branch is to either run the fixed population policy through local-to-external integration gates or distill the local meta-strategy into one stochastic neural policy, then require the same support/off-support gate again before any Slumbot/RLCard confidence run.

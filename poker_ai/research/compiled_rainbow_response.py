@@ -509,10 +509,11 @@ def run_compiled_rainbow_response_oracle(
     device: str = "auto",
     opponent_policy_specs: Sequence[str] | None = None,
     opponent_meta_strategy: Sequence[float] | None = None,
+    checkpoint_in: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
     output_json: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Train a fresh Rainbow response oracle with compiled local collection."""
+    """Train or continue a Rainbow response oracle with compiled collection."""
 
     from tianshou.algorithm.algorithm_base import policy_within_training_step
     from tianshou.algorithm.modelfree.c51 import C51Policy
@@ -523,6 +524,7 @@ def run_compiled_rainbow_response_oracle(
     from scripts.run_tianshou_rainbow_native_control import (
         NativeRainbowPokerEnv,
         _RainbowDistributionNet,
+        _rainbow_state_dict_from_payload,
     )
 
     random.seed(int(seed))
@@ -530,6 +532,13 @@ def run_compiled_rainbow_response_oracle(
     torch.manual_seed(int(seed))
     device_info = resolve_device(str(device))
     resolved_device = torch.device(device_info["resolved_device"])
+    checkpoint_payload = None
+    if checkpoint_in is not None:
+        checkpoint_payload = torch.load(checkpoint_in, map_location=resolved_device, weights_only=False)
+        if int(checkpoint_payload.get("num_actions", -1)) != N_ACTIONS:
+            raise ValueError("Rainbow checkpoint action count does not match native full-deck contract")
+        if int(checkpoint_payload.get("num_features", -1)) != N_FEATURES:
+            raise ValueError("Rainbow checkpoint feature count does not match native full-deck contract")
     opponent_policies = _parse_policy_specs(opponent_policy_specs, device=resolved_device)
     base_env = NativeRainbowPokerEnv(
         seed=int(seed),
@@ -542,6 +551,8 @@ def run_compiled_rainbow_response_oracle(
         num_atoms=int(num_atoms),
         device=resolved_device,
     ).to(resolved_device)
+    if checkpoint_payload is not None:
+        model.load_state_dict(_rainbow_state_dict_from_payload(checkpoint_payload))
     policy = C51Policy(
         model=model,
         action_space=base_env.action_space,
@@ -602,6 +613,7 @@ def run_compiled_rainbow_response_oracle(
         torch.cuda.synchronize()
     train_seconds = time.perf_counter() - started
 
+    learner_mode = "continued" if checkpoint_payload is not None else "fresh"
     metrics: dict[str, Any] = {
         "algorithm": "compiled_tianshou_rainbow_response_oracle",
         "role": "online_compiled_response_oracle",
@@ -612,8 +624,9 @@ def run_compiled_rainbow_response_oracle(
         "native_action_projection": False,
         "uses_slumbot_training_data": False,
         "warning": (
-            "Fresh local Rainbow response learner using compiled semi-MDP poker "
-            "transitions. This is not promotion evidence without H2H and league gates."
+            f"{learner_mode.capitalize()} local Rainbow response learner using "
+            "compiled semi-MDP poker transitions. This is not promotion evidence "
+            "without H2H and league gates."
         ),
         **device_info,
         "num_actions": N_ACTIONS,
@@ -641,6 +654,10 @@ def run_compiled_rainbow_response_oracle(
         "epsilon": float(epsilon),
         "opponent_policy_specs": list(opponent_policy_specs or []),
         "opponent_meta_strategy": list(opponent_meta_strategy or []),
+        "checkpoint_in": str(checkpoint_in) if checkpoint_in is not None else None,
+        "checkpoint_in_algorithm": (
+            str(checkpoint_payload.get("algorithm")) if checkpoint_payload is not None else None
+        ),
         "needs_python_showdown": int(needs_python_showdown),
         "train_seconds": float(train_seconds),
         "updates_per_second": float(learner_updates / max(train_seconds, 1e-12)),
@@ -663,6 +680,7 @@ def run_compiled_rainbow_response_oracle(
                 "num_atoms": int(num_atoms),
                 "model_state_dict": model.state_dict(),
                 "metrics": metrics,
+                "parent_checkpoint": str(checkpoint_in) if checkpoint_in is not None else None,
                 "config": {
                     "initial_chips": int(initial_chips),
                     "max_steps_per_hand": int(max_steps_per_game),
