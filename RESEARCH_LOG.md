@@ -18317,3 +18317,35 @@
 - Summary: Gate failure-synthesis-20260602T053550Z-20k-compiled-replay-soft-q-actor-near-parity passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T053709Z-failure-synthesis-for-20k-compiled-replay-soft-q/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T053550Z-20k-compiled-replay-soft-q-actor-near-parity", "passed": true}`
+## 20260602T054036Z-methodology-review-for-compiled-replay-nfsp-average-response - passed
+
+- Timestamp: 2026-06-02T05:40:36Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T053920Z-compiled-replay-nfsp-average-response
+- Hypothesis: Methodology review for Compiled replay NFSP average response should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T053920Z-compiled-replay-nfsp-average-response passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T054036Z-methodology-review-for-compiled-replay-nfsp-average-response/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T053920Z-compiled-replay-nfsp-average-response", "passed": true}`
+
+## 20260602T054706Z-compiled-replay-nfsp-average-response-trained-from-local - failed
+
+- Timestamp: 2026-06-02T05:47:14Z
+- Type: experiment
+- Gate: compiled_replay_nfsp_average_response_vs_20k_support
+- Hypothesis: Compiled replay NFSP average response trained from local 20k population replay should beat the active 20k support under matched duplicate-swapped H2H while preserving a broad legal stochastic policy.
+- Failure class: strategy_quality
+- Summary: The reviewed NFSP-style replay average-response learner trained mechanically on CUDA from 24,967 local compiled 20k transitions and exported the average-policy network as the deployed native 9-action policy, but failed the matched 2,000-game H2H truth gate versus active 20k support: mean=-0.059379, lower95=-0.080292, upper95=-0.038466. A separate distribution diagnostic passed with all 9 actions used, top action call at 0.2060, all-in fraction 0.1544, and mean entropy 1.7118, so this is a strategic-learning failure rather than legality or action-collapse.
+- Metrics file: autoresearch-session/native_neural_nashpg/compiled_replay_nfsp_avg_20k_support_h256_4096h_vs_support_h2h_2000_seed20260851.json
+- Key metrics: `{"gate": null, "passed": false}`
+
+## 20260602T054839Z-failure-synthesis-for-20k-compiled-replay-nfsp-average - passed
+
+- Timestamp: 2026-06-02T05:48:39Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T054746Z-20k-compiled-replay-nfsp-average-response-failed-support
+- Hypothesis: Failure synthesis for 20k compiled replay NFSP average response failed support H2H should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T054746Z-20k-compiled-replay-nfsp-average-response-failed-support passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T054839Z-failure-synthesis-for-20k-compiled-replay-nfsp-average/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T054746Z-20k-compiled-replay-nfsp-average-response-failed-support", "passed": true}`
