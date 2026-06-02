@@ -142,3 +142,31 @@ def test_native_neural_nashpg_compiled_learner_supports_checkpoint_continuation(
     assert metrics["passed"] is True
     payload = torch.load(child, map_location="cpu", weights_only=False)
     assert payload["metrics"]["checkpoint_in"] == str(parent)
+
+
+def test_native_neural_nashpg_compiled_learner_supports_gae_targets(tmp_path):
+    from scripts.run_native_neural_nashpg_compiled_learner import run_learner
+
+    checkpoint = tmp_path / "gae.pt"
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        advantage_target="gae",
+        gamma=1.0,
+        gae_lambda=0.75,
+        seed=20260679,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["advantage_target"] == "gae"
+    assert metrics["gamma"] == 1.0
+    assert metrics["gae_lambda"] == 0.75
+    assert metrics["passed"] is True
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["advantage_target"] == "gae"
+    assert payload["metrics"]["advantage_target"] == "gae"

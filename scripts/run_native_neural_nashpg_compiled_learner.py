@@ -83,6 +83,9 @@ def _policy_value_reference_loss(
     value_weight: float,
     entropy_weight: float,
     reference_kl_weight: float,
+    advantage_target: str,
+    gamma: float,
+    gae_lambda: float,
 ) -> tuple[torch.Tensor, dict[str, float], int]:
     if int(batch["actions"].shape[0]) <= 0:
         return torch.zeros((), dtype=torch.float32, device=device), {}, 0
@@ -98,11 +101,24 @@ def _policy_value_reference_loss(
     values = value_net(features).reshape(-1)
     action_log_probs = log_probs.gather(1, actions.view(-1, 1)).squeeze(1)
 
-    advantages = returns - values.detach()
+    target_mode = str(advantage_target)
+    if target_mode == "terminal":
+        value_targets = returns
+        advantages = value_targets - values.detach()
+    elif target_mode == "gae":
+        value_targets, advantages = _linked_bootstrap_targets_and_advantages(
+            values=values.detach(),
+            terminal_returns=returns,
+            batch=batch,
+            gamma=float(gamma),
+            gae_lambda=float(gae_lambda),
+        )
+    else:
+        raise ValueError("advantage_target must be one of: terminal, gae")
     if int(advantages.numel()) > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-5)
     policy_loss = -(action_log_probs * advantages).mean()
-    value_loss = torch.mean(torch.square(values - returns))
+    value_loss = torch.mean(torch.square(values - value_targets))
     entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1).mean()
 
     reference_kl = torch.zeros((), dtype=torch.float32, device=device)
@@ -138,8 +154,49 @@ def _policy_value_reference_loss(
         "illegal_action_probability": float(illegal_probability.detach().cpu()),
         "mean_return": float(returns.detach().mean().cpu()),
         "std_return": float(returns.detach().std(unbiased=False).cpu()),
+        "advantage_target": target_mode,
+        "mean_value_target": float(value_targets.detach().mean().cpu()),
+        "std_value_target": float(value_targets.detach().std(unbiased=False).cpu()),
     }
     return loss, stats, int(actions.numel())
+
+
+def _linked_bootstrap_targets_and_advantages(
+    *,
+    values: torch.Tensor,
+    terminal_returns: torch.Tensor,
+    batch: dict[str, np.ndarray],
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute GAE-style targets over same-player decision links."""
+    targets = torch.zeros_like(terminal_returns)
+    advantages = torch.zeros_like(terminal_returns)
+    grouped: dict[tuple[int, int], list[int]] = {}
+    for record_i, (game_i, player_i) in enumerate(
+        zip(batch["game_indices"], batch["players"], strict=False)
+    ):
+        grouped.setdefault((int(game_i), int(player_i)), []).append(int(record_i))
+
+    next_decision_indices = batch["next_decision_indices"]
+    step_indices = batch["step_indices"]
+    for indices in grouped.values():
+        ordered = sorted(indices, key=lambda idx: int(step_indices[idx]), reverse=True)
+        for record_i in ordered:
+            next_i = int(next_decision_indices[record_i])
+            if next_i >= 0:
+                delta = float(gamma) * values[next_i] - values[record_i]
+                advantages[record_i] = (
+                    delta
+                    + float(gamma)
+                    * float(gae_lambda)
+                    * advantages[next_i]
+                )
+                targets[record_i] = advantages[record_i] + values[record_i]
+            else:
+                advantages[record_i] = terminal_returns[record_i] - values[record_i]
+                targets[record_i] = terminal_returns[record_i]
+    return targets.detach(), advantages.detach()
 
 
 def run_learner(
@@ -155,6 +212,9 @@ def run_learner(
     entropy_weight: float = 0.02,
     reference_kl_weight: float = 0.05,
     reference_update_every: int = 4,
+    advantage_target: str = "terminal",
+    gamma: float = 1.0,
+    gae_lambda: float = 0.95,
     seed: int = 20260661,
     device: str = "auto",
     checkpoint_in: str | Path | None = None,
@@ -171,6 +231,12 @@ def run_learner(
         raise ValueError("reference_update_every must be positive")
     if float(reference_kl_weight) < 0.0:
         raise ValueError("reference_kl_weight must be non-negative")
+    if str(advantage_target) not in {"terminal", "gae"}:
+        raise ValueError("advantage_target must be one of: terminal, gae")
+    if not (0.0 <= float(gamma) <= 1.0):
+        raise ValueError("gamma must be in [0, 1]")
+    if not (0.0 <= float(gae_lambda) <= 1.0):
+        raise ValueError("gae_lambda must be in [0, 1]")
 
     random.seed(seed)
     np.random.seed(seed)
@@ -247,6 +313,9 @@ def run_learner(
             value_weight=float(value_weight),
             entropy_weight=float(entropy_weight),
             reference_kl_weight=float(reference_kl_weight),
+            advantage_target=str(advantage_target),
+            gamma=float(gamma),
+            gae_lambda=float(gae_lambda),
         )
         if batch_samples <= 0:
             continue
@@ -294,6 +363,9 @@ def run_learner(
         "entropy_weight": float(entropy_weight),
         "reference_kl_weight": float(reference_kl_weight),
         "reference_update_every": int(reference_update_every),
+        "advantage_target": str(advantage_target),
+        "gamma": float(gamma),
+        "gae_lambda": float(gae_lambda),
         "moving_reference": bool(moving_reference),
         "reference_updates": int(reference_updates),
         "reference_policy_checkpoint": (
@@ -371,6 +443,9 @@ def run_learner(
                     "reference_policy_kind": reference_kind,
                     "reference_kl_weight": float(reference_kl_weight),
                     "reference_update_every": int(reference_update_every),
+                    "advantage_target": str(advantage_target),
+                    "gamma": float(gamma),
+                    "gae_lambda": float(gae_lambda),
                     "moving_reference": bool(moving_reference),
                     "opponent_population_size": int(len(opponent_policies)),
                     "opponent_kinds": list(opponent_kinds),
@@ -402,6 +477,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--entropy-weight", type=float, default=0.02)
     parser.add_argument("--reference-kl-weight", type=float, default=0.05)
     parser.add_argument("--reference-update-every", type=int, default=4)
+    parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
+    parser.add_argument("--gamma", type=float, default=1.0)
+    parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--seed", type=int, default=20260661)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--checkpoint-in", type=Path)
@@ -431,6 +509,9 @@ def main(argv: list[str] | None = None) -> int:
         entropy_weight=args.entropy_weight,
         reference_kl_weight=args.reference_kl_weight,
         reference_update_every=args.reference_update_every,
+        advantage_target=args.advantage_target,
+        gamma=args.gamma,
+        gae_lambda=args.gae_lambda,
         seed=args.seed,
         device=args.device,
         checkpoint_in=args.checkpoint_in,

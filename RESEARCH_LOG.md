@@ -17690,3 +17690,25 @@
   - `uv run --with tianshou python scripts/run_native_neural_nashpg_compiled_learner.py --checkpoint-in <child> --reference-policy-checkpoint <child> --opponent-checkpoint <child> --opponent-checkpoint <fresh> --opponent-checkpoint <nfsp> --opponent-checkpoint <rainbow> --train-iterations 64 --games-per-iteration 4096 ...` -> passed on CUDA with zero illegal actions and zero Python-showdown fallback.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_neural_nashpg/native_nashpg_empirical_game_gen3_child_nfsp_rainbow_confidence_seed20260678.json` -> solved complete four-policy matrix with pure Rainbow support.
 - Decision: keep the native NashPG/MMD learner as the new lead infrastructure because it produced verified parent improvement and nearly reached Rainbow, but do not promote it or run Slumbot. The immediate next test should change the update quality rather than repeat identical generations: either add a bootstrapped/GAE critic target to reduce terminal-return credit-assignment noise, or train a larger same-method generation only if paired with the same parent/Rainbow confidence gates and empirical-game support.
+## 20260602T024914Z-native-neural-nashpg-gae-credit-assignment-gate - failed
+
+- Timestamp: 2026-06-02T02:49:14Z
+- Type: native_neural_nashpg_gae_credit_assignment
+- Gate: native_neural_nashpg_gae_parent_rainbow_empirical_game_gate
+- Hypothesis: Replacing repeated terminal-return advantages with same-player linked GAE/bootstrap targets should reduce full-HUNL credit-assignment noise enough for the native NashPG learner to improve over gen3 and cross the Rainbow local control.
+- Failure class: strategy_quality
+- Summary: Added an opt-in `--advantage-target gae` mode to the native neural NashPG learner. It computes bootstrapped value targets over the collector's same-player decision links while keeping the same tabula-rasa local simulator, reference KL, entropy, and population-training setup. The GAE gen4 trained cleanly on CUDA with zero illegal actions and zero Python-showdown fallback. It stayed strong versus NFSP, but 10k confidence gates showed it was neutral versus gen3 and still lost to Rainbow; empirical-game support stayed pure Rainbow. Bootstrapped credit assignment alone is not sufficient.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gae_gen4_h256_64x4096_seed20260680.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_empirical_game_gae_gen4_gen3_nfsp_rainbow_confidence_seed20260685.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gae_gen4_vs_gen3_h2h_10000_seed20260684.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gae_gen4_vs_nfsp_h2h_2000_seed20260682.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gae_gen4_vs_rainbow_h2h_10000_seed20260685.json
+- Key metrics: `{"gae_samples": 636286, "gae_samples_per_second": 16913.26862507821, "advantage_target": "gae", "gae_lambda": 0.75, "gae_vs_gen3_10k_mean": 0.0002438, "gae_vs_gen3_10k_lower95": -0.0006842, "gae_vs_nfsp_mean": 0.07108, "gae_vs_nfsp_lower95": 0.0528807, "gae_vs_rainbow_10k_mean": -0.0020668, "gae_vs_rainbow_10k_upper95": -0.0009173, "empirical_meta_strategy": [0.0, 0.0, 0.0, 1.0], "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py` -> `4 passed`.
+  - `python -m py_compile scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
+  - `uv run --with tianshou python scripts/run_native_neural_nashpg_compiled_learner.py --checkpoint-in <gen3> --reference-policy-checkpoint <gen3> --opponent-checkpoint <gen3> --opponent-checkpoint <child> --opponent-checkpoint <nfsp> --opponent-checkpoint <rainbow> --advantage-target gae --gae-lambda 0.75 --train-iterations 64 --games-per-iteration 4096 ...` -> passed on CUDA.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_neural_nashpg/native_nashpg_empirical_game_gae_gen4_gen3_nfsp_rainbow_confidence_seed20260685.json` -> solved complete four-policy matrix with pure Rainbow support.
+- Decision: keep GAE support as an opt-in diagnostic, but do not treat it as the current lead over gen3. The next principled step should either improve the policy-improvement objective itself, such as a replay/off-policy response learner with stronger value bootstrapping, or run a synthesis if another same-family native NashPG variant fails before crossing Rainbow support.
