@@ -17633,3 +17633,16 @@
   - `uv run --with tianshou python scripts/run_rnad_compiled_native_learner.py --checkpoint-in autoresearch-session/native_rnad/export_source_gen2_learner_500x512_seed20260653.pt --train-iterations 500 --n-games 512 --collector-batch-size 128 --max-steps-per-game 64 --hidden-dim 128 --device auto --seed 20260657 --opponent-checkpoint <rainbow> --opponent-kind tianshou-rainbow --opponent-checkpoint <nfsp> --opponent-kind native-nfsp --opponent-checkpoint <gen1> --opponent-kind native-ppo ...` -> passed and wrote CUDA population metrics.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_rnad/pop_response_empirical_game_pop_gen2_nfsp_rainbow_seed20260660.json` -> solved complete four-policy matrix with pure Rainbow support.
 - Decision: keep population-opponent R-NaD collection as tested infrastructure, but do not repeat this direct response recipe unchanged. Synthesis is due after this fifth post-synthesis experiment; the next cycle must first update the causal model and choose one next test.
+## 20260602T021540Z-failure-synthesis-for-post-mmd-native-r-nad - passed
+
+- Timestamp: 2026-06-02T02:17:02Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T021540Z-post-mmd-native-r-nad-translation-failures
+- Hypothesis: Failure synthesis for post-MMD native R-NaD translation failures should identify the causal model and one next falsifier before further expansion.
+- Failure class: eval_invalid
+- Summary: Completed synthesis across the post-MMD native translation failures. Verdict is `revise`: exact small-NLHE MMD remains the strongest principled lead, and native rollout/R-NaD plumbing is now usable, but the tested native R-NaD bridge does not translate the exact-game dynamics into population strength. Target export, learner export, parent-only continuation, and direct population-opponent trajectories all failed Rainbow empirical-game support. The next test should move back to an exact small-game neural update gate before scaling another native 9-action HUNL learner.
+- Synthesis file: autoresearch-session/poker_reviews/20260602T021540Z-post-mmd-native-r-nad-translation-failures-synthesis/synthesis.md
+- Decision file: autoresearch-session/poker_reviews/20260602T021540Z-post-mmd-native-r-nad-translation-failures-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_validation_passed": true, "retired_hypotheses": ["target/EMA export is the right deployed native R-NaD object", "parent-only learner-export continuation closes the Rainbow gap", "direct saved-population behavior trajectories are enough to create a stronger R-NaD response"], "single_next_test": "neural MMD/NashPG-style exact small-NLHE truth gate with NashConv before native scaling"}`
+- Verification: `python scripts/poker_autoresearch.py gate failure-synthesis-20260602T021540Z-post-mmd-native-r-nad-translation-failures --run-dir autoresearch-session/poker_runs/20260602T021540Z-failure-synthesis-for-post-mmd-native-r-nad` -> passed.
+- Decision: stop expanding native R-NaD variants until a neural MMD/NashPG-style update passes the locked small-NLHE exact NashConv gate against the existing R-NaD/PPO baselines.

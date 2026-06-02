@@ -434,6 +434,10 @@ gen2, remained positive versus NFSP, still lost to Rainbow (`mean=-0.017587`,
 upper95 `-0.006654`), and the empirical game again solved to pure Rainbow
 support. Keep population-opponent collection as infrastructure and evidence;
 do not repeat the same direct response recipe unchanged.
+The post-MMD native translation synthesis therefore sets the next single test:
+build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
+compare it against the existing small-game R-NaD/PPO baselines before scaling
+another native 9-action HUNL learner.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
