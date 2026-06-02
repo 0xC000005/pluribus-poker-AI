@@ -111,8 +111,14 @@ def _counterfactual_training_rows(
     tree: Tree,
     by: dict,
     pi: list[dict[int, float]],
+    reference_pi: list[dict[int, float]] | None = None,
+    reference_regularization_weight: float = 0.0,
     advantage_temperature: float,
 ) -> list[dict]:
+    if float(reference_regularization_weight) < 0.0:
+        raise ValueError("reference_regularization_weight must be non-negative")
+    if reference_pi is not None and len(reference_pi) != len(pi):
+        raise ValueError("reference_pi must match pi length")
     q, cf_weights = _counterfactual_values_and_weights(tree, pi)
     rows: list[dict] = []
     for key, iid in tree.infosets.items():
@@ -128,10 +134,18 @@ def _counterfactual_training_rows(
         for action in tree.iset_actions[iid]:
             current[int(action)] = float(pi[iid][int(action)])
             advantage[int(action)] = float(q[iid][int(action)] - value)
+        regularized_advantage = advantage.copy()
+        if reference_pi is not None and float(reference_regularization_weight) > 0.0:
+            for action in tree.iset_actions[iid]:
+                current_prob = max(float(pi[iid][int(action)]), 1e-12)
+                reference_prob = max(float(reference_pi[iid][int(action)]), 1e-12)
+                regularized_advantage[int(action)] += -float(reference_regularization_weight) * (
+                    math.log(current_prob) - math.log(reference_prob)
+                )
         target = _soft_counterfactual_target(
             legal=legal_arr,
             current_policy=current,
-            advantage=advantage,
+            advantage=regularized_advantage,
             advantage_temperature=float(advantage_temperature),
         )
         rows.append(
@@ -141,9 +155,11 @@ def _counterfactual_training_rows(
                 "legal": legal_arr,
                 "current_policy": current,
                 "advantage": advantage,
+                "regularized_advantage": regularized_advantage,
                 "target_policy": target,
                 "cf_reach_weight": float(max(cf_weights[iid], 0.0)),
                 "counterfactual_value": float(value),
+                "reference_regularization_weight": float(reference_regularization_weight),
             }
         )
     if not rows:
@@ -167,6 +183,8 @@ class ExactCounterfactualNeuralPGSolver:
         lr: float,
         fit_epochs_per_step: int,
         advantage_temperature: float,
+        reference_regularization_weight: float,
+        reference_update_every: int,
         seed: int,
     ) -> None:
         if int(fit_epochs_per_step) <= 0:
@@ -175,6 +193,10 @@ class ExactCounterfactualNeuralPGSolver:
             raise ValueError("lr must be positive")
         if float(advantage_temperature) <= 0.0:
             raise ValueError("advantage_temperature must be positive")
+        if float(reference_regularization_weight) < 0.0:
+            raise ValueError("reference_regularization_weight must be non-negative")
+        if int(reference_update_every) <= 0:
+            raise ValueError("reference_update_every must be positive")
         self.game = game
         self.tree = tree
         self.by = by
@@ -187,6 +209,9 @@ class ExactCounterfactualNeuralPGSolver:
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=float(lr))
         self.fit_epochs_per_step = int(fit_epochs_per_step)
         self.advantage_temperature = float(advantage_temperature)
+        self.reference_regularization_weight = float(reference_regularization_weight)
+        self.reference_update_every = int(reference_update_every)
+        self.reference_pi = self._tabular_policy_dict()
         self.learner_steps = 0
 
     @torch.no_grad()
@@ -216,6 +241,8 @@ class ExactCounterfactualNeuralPGSolver:
             tree=self.tree,
             by=self.by,
             pi=self._tabular_policy_dict(),
+            reference_pi=self.reference_pi if self.reference_regularization_weight > 0.0 else None,
+            reference_regularization_weight=self.reference_regularization_weight,
             advantage_temperature=self.advantage_temperature,
         )
         obs = torch.as_tensor(np.stack([row["obs"] for row in rows]), dtype=torch.float32, device=self.device)
@@ -234,11 +261,19 @@ class ExactCounterfactualNeuralPGSolver:
             self.optimizer.step()
             last_loss = loss.detach()
         self.learner_steps += 1
+        if (
+            self.reference_regularization_weight > 0.0
+            and self.learner_steps % self.reference_update_every == 0
+        ):
+            self.reference_pi = self._tabular_policy_dict()
         target_l1 = [
             float(np.abs(row["target_policy"] - row["current_policy"]).sum())
             for row in rows
         ]
         advantages = np.concatenate([np.asarray(row["advantage"], dtype=np.float64) for row in rows])
+        regularized_advantages = np.concatenate(
+            [np.asarray(row["regularized_advantage"], dtype=np.float64) for row in rows]
+        )
         return {
             "loss": float(last_loss.cpu()),
             "n_information_sets": int(len(rows)),
@@ -246,8 +281,13 @@ class ExactCounterfactualNeuralPGSolver:
             "max_cf_reach_weight": float(np.max([row["cf_reach_weight"] for row in rows])),
             "mean_target_l1_from_current": float(np.mean(target_l1)),
             "max_abs_advantage": float(np.max(np.abs(advantages))) if advantages.size else 0.0,
+            "max_abs_regularized_advantage": (
+                float(np.max(np.abs(regularized_advantages))) if regularized_advantages.size else 0.0
+            ),
             "fit_epochs_per_step": int(self.fit_epochs_per_step),
             "advantage_temperature": float(self.advantage_temperature),
+            "reference_regularization_weight": float(self.reference_regularization_weight),
+            "reference_update_every": int(self.reference_update_every),
             "learner_steps": int(self.learner_steps),
         }
 
@@ -261,6 +301,8 @@ def _run_seed(args, seed: int, game, tree: Tree, by, policy_lib, exploitability)
         lr=float(args.lr),
         fit_epochs_per_step=int(args.fit_epochs_per_step),
         advantage_temperature=float(args.advantage_temperature),
+        reference_regularization_weight=float(args.reference_regularization_weight),
+        reference_update_every=int(args.reference_update_every),
         seed=int(seed),
     )
     history = [(0, _nashconv_from_policy_fn(game, by, solver.action_probabilities, policy_lib, exploitability))]
@@ -331,6 +373,8 @@ def main(argv=None) -> int:
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--fit-epochs-per-step", type=int, default=4)
     parser.add_argument("--advantage-temperature", type=float, default=1.0)
+    parser.add_argument("--reference-regularization-weight", type=float, default=0.0)
+    parser.add_argument("--reference-update-every", type=int, default=100)
     parser.add_argument("--baseline-json")
     parser.add_argument("--baseline-arm", default="rnad")
     parser.add_argument("--output-json")
@@ -346,6 +390,10 @@ def main(argv=None) -> int:
         raise ValueError("--fit-epochs-per-step must be positive")
     if float(args.advantage_temperature) <= 0.0:
         raise ValueError("--advantage-temperature must be positive")
+    if float(args.reference_regularization_weight) < 0.0:
+        raise ValueError("--reference-regularization-weight must be non-negative")
+    if int(args.reference_update_every) <= 0:
+        raise ValueError("--reference-update-every must be positive")
 
     from open_spiel.python import policy as policy_lib
     from open_spiel.python.algorithms import exploitability
@@ -428,6 +476,8 @@ def main(argv=None) -> int:
             "lr": float(args.lr),
             "fit_epochs_per_step": int(args.fit_epochs_per_step),
             "advantage_temperature": float(args.advantage_temperature),
+            "reference_regularization_weight": float(args.reference_regularization_weight),
+            "reference_update_every": int(args.reference_update_every),
             "baseline_json": args.baseline_json,
             "baseline_arm": args.baseline_arm,
         },

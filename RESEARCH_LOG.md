@@ -19313,3 +19313,28 @@
 - Verification:
   - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T102658Z-exact-cfpg-small-nlhe-best-iterate-passed-but-synthesis --require-complete` -> passed with decision `revise`.
 - Decision: The next branch should not tune exact-CFPG temperature/learning rate. It should add one reviewed sequence-form/QFR/NashPG-style proximal-control mechanism to the exact counterfactual row builder and require last-policy exact NashConv to beat learner-source R-NaD before native scaling.
+
+## 20260602T152000Z-small-nlhe-reference-regularized-exact-cfpg-plan - planned
+
+- Timestamp: 2026-06-02T15:20:00Z
+- Type: predeclared_experiment
+- Gate: small_nlhe_reference_regularized_exact_cfpg
+- Hypothesis: If the exact-CFPG blocker is last-iterate/proximal-control instability, then adding a current-vs-reference policy regularizer directly inside the exact counterfactual advantage update should preserve the useful counterfactual signal while improving deployable last-policy NashConv. This is a NashPG/R-NaD-style game-dynamics test, not a poker-specific action rule.
+- Controls: use the same exact-CFPG row builder and learner-source R-NaD comparator as the failed gate. Use one reference-regularized setting derived from the existing tabular R-NaD scale (`reference_regularization_weight=0.2`, `reference_update_every=100`), and do not sweep temperature, learning rate, or reset schedules. Slumbot/RLCard/native HUNL remain blocked.
+- Decision rule: pass only if the last policy, not only the best point, beats learner-source R-NaD mean last NashConv with stable harness fingerprint and finite metrics. If it fails, synthesize the proximal-control gap and choose a maintained/faithful QFR/NashPG primitive rather than tuning this branch.
+
+## 20260602T153000Z-small-nlhe-reference-regularized-exact-cfpg - passed
+
+- Timestamp: 2026-06-02T15:30:00Z
+- Type: experiment
+- Gate: small_nlhe_reference_regularized_exact_cfpg
+- Hypothesis: Adding a current-vs-reference policy regularizer directly inside the exact counterfactual neural update should repair exact-CFPG last-iterate instability on the locked small-NLHE gate.
+- Failure class: none
+- Summary: Added `reference_pi` and `reference_regularization_weight` support to the exact-CFPG row builder and solver, plus a focused test that verifies regularized targets move toward the reference policy. The predeclared 3-seed gate with `reference_regularization_weight=0.2` and `reference_update_every=100` passed decisively: mean last NashConv dropped to `0.004728`, far below learner-source R-NaD's `0.211838`. This is the first current-branch evidence that a counterfactual neural learner can preserve last-iterate quality on the exact small game. It is not native HUNL, Slumbot, or SOTA evidence yet.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/reference_regularized_exact_cfpg_1200_seed1_3_eta02_reset100.json
+- Key metrics: `{"baseline_mean_last_nashconv": 0.211838, "mean_best_nashconv": 0.004146, "mean_last_nashconv": 0.004728, "last_nashconv": [0.005086, 0.008247, 0.000852], "best_nashconv": [0.005086, 0.006500, 0.000852], "candidate_truth_gate_passed": true, "reference_regularization_weight": 0.2, "reference_update_every": 100, "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_exact_cfpg_gate.py` -> `3 passed`.
+  - `python -m py_compile scripts/run_small_nlhe_exact_cfpg_neural_gate.py` -> passed.
+  - `uv run --no-project --with open-spiel python scripts/run_small_nlhe_exact_cfpg_neural_gate.py --steps 1200 --eval-every 400 --seeds 1,2,3 --layers 128 128 --lr 0.01 --fit-epochs-per-step 4 --advantage-temperature 1.0 --reference-regularization-weight 0.2 --reference-update-every 100 --baseline-json autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json --baseline-arm rnad --output-json autoresearch-session/small_nlhe_neural_nashpg/reference_regularized_exact_cfpg_1200_seed1_3_eta02_reset100.json` -> completed and passed the comparator.
+- Decision: This authorizes one native-design branch: approximate the same reference-regularized counterfactual update with sampled/vectorized native trajectories and then require native 20k multi-seed parent/control H2H plus empirical-game insertion. Do not run Slumbot/RLCard from this small-game result alone.
