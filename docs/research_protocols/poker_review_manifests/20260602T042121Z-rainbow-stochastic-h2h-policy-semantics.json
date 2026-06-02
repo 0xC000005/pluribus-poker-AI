@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 825,
+      "path": "benchmark_audit.md",
+      "sha256": "08c6af1a7a3b6087481528f26fd0e3d920d54b4f02998f8e362ab7129795f90b"
+    },
+    {
+      "bytes": 551,
+      "path": "decision.json",
+      "sha256": "d50accab4cdc7f5ebb4aacc6e3909dcc18ab5b04d8298ac219b09a6b59ee5136"
+    },
+    {
+      "bytes": 953,
+      "path": "mechanism_review.md",
+      "sha256": "95f9eb0eba199d02ae5422c8f303d88a803483d29b3d348fc1f2aea313c03be7"
+    },
+    {
+      "bytes": 1387,
+      "path": "related_work.md",
+      "sha256": "73e4efbf647d5c7c7b036fbf8c38ac02472746c7d27da0b0ad2e5199ef2280e7"
+    },
+    {
+      "bytes": 1323,
+      "path": "review.md",
+      "sha256": "06d001fd0499c4c2e786a5faf358940f673f51c1b931b7d9118dedd0a29197b0"
+    },
+    {
+      "bytes": 2092,
+      "path": "review_scope.json",
+      "sha256": "d4243fd0cc077d1e5d68825da86292567fc0fca98996065c80c45b8ba0e043fe"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Approve an opt-in stochastic Rainbow H2H policy kind as a local semantics control. Existing greedy Rainbow behavior and prior artifacts must remain unchanged, and the new kind must not be used as promotion evidence without matched local H2H results.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T042121Z-rainbow-stochastic-h2h-policy-semantics",
+  "review_id": "20260602T042121Z-rainbow-stochastic-h2h-policy-semantics",
+  "sources": [
+    "poker_ai/research/mixed_policy_h2h.py",
+    "scripts/eval_mixed_policy_h2h.py",
+    "https://proceedings.mlr.press/v70/bellemare17a.html",
+    "https://jmlr.csail.mit.edu/proceedings/papers/v37/heinrich15.pdf"
+  ],
+  "written_at": "2026-06-02T04:24:21Z"
+}

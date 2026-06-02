@@ -11,7 +11,7 @@ import time
 import numpy as np
 import torch
 
-from poker_ai.games.full_deck.state import INDEX_TO_ACTION, N_ACTIONS, new_game
+from poker_ai.games.full_deck.state import INDEX_TO_ACTION, N_ACTIONS, N_FEATURES, new_game
 from poker_ai.research.native_rollout_substrate import fast_state_from_full_deck_state
 from poker_ai.research.native_nfsp import (
     get_legal_mask,
@@ -30,6 +30,7 @@ SUPPORTED_POLICY_KINDS = (
     "native-nfsp",
     "native-ppo",
     "tianshou-rainbow",
+    "tianshou-rainbow-softmax",
     "tianshou-ppo",
     "agilerl-ippo",
     "rllib-ppo",
@@ -37,6 +38,8 @@ SUPPORTED_POLICY_KINDS = (
 _KIND_ALIASES = {
     "rainbow": "tianshou-rainbow",
     "tianshou_rainbow": "tianshou-rainbow",
+    "rainbow-softmax": "tianshou-rainbow-softmax",
+    "tianshou_rainbow_softmax": "tianshou-rainbow-softmax",
     "native_ppo": "native-ppo",
     "ppo": "tianshou-ppo",
     "tianshou_ppo": "tianshou-ppo",
@@ -108,6 +111,108 @@ def _one_hot_action_probs(action_idx: int, legal_mask: np.ndarray) -> np.ndarray
         total = float(legal.sum())
         return legal / total if total > 0.0 else np.full(N_ACTIONS, 1.0 / N_ACTIONS, dtype=np.float32)
     return masked / float(masked.sum())
+
+
+class _RainbowDistributionNet(torch.nn.Module):
+    def __init__(self, *, hidden_dim: int, num_atoms: int, device: torch.device) -> None:
+        super().__init__()
+        self.num_atoms = int(num_atoms)
+        self.device = device
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(N_FEATURES, int(hidden_dim)),
+            torch.nn.ReLU(),
+            torch.nn.Linear(int(hidden_dim), int(hidden_dim)),
+            torch.nn.ReLU(),
+            torch.nn.Linear(int(hidden_dim), N_ACTIONS * int(num_atoms)),
+        )
+
+    def forward(self, obs: np.ndarray | torch.Tensor) -> torch.Tensor:
+        x = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        logits = self.net(x).view(-1, N_ACTIONS, self.num_atoms)
+        return torch.softmax(logits, dim=-1)
+
+
+class _RainbowQPolicy(torch.nn.Module):
+    kind = "tianshou-rainbow-softmax"
+
+    def __init__(self, model: torch.nn.Module, *, num_atoms: int, algorithm: str) -> None:
+        super().__init__()
+        self.model = model
+        self.algorithm = str(algorithm)
+        self.register_buffer(
+            "support",
+            torch.linspace(-1.0, 1.0, int(num_atoms), dtype=torch.float32),
+        )
+
+    def forward(self, features: np.ndarray | torch.Tensor) -> torch.Tensor:
+        distribution = self.model(features)
+        return torch.sum(distribution * self.support.view(1, 1, -1), dim=-1)
+
+
+def _rainbow_state_dicts_by_seat_from_payload(payload: dict) -> dict[int, dict]:
+    if payload.get("shared_model_state_dict") is not None:
+        shared = payload["shared_model_state_dict"]
+        return {0: shared, 1: shared}
+    if "agent_model_state_dicts" in payload:
+        agent_state_dicts = payload["agent_model_state_dicts"]
+        fallback_key = "player_0" if "player_0" in agent_state_dicts else sorted(agent_state_dicts)[0]
+        return {
+            seat: agent_state_dicts.get(f"player_{seat}", agent_state_dicts[fallback_key])
+            for seat in (0, 1)
+        }
+    if "model_state_dict" in payload:
+        shared = payload["model_state_dict"]
+        return {0: shared, 1: shared}
+    raise ValueError("Rainbow checkpoint is missing a loadable model state dict")
+
+
+def _load_rainbow_q_policy(checkpoint_path: str | Path, device: torch.device) -> tuple[dict, _RainbowQPolicy]:
+    payload = torch.load(str(checkpoint_path), map_location=device, weights_only=False)
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("Rainbow checkpoint action count does not match native contract")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("Rainbow checkpoint feature count does not match native contract")
+    hidden_dim = int(payload.get("hidden_dim", 128))
+    num_atoms = int(payload.get("num_atoms", 51))
+    model = _RainbowDistributionNet(
+        hidden_dim=hidden_dim,
+        num_atoms=num_atoms,
+        device=device,
+    ).to(device)
+    state_dicts = _rainbow_state_dicts_by_seat_from_payload(payload)
+    model.load_state_dict(state_dicts.get(0, state_dicts[sorted(state_dicts)[0]]))
+    policy = _RainbowQPolicy(
+        model,
+        num_atoms=num_atoms,
+        algorithm=str(payload.get("algorithm", "tianshou_rainbow_dqn")),
+    ).to(device)
+    policy.eval()
+    for parameter in policy.parameters():
+        parameter.requires_grad_(False)
+    return dict(payload), policy
+
+
+def _q_softmax_action_probs(
+    policy: torch.nn.Module,
+    features: np.ndarray,
+    legal_mask: np.ndarray,
+    device: torch.device,
+) -> np.ndarray:
+    legal = np.asarray(legal_mask, dtype=np.float32)
+    if float(legal.sum()) <= 0.0:
+        return np.full(N_ACTIONS, 1.0 / N_ACTIONS, dtype=np.float32)
+    with torch.no_grad():
+        q_values = policy(
+            torch.as_tensor(features, dtype=torch.float32, device=device).unsqueeze(0)
+        ).detach().float().reshape(-1)
+    mask = torch.as_tensor(legal > 0, dtype=torch.bool, device=q_values.device)
+    logits = q_values.masked_fill(~mask, -1.0e30)
+    probs = torch.softmax(logits, dim=-1).detach().cpu().numpy().astype(np.float32)
+    probs *= legal
+    total = float(probs.sum())
+    return probs / total if total > 0.0 else legal / float(legal.sum())
 
 
 def _resolve_rllib_module_checkpoint(checkpoint_path: str | Path) -> Path:
@@ -277,6 +382,22 @@ def load_policy_adapter(
             action_probs_fn=lambda features, legal_mask, _resolved_device: _one_hot_action_probs(
                 _rainbow_greedy_action(policy, features, legal_mask),
                 legal_mask,
+            ),
+            initial_chips=int(config.get("initial_chips", 1000)),
+            max_steps_per_hand=int(config.get("max_steps_per_hand", 256)),
+        )
+    if kind == "tianshou-rainbow-softmax":
+        payload, policy = _load_rainbow_q_policy(checkpoint_path, device)
+        config = _checkpoint_runtime_config(dict(payload))
+        return PolicyAdapter(
+            kind=kind,
+            checkpoint_path=str(checkpoint_path),
+            algorithm=str(payload.get("algorithm", "tianshou_rainbow_dqn")),
+            action_probs_fn=lambda features, legal_mask, resolved_device: _q_softmax_action_probs(
+                policy,
+                features,
+                legal_mask,
+                resolved_device,
             ),
             initial_chips=int(config.get("initial_chips", 1000)),
             max_steps_per_hand=int(config.get("max_steps_per_hand", 256)),

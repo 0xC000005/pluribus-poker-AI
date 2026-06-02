@@ -254,6 +254,47 @@ def test_load_policy_adapter_supports_tianshou_rainbow_one_hot(monkeypatch):
     assert np.allclose(probs, np.array([0, 0, 0, 0, 0, 0, 0, 0, 1], dtype=np.float32))
 
 
+def test_load_policy_adapter_supports_tianshou_rainbow_softmax(monkeypatch):
+    from poker_ai.research import mixed_policy_h2h
+
+    class FakeRainbowQPolicy(torch.nn.Module):
+        kind = "tianshou-rainbow-softmax"
+        algorithm = "fake_rainbow"
+
+        def forward(self, features):
+            scores = torch.zeros((features.shape[0], 9), dtype=torch.float32)
+            scores[:, 1] = 1.0
+            scores[:, 8] = 2.0
+            return scores
+
+    monkeypatch.setattr(
+        mixed_policy_h2h,
+        "_load_rainbow_q_policy",
+        lambda checkpoint_path, resolved_device: (
+            {
+                "algorithm": "tianshou_rainbow_dqn",
+                "metrics": {"initial_chips": 999, "max_steps_per_hand": 55},
+            },
+            FakeRainbowQPolicy(),
+        ),
+    )
+
+    adapter = load_policy_adapter(
+        "rainbow.pt",
+        kind="tianshou-rainbow-softmax",
+        device=torch.device("cpu"),
+    )
+    legal_mask = np.array([1, 1, 0, 0, 0, 0, 0, 0, 1], dtype=np.float32)
+    probs = adapter.probs(np.zeros(126, dtype=np.float32), legal_mask, torch.device("cpu"))
+
+    assert adapter.kind == "tianshou-rainbow-softmax"
+    assert adapter.initial_chips == 999
+    assert adapter.max_steps_per_hand == 55
+    assert probs[2] == 0.0
+    assert probs[8] > probs[1] > probs[0]
+    assert np.isclose(probs.sum(), 1.0)
+
+
 def test_load_policy_adapter_supports_tianshou_ppo_probabilities(monkeypatch):
     pytest.importorskip("gymnasium")
     from scripts import run_tianshou_ppo_native_control as ppo_control

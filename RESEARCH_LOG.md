@@ -18028,3 +18028,29 @@
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T041823Z-native-rainbow-action-collapse-diagnostic", "passed": true}`
 - Manifest:
   - docs/research_protocols/poker_review_manifests/20260602T041823Z-native-rainbow-action-collapse-diagnostic.json
+## 20260602T042704Z-methodology-review-for-rainbow-stochastic-h2h-policy-semantics - passed
+
+- Timestamp: 2026-06-02T04:27:04Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T042121Z-rainbow-stochastic-h2h-policy-semantics
+- Hypothesis: Methodology review for Rainbow stochastic H2H policy semantics should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T042121Z-rainbow-stochastic-h2h-policy-semantics passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T042704Z-methodology-review-for-rainbow-stochastic-h2h-policy-semantics/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T042121Z-rainbow-stochastic-h2h-policy-semantics", "passed": true}`
+
+## 20260602T042723Z-native-rainbow-softmax-vs-greedy-h2h - failed
+
+- Timestamp: 2026-06-02T04:27:23Z
+- Type: local_h2h_diagnostic
+- Gate: native_rainbow_softmax_vs_greedy_h2h
+- Hypothesis: If the greedy Slumbot smoke all-in streak is mainly a deployment-mode artifact, then sampling a legal-mask softmax over the same Rainbow Q-values should improve local H2H against the same checkpoint's greedy policy without changing training data or using Slumbot feedback.
+- Failure class: policy_semantics
+- Summary: Added an opt-in `tianshou-rainbow-softmax` mixed-policy adapter for native H2H and compared the seed-20260717 online-response support checkpoint against the same checkpoint under existing greedy Rainbow semantics. The softmax policy lost clearly: mean candidate payoff `-0.04755`, lower95 `-0.06855`, upper95 `-0.02655` over `2000` duplicate-swapped games. This falsifies post-hoc Q-softmax as a free deployment fix. A principled stochastic poker policy needs to be learned explicitly, for example through an average-policy / actor objective inside the local self-play population loop, not recovered by softmaxing a greedy value head after training.
+- Metrics file:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_softmax_vs_greedy_h2h_2000_seed20260812.json
+- Key metrics: `{"candidate_kind": "tianshou-rainbow-softmax", "baseline_kind": "tianshou-rainbow", "n_games": 2000, "mean_candidate_payoff": -0.04755, "lower95_candidate_payoff": -0.0685473603524865, "upper95_candidate_payoff": -0.02655263964751349, "eval_games_per_second": 301.0590008965256, "resolved_device": "cuda"}`
+- Verification:
+  - `uv run pytest -q test/unit/test_mixed_policy_h2h.py::test_load_policy_adapter_supports_tianshou_rainbow_one_hot test/unit/test_mixed_policy_h2h.py::test_load_policy_adapter_supports_tianshou_rainbow_softmax test/unit/test_mixed_policy_h2h.py::test_eval_mixed_policy_h2h_cli_writes_json` -> `3 passed`.
+  - `python -m py_compile poker_ai/research/mixed_policy_h2h.py scripts/eval_mixed_policy_h2h.py` -> passed.
+- Decision: do not use Q-softmax for external Slumbot evaluation or promotion. The next tabula-rasa step should train an explicit stochastic policy objective and test it against the same local parent/population H2H truth gate.
