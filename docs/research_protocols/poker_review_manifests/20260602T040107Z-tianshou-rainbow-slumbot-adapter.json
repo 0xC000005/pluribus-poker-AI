@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1524,
+      "path": "benchmark_audit.md",
+      "sha256": "055f5b2918c1c77aa4305bee76a4ea82123bb4cf62d87c788586d74d9f5391c3"
+    },
+    {
+      "bytes": 736,
+      "path": "decision.json",
+      "sha256": "e9508220ce5282355f16714d6764ec4a725412d7be31c8545b2fc0d40b8d6dac"
+    },
+    {
+      "bytes": 1407,
+      "path": "mechanism_review.md",
+      "sha256": "9da1d63ca69a0757d40f8251382cdef37ede08e2bbd9b8739af07c1e8f264caa"
+    },
+    {
+      "bytes": 1771,
+      "path": "related_work.md",
+      "sha256": "4f5af0824c195665a009507284cc16288825ebb06c9b1cc6b7a96456a2c4eda5"
+    },
+    {
+      "bytes": 2112,
+      "path": "review.md",
+      "sha256": "9e00ec3a0dabf733add9043f66b79995f649a8b5dd637f58f475aac28403e107"
+    },
+    {
+      "bytes": 2884,
+      "path": "review_scope.json",
+      "sha256": "f152c288cb675b242641a7342607ff5b9c1a0f7144ebbac03d8f4f626272982d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Approve the protected-surface change as narrow held-out evaluation plumbing only. The adapter preserves the native 126-feature/9-action contract, passes load/mask tests, and does not loosen promotion blockers or use Slumbot data.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T040107Z-tianshou-rainbow-slumbot-adapter",
+  "review_id": "20260602T040107Z-tianshou-rainbow-slumbot-adapter",
+  "sources": [
+    "scripts/play_slumbot.py",
+    "scripts/poker_autoresearch_slumbot.py",
+    "poker_ai/research/native_candidate_precheck.py",
+    "test/unit/test_slumbot_rainbow_adapter.py",
+    "autoresearch-session/native_neural_nashpg/online_response_iter4_support_native_local_precheck_seed20260723.json",
+    "https://proceedings.mlr.press/v70/bellemare17a.html",
+    "https://github.com/thu-ml/tianshou/blob/master/README.md"
+  ],
+  "written_at": "2026-06-02T04:04:18Z"
+}

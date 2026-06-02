@@ -17924,3 +17924,43 @@
   - `python -m py_compile poker_ai/research/native_candidate_precheck.py scripts/eval_native_candidate_local_precheck.py` -> passed.
   - `python scripts/eval_native_candidate_local_precheck.py --candidate-checkpoint <online_iter4_support> --native-h2h-json <iter2/gen3/rainbow/nfsp/online_pivot_h2h> --empirical-game-json <confidence_matrix> --min-candidate-support 0.999 ...` -> passed locally.
 - Decision: native evidence is strong enough to justify resolving external-evaluation plumbing, not strong enough to claim Slumbot readiness. The next concrete blocker is a Slumbot-compatible policy adapter for `tianshou-rainbow`; RLCard AlphaHoldem evidence remains a separate same-philosophy benchmark requirement.
+## 20260602T035410Z-tianshou-rainbow-slumbot-adapter - passed
+
+- Timestamp: 2026-06-02T03:54:10Z
+- Type: slumbot_policy_adapter
+- Gate: tianshou_rainbow_slumbot_load_smoke
+- Hypothesis: The best native `tianshou-rainbow` checkpoint can be loaded into `play_slumbot.py` through a minimal PyTorch C51/Rainbow adapter using the same 126-feature, 9-action contract.
+- Failure class: eval_invalid
+- Summary: Added an opt-in/auto-detected `--model-kind tianshou-rainbow` Slumbot adapter. The adapter reads native Rainbow checkpoints without requiring `tianshou` or `gymnasium`, converts C51 atom distributions to action values, applies the Slumbot legal mask, and feeds the existing action translation path. The autoresearch Slumbot wrapper now forwards `--model-kind`. A zero-hand wrapper smoke loaded the best checkpoint and parsed a clean summary without contacting Slumbot. The refreshed native local precheck now reports `tianshou-rainbow` as Slumbot-supported while still blocking promotion on missing RLCard reference evidence and held-out Slumbot smoke.
+- Artifact:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_native_local_precheck_seed20260723.json
+- Verification:
+  - `uv run pytest -q test/unit/test_slumbot_rainbow_adapter.py test/unit/test_native_candidate_precheck.py test/unit/test_candidate_promotion_gate.py` -> `9 passed`.
+  - `python -m py_compile scripts/play_slumbot.py scripts/poker_autoresearch_slumbot.py poker_ai/research/native_candidate_precheck.py scripts/eval_native_candidate_local_precheck.py` -> passed.
+  - `python scripts/poker_autoresearch_slumbot.py --model <online_iter4_support> --model-kind tianshou-rainbow --hands 0 --greedy --no-solver --timeout-seconds 60` -> passed; `decision_total=0`, `returncode=0`, `stderr_tail=""`.
+- Decision: adapter blocker is resolved for load/inference plumbing. Do not run held-out Slumbot confidence yet; the workflow still requires a formal decision about missing RLCard AlphaHoldem evidence or an explicit native-only promotion path.
+## 20260602T035928Z-failure-synthesis-for-online-response-support-candidate-and - passed
+
+- Timestamp: 2026-06-02T03:59:28Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T035542Z-online-response-support-candidate-and-external-evaluation-readiness
+- Hypothesis: Failure synthesis for online response support candidate and external-evaluation readiness should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: The synthesis accepted the local evidence for the seed-20260717 online support response as the strongest native candidate so far, but did not promote it to external play. Online compiled response learning remains the live mechanism; unchanged offline replay and more same-budget local iterations without a concrete failure target are lower priority. The next bottleneck is external-evaluation governance: decide whether same-philosophy RLCard AlphaHoldem evidence is required before a small held-out Slumbot smoke, or explicitly record a native-only Slumbot smoke path.
+- Metrics file: autoresearch-session/poker_runs/20260602T035928Z-failure-synthesis-for-online-response-support-candidate-and/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T035542Z-online-response-support-candidate-and-external-evaluation-readiness", "passed": true}`
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T035542Z-online-response-support-candidate-and-external-evaluation-readiness-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T035542Z-online-response-support-candidate-and-external-evaluation-readiness-synthesis/decision.json
+- Decision: revise toward a formal external-evaluation decision gate before any large held-out Slumbot confidence run.
+## 20260602T040358Z-methodology-review-for-tianshou-rainbow-slumbot-adapter-should - passed
+
+- Timestamp: 2026-06-02T04:03:58Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T040107Z-tianshou-rainbow-slumbot-adapter
+- Hypothesis: Methodology review for Tianshou Rainbow Slumbot adapter should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T040107Z-tianshou-rainbow-slumbot-adapter passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T040358Z-methodology-review-for-tianshou-rainbow-slumbot-adapter-should/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T040107Z-tianshou-rainbow-slumbot-adapter", "passed": true}`
+

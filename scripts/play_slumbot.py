@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import requests
 import torch
+import torch.nn as nn
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -531,6 +532,8 @@ def _feature_street(features):
 
 
 def effective_strategy_source(value_net, features, strategy_source):
+    if hasattr(value_net, "slumbot_strategy_source"):
+        return str(value_net.slumbot_strategy_source)
     if strategy_source != "policy-head-covered":
         return strategy_source
     covered_streets = _policy_calibration_target_streets(value_net)
@@ -543,6 +546,15 @@ def effective_strategy_source(value_net, features, strategy_source):
 
 def network_strategy(value_net, features, legal_mask, device, strategy_source="regret"):
     """Return (advantages, strategy) from the requested learned policy source."""
+    custom_strategy = getattr(value_net, "slumbot_policy_strategy", None)
+    if callable(custom_strategy):
+        if strategy_source not in {"regret"}:
+            raise ValueError(
+                "custom Slumbot policy adapters currently support only the default "
+                "strategy source"
+            )
+        return custom_strategy(features, legal_mask, device)
+
     strategy_source = effective_strategy_source(value_net, features, strategy_source)
     feat_t = torch.from_numpy(features).unsqueeze(0).to(device)
     with torch.no_grad():
@@ -715,6 +727,132 @@ class PerHandCheckpointSelector:
         del hand_index
         idx = int(self.rng.choice(len(self.choices), p=self.weights))
         return self.choices[idx]
+
+
+class _RainbowDistributionNetForSlumbot(nn.Module):
+    """Minimal native Rainbow/C51 network reader for Slumbot inference."""
+
+    def __init__(self, *, hidden_dim: int, num_atoms: int, device: torch.device):
+        super().__init__()
+        self.num_atoms = int(num_atoms)
+        self.device = device
+        self.net = nn.Sequential(
+            nn.Linear(N_FEATURES, int(hidden_dim)),
+            nn.ReLU(),
+            nn.Linear(int(hidden_dim), int(hidden_dim)),
+            nn.ReLU(),
+            nn.Linear(int(hidden_dim), N_ACTIONS * int(num_atoms)),
+        )
+
+    def forward(self, obs):
+        x = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        logits = self.net(x).view(-1, N_ACTIONS, self.num_atoms)
+        return torch.softmax(logits, dim=-1)
+
+
+class TianshouRainbowSlumbotPolicy(nn.Module):
+    """Adapter exposing a native Rainbow checkpoint through play_slumbot policy API."""
+
+    slumbot_strategy_source = "tianshou-rainbow-q"
+
+    def __init__(self, model: nn.Module, *, num_atoms: int):
+        super().__init__()
+        self.model = model
+        self.num_atoms = int(num_atoms)
+
+    def slumbot_policy_strategy(self, features, legal_mask, device):
+        x = torch.as_tensor(features, dtype=torch.float32, device=device).unsqueeze(0)
+        with torch.no_grad():
+            distribution = self.model(x)
+            support = torch.linspace(
+                -1.0,
+                1.0,
+                int(self.num_atoms),
+                dtype=torch.float32,
+                device=device,
+            )
+            q_values = torch.sum(distribution * support.view(1, 1, -1), dim=-1)
+        advantages = q_values.detach().cpu().numpy()[0].astype(np.float64)
+        legal = np.asarray(legal_mask, dtype=np.float64)
+        if float(legal.sum()) <= 0.0:
+            return advantages, np.ones(N_ACTIONS, dtype=np.float64) / float(N_ACTIONS)
+        masked = np.where(legal > 0, advantages, -1.0e9)
+        shifted = masked - float(np.max(masked))
+        probs = np.exp(shifted) * legal
+        total = float(probs.sum())
+        strategy = probs / total if total > 0.0 else legal / float(legal.sum())
+        return advantages, strategy
+
+
+def _rainbow_state_dicts_by_seat_from_payload(payload):
+    if payload.get("shared_model_state_dict") is not None:
+        shared = payload["shared_model_state_dict"]
+        return {0: shared, 1: shared}
+    if "agent_model_state_dicts" in payload:
+        agent_state_dicts = payload["agent_model_state_dicts"]
+        fallback_key = "player_0" if "player_0" in agent_state_dicts else sorted(agent_state_dicts)[0]
+        return {
+            seat: agent_state_dicts.get(f"player_{seat}", agent_state_dicts[fallback_key])
+            for seat in (0, 1)
+        }
+    if "model_state_dict" in payload:
+        shared = payload["model_state_dict"]
+        return {0: shared, 1: shared}
+    raise ValueError("Rainbow checkpoint is missing a loadable model state dict")
+
+
+def _detect_model_kind(path):
+    payload = torch.load(str(path), map_location="cpu", weights_only=False)
+    if isinstance(payload, dict):
+        algorithm = str(payload.get("algorithm", "")).lower()
+        has_rainbow_state = any(
+            key in payload
+            for key in ("model_state_dict", "shared_model_state_dict", "agent_model_state_dicts")
+        )
+        if (
+            "rainbow" in algorithm
+            or (has_rainbow_state and payload.get("num_atoms") is not None)
+        ):
+            return "tianshou-rainbow"
+    return "deep-cfr"
+
+
+def _load_tianshou_rainbow_choice(path, device):
+    payload = torch.load(str(path), map_location=device, weights_only=False)
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("Rainbow checkpoint action count does not match Slumbot action contract")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("Rainbow checkpoint feature count does not match Slumbot feature contract")
+    hidden_dim = int(payload.get("hidden_dim", 128))
+    num_atoms = int(payload.get("num_atoms", 51))
+    state_dicts = _rainbow_state_dicts_by_seat_from_payload(payload)
+    # Slumbot features are already built from our current-player perspective, so
+    # use the shared/player-0 policy as the direct native action-value model.
+    state_dict = state_dicts.get(0, next(iter(state_dicts.values())))
+    model = _RainbowDistributionNetForSlumbot(
+        hidden_dim=hidden_dim,
+        num_atoms=num_atoms,
+        device=device,
+    ).to(device)
+    model.load_state_dict(state_dict)
+    model.eval()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    metadata = {
+        "checkpoint": str(path),
+        "checkpoint_kind": "tianshou-rainbow",
+        "algorithm": payload.get("algorithm", "tianshou_rainbow_dqn"),
+        "hidden_dim": hidden_dim,
+        "num_atoms": num_atoms,
+        "num_actions": int(payload.get("num_actions", N_ACTIONS)),
+        "num_features": int(payload.get("num_features", N_FEATURES)),
+    }
+    return SlumbotModelChoice(
+        value_net=TianshouRainbowSlumbotPolicy(model, num_atoms=num_atoms),
+        metadata=metadata,
+    )
 
 
 class ActionDiagnostics:
@@ -1431,8 +1569,16 @@ def _remap_legacy_state_dict(state: dict) -> dict:
     return remapped
 
 
-def _load_single_model_choice(path, device, *, strategy_source):
+def _load_single_model_choice(path, device, *, strategy_source, model_kind="auto"):
     """Load one checkpoint through the shared evaluation loader."""
+    resolved_kind = _detect_model_kind(path) if model_kind == "auto" else str(model_kind)
+    if resolved_kind == "tianshou-rainbow":
+        if strategy_source != "regret":
+            raise ValueError("tianshou-rainbow Slumbot adapter supports only --strategy-source regret")
+        return _load_tianshou_rainbow_choice(path, device)
+    if resolved_kind != "deep-cfr":
+        raise ValueError(f"Unknown Slumbot model kind: {resolved_kind}")
+
     from poker_ai.research.evaluation import (
         assert_strategy_source_supported,
         load_value_network_checkpoint,
@@ -1448,6 +1594,8 @@ def _load_model_selector(args, device):
     """Build a per-hand model selector for either single-checkpoint or SD-CFR mixture play."""
     patterns = [*args.model_glob, *args.model_checkpoint]
     if patterns:
+        if args.model_kind == "tianshou-rainbow":
+            raise ValueError("tianshou-rainbow Slumbot adapter currently supports only --model")
         from poker_ai.research.sd_cfr_mixture import (
             discover_checkpoint_paths,
             load_checkpoint_policy_set,
@@ -1481,6 +1629,7 @@ def _load_model_selector(args, device):
         args.model,
         device,
         strategy_source=args.strategy_source,
+        model_kind=args.model_kind,
     )
     return PerHandCheckpointSelector([choice], weights=[1.0], seed=args.mixture_seed)
 
@@ -1488,6 +1637,12 @@ def _load_model_selector(args, device):
 def main():
     parser = argparse.ArgumentParser(description='Play against Slumbot')
     parser.add_argument('--model', type=str, help='Model checkpoint path')
+    parser.add_argument(
+        '--model-kind',
+        choices=('auto', 'deep-cfr', 'tianshou-rainbow'),
+        default='auto',
+        help='Checkpoint family for --model. auto detects native Rainbow checkpoints.',
+    )
     parser.add_argument(
         '--model-glob',
         action='append',
@@ -1566,6 +1721,8 @@ def main():
             mode_str += f"+budget-{args.solver_budget_profile}"
     if args.strategy_source != "regret":
         mode_str += f"+{args.strategy_source}"
+    if args.model_kind != "auto":
+        mode_str += f"+model-{args.model_kind}"
     has_mixture = bool(args.model_glob or args.model_checkpoint)
     if has_mixture:
         mode_str += "+sd-cfr-mixture"
@@ -1576,6 +1733,7 @@ def main():
             print(f"Model pattern: {pattern}")
     else:
         print(f"Model: {args.model}")
+        print(f"Model kind: {args.model_kind}")
     print("=" * 60)
 
     if not args.model and not has_mixture:
@@ -1592,7 +1750,9 @@ def main():
         print(
             "Loaded model "
             f"(iter {meta.get('checkpoint_iteration')}, "
-            f"hidden={meta.get('hidden_dim')}, layers={meta.get('n_layers')})"
+            f"hidden={meta.get('hidden_dim')}, "
+            f"layers={meta.get('n_layers')}, "
+            f"kind={meta.get('checkpoint_kind', 'deep-cfr')})"
         )
     else:
         print(f"Loaded SD-CFR mixture with {model_selector.size} checkpoints")
@@ -1639,13 +1799,19 @@ def main():
 
     print()
     print("=" * 60)
-    avg = np.mean(results)
-    se = np.std(results) / np.sqrt(len(results))
+    if results:
+        avg = float(np.mean(results))
+        se = float(np.std(results) / np.sqrt(len(results)))
+        win_rate = float(np.mean(np.array(results) > 0) * 100.0)
+    else:
+        avg = 0.0
+        se = 0.0
+        win_rate = 0.0
     mbb_per_hand = avg / BIG_BLIND * 1000  # milli-big-blinds per hand
     print(f"FINAL: {args.hands} hands | {total_winnings:+d} chips")
     print(f"  Avg: {avg:+.0f} +/- {1.96*se:.0f} chips/hand")
     print(f"  Rate: {mbb_per_hand:+.0f} mbb/hand")
-    print(f"  Win rate: {np.mean(np.array(results) > 0)*100:.1f}%")
+    print(f"  Win rate: {win_rate:.1f}%")
     for line in diagnostics.format_summary_lines():
         print(line)
     print("=" * 60)

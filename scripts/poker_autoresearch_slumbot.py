@@ -22,6 +22,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run a Slumbot smoke evaluation.")
     parser.add_argument("--model")
     parser.add_argument(
+        "--model-kind",
+        choices=("auto", "deep-cfr", "tianshou-rainbow"),
+        default="auto",
+    )
+    parser.add_argument(
         "--model-glob",
         action="append",
         default=[],
@@ -78,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if args.model:
         command.extend(["--model", args.model])
+        if args.model_kind != "auto":
+            command.extend(["--model-kind", args.model_kind])
     for pattern in args.model_glob:
         command.extend(["--model-glob", pattern])
     for checkpoint in args.model_checkpoint:

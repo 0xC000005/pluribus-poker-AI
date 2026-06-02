@@ -163,9 +163,12 @@ def evaluate_native_candidate_local_precheck(
     external_blockers = [
         "rlcard_reference_evidence_missing",
         "slumbot_confidence_not_authorized_by_native_only_precheck",
+        "held_out_slumbot_smoke_missing",
     ]
-    if "tianshou-rainbow" in candidate_kinds:
-        external_blockers.append("slumbot_adapter_missing_for_tianshou_rainbow")
+    slumbot_supported_kinds = {"deep-cfr", "tianshou-rainbow"}
+    unsupported_kinds = sorted(kind for kind in candidate_kinds if kind not in slumbot_supported_kinds)
+    if unsupported_kinds:
+        external_blockers.append("slumbot_adapter_missing_for_candidate_kind")
 
     return {
         "algorithm": "native_candidate_local_precheck",
@@ -178,6 +181,7 @@ def evaluate_native_candidate_local_precheck(
         "formal_dual_surface_gate_required": True,
         "candidate_checkpoint": candidate,
         "candidate_kinds": sorted(candidate_kinds),
+        "slumbot_supported_candidate_kinds": sorted(slumbot_supported_kinds),
         "min_lower95": float(min_lower95),
         "min_candidate_support": float(min_candidate_support),
         "checks": {
@@ -191,7 +195,6 @@ def evaluate_native_candidate_local_precheck(
         "uses_alphanlholdem_training_data": False,
         "next_required_evidence": [
             "same-philosophy RLCard-native AlphaHoldem reference evidence or explicit workflow decision that native Slumbot can proceed without it",
-            "Slumbot-compatible adapter for the candidate checkpoint kind",
             "held-out Slumbot smoke/confidence evaluation after formal gate approval",
         ],
     }

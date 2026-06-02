@@ -60,7 +60,8 @@ def test_native_candidate_local_precheck_passes_local_but_blocks_external(tmp_pa
     assert metrics["slumbot_confidence_eligible"] is False
     assert metrics["local_blockers"] == []
     assert "rlcard_reference_evidence_missing" in metrics["external_promotion_blockers"]
-    assert "slumbot_adapter_missing_for_tianshou_rainbow" in metrics["external_promotion_blockers"]
+    assert "held_out_slumbot_smoke_missing" in metrics["external_promotion_blockers"]
+    assert "slumbot_adapter_missing_for_candidate_kind" not in metrics["external_promotion_blockers"]
 
 
 def test_native_candidate_local_precheck_fails_bad_lower_bound(tmp_path):
