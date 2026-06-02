@@ -15094,7 +15094,6 @@
 - Summary: Implemented a JBR-style joint-experience dataset contract and generated a real CUDA artifact from the frozen local incumbent meta-policy: 32 local hands, 65 transitions, observation/next-observation/mask/next-mask/action/done arrays, 9-action/126-feature schema, zero truncated hands, uses_slumbot_training_data=false, promotion=false. This is data-contract evidence only; next work must connect the dataset to a maintained response-oracle trainer and parent/population H2H gate.
 - Metrics file: autoresearch-session/joint_experience/incumbent_meta_joint32_seed20260533.json
 - Key metrics: `{"gate": null, "passed": null}`
-
 ## 20260527T164954Z-methodology-review-for-jbr-style-joint-experience-response - passed
 
 - Timestamp: 2026-05-27T16:49:54Z
@@ -18380,3 +18379,13 @@
 - Summary: The new 20k Global-PSRO response candidate retained a strong confidence edge over the previous active 20k support: 10,000 duplicate-swapped H2H games, mean=+0.040936, lower95=+0.032377, upper95=+0.049495, 244.19 games/sec, native 9-action full-deck environment, 20,000-chip stack, no Slumbot training data. This confirms the candidate as the current local 20k support lead, but it remains internal local evidence rather than Slumbot/SOTA proof.
 - Metrics file: autoresearch-session/native_neural_nashpg/global_psro_response_to_20k_support_vs_prev_support_h2h_10000_seed20260860.json
 - Key metrics: `{"gate": null, "passed": true}`
+## 20260602T060537Z-a-second-reviewed-global-psro-style-compiled-rainbow - passed
+
+- Timestamp: 2026-06-02T06:05:47Z
+- Type: experiment
+- Gate: 20k_global_psro_iter2_population_expansion
+- Hypothesis: A second reviewed Global-PSRO-style compiled Rainbow response trained against the current local 20k support should improve the expanded 20k empirical-game population and retain a positive 10k confidence edge over its parent support.
+- Failure class: none
+- Summary: The second Global-PSRO-style compiled Rainbow response trained on CUDA from 66,204 local 20k transitions against the current support. It passed support H2H versus iteration 1 at 2k games (mean=+0.027132, lower95=+0.013057) and 10k confidence (mean=+0.025165, lower95=+0.018661). The complete seven-policy empirical game solved to pure support on iteration 2. Historical edges were mixed at 2k confidence (iter2 lower95=-0.001130; old iter4 lower95=-0.002642), but the solved population support and parent-confidence gate both passed. This is local population progress only, not Slumbot/SOTA proof.
+- Metrics file: autoresearch-session/empirical_game/native_20k_global_psro_iter2_expansion_seed20260867.json
+- Key metrics: `{"gate": null, "passed": null}`
