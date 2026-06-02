@@ -119,8 +119,12 @@ existing duplicate-swapped H2H and league gates. Treat both bridges as plumbing
 evidence only. The next promotion question is whether a scaled native R-NaD
 run improves against parents/population controls in H2H and empirical-game
 gates. The first scaled probe (`500x512`, seed `20260605`) cleared the parent
-H2H lower95 gate, so the immediate next gate is population/empirical-game
-support, not Slumbot.
+H2H lower95 gate but failed the required population gate: it lost to saved
+native NFSP and Rainbow controls, and the child/parent/NFSP empirical game
+solved to pure NFSP support. This makes the candidate non-promotable. The next
+R-NaD step must change the population/self-play regime or train
+multi-generation candidates that beat saved native controls before Slumbot or
+RLCard evaluation.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:

@@ -17409,3 +17409,19 @@
 - Inconclusive H2H file: autoresearch-session/native_rnad/rnad_compiled_native_child_vs_parent_h2h_1000_seed20260605.json
 - Key metrics: `{"passed": true, "resolved_device": "cuda", "train_iterations": 500, "n_samples": 888090, "train_seconds": 31.94649854000454, "samples_per_second": 27799.29070749028, "rnad_loss_is_finite": true, "compiled_needs_python_showdown": 0, "illegal_records": 0, "target_policy_mean_l1_vs_parent": 0.08422026038169861, "h2h_1000_mean_candidate_payoff": 0.015772, "h2h_1000_lower95_candidate_payoff": -0.0001357044512131124, "h2h_5000_mean_candidate_payoff": 0.018397800000000002, "h2h_5000_lower95_candidate_payoff": 0.011623093375971349, "promotion": false}`
 - Decision: first native R-NaD generation-over-generation gate is positive. Do not evaluate Slumbot yet; require population/empirical-game support and at least one comparison against saved native controls before public or held-out evaluation.
+
+## 20260602T002548Z-the-scaled-native-r-nad-child-that-beats - failed
+
+- Timestamp: 2026-06-02T00:25:58Z
+- Type: evaluation
+- Gate: native_rnad_population_empirical_game
+- Hypothesis: The scaled native R-NaD child that beats its parent should retain support when evaluated against saved native controls in a local empirical game.
+- Failure class: self_play_strength
+- Summary: Population gate failed for the scaled native R-NaD child. The child beat its initial parent, but lost clearly to the native NFSP population control (mean=-0.0742895, lower95=-0.097575) and also lost to the fast-state Rainbow control (mean=-0.1211655, lower95=-0.144289). A complete child/parent/NFSP empirical game solved to pure NFSP support with zero support for the R-NaD child. Therefore the candidate is not promotable to Slumbot/RLCard; next work should improve the R-NaD population/self-play regime or compare multi-generation R-NaD against controls before public evaluation.
+- Metrics file: autoresearch-session/empirical_game/rnad500_parent_nfsp_matrix_seed20260609.json
+- Parent H2H file: autoresearch-session/native_rnad/rnad_compiled_native_child_vs_parent_h2h_5000_seed20260606.json
+- NFSP H2H file: autoresearch-session/native_rnad/rnad500_vs_nfsp_population_dueling_h2h_2000_seed20260607.json
+- Rainbow H2H file: autoresearch-session/native_rnad/rnad500_vs_fast_rainbow_h2h_2000_seed20260608.json
+- Parent-vs-NFSP H2H file: autoresearch-session/native_rnad/rnad_parent500_vs_nfsp_population_dueling_h2h_2000_seed20260609.json
+- Key metrics: `{"candidate_parent_lower95": 0.011623093375971349, "candidate_vs_nfsp_mean": -0.07428950000000001, "candidate_vs_nfsp_lower95": -0.09757499776922332, "candidate_vs_rainbow_mean": -0.12116550000000001, "candidate_vs_rainbow_lower95": -0.14428881088113726, "parent_vs_nfsp_mean": -0.09671900000000001, "parent_vs_nfsp_lower95": -0.12061486868196862, "empirical_off_diagonal_coverage": 1.0, "empirical_meta_strategy": [0.0, 0.0, 1.0], "candidate_support": 0.0, "promotion": false}`
+- Decision: this R-NaD generation is useful evidence that the compiled learner can improve over a weak parent, but it is not a local incumbent and must not route to Slumbot or RLCard AlphaNLHoldem gates. Next work should change the population/self-play regime or train multi-generation R-NaD against stronger local controls before another promotion attempt.
