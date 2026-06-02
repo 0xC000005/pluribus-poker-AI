@@ -18413,3 +18413,25 @@
 - Summary: Gate failure-synthesis-20260602T060757Z-20k-global-psro-response-loop-saturated-at-iteration passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T060828Z-failure-synthesis-for-20k-global-psro-response-loop/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T060757Z-20k-global-psro-response-loop-saturated-at-iteration", "passed": true}`
+
+## 20260602T061048Z-a-broader-equal-mixture-response-against-iteration2-iteration1 - failed
+
+- Timestamp: 2026-06-02T06:10:56Z
+- Type: experiment
+- Gate: 20k_global_psro_meta_response_parent_h2h
+- Hypothesis: A broader equal-mixture response against iteration2, iteration1, and prior 20k support should beat the current iteration2 support before expanded matrix work.
+- Failure class: strategy_quality
+- Summary: The broader equal-mixture response trained mechanically on CUDA from 67,140 local 20k transitions against iteration2/iteration1/prior20k support, but failed parent H2H versus iteration2 support: 2,000 duplicate-swapped games, mean=-0.016322, lower95=-0.031493, upper95=-0.001151. This falsifies the simple equal-mixture meta-policy response at this budget; do not rescue it by changing mixture weights without a new expansion-quality selector or methodology review.
+- Metrics file: autoresearch-session/native_neural_nashpg/global_psro_meta_response_20k_vs_iter2_h2h_2000_seed20260872.json
+- Key metrics: `{"gate": null, "passed": false}`
+
+## 20260602T061350Z-failure-synthesis-for-20k-meta-policy-response-failed - passed
+
+- Timestamp: 2026-06-02T06:13:50Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T061103Z-20k-meta-policy-response-failed-after-psro-iteration2
+- Hypothesis: Failure synthesis for 20k meta-policy response failed after PSRO iteration2 lead should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T061103Z-20k-meta-policy-response-failed-after-psro-iteration2 passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T061350Z-failure-synthesis-for-20k-meta-policy-response-failed/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T061103Z-20k-meta-policy-response-failed-after-psro-iteration2", "passed": true}`
