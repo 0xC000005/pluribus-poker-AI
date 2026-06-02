@@ -19160,3 +19160,116 @@
 - Verification:
   - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T095550Z-native-20k-post-saturation-population-learning-branch --require-complete` -> passed with decision `revise`.
 - Decision: Before any new candidate training, resolve the true current local 20k lead from AGENTS.md, RESEARCH_LOG.md, and the session ledger. The next branch must predeclare fixed candidate budget, support set, seeds, and pass/fail gates, then improve measured local self-play league strength against PPO-inner gen2. Do not use Slumbot/RLCard feedback, stale support, identical single-support chains, simple mixture-weight tuning, or unchanged plain PPO-inner continuation.
+
+## 20260602T141500Z-native-ppo-inner-fixed-parent-reference-plan - planned
+
+- Timestamp: 2026-06-02T14:15:00Z
+- Type: predeclared_experiment
+- Gate: native_ppo_inner_fixed_parent_reference_vs_gen2
+- Hypothesis: The PPO-inner NashPG gen3 failures may be caused by the moving reference policy tracking the learner too quickly after gen2, weakening the multi-round regularization object. A fixed-parent-reference continuation from PPO-inner gen2 should better match the NashPG idea of optimizing against a stable reference policy within a round. This is a general game-theoretic regularization test, not a poker-specific heuristic.
+- Controls: train only in the native 9-action local simulator with `initial_chips=20000`, `max_steps_per_game=64`, checkpoint-in and fixed reference both set to `native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.pt`, the same PPO-inner settings as the previous gen3 attempts, and no Slumbot/AlphaNLHoldem/solver-label data. Compare against the same-budget moving-reference gen3 failures and the 256x compute-scaling falsifier already logged.
+- Decision rule: the branch is locally promotable only if the candidate has positive lower95 H2H versus PPO-inner gen2 over 10k duplicate-swapped games and passes action sanity. If it fails, do not tune the reference weight/update schedule; record the fixed-reference falsifier and pivot to a genuinely different counterfactual-compatible or population-objective learner.
+
+## 20260602T142500Z-native-ppo-inner-fixed-parent-reference - failed
+
+- Timestamp: 2026-06-02T14:25:00Z
+- Type: experiment
+- Gate: native_ppo_inner_fixed_parent_reference_vs_gen2
+- Hypothesis: A fixed-parent-reference PPO-inner NashPG continuation from gen2 should better match the NashPG multi-round regularization idea than the previous moving-reference gen3 runs and should improve over PPO-inner gen2 if reference drift was the main cause of gen3 failure.
+- Failure class: native_objective_repeatability
+- Summary: Trained a 64x2048 native PPO-inner continuation from gen2 with `reference_policy_checkpoint` fixed to gen2. Training was CUDA-backed and legal (`414030` samples, `22059.587` samples/sec, `moving_reference=false`, `reference_updates=0`, zero illegal action probability, zero Python showdown fallback). The 10k parent gate failed: mean payoff versus gen2 was effectively zero (`+0.000023`) with lower95 `-0.003065`. Action sanity passed with all 9 actions represented, top action fraction `0.340956`, mean entropy `1.460171`. This falsifies fixed parent reference as a sufficient repair for the post-gen2 repeatability gap.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_fixed_parent_ref_from_gen2_64x2048_seed20260742.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_fixed_parent_ref_vs_gen2_h2h_10k_seed20260743.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_fixed_parent_ref_action_distribution_seed20260744.json
+- Key metrics: `{"train_samples": 414030, "samples_per_second": 22059.587, "moving_reference": false, "reference_updates": 0, "mean_reference_kl": 0.022997, "h2h_vs_gen2_mean": 0.000023, "h2h_vs_gen2_lower95": -0.003065, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.340956, "uses_slumbot_training_data": false}`
+- Verification:
+  - Native fixed-reference train command -> passed and wrote CUDA metrics/checkpoint.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py ... --baseline native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.pt --n-games 10000 --min-lower95-candidate-payoff 0.0` -> failed as expected with exit code 1 and wrote metrics.
+  - Action-distribution diagnostic -> passed.
+- Decision: Do not tune the reference schedule or weight for promotion. The next question is whether the current PPO-inner gen2 incumbent is itself reproducible or a single-seed artifact. Run a fixed repeatability audit from gen1 before inventing another objective.
+
+## 20260602T142800Z-failure-synthesis-for-fixed-parent-reference - passed
+
+- Timestamp: 2026-06-02T14:28:00Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T100803Z-fixed-parent-reference-ppo-inner-nashpg-failed-to
+- Hypothesis: The fixed-parent-reference failure synthesis should identify a causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Completed the synthesis bundle. The causal model is that PPO-inner NashPG reached a useful gen2 checkpoint but no tested post-gen2 variant has provided reliable population improvement. Retired hypotheses include stale-support response, identical response chains, equal-mixture response, compute-only scaling, fixed parent reference, and action collapse. The live concern is that PPO-inner gen2 may be a single-seed artifact.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T100803Z-fixed-parent-reference-ppo-inner-nashpg-failed-to-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T100803Z-fixed-parent-reference-ppo-inner-nashpg-failed-to-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "next_test": "gen2_repeatability_audit_from_gen1", "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T100803Z-fixed-parent-reference-ppo-inner-nashpg-failed-to-synthesis` -> passed with decision `revise`.
+- Decision: Run a fixed gen2-repeatability audit from PPO-inner gen1 using the exact successful gen2 recipe and two fresh seeds, then combine those results with the original gen2 seed. If the transition is not repeatable, demote single-checkpoint gen2 promotion evidence and pivot to multi-seed or exploitability-like gates before further native scaling.
+
+## 20260602T143000Z-native-ppo-inner-gen2-repeatability-audit-plan - planned
+
+- Timestamp: 2026-06-02T14:30:00Z
+- Type: predeclared_experiment
+- Gate: native_ppo_inner_gen2_repeatability_from_gen1
+- Hypothesis: If PPO-inner NashPG gen2 is a genuine local self-play improvement step rather than a lucky single seed, then two fresh same-budget continuations from gen1 using the exact successful gen2 recipe should also beat gen1 with positive lower95 H2H and pass action sanity. Together with the original seed, this forms a three-seed transition audit.
+- Controls: checkpoint-in `native_ppo_inner_nashpg_64x2048_seed20260687.pt`, no frozen opponents, moving reference with `reference_update_every=2`, same PPO-inner hyperparameters as original gen2, native 20k simulator only, no Slumbot/AlphaNLHoldem/solver-label data. Evaluate each fresh seed against gen1 over 10k duplicate-swapped native H2H and action sanity.
+- Decision rule: if both fresh seeds pass positive lower95 versus gen1, keep PPO-inner gen2 as a reproducible local incumbent and move to post-gen2 objective work. If either fresh seed fails, mark gen2 promotion as not robust enough for external evaluation and require multi-seed promotion gates before any future local incumbent claim.
+
+## 20260602T144000Z-native-ppo-inner-gen2-repeatability-audit - failed
+
+- Timestamp: 2026-06-02T14:40:00Z
+- Type: experiment
+- Gate: native_ppo_inner_gen2_repeatability_from_gen1
+- Hypothesis: The PPO-inner gen2 transition should reproduce across fresh training seeds if the original gen2 promotion is a reliable local self-play improvement step rather than a seed artifact.
+- Failure class: training_seed_repeatability
+- Summary: Ran the predeclared repeatability audit. Two fresh same-budget continuations from PPO-inner gen1 used the exact original gen2 recipe: native 20k simulator, 64x2048, PPO-inner, player GAE, moving reference update every 2 iterations, no frozen opponents, no Slumbot/AlphaNLHoldem/solver-label data. Both trainings were CUDA-backed, legal, and broad-action. Both fresh seeds had mildly positive mean H2H versus gen1 but failed the positive lower95 rule. Combined with the original seed, only 1 of 3 gen2-transition seeds passed. This means PPO-inner gen2 remains the best local checkpoint but is not robust enough as a reliable generation-improvement operator or for external evaluation.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_vs_gen1_h2h_10k_seed20260698.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_repeat_from_gen1_64x2048_seed20260745.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_repeat_seed20260745_vs_gen1_h2h_10k_seed20260746.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_repeat_seed20260745_action_distribution.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_repeat_from_gen1_64x2048_seed20260748.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_repeat_seed20260748_vs_gen1_h2h_10k_seed20260749.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_repeat_seed20260748_action_distribution.json
+- Key metrics: `{"original_gen2_mean": 0.007089, "original_gen2_lower95": 0.002812, "repeat_20260745_mean": 0.003573, "repeat_20260745_lower95": -0.000857, "repeat_20260748_mean": 0.003800, "repeat_20260748_lower95": -0.000724, "transition_pass_count": 1, "transition_seed_count": 3, "mean_of_means": 0.004821, "fresh_action_gates_passed": true, "uses_slumbot_training_data": false}`
+- Verification:
+  - Two fresh native train commands -> passed on CUDA and wrote metrics/checkpoints.
+  - Two 10k duplicate-swapped H2H commands versus gen1 -> completed with exit code 1 due failed positive-lower95 gates and wrote metrics.
+  - Two action-distribution diagnostics -> passed with all 9 actions represented.
+- Decision: Demote PPO-inner gen2 from "reproducible local incumbent" to "best observed local checkpoint, not externally promotable." Do not run Slumbot/RLCard. Future local incumbent claims require multi-seed transition gates, not one lucky checkpoint. The next mechanism must improve training-seed repeatability through a genuinely different game-theoretic objective or estimator, not by tuning H2H sample size, action distribution, reference schedule, or compute-only continuation.
+
+## 20260602T144500Z-failure-synthesis-for-ppo-inner-gen2-repeatability - passed
+
+- Timestamp: 2026-06-02T14:45:00Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T101248Z-ppo-inner-gen2-transition-failed-multi-seed-repeatability
+- Hypothesis: The PPO-inner gen2 repeatability failure synthesis should identify the causal model and one next falsifier before another native training branch.
+- Failure class: none
+- Summary: Completed the synthesis bundle. The causal model is that PPO-inner NashPG can produce a strong local checkpoint on one seed, but the same transition does not reliably clear parent H2H across fresh seeds. The next branch must target update/objective repeatability rather than action collapse, H2H sample count, stale support, reference schedule, or compute-only continuation.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T101248Z-ppo-inner-gen2-transition-failed-multi-seed-repeatability-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T101248Z-ppo-inner-gen2-transition-failed-multi-seed-repeatability-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "repeatability_pass_count": 1, "repeatability_seed_count": 3, "next_required_gate": "methodology_review_for_counterfactual_or_sequence_form_learner", "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T101248Z-ppo-inner-gen2-transition-failed-multi-seed-repeatability-synthesis` -> passed with decision `revise`.
+- Decision: Queue a methodology review for a genuinely different game-theoretic learner, such as a counterfactual-compatible stochastic policy-gradient estimator, faithful sequence-form/NashPG/MMD bridge, or maintained R-NaD-style objective. The review must require exact small-game gates and native multi-seed transition gates before any incumbent or external evaluation claim.
+
+## 20260602T145000Z-methodology-review-for-counterfactual-compatible-multiseed-learner - passed
+
+- Timestamp: 2026-06-02T14:50:00Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo
+- Hypothesis: The next branch after PPO-inner gen2 repeatability failure should be reviewed before implementation and should require a different game-theoretic estimator/objective plus multi-seed gates.
+- Failure class: none
+- Summary: Completed the methodology review. The decision is `revise`: the pivot away from unchanged PPO-inner continuation is justified, but the next branch must be made concrete before implementation. Related work supports this framing: NashPG motivates stochastic policy-gradient regularization, IIG PPO benchmarks keep policy gradient in scope, policy-gradient theory for IIGs emphasizes counterfactual-compatible objectives, and DeepNash/R-NaD keeps model-free regularized dynamics in scope. The review requires exact small-NLHE last-policy NashConv against learner-source R-NaD before native scaling, then native 20k multi-seed parent/control H2H and empirical-game insertion before any local incumbent or external evaluation claim.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo/review.md
+  - autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo/related_work.md
+  - autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo/benchmark_audit.md
+  - autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo/mechanism_review.md
+  - autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo/review_scope.json
+  - autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo/decision.json
+- Key metrics: `{"decision": "revise", "methodology_review_passed": true, "requires_exact_small_game_gate": true, "requires_native_multiseed_gate": true, "external_evaluation_blocked": true, "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo --require-complete` -> passed with decision `revise`.
+- Decision: The next implementation branch must specify one concrete estimator. It should not start by tuning PPO-inner hyperparameters. Candidate directions are: exact small-game counterfactual-compatible stochastic PG reproduction, faithful sequence-form/NashPG/MMD bridge, or maintained R-NaD-style objective. Native scaling is blocked until the exact small-game comparator is passed.
