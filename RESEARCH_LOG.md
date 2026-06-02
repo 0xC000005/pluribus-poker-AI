@@ -18876,3 +18876,28 @@
   - 3k NFSP H2H command above -> passed with positive lower95.
   - Complete 4-policy empirical-game command above -> solved with row/column support `[1.0, 0.0, 0.0, 0.0]`.
 - Decision: promote `autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_seed20260687.pt` to the current local incumbent for native 9-action self-play gates. This is not Slumbot/RLCard/SOTA evidence. The next cycle should test continuation or population robustness from this incumbent and keep external evaluation blocked until those gates stay positive.
+
+## 20260602T100000Z-native-ppo-inner-nashpg-gen2-continuation - passed
+
+- Timestamp: 2026-06-02T10:00:00Z
+- Type: experiment
+- Gate: native_ppo_inner_nashpg_gen2_local_league
+- Hypothesis: If the 64x PPO-inner NashPG local incumbent is a real self-play improvement rather than a one-off seed artifact, then continuing from it with the same fixed 64x2048 native PPO-inner update should beat the parent under a higher-confidence duplicate-swapped H2H gate while preserving local control wins and broad legal action use.
+- Failure class: none
+- Summary: Continued training from the 64x PPO-inner local incumbent for another `64x2048` native 20k-chip generation. Training stayed CUDA-backed (`395967` samples, `26432.505` samples/sec, zero illegal probability, zero Python showdown fallback). The first 3k parent H2H was positive but underpowered (`mean=+0.005301`, lower95 `-0.002791`), so the parent gate was repeated at 10k duplicate-swapped games; gen2 passed with `mean=+0.007089`, lower95 `+0.002812`. Gen2 also beat the previous Rainbow incumbent (`mean=+0.019099`, lower95 `+0.006723` over 3k), saved native NFSP (`mean=+0.034912`, lower95 `+0.018639` over 3k), and the older 8x PPO-inner generation (`mean=+0.033584`, lower95 `+0.018736` over 3k). Action distribution remained broad (`9` distinct actions, top-action fraction `0.364362`, mean entropy `1.474725`). A complete 5-policy empirical game over gen2, gen1, 8x PPO-inner, Rainbow, and NFSP solved to pure support on gen2.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_vs_gen1_h2h_10k_seed20260698.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_vs_rainbow_h2h_3k_seed20260696.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_vs_nfsp_h2h_3k_seed20260697.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_vs_8x2048_h2h_3k_seed20260699.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_action_distribution_seed20260694.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_empirical_game_5policy_seed20260696_99.json
+- Key metrics: `{"train_samples": 395967, "samples_per_second": 26432.505, "h2h_vs_parent_10k_mean": 0.007089, "h2h_vs_parent_10k_lower95": 0.002812, "h2h_vs_rainbow_3k_mean": 0.019099, "h2h_vs_rainbow_3k_lower95": 0.006723, "h2h_vs_nfsp_3k_mean": 0.034912, "h2h_vs_nfsp_3k_lower95": 0.018639, "h2h_vs_8x_3k_mean": 0.033584, "h2h_vs_8x_3k_lower95": 0.018736, "empirical_game_support": [1.0, 0.0, 0.0, 0.0, 0.0], "action_gate_passed": true, "promotion": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - Gen2 continuation train command -> passed and wrote checkpoint/metrics.
+  - 10k parent H2H command -> passed with positive lower95 after the initial 3k check was inconclusive.
+  - 3k Rainbow, NFSP, and 8x H2H commands -> passed with positive lower95.
+  - Action-distribution diagnostic -> passed with all 9 actions selected.
+  - Complete 5-policy empirical-game command -> solved with row/column support `[1.0, 0.0, 0.0, 0.0, 0.0]`.
+- Decision: promote `autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.pt` to the current local native incumbent. This is a meaningful generation-over-generation local self-play result, not Slumbot/RLCard/SOTA evidence. Keep external evaluation quarantined until repeated native continuation or multi-seed robustness and environment-native RLCard reference gates are in place.

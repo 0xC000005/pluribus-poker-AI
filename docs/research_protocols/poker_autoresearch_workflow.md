@@ -462,6 +462,15 @@ pure candidate support. This advances the local incumbent, but still does not
 authorize Slumbot or RLCard claims; the next cycle must test generation-to-
 generation continuation/population robustness and only then consider external
 held-out evaluation gates.
+That continuation gate now passed: gen2 initialized from the 64x incumbent,
+trained for the same `64x2048` native PPO-inner budget, beat its parent at 10k
+duplicate-swapped H2H (`mean=+0.007089`, lower95 `+0.002812`), beat Rainbow and
+NFSP controls at 3k with positive lower95, passed broad action-distribution
+sanity, and solved a complete 5-policy empirical game to pure gen2 support.
+This makes gen2 the current local native incumbent. It is still internal
+league evidence only; Slumbot/RLCard confidence remains quarantined until
+repeated or multi-seed native robustness and environment-native external gates
+are documented.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
