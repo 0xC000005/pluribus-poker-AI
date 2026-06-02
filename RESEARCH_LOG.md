@@ -18926,3 +18926,20 @@
   - Three 10k parent H2H commands -> completed; all failed the positive-lower95 promotion requirement.
   - Three action-distribution diagnostics -> passed; all selected all 9 actions.
 - Decision: keep `autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.pt` as the local incumbent, but do not repeat same-budget plain PPO-inner continuation from gen2 unchanged. The next principled step is a failure synthesis/related-work pivot inside the same tabula-rasa self-play philosophy: either an empirical-game/population-aware objective, a larger predeclared training budget with multi-seed promotion gates, or an R-NaD/NashPG/MMD-style update that directly targets repeatable population improvement rather than one-step parent imitation.
+
+## 20260602T102000Z-ppo-inner-repeatability-synthesis-and-population-response-plan - passed
+
+- Timestamp: 2026-06-02T10:20:00Z
+- Type: synthesis
+- Gate: native_ppo_inner_repeatability_failure_synthesis
+- Hypothesis: The gen3 repeatability failure means plain same-budget continuation is updating both seats around a narrow incumbent distribution and no longer produces a reliable improved policy. A more principled next test is a local population-response update: freeze the current local population as the environment, keep the learner initialized from gen2 and KL-regularized to gen2, and train only from local simulator observations, legal actions, and rewards.
+- Failure class: none
+- Related work:
+  - DeepNash/R-NaD frames the problem as modifying multi-agent learning dynamics so self-play converges toward an approximate equilibrium rather than cycling; it is model-free and search-free, which matches the tabula-rasa preference. Source: https://arxiv.org/abs/2206.15378
+  - Reevaluating Policy Gradient Methods for Imperfect-Information Games reports that generic deep policy-gradient methods such as PPO can be competitive with FP/DO/CFR-based methods when evaluated by exact exploitability, so the failed repeatability gate should not force us away from PPO-style updates yet. Source: https://openreview.net/forum?id=vClBDezZUo
+  - Policy-gradient theory for imperfect-information extensive-form games emphasizes regularized alternating policy-gradient convergence to approximate Nash equilibria, supporting a regularized policy-gradient family rather than ad hoc poker rules. Source: https://openreview.net/forum?id=VYY5sG4EMm
+  - MAIO updates a policy against an improved opponent and allows the improved opponent to come from best response, greedy policy, policy gradient, RL, or search; this supports a local population-response gate as a game-theoretic update rather than a benchmark patch. Source: https://proceedings.mlr.press/v119/munos20a.html
+  - PSRO focuses on scalable empirical games by expanding a restricted policy set and solving over that set; this supports using the local empirical population as the next environment, while still rejecting Slumbot data. Source: https://arxiv.org/abs/2403.02227
+- Synthesis: The current evidence says scaling the PPO-inner mechanism from 8x to 64x worked and one continuation to gen2 worked, but the same update did not compound across three independent gen3 seeds. Since all gen3 policies remained legal and broad, the failure is not action collapse. The root issue is population/repeatability: the update needs a stronger opponent distribution or empirical-game pressure, not a hand-coded poker feature, Slumbot trace, or smaller H2H sample.
+- Predeclared next experiment: train one `64x2048` native PPO-inner population-response candidate from gen2 with `--reference-policy-checkpoint gen2` and frozen local opponents `[gen2, gen1, Rainbow, NFSP]`. This keeps the update local and tabula-rasa: the learner sees only simulator observations, legal masks, and rewards. Gate it by 10k parent H2H versus gen2, 3k controls versus Rainbow/NFSP, action-distribution sanity, and complete empirical-game support. If it fails, do not repeat unchanged; pivot to a stronger empirical-game objective or larger multi-seed schedule.
+- Decision: run the local population-response gate next. Slumbot/RLCard remain blocked.

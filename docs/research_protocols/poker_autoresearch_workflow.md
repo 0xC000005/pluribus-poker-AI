@@ -479,6 +479,11 @@ retired as a repeatability mechanism. The next PPO-inner-family step must add
 principled population/empirical-game pressure, use a larger predeclared
 multi-seed budget, or pivot to another tabula-rasa regularized self-play update
 that explicitly targets repeatable population improvement.
+The predeclared population-response follow-up is: initialize from gen2, freeze a
+local opponent population `[gen2, gen1, Rainbow, NFSP]`, regularize to gen2,
+train from local simulator rewards only, and judge by parent H2H, control H2H,
+action sanity, and empirical-game support. This is PSRO/MAIO-like local
+population pressure, not Slumbot adaptation.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
