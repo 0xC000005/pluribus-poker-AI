@@ -471,6 +471,14 @@ This makes gen2 the current local native incumbent. It is still internal
 league evidence only; Slumbot/RLCard confidence remains quarantined until
 repeated or multi-seed native robustness and environment-native external gates
 are documented.
+A direct three-seed gen3 repeatability test from gen2 failed that robustness
+standard: all three continuations trained cleanly and kept broad legal action
+use, but none cleared a positive 10k parent-H2H lower95. Therefore gen2 stays
+the local incumbent, while same-budget plain PPO-inner continuation from gen2 is
+retired as a repeatability mechanism. The next PPO-inner-family step must add
+principled population/empirical-game pressure, use a larger predeclared
+multi-seed budget, or pivot to another tabula-rasa regularized self-play update
+that explicitly targets repeatable population improvement.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling

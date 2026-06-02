@@ -18901,3 +18901,28 @@
   - Action-distribution diagnostic -> passed with all 9 actions selected.
   - Complete 5-policy empirical-game command -> solved with row/column support `[1.0, 0.0, 0.0, 0.0, 0.0]`.
 - Decision: promote `autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.pt` to the current local native incumbent. This is a meaningful generation-over-generation local self-play result, not Slumbot/RLCard/SOTA evidence. Keep external evaluation quarantined until repeated native continuation or multi-seed robustness and environment-native RLCard reference gates are in place.
+
+## 20260602T101500Z-native-ppo-inner-nashpg-gen3-repeatability - failed
+
+- Timestamp: 2026-06-02T10:15:00Z
+- Type: experiment
+- Gate: native_ppo_inner_nashpg_gen3_repeatability
+- Hypothesis: If the PPO-inner NashPG continuation update is a reliable monotonic self-play improvement operator, then three independent `64x2048` continuations from the gen2 local incumbent should each beat gen2 under 10k duplicate-swapped H2H, without changing hyperparameters or using Slumbot data.
+- Failure class: native_repeatability
+- Summary: Trained three independent gen3 continuations from the gen2 local incumbent with the exact same native PPO-inner settings. All three trainings were CUDA-backed, legal, and fast (`430143` to `437300` samples, `26604.816` to `26845.817` samples/sec, zero illegal action probability, zero Python showdown fallback). The repeatability gate failed: no seed cleared a positive lower95 parent H2H bound. Seed `20260700` was weakly positive but inconclusive (`mean=+0.002124`, lower95 `-0.000972` over 10k), while seeds `20260701` and `20260702` were slightly negative (`mean=-0.001136`, lower95 `-0.004713`; `mean=-0.000297`, lower95 `-0.003795`). All three action diagnostics passed with 9 distinct actions and top-action fractions below `0.331`, so this is not an action-collapse failure.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_from_gen2_64x2048_seed20260700.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_from_gen2_64x2048_seed20260701.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_from_gen2_64x2048_seed20260702.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_seed20260700_vs_gen2_h2h_10k_seed20260703.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_seed20260701_vs_gen2_h2h_10k_seed20260704.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_seed20260702_vs_gen2_h2h_10k_seed20260705.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_seed20260700_action_distribution.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_seed20260701_action_distribution.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen3_seed20260702_action_distribution.json
+- Key metrics: `{"seeds": [20260700, 20260701, 20260702], "train_samples_range": [430143, 437300], "samples_per_second_range": [26604.816, 26845.817], "parent_h2h_means": [0.002124, -0.001136, -0.000297], "parent_h2h_lower95": [-0.000972, -0.004713, -0.003795], "positive_lower95_count": 0, "action_gate_passed_count": 3, "uses_slumbot_training_data": false}`
+- Verification:
+  - Three gen3 continuation train commands -> passed and wrote CUDA metrics/checkpoints.
+  - Three 10k parent H2H commands -> completed; all failed the positive-lower95 promotion requirement.
+  - Three action-distribution diagnostics -> passed; all selected all 9 actions.
+- Decision: keep `autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_gen2_from64x_64x2048_seed20260694.pt` as the local incumbent, but do not repeat same-budget plain PPO-inner continuation from gen2 unchanged. The next principled step is a failure synthesis/related-work pivot inside the same tabula-rasa self-play philosophy: either an empirical-game/population-aware objective, a larger predeclared training budget with multi-seed promotion gates, or an R-NaD/NashPG/MMD-style update that directly targets repeatable population improvement rather than one-step parent imitation.
