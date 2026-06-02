@@ -442,9 +442,13 @@ translation lead: the native compiled learner now supports the same clipped
 behavior-policy update used in the small-game pass. The first native smoke used
 the 20k-chip, 9-action local environment on CUDA and passed only the plumbing
 contract (`3754` samples, finite loss, zero illegal probability, zero compiled
-showdown fallback). This is not population strength. The next native test must
-be a larger PPO-inner generation followed by duplicate-swapped parent/control
-H2H and empirical-game support; Slumbot remains blocked.
+showdown fallback). A moderate 8x2048 generation then trained quickly on CUDA
+but failed the first control H2H against the current Rainbow incumbent
+(`mean=-0.035716`, lower95 `-0.054535` over 2k games). The action distribution
+gate passed, so the failure is not a simple action-collapse bug. This is not
+population strength. Slumbot remains blocked; the next native step must add
+population/self-play pressure or a larger reviewed PPO-inner generation and then
+re-test parent/control H2H plus empirical-game support.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling

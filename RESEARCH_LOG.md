@@ -18810,3 +18810,22 @@
   - `python -m py_compile scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
   - Native smoke command above -> passed and wrote the metrics/checkpoint artifacts.
 - Decision: native PPO-inner NashPG plumbing is valid and CUDA-capable. This does not prove strength. The next gate is a larger native PPO-inner generation followed by duplicate-swapped parent/population H2H and empirical-game support against current native controls.
+
+## 20260602T093000Z-native-ppo-inner-nashpg-8x2048-control - failed
+
+- Timestamp: 2026-06-02T09:30:00Z
+- Type: experiment
+- Gate: native_ppo_inner_nashpg_control_h2h
+- Hypothesis: If the small-game PPO-inner NashPG pass transfers to native full-deck learning, then a moderate fresh 20k-chip native generation should at least be competitive with the current local Rainbow incumbent under duplicate-swapped H2H, while preserving broad legal action use.
+- Failure class: native_population_strength
+- Summary: Trained a fresh native PPO-inner NashPG candidate for `8x2048` games with the same clipped PPO/GAE/reference schema. Training was fast and CUDA-backed (`69284` samples in `6.353s`, `10905` samples/sec, zero illegal probability, zero Python showdown fallback). The strength gate failed: over 2k duplicate-swapped 20k-chip H2H games against the current Rainbow incumbent, the candidate had mean payoff `-0.035716` and lower95 `-0.054535`. A follow-up action-distribution diagnostic passed with all 9 actions selected, top-action fraction `0.240426`, and mean entropy `1.716513`, so the failure is not simple policy collapse.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_seed20260682.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_vs_incumbent_h2h_2k_seed20260683.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_action_distribution_seed20260682.json
+- Key metrics: `{"train_samples": 69284, "samples_per_second": 10905.313, "h2h_mean_candidate_payoff": -0.035716, "h2h_lower95_candidate_payoff": -0.054535, "h2h_upper95_candidate_payoff": -0.016898, "action_gate_passed": true, "distinct_actions": 9, "top_action_fraction": 0.240426, "mean_entropy": 1.716513, "promotion": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - Native train command above -> passed and wrote checkpoint/metrics.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_seed20260682.pt --candidate-kind native-ppo --baseline autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt --baseline-kind tianshou-rainbow --n-games 2000 --initial-chips 20000 --max-steps-per-hand 256 --device auto --seed 20260683 --eval-state-backend fast-state-canonical-deal --output-json autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_vs_incumbent_h2h_2k_seed20260683.json` -> passed, candidate lost.
+  - Action distribution command above -> passed and wrote diagnostic.
+- Decision: keep PPO-inner NashPG as the current small-game lead and native-capable mechanism, but this moderate native run is not promotable. Do not run Slumbot. The next native attempt needs stronger population pressure, a longer reviewed generation with parent/control gates, or empirical-game-aware opponent sampling; do not reinterpret this as a compute-only or action-collapse failure.
