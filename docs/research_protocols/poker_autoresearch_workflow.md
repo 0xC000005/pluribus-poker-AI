@@ -388,6 +388,15 @@ unchanged; the next response-objective branch needs a real mechanism change
 such as stronger bootstrapping/priority semantics, empirical-game-aware
 training, NashPG/MMD/R-NaD-family dynamics, or a reviewed maintained
 game-dynamics learner.
+A direct NashPG/MMD-style reference-regularized V-trace variant was then
+tested. It added a local reference-policy KL term and fixed the compiled
+collector's all-zero legal-mask fallback, but the h256 `16x4096` finite-update
+candidate still failed the 5000-game H2H gate against the current incumbent
+(`mean=-0.114943`, lower95 `-0.128896`). Keep the reference-KL code as a
+debuggable mechanism surface and collector robustness improvement, but do not
+tune `reference_kl_weight`, LR, or V-trace scale to rescue it. The next
+policy-gradient branch needs stronger reviewed game dynamics, exact small-game
+PG reproduction, or failure synthesis before another native scaling attempt.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to

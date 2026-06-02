@@ -1000,12 +1000,34 @@ def _collect_compiled_fast_policy_gradient_rollout(
                     x = torch.as_tensor(features, dtype=torch.float32, device=device)
                     masks = torch.as_tensor(legal_masks, dtype=torch.float32, device=device)
                     logits = acting_policy(x).masked_fill(masks <= 0, -1.0e30)
-                    probs = torch.softmax(logits, dim=1).detach().cpu()
-                    actions = (
-                        torch.multinomial(probs, num_samples=1, generator=generator)
-                        .squeeze(1)
-                        .numpy()
+                    probs_t = torch.softmax(logits, dim=1)
+                    legal_mass = masks.sum(dim=1, keepdim=True)
+                    fallback = masks / torch.clamp(legal_mass, min=1.0)
+                    bad_rows = (
+                        (legal_mass.squeeze(1) <= 0)
+                        | (~torch.isfinite(probs_t).all(dim=1))
+                        | (probs_t < 0).any(dim=1)
+                        | (probs_t.sum(dim=1) <= 0)
                     )
+                    probs_t = torch.where(
+                        bad_rows.unsqueeze(1),
+                        fallback,
+                        probs_t,
+                    )
+                    probs = probs_t.detach().cpu()
+                    actions = np.full(len(group_indices), -1, dtype=np.int64)
+                    legal_rows = (legal_mass.squeeze(1).detach().cpu().numpy() > 0)
+                    if np.any(legal_rows):
+                        sampled = (
+                            torch.multinomial(
+                                probs[legal_rows],
+                                num_samples=1,
+                                generator=generator,
+                            )
+                            .squeeze(1)
+                            .numpy()
+                        )
+                        actions[legal_rows] = sampled
                 forward_calls += 1
                 if key == -1:
                     learner_forward_calls += 1
@@ -1014,6 +1036,9 @@ def _collect_compiled_fast_policy_gradient_rollout(
                 for row_i, game_i in enumerate(group_indices):
                     player_i = int(current_players[int(game_i)])
                     action_idx = int(actions[row_i])
+                    if action_idx < 0:
+                        steps_per_game[int(game_i)] = int(max_steps_per_game)
+                        continue
                     action_prob = float(probs[row_i, action_idx])
                     action_array[int(game_i)] = action_idx
                     if key == -1:
@@ -1338,12 +1363,34 @@ def _collect_batched_fast_policy_gradient_rollout(
                     x = torch.as_tensor(features, dtype=torch.float32, device=device)
                     masks = torch.as_tensor(legal_masks, dtype=torch.float32, device=device)
                     logits = acting_policy(x).masked_fill(masks <= 0, -1.0e30)
-                    probs = torch.softmax(logits, dim=1).detach().cpu()
-                    actions = (
-                        torch.multinomial(probs, num_samples=1, generator=generator)
-                        .squeeze(1)
-                        .numpy()
+                    probs_t = torch.softmax(logits, dim=1)
+                    legal_mass = masks.sum(dim=1, keepdim=True)
+                    fallback = masks / torch.clamp(legal_mass, min=1.0)
+                    bad_rows = (
+                        (legal_mass.squeeze(1) <= 0)
+                        | (~torch.isfinite(probs_t).all(dim=1))
+                        | (probs_t < 0).any(dim=1)
+                        | (probs_t.sum(dim=1) <= 0)
                     )
+                    probs_t = torch.where(
+                        bad_rows.unsqueeze(1),
+                        fallback,
+                        probs_t,
+                    )
+                    probs = probs_t.detach().cpu()
+                    actions = np.full(len(group_indices), -1, dtype=np.int64)
+                    legal_rows = (legal_mass.squeeze(1).detach().cpu().numpy() > 0)
+                    if np.any(legal_rows):
+                        sampled = (
+                            torch.multinomial(
+                                probs[legal_rows],
+                                num_samples=1,
+                                generator=generator,
+                            )
+                            .squeeze(1)
+                            .numpy()
+                        )
+                        actions[legal_rows] = sampled
                 forward_calls += 1
                 if key == -1:
                     learner_forward_calls += 1
@@ -1353,6 +1400,9 @@ def _collect_batched_fast_policy_gradient_rollout(
                     state = states[int(game_i)]
                     player_i = int(state.current_player_i)
                     action_idx = int(actions[row_i])
+                    if action_idx < 0:
+                        steps_per_game[int(game_i)] = int(max_steps_per_game)
+                        continue
                     action_prob = float(probs[row_i, action_idx])
                     if key == -1:
                         learner_controlled_steps += 1

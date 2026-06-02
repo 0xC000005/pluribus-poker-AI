@@ -17507,3 +17507,24 @@
   - `uv run --with tianshou pytest -q test/unit/test_compiled_rainbow_response.py test/unit/test_joint_experience.py test/unit/test_joint_experience_response_oracle.py` -> `10 passed`.
   - `python -m py_compile poker_ai/research/compiled_rainbow_response.py scripts/run_compiled_rainbow_response_oracle.py` -> passed.
 - Decision: correct semi-MDP collection and maintained-library update integration are no longer the blocker for this branch. The blocker remains policy-improvement quality: online Rainbow response against a singleton incumbent still loses to the incumbent. The next branch needs a mechanism change rather than more same-recipe scale, such as empirical-game/meta-policy-aware response training, principled prioritized/bootstrapped value semantics, or a reviewed NashPG/MMD/R-NaD-style population learner.
+## 20260602T012526Z-a-nashpg-mmd-style-reference-regularized-compiled-v - failed
+
+- Timestamp: 2026-06-02T01:25:26Z
+- Type: reference_regularized_vtrace_response
+- Gate: reference_regularized_vtrace_parent_h2h
+- Hypothesis: A NashPG/MMD-style reference-regularized compiled V-trace learner should keep updates locally anchored to the current self-play incumbent while improving via terminal-reward self-play, producing positive H2H lower95 without Slumbot data or solver labels.
+- Failure class: strategy_quality
+- Summary: Added a NashPG/MMD-style local reference-KL option to the compiled native V-trace learner and fixed collector probability guards for all-zero legal masks. The finite-update gate passed on CUDA (102250 samples, zero Python-showdown fallback, mean_reference_kl=0.009925), but the 5000-game H2H gate versus the current fast-state shared-MARL incumbent failed decisively: mean=-0.114943, lower95=-0.128896. Treat reference-KL V-trace as a useful mechanism falsifier, not a promotable path.
+- Metrics file: autoresearch-session/native_rollout_substrate/reference_regularized_vtrace_vs_incumbent_h2h_5000_seed20260636.json
+- Training file: autoresearch-session/native_rollout_substrate/reference_regularized_vtrace_vs_incumbent_h256_16x4096_lr5e5_seed20260635.json
+- Debug files:
+  - autoresearch-session/native_rollout_substrate/reference_regularized_vtrace_vs_incumbent_h256_16x4096_seed20260630.json
+  - autoresearch-session/native_rollout_substrate/reference_regularized_vtrace_vs_incumbent_h256_16x4096_lr5e5_seed20260631.json
+  - autoresearch-session/native_rollout_substrate/reference_regularized_vtrace_debug_2x4096_seed20260634.json
+- Related-work grounding: NashPG motivates iteratively refined reference-policy regularization for imperfect-information games (https://arxiv.org/abs/2510.18183); R-NaD/DeepNash motivates model-free regularized Nash dynamics to reduce cycling in imperfect-information self-play (https://arxiv.org/abs/2206.15378); the 2025 PG reevaluation argues generic policy-gradient methods can be competitive in imperfect-information games when regularization/evaluation are correct, so a policy-gradient branch remains a legitimate falsifier (https://arxiv.org/abs/2502.08938); AlphaHoldem motivates historical self-play competition on PC-scale resources for HUNL (https://mlanthology.org/aaai/2022/zhao2022aaai-alphaholdem/).
+- Key metrics: `{"resolved_device": "cuda", "train_iterations": 16, "n_samples": 102250, "train_seconds": 3.9606865669993567, "samples_per_second": 25816.23116859391, "compiled_needs_python_showdown": 0, "illegal_action_probability": 0.0, "reference_regularized": true, "reference_policy_kind": "tianshou-rainbow", "reference_kl_weight": 0.05, "mean_reference_kl": 0.009924738435074687, "loss_is_finite": true, "h2h_mean": -0.11494259999999999, "h2h_lower95": -0.12889618915605222, "h2h_upper95": -0.10098901084394776, "eval_games_per_second": 238.13845270602218, "passed": false, "promotion": false}`
+- Verification:
+  - `uv run --with tianshou pytest -q test/unit/test_local_vtrace_compiled_native_learner.py::test_local_vtrace_compiled_native_learner_supports_reference_regularization` -> `1 passed`.
+  - `uv run --with tianshou pytest -q test/unit/test_local_vtrace_compiled_native_learner.py test/unit/test_local_vtrace_compiled_native_smoke.py test/unit/test_native_rollout_substrate.py` -> `33 passed, 1 warning`.
+  - `python -m py_compile poker_ai/research/native_rollout_substrate.py scripts/run_local_vtrace_compiled_native_learner.py` -> passed.
+- Decision: the reference-KL option is useful infrastructure and fixes a real collector edge case, but reference-regularized V-trace is much weaker than the current incumbent at this budget. Do not tune `reference_kl_weight` or LR as a rescue. The next principled step is not another V-trace variant; run synthesis/innovation review if the strategy-quality failure count reaches the workflow threshold, then pivot toward a stronger reviewed policy-gradient/equilibrium learner or exact small-game PG benchmark reproduction before native scaling.

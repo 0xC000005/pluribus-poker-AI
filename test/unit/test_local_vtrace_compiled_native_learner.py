@@ -134,6 +134,47 @@ def test_local_vtrace_compiled_native_learner_supports_frozen_parent_population(
     assert payload["metrics"]["opponent_population_size"] == 1
 
 
+def test_local_vtrace_compiled_native_learner_supports_reference_regularization(tmp_path):
+    from scripts.run_local_vtrace_compiled_native_learner import run_learner
+
+    reference = tmp_path / "reference.pt"
+    child = tmp_path / "child.pt"
+    run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        seed=20260628,
+        device="cpu",
+        checkpoint_out=reference,
+    )
+
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        seed=20260629,
+        device="cpu",
+        reference_policy_checkpoint=reference,
+        reference_kl_weight=0.05,
+        checkpoint_out=child,
+    )
+
+    assert child.exists()
+    assert metrics["reference_policy_checkpoint"] == str(reference)
+    assert metrics["reference_policy_kind"] == "native-ppo"
+    assert metrics["reference_kl_weight"] == 0.05
+    assert metrics["reference_regularized"] is True
+    assert metrics["mean_reference_kl"] is not None
+    assert metrics["passed"] is True
+    payload = torch.load(child, map_location="cpu", weights_only=False)
+    assert payload["metrics"]["reference_regularized"] is True
+    assert payload["config"]["reference_policy_kind"] == "native-ppo"
+
+
 def test_local_vtrace_compiled_native_learner_supports_rainbow_population_opponent(tmp_path):
     pytest.importorskip("tianshou")
 

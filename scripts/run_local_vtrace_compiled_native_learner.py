@@ -20,7 +20,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES  # noqa: E402
-from poker_ai.research.local_vtrace import vtrace_policy_value_loss  # noqa: E402
+from poker_ai.research.local_vtrace import masked_log_probs, vtrace_policy_value_loss  # noqa: E402
 from poker_ai.research.native_nfsp import resolve_device  # noqa: E402
 from poker_ai.research.native_ppo_policy import _load_policy_network, _PolicyMLP, _ValueMLP  # noqa: E402
 from poker_ai.research.native_rollout_substrate import (  # noqa: E402
@@ -122,10 +122,28 @@ def _load_compiled_rollout_opponents(
     return opponents, kinds
 
 
+def _load_reference_policy(
+    checkpoint: str | Path | None,
+    device: torch.device,
+) -> tuple[torch.nn.Module | None, str | None]:
+    if checkpoint is None:
+        return None, None
+    policies, kinds = _load_compiled_rollout_opponents([checkpoint], device)
+    if len(policies) != 1 or len(kinds) != 1:
+        raise ValueError("reference_policy_checkpoint must load exactly one policy")
+    reference = policies[0].to(device)
+    reference.eval()
+    for parameter in reference.parameters():
+        parameter.requires_grad_(False)
+    return reference, kinds[0]
+
+
 def _train_on_batch(
     *,
     policy_net: torch.nn.Module,
     value_net: torch.nn.Module,
+    reference_policy: torch.nn.Module | None = None,
+    reference_kl_weight: float = 0.0,
     optimizer: torch.optim.Optimizer,
     batch: dict[str, np.ndarray],
     gamma: float,
@@ -161,6 +179,37 @@ def _train_on_batch(
         bootstrap_value=bootstrap,
         valid_mask=valid_mask_t,
     )
+    reference_kl = torch.zeros((), dtype=torch.float32, device=device)
+    if reference_policy is not None and float(reference_kl_weight) > 0.0:
+        with torch.no_grad():
+            reference_logits = reference_policy(flat_features).reshape(
+                features_t.shape[0],
+                features_t.shape[1],
+                N_ACTIONS,
+            )
+            reference_log_probs = masked_log_probs(reference_logits, legal_masks_t)
+        log_probs = masked_log_probs(logits, legal_masks_t)
+        probs = torch.exp(log_probs)
+        valid = valid_mask_t.to(dtype=torch.float32, device=device)
+        valid_count = valid.sum().clamp_min(1.0)
+        safe_log_probs = torch.nan_to_num(log_probs, nan=0.0, posinf=0.0, neginf=0.0)
+        safe_reference_log_probs = torch.nan_to_num(
+            reference_log_probs,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        kl_terms = probs * (safe_log_probs - safe_reference_log_probs)
+        kl_terms = torch.where(legal_masks_t, kl_terms, torch.zeros_like(kl_terms))
+        kl_terms = torch.nan_to_num(kl_terms, nan=0.0, posinf=0.0, neginf=0.0)
+        per_row_kl = torch.sum(kl_terms, dim=-1)
+        reference_kl = (per_row_kl * valid).sum() / valid_count
+        loss = loss + float(reference_kl_weight) * reference_kl
+        stats["reference_kl"] = float(reference_kl.detach().cpu())
+        stats["reference_kl_weight"] = float(reference_kl_weight)
+    else:
+        stats["reference_kl"] = 0.0
+        stats["reference_kl_weight"] = 0.0
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
@@ -185,6 +234,8 @@ def run_learner(
     seed: int = 20260559,
     device: str = "auto",
     opponent_checkpoints: list[str | Path] | None = None,
+    reference_policy_checkpoint: str | Path | None = None,
+    reference_kl_weight: float = 0.0,
     checkpoint_out: str | Path | None = None,
     output_json: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -206,6 +257,10 @@ def run_learner(
         opponent_checkpoints,
         resolved_device,
     )
+    reference_policy, reference_kind = _load_reference_policy(
+        reference_policy_checkpoint,
+        resolved_device,
+    )
     optimizer = torch.optim.Adam(
         list(policy_net.parameters()) + list(value_net.parameters()),
         lr=float(lr),
@@ -213,6 +268,7 @@ def run_learner(
 
     losses: list[float] = []
     illegal_probabilities: list[float] = []
+    reference_kls: list[float] = []
     n_samples = 0
     n_trajectories = 0
     collector_steps = 0
@@ -236,6 +292,8 @@ def run_learner(
         loss_value, stats, batch_samples, batch_trajectories = _train_on_batch(
             policy_net=policy_net,
             value_net=value_net,
+            reference_policy=reference_policy,
+            reference_kl_weight=float(reference_kl_weight),
             optimizer=optimizer,
             batch=batch,
             gamma=float(gamma),
@@ -244,6 +302,7 @@ def run_learner(
         if batch_samples > 0:
             losses.append(loss_value)
             illegal_probabilities.append(float(stats.get("illegal_action_probability", 0.0)))
+            reference_kls.append(float(stats.get("reference_kl", 0.0)))
             n_samples += int(batch_samples)
             n_trajectories += int(batch_trajectories)
     if resolved_device.type == "cuda":
@@ -273,6 +332,14 @@ def run_learner(
         "opponent_kinds": list(opponent_kinds),
         "opponent_population_size": int(len(opponent_policies)),
         "opponent_checkpoints": [str(path) for path in (opponent_checkpoints or [])],
+        "reference_regularized": bool(reference_policy is not None and float(reference_kl_weight) > 0.0),
+        "reference_policy_checkpoint": (
+            str(reference_policy_checkpoint) if reference_policy_checkpoint is not None else None
+        ),
+        "reference_policy_kind": reference_kind,
+        "reference_kl_weight": float(reference_kl_weight),
+        "mean_reference_kl": float(np.mean(reference_kls)) if reference_kls else None,
+        "last_reference_kl": float(reference_kls[-1]) if reference_kls else None,
         "collector_backend": "compiled-fast-state",
         "trajectory_packing": "padded_vectorized",
         "collector_steps": int(collector_steps),
@@ -323,6 +390,13 @@ def run_learner(
                     "train_environment": "poker_ai:full_deck_hu_nlhe",
                     "opponent_population_size": int(len(opponent_policies)),
                     "opponent_kinds": list(opponent_kinds),
+                    "reference_policy_checkpoint": (
+                        str(reference_policy_checkpoint)
+                        if reference_policy_checkpoint is not None
+                        else None
+                    ),
+                    "reference_policy_kind": reference_kind,
+                    "reference_kl_weight": float(reference_kl_weight),
                 },
                 "metrics": metrics,
                 "trained_environment_native": True,
@@ -354,6 +428,12 @@ def main(argv: list[str] | None = None) -> int:
         dest="opponent_checkpoints",
         help="Frozen native-ppo-compatible opponent checkpoint. May be supplied multiple times.",
     )
+    parser.add_argument(
+        "--reference-policy-checkpoint",
+        type=Path,
+        help="Frozen local policy checkpoint used as a NashPG/MMD-style reference regularizer.",
+    )
+    parser.add_argument("--reference-kl-weight", type=float, default=0.0)
     parser.add_argument("--checkpoint-out", type=Path)
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args(argv)
@@ -369,6 +449,8 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         device=args.device,
         opponent_checkpoints=args.opponent_checkpoints,
+        reference_policy_checkpoint=args.reference_policy_checkpoint,
+        reference_kl_weight=args.reference_kl_weight,
         checkpoint_out=args.checkpoint_out,
         output_json=args.output_json,
     )
