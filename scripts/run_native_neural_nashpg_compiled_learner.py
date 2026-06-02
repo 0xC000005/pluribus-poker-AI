@@ -174,8 +174,16 @@ def _policy_value_reference_loss(
             gamma=float(gamma),
             gae_lambda=float(gae_lambda),
         )
+    elif target_mode == "player-gae":
+        value_targets, advantages = _player_perspective_bootstrap_targets_and_advantages(
+            values=values.detach(),
+            terminal_returns=returns,
+            batch=batch,
+            gamma=float(gamma),
+            gae_lambda=float(gae_lambda),
+        )
     else:
-        raise ValueError("advantage_target must be one of: terminal, gae")
+        raise ValueError("advantage_target must be one of: terminal, gae, player-gae")
     if int(advantages.numel()) > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-5)
     policy_loss = -torch.sum(decision_weights * action_log_probs * advantages) / weight_denom
@@ -309,6 +317,14 @@ def _prepare_ppo_fixed_rows(
             gamma=float(gamma),
             gae_lambda=float(gae_lambda),
         )
+    elif target_mode == "player-gae":
+        value_targets, advantages = _player_perspective_bootstrap_targets_and_advantages(
+            values=values,
+            terminal_returns=returns,
+            batch=batch,
+            gamma=float(gamma),
+            gae_lambda=float(gae_lambda),
+        )
     elif target_mode == "q_expected_mc":
         if q_values is None:
             raise ValueError("q_expected_mc requires q_net")
@@ -332,7 +348,7 @@ def _prepare_ppo_fixed_rows(
         expected_q = torch.sum(torch.exp(legal_log_probs) * legal_q, dim=1)
         advantages = value_targets - expected_q
     else:
-        raise ValueError("advantage_target must be one of: terminal, gae, q_expected_mc, q_expected_lambda")
+        raise ValueError("advantage_target must be one of: terminal, gae, player-gae, q_expected_mc, q_expected_lambda")
     if int(advantages.numel()) > 1:
         advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-5)
     rows = {
@@ -655,6 +671,47 @@ def _linked_bootstrap_targets_and_advantages(
     return targets.detach(), advantages.detach()
 
 
+def _player_perspective_bootstrap_targets_and_advantages(
+    *,
+    values: torch.Tensor,
+    terminal_returns: torch.Tensor,
+    batch: dict[str, np.ndarray],
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute GAE over alternating turns in each actor's value perspective."""
+    targets = torch.zeros_like(terminal_returns)
+    advantages = torch.zeros_like(terminal_returns)
+    game_indices = np.asarray(batch["game_indices"], dtype=np.int64)
+    players = np.asarray(batch["players"], dtype=np.int64)
+    step_indices = np.asarray(batch["step_indices"], dtype=np.int64)
+    grouped: dict[int, list[int]] = {}
+    for record_i, game_i in enumerate(game_indices):
+        grouped.setdefault(int(game_i), []).append(int(record_i))
+
+    for indices in grouped.values():
+        ordered = sorted(indices, key=lambda idx: int(step_indices[idx]), reverse=True)
+        next_i = -1
+        for record_i in ordered:
+            if next_i >= 0:
+                same_player = int(players[next_i]) == int(players[record_i])
+                sign = 1.0 if same_player else -1.0
+                delta = float(gamma) * sign * values[next_i] - values[record_i]
+                advantages[record_i] = (
+                    delta
+                    + float(gamma)
+                    * float(gae_lambda)
+                    * sign
+                    * advantages[next_i]
+                )
+                targets[record_i] = advantages[record_i] + values[record_i]
+            else:
+                advantages[record_i] = terminal_returns[record_i] - values[record_i]
+                targets[record_i] = terminal_returns[record_i]
+            next_i = int(record_i)
+    return targets.detach(), advantages.detach()
+
+
 def run_learner(
     *,
     train_iterations: int = 8,
@@ -718,8 +775,8 @@ def run_learner(
     if not (0.0 < float(adaptive_policy_kl_backtrack_factor) < 1.0):
         raise ValueError("adaptive_policy_kl_backtrack_factor must be in (0, 1)")
     q_advantage_targets = {"q_expected_mc", "q_expected_lambda"}
-    if str(advantage_target) not in {"terminal", "gae", *q_advantage_targets}:
-        raise ValueError("advantage_target must be one of: terminal, gae, q_expected_mc, q_expected_lambda")
+    if str(advantage_target) not in {"terminal", "gae", "player-gae", *q_advantage_targets}:
+        raise ValueError("advantage_target must be one of: terminal, gae, player-gae, q_expected_mc, q_expected_lambda")
     if str(advantage_target) in q_advantage_targets and str(inner_update) != "ppo":
         raise ValueError("q_expected_* advantage targets require inner_update=ppo")
     if not (0.0 <= float(gamma) <= 1.0):
@@ -1146,7 +1203,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--adaptive-policy-kl-backtrack-factor", type=float, default=0.5)
     parser.add_argument(
         "--advantage-target",
-        choices=("terminal", "gae", "q_expected_mc", "q_expected_lambda"),
+        choices=("terminal", "gae", "player-gae", "q_expected_mc", "q_expected_lambda"),
         default="terminal",
     )
     parser.add_argument("--gamma", type=float, default=1.0)

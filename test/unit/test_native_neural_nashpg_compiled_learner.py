@@ -197,6 +197,59 @@ def test_native_neural_nashpg_compiled_learner_supports_gae_targets(tmp_path):
     assert payload["metrics"]["advantage_target"] == "gae"
 
 
+def test_player_perspective_gae_flips_values_across_alternating_turns():
+    from scripts.run_native_neural_nashpg_compiled_learner import (
+        _player_perspective_bootstrap_targets_and_advantages,
+    )
+
+    values = torch.tensor([0.2, 0.3, -0.1], dtype=torch.float32)
+    terminal_returns = torch.tensor([1.0, -1.0, 1.0], dtype=torch.float32)
+    batch = {
+        "game_indices": np.asarray([0, 0, 0], dtype=np.int64),
+        "players": np.asarray([0, 1, 0], dtype=np.int64),
+        "step_indices": np.asarray([0, 1, 2], dtype=np.int64),
+    }
+
+    targets, advantages = _player_perspective_bootstrap_targets_and_advantages(
+        values=values,
+        terminal_returns=terminal_returns,
+        batch=batch,
+        gamma=1.0,
+        gae_lambda=1.0,
+    )
+
+    assert torch.allclose(targets, terminal_returns, atol=1e-6)
+    assert torch.allclose(advantages, torch.tensor([0.8, -1.3, 1.1]), atol=1e-6)
+
+
+def test_native_neural_nashpg_compiled_learner_supports_player_gae_targets(tmp_path):
+    from scripts.run_native_neural_nashpg_compiled_learner import run_learner
+
+    checkpoint = tmp_path / "player_gae.pt"
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        inner_update="ppo",
+        ppo_epochs=1,
+        ppo_minibatches=1,
+        advantage_target="player-gae",
+        gamma=1.0,
+        gae_lambda=0.95,
+        seed=20260767,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["advantage_target"] == "player-gae"
+    assert metrics["passed"] is True
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["advantage_target"] == "player-gae"
+
+
 def test_native_neural_nashpg_compiled_learner_supports_ppo_inner_update(tmp_path):
     from scripts.run_native_neural_nashpg_compiled_learner import run_learner
 
