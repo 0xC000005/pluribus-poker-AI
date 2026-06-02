@@ -169,6 +169,28 @@ Rainbow response to the meta8 support trained cleanly but lost decisively to
 current and worst-gap support members. Do not rerun the same-budget
 response-chain recipe unchanged; the next response/exploiter must change the
 objective, budget, or population pressure in a reviewed way.
+The follow-up budget/control check is also closed. A scaled compiled Rainbow
+response trained from `596,966` local transitions and entered a point-solved
+meta9 empirical game with support probability `0.395`, but direct H2H gate
+validation failed: the meta9 mixture lost to the incumbent support member and
+did not beat the previous response as off-support. A higher-confidence
+critical-edge refresh and re-solve still failed in two independent 20k
+incumbent support checks (`combined mean=-0.003224`). This retires
+confidence-only point re-solving and further Rainbow response-chain budget
+increases as sufficient. The next branch must change the learner/objective or
+the population objective, not only the empirical-game solver weights.
+
+The first changed population objective has passed its initial local gate. A
+state-conditioned policy-population router was trained from compiled local
+joint experience over the boundary archive using only simulator observations,
+legal actions, and terminal rewards. It beat the incumbent, K-best2, previous
+response, and all older off-support controls with positive lower95, tied the
+scaled response within a 20k confidence interval, and solved the augmented
+ten-policy empirical game to pure router support. This is meaningful
+population-weak progress, not SOTA or Slumbot evidence. The active next step is
+seed-robust replication and then training the next generation against the
+router/archive; do not return to fixed mixture retuning or another unchanged
+Rainbow response-chain run.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:

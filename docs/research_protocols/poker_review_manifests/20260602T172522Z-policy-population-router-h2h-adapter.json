@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1599,
+      "path": "benchmark_audit.md",
+      "sha256": "3c4aebd650f620868fc8a7da55ff2d35cf230df65fc01044b07a54567440984e"
+    },
+    {
+      "bytes": 676,
+      "path": "decision.json",
+      "sha256": "d61823753f69068e6cee9e4ce1341218f17afb232632e2b5de3a5dc68f90b06f"
+    },
+    {
+      "bytes": 1822,
+      "path": "mechanism_review.md",
+      "sha256": "f4068a0f2cde10375343bcd51791e453bf5c8fc7be9e0ee6eff6e14e5f761568"
+    },
+    {
+      "bytes": 2626,
+      "path": "related_work.md",
+      "sha256": "e8a00104cd8693fdbe9f52ddb49e1517fad0d868e4dceb13f5e0a1ade5019d79"
+    },
+    {
+      "bytes": 2049,
+      "path": "review.md",
+      "sha256": "e9a5556a127e94b8318d8fbed5a60973bb299132fbae70e5fab2da0dc563f5c5"
+    },
+    {
+      "bytes": 2978,
+      "path": "review_scope.json",
+      "sha256": "ab385e56bfffb2c369b7d7794c5934da04e8ede593a43012b030cc91b6860d03"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The protected evaluator change is additive and preserves the native H2H contract. The policy-router mechanism is allowed as a local population-weak branch, but only after seed-robust replication and next-generation archive gates; it is not Slumbot or SOTA evidence.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T172522Z-policy-population-router-h2h-adapter",
+  "review_id": "20260602T172522Z-policy-population-router-h2h-adapter",
+  "sources": [
+    "https://arxiv.org/abs/2605.28273",
+    "https://ojs.aaai.org/index.php/AAAI/article/view/20394",
+    "https://arxiv.org/abs/2408.00751",
+    "autoresearch-session/policy_router/boundary4_router_augmented_empirical_game_seed20260991.json",
+    "test/unit/test_policy_router.py",
+    "test/unit/test_mixed_policy_h2h.py"
+  ],
+  "written_at": "2026-06-02T17:26:56Z"
+}

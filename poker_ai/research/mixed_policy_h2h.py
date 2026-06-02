@@ -34,6 +34,7 @@ SUPPORTED_POLICY_KINDS = (
     "tianshou-ppo",
     "agilerl-ippo",
     "rllib-ppo",
+    "policy-router",
 )
 _KIND_ALIASES = {
     "rainbow": "tianshou-rainbow",
@@ -47,6 +48,10 @@ _KIND_ALIASES = {
     "ippo": "agilerl-ippo",
     "rllib_ppo": "rllib-ppo",
     "rllib": "rllib-ppo",
+    "policy_router": "policy-router",
+    "router": "policy-router",
+    "conflux-router": "policy-router",
+    "conflux_router": "policy-router",
 }
 
 
@@ -570,6 +575,66 @@ def load_policy_adapter(
             ),
             initial_chips=1000,
             max_steps_per_hand=256,
+        )
+    if kind == "policy-router":
+        from poker_ai.research.policy_router import (  # noqa: PLC0415
+            load_policy_router_checkpoint,
+            router_policy_scores,
+        )
+
+        payload, router = load_policy_router_checkpoint(checkpoint_path, device=device)
+        member_kinds = [str(value) for value in payload.get("member_policy_kinds", [])]
+        member_checkpoints = [str(value) for value in payload.get("member_checkpoints", [])]
+        if len(member_kinds) != len(member_checkpoints) or not member_kinds:
+            raise ValueError("policy-router checkpoint has invalid member policy metadata")
+        if any(_normalize_policy_kind(kind_i) == "policy-router" for kind_i in member_kinds):
+            raise ValueError("policy-router members may not themselves be policy-router checkpoints")
+        members = tuple(
+            load_policy_adapter(checkpoint, kind=kind_i, device=device)
+            for kind_i, checkpoint in zip(member_kinds, member_checkpoints, strict=True)
+        )
+        max_steps = int(max(member.max_steps_per_hand for member in members))
+        initial_chips = int(members[0].initial_chips)
+
+        def _select_member(features: np.ndarray, resolved_device: torch.device) -> PolicyAdapter:
+            scores = router_policy_scores(router, features, resolved_device)
+            member_i = int(np.argmax(scores))
+            if member_i < 0 or member_i >= len(members):
+                raise ValueError("policy-router selected an invalid member")
+            return members[member_i]
+
+        def _router_probs(
+            features: np.ndarray,
+            legal_mask: np.ndarray,
+            resolved_device: torch.device,
+        ) -> np.ndarray:
+            member = _select_member(features, resolved_device)
+            return member.probs(features, legal_mask, resolved_device)
+
+        def _router_action(
+            state: Any,
+            features: np.ndarray,
+            legal_mask: np.ndarray,
+            resolved_device: torch.device,
+            rng: np.random.Generator,
+        ) -> int:
+            member = _select_member(features, resolved_device)
+            return member.select_action(
+                state=state,
+                features=features,
+                legal_mask=legal_mask,
+                device=resolved_device,
+                rng=rng,
+            )
+
+        return PolicyAdapter(
+            kind=kind,
+            checkpoint_path=str(checkpoint_path),
+            algorithm=str(payload.get("algorithm", "policy_population_router")),
+            action_probs_fn=_router_probs,
+            initial_chips=initial_chips,
+            max_steps_per_hand=max_steps,
+            action_for_state_fn=_router_action,
         )
     raise ValueError(f"kind must be one of: {', '.join(SUPPORTED_POLICY_KINDS)}")
 

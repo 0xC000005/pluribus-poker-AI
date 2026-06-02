@@ -19946,3 +19946,46 @@
 - Summary: Fresh same-budget compiled Rainbow response to the meta8 support trained locally from 182252 transitions at 58529.75 transitions/sec, but failed support pressure: versus incumbent mean=-0.029852 lower95=-0.039125, versus worst-gap mean=-0.013752 lower95=-0.025391, versus prior response inconclusive. Do not continue same-budget PSRO response chaining unchanged; synthesize or pivot to a stronger response/exploiter objective.
 - Metrics file: autoresearch-session/native_rollout_substrate/compiled_rainbow_response_to_meta8_h256_16x4096_upc16_seed20260940.json
 - Key metrics: `{"gate": null, "passed": true}`
+## 20260602T164234Z-a-single-stronger-budget-compiled-rainbow-response-to - failed
+
+- Timestamp: 2026-06-02T16:53:39Z
+- Type: experiment
+- Gate: scaled-compiled-rainbow-response-to-meta8
+- Hypothesis: A single stronger-budget compiled Rainbow response to the meta8 support should test whether the same objective failed from undertraining rather than mechanism mismatch; if it still loses support pressure, retire budget-only response chaining and pivot objective.
+- Failure class: meta_strategy_support_calibration
+- Summary: Scaled compiled Rainbow response entered empirical-game support (support=0.395, weighted lower95 vs previous meta positive) and beat most archive policies, but the solved meta9 mixture failed H2H gate: support CI excluded zero versus incumbent and previous response was not beaten off-support. Retire budget-only response chaining until meta-strategy uncertainty/support calibration is addressed.
+- Metrics file: autoresearch-session/native_rollout_substrate/meta9_scaled_response_h2h_gate_seed20260950.json
+- Key metrics: `{"gate": null, "passed": false}`
+
+## 20260602T165603Z-higher-confidence-re-estimation-of-the-critical-support - failed
+
+- Timestamp: 2026-06-02T17:04:47Z
+- Type: experiment
+- Gate: confidence-aware-meta-strategy-calibration
+- Hypothesis: Higher-confidence re-estimation of the critical support-boundary empirical-game edges should remove point-estimate optimism and either produce a validated local meta-strategy over the same archive or falsify Rainbow-response PSRO without another policy-training run.
+- Failure class: meta_strategy_support_calibration
+- Summary: Critical-edge 20k re-estimation corrected the meta9 point matrix but did not solve the gate: calibrated meta9 still lost to incumbent in two independent 20k support checks (combined mean -0.003224) and only tied the previous response boundary policy. Retire confidence-only point re-solving as sufficient; next pivot must change the learner/objective or use a validation-aware population objective rather than another Rainbow response-chain budget increase.
+- Metrics file: autoresearch-session/native_rollout_substrate/calibrated_meta9_boundary_summary_seed20260970.json
+- Key metrics: `{"gate": null, "passed": false}`
+
+## 20260602T170551Z-validated-population-response-chain-synthesis-should-reset-the - passed
+
+- Timestamp: 2026-06-02T17:05:56Z
+- Type: synthesis
+- Gate: failure-synthesis-population-response-chain-and-meta-calibration
+- Hypothesis: Validated population response-chain synthesis should reset the synthesis guard before the learner-objective pivot.
+- Failure class: meta_strategy_support_calibration
+- Summary: Validated synthesis completed: Rainbow response chains and confidence-only point re-solving did not consistently solve population support. Next work must pivot to a learner/objective-level population method inside the tabula-rasa self-play philosophy.
+- Metrics file: autoresearch-session/poker_reviews/20260602T165354Z-population-response-chain-and-empirical-meta-strategy-calibration-synthesis/decision.json
+- Key metrics: `{"gate": null, "passed": null}`
+
+## 20260602T171450Z-a-learned-state-conditioned-router-over-the-local - passed
+
+- Timestamp: 2026-06-02T17:23:10Z
+- Type: experiment
+- Gate: policy-population-router-boundary-h2h
+- Hypothesis: A learned state-conditioned router over the local boundary archive can outperform a fixed per-hand empirical meta-strategy by selecting population members from simulator observations, legal actions, and rewards only; it should tie or beat current support members and beat off-support boundary policies without Slumbot data or solver-label imitation.
+- Failure class: population_weak_policy_support
+- Summary: State-conditioned policy router passed the first population-weak gate: trained only from local compiled joint experience, beat incumbent/K-best2/previous/off-support policies with positive lower95, tied scaled response within 20k CI, and entered the augmented empirical game as pure support. Next work must validate seed robustness and train the next generation against the router/archive, not retune fixed mixtures.
+- Metrics file: autoresearch-session/policy_router/boundary4_router_augmented_empirical_game_seed20260991.json
+- Key metrics: `{"gate": null, "passed": true}`

@@ -474,6 +474,90 @@ def test_load_policy_adapter_supports_rllib_ppo_checkpoint(monkeypatch, tmp_path
     assert np.isclose(float(probs.sum()), 1.0)
 
 
+def test_load_policy_adapter_supports_policy_router(monkeypatch, tmp_path):
+    import poker_ai.research.native_ppo_policy as native_ppo
+
+    from poker_ai.games.full_deck.state import N_FEATURES
+    from poker_ai.research.policy_router import PolicyRouterNet
+
+    router = PolicyRouterNet(hidden_dim=4, n_policies=2)
+    for parameter in router.parameters():
+        parameter.data.zero_()
+    router.net[-1].bias.data = torch.tensor([-1.0, 1.0], dtype=torch.float32)
+    checkpoint = tmp_path / "router.pt"
+    torch.save(
+        {
+            "algorithm": "policy_population_router",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_features": N_FEATURES,
+            "num_policies": 2,
+            "hidden_dim": 4,
+            "member_policy_kinds": ["native-ppo", "native-ppo"],
+            "member_checkpoints": ["first.pt", "second.pt"],
+            "router_state_dict": router.state_dict(),
+        },
+        checkpoint,
+    )
+
+    monkeypatch.setattr(
+        native_ppo,
+        "_load_policy_network",
+        lambda checkpoint_path, resolved_device, *, strategy_source="auto": (
+            {
+                "algorithm": f"native_ppo_policy:{checkpoint_path}",
+                "config": {"initial_chips": 321, "max_steps_per_hand": 22},
+            },
+            str(checkpoint_path),
+            "flat",
+        ),
+    )
+
+    def fake_probs(policy, _features, legal_mask, _resolved_device):
+        probs = np.zeros_like(legal_mask, dtype=np.float32)
+        if str(policy) == "second.pt":
+            probs[int(np.flatnonzero(legal_mask)[-1])] = 1.0
+        else:
+            probs[int(np.flatnonzero(legal_mask)[0])] = 1.0
+        return probs
+
+    monkeypatch.setattr(native_ppo, "_network_probs", fake_probs)
+
+    adapter = load_policy_adapter(str(checkpoint), kind="policy-router", device=torch.device("cpu"))
+    legal_mask = np.array([1, 1, 0, 0, 0, 0, 0, 0, 1], dtype=np.float32)
+    probs = adapter.probs(np.zeros(N_FEATURES, dtype=np.float32), legal_mask, torch.device("cpu"))
+
+    assert "policy-router" in SUPPORTED_POLICY_KINDS
+    assert adapter.kind == "policy-router"
+    assert adapter.algorithm == "policy_population_router"
+    assert adapter.initial_chips == 321
+    assert adapter.max_steps_per_hand == 22
+    assert np.allclose(probs, np.array([0, 0, 0, 0, 0, 0, 0, 0, 1], dtype=np.float32))
+
+
+def test_load_policy_adapter_rejects_recursive_policy_router_member(tmp_path):
+    from poker_ai.games.full_deck.state import N_FEATURES
+    from poker_ai.research.policy_router import PolicyRouterNet
+
+    router = PolicyRouterNet(hidden_dim=4, n_policies=1)
+    checkpoint = tmp_path / "router.pt"
+    torch.save(
+        {
+            "algorithm": "policy_population_router",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_features": N_FEATURES,
+            "num_policies": 1,
+            "hidden_dim": 4,
+            "member_policy_kinds": ["policy-router"],
+            "member_checkpoints": ["nested.pt"],
+            "router_state_dict": router.state_dict(),
+        },
+        checkpoint,
+    )
+
+    with pytest.raises(ValueError, match="members may not themselves"):
+        load_policy_adapter(str(checkpoint), kind="router", device=torch.device("cpu"))
+
+
 def test_resolve_rllib_module_checkpoint_accepts_single_agent_default_policy(tmp_path):
     module_dir = tmp_path / "algo_ckpt" / "learner_group" / "learner" / "rl_module" / "default_policy"
     module_dir.mkdir(parents=True)
