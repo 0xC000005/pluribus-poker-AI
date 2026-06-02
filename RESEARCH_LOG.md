@@ -17712,3 +17712,24 @@
   - `uv run --with tianshou python scripts/run_native_neural_nashpg_compiled_learner.py --checkpoint-in <gen3> --reference-policy-checkpoint <gen3> --opponent-checkpoint <gen3> --opponent-checkpoint <child> --opponent-checkpoint <nfsp> --opponent-checkpoint <rainbow> --advantage-target gae --gae-lambda 0.75 --train-iterations 64 --games-per-iteration 4096 ...` -> passed on CUDA.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_neural_nashpg/native_nashpg_empirical_game_gae_gen4_gen3_nfsp_rainbow_confidence_seed20260685.json` -> solved complete four-policy matrix with pure Rainbow support.
 - Decision: keep GAE support as an opt-in diagnostic, but do not treat it as the current lead over gen3. The next principled step should either improve the policy-improvement objective itself, such as a replay/off-policy response learner with stronger value bootstrapping, or run a synthesis if another same-family native NashPG variant fails before crossing Rainbow support.
+## 20260602T025326Z-joint-experience-response-oracle-falsifier - failed
+
+- Timestamp: 2026-06-02T02:53:26Z
+- Type: joint_experience_response_oracle
+- Gate: psro_joint_experience_response_oracle_h2h_gate
+- Hypothesis: A maintained-library Rainbow response oracle trained from local compiled joint experience under the current gen3/Rainbow population should provide stronger off-policy value learning than the terminal-return NashPG variants and cross the Rainbow support gate.
+- Failure class: strategy_quality
+- Summary: Reused the existing compiled joint-experience and Tianshou Rainbow response-oracle path instead of adding new code. Dataset collection was fast and local-only: 32,768 hands, 174,666 transitions, 140k transitions/sec, zero fallback. The response oracle trained on CUDA for 2,000 updates, but the resulting checkpoint lost badly to both gen3 and the saved Rainbow control. This falsifies deterministic offline joint replay as a sufficient best-response learner; the likely missing ingredient is online/exploratory response collection, not more offline updates on the same deterministic behavior dataset.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/joint_response_gen3_rainbow_32768_seed20260686.json
+  - autoresearch-session/native_neural_nashpg/joint_response_rainbow_oracle_h256_u2000_seed20260687.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_vs_gen3_h2h_5000_seed20260689.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_vs_rainbow_h2h_5000_seed20260688.json
+- Key metrics: `{"dataset_transitions": 174666, "dataset_transitions_per_second": 140474.859908116, "oracle_updates": 2000, "oracle_updates_per_second": 184.28314409007965, "oracle_vs_gen3_mean": -0.1745094, "oracle_vs_gen3_lower95": -0.1900371, "oracle_vs_rainbow_mean": -0.0991632, "oracle_vs_rainbow_lower95": -0.1155299, "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/build_compiled_joint_experience_dataset.py --policy native-ppo:<gen3> --policy tianshou-rainbow:<rainbow> --meta-strategy 0.25,0.75 --n-hands 32768 --batch-size 256 --max-steps-per-hand 64 --device auto ...` -> passed on CUDA.
+  - `uv run --with tianshou python scripts/train_joint_experience_response_oracle.py --dataset-npz <dataset> --updates 2000 --batch-size 1024 --hidden-dim 256 --device auto ...` -> passed on CUDA.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <oracle> --candidate-kind tianshou-rainbow --baseline <rainbow> --baseline-kind tianshou-rainbow --n-games 5000 ...` -> passed and showed clear loss.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <oracle> --candidate-kind tianshou-rainbow --baseline <gen3> --baseline-kind native-ppo --n-games 5000 ...` -> passed and showed clear loss.
+- Decision: retire this deterministic offline response-oracle recipe as a lead path. If response-oracle work continues, the next version must change the data-generation mechanism, for example online epsilon/soft action exploration inside the compiled collector or an online DQN/Rainbow response rollout, not just more replay updates on argmax population traces.
