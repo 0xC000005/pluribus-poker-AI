@@ -17446,3 +17446,16 @@
   - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py test/unit/test_rnad_compiled_native_smoke.py test/unit/test_rnad_torch.py` -> `11 passed, 1 warning`.
   - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py scripts/run_rnad_compiled_native_smoke.py` -> passed.
 - Decision: do not repeat same-budget R-NaD continuation unchanged. The next R-NaD-family step must either train against empirical-game/meta-policy support, add a principled average/historical population objective, or pivot to another tabula-rasa game-theoretic learner that can beat saved native controls before any Slumbot/RLCard evaluation.
+
+## 20260602T003839Z-failure-synthesis-for-native-r-nad-continuation-and - passed
+
+- Timestamp: 2026-06-02T00:38:48Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T003650Z-native-r-nad-continuation-and-local-rl-population
+- Hypothesis: Failure synthesis for Native R-NaD continuation and local RL population gates should identify the causal model and one next falsifier before further expansion.
+- Failure class: self_play_strength
+- Summary: Completed failure synthesis for native R-NaD continuation and local population gates. Verdict is `revise`: continuation works and beats immediate parent, but parent-only wins keep failing saved NFSP/Rainbow controls and empirical-game support. The causal model is that the learner is climbing a local within-family ladder rather than learning a policy with broader population support. Next test must train against empirical-game/meta-policy support or a principled historical/average population.
+- Metrics file: autoresearch-session/poker_reviews/20260602T003650Z-native-r-nad-continuation-and-local-rl-population-synthesis/decision.json
+- Synthesis file: autoresearch-session/poker_reviews/20260602T003650Z-native-r-nad-continuation-and-local-rl-population-synthesis/synthesis.md
+- Key metrics: `{"decision": "revise", "synthesis_validation_passed": true, "experiments_since_synthesis": 0, "next_test": "train one fresh stochastic candidate against empirical-game/meta-policy support or a principled historical/average population, then require positive lower95 against support policies and nonzero empirical-game support"}`
+- Verification: `uv run python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T003650Z-native-r-nad-continuation-and-local-rl-population-synthesis --require-complete` -> passed.
