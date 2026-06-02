@@ -6344,7 +6344,6 @@
 - Summary: CUDA25 fixed-state A/B passed mechanically and preserved the calibrated response-range revealed-hand likelihood gain, but large action drift remains diagnostic-only and blocks promotion.
 - Metrics file: autoresearch-session/slumbot_trace_cases/20260515T153835Z-session2-response-range-solver-ab-full192-iter25-cuda-truth.json
 - Key metrics: `{"gate": null, "passed": true}`
-
 ## 20260515T154215Z-calibrated-opponent-response-ranges-trained-on-the-source - passed
 
 - Timestamp: 2026-05-15T15:47:48Z
@@ -18371,3 +18370,13 @@
 - Summary: The reviewed Global-PSRO-style population-expansion falsifier passed. A fresh compiled online Rainbow response trained on CUDA from the local 20k simulator against active support only, collecting 84,703 transitions in 7.72s with zero Python-showdown fallback. It passed all 2,000-game 20k H2H support edges: vs active 20k support mean=+0.036804 lower95=+0.017545; vs iter2 lower95=+0.015719; vs iter3 lower95=+0.028086; vs old iter4 lower95=+0.008823; vs raw-sequence PPO lower95=+0.014515. The complete six-policy empirical game solved to pure support on the new candidate. Action-distribution diagnostic used all 9 actions with top action call at 0.4106 and all-in fraction 0.0639. This is local 20k population progress, not Slumbot or SOTA proof.
 - Metrics file: autoresearch-session/empirical_game/native_20k_global_psro_response_expansion_seed20260858.json
 - Key metrics: `{"gate": null, "passed": null}`
+## 20260602T060008Z-the-new-20k-global-psro-response-candidate-should - passed
+
+- Timestamp: 2026-06-02T06:00:18Z
+- Type: experiment
+- Gate: 20k_global_psro_support_confidence_h2h
+- Hypothesis: The new 20k Global-PSRO response candidate should retain a positive confidence H2H edge over the previous active 20k support at 10,000 duplicate-swapped games.
+- Failure class: none
+- Summary: The new 20k Global-PSRO response candidate retained a strong confidence edge over the previous active 20k support: 10,000 duplicate-swapped H2H games, mean=+0.040936, lower95=+0.032377, upper95=+0.049495, 244.19 games/sec, native 9-action full-deck environment, 20,000-chip stack, no Slumbot training data. This confirms the candidate as the current local 20k support lead, but it remains internal local evidence rather than Slumbot/SOTA proof.
+- Metrics file: autoresearch-session/native_neural_nashpg/global_psro_response_to_20k_support_vs_prev_support_h2h_10000_seed20260860.json
+- Key metrics: `{"gate": null, "passed": true}`
