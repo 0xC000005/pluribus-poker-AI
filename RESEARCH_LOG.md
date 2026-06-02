@@ -18240,3 +18240,49 @@
   - `uv run pytest -q test/unit/test_native_policy_action_distribution.py test/unit/test_policy_action_collapse_gate.py` -> `4 passed`.
   - `python -m py_compile scripts/eval_native_policy_action_distribution.py` -> passed.
 - Decision: Do not fix this branch with anti-collapse patches or entropy tweaks. The next mechanism needs better strategic learning from the 20k population, not more action-distribution regularization.
+## 20260602T052330Z-failure-synthesis-for-20k-maintained-ppo-response-failed - passed
+
+- Timestamp: 2026-06-02T05:23:30Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T052019Z-20k-maintained-ppo-response-failed-current-20k-support
+- Hypothesis: Failure synthesis for 20k maintained PPO response failed current 20k support bar should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T052019Z-20k-maintained-ppo-response-failed-current-20k-support passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T052330Z-failure-synthesis-for-20k-maintained-ppo-response-failed/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T052019Z-20k-maintained-ppo-response-failed-current-20k-support", "passed": true}`
+
+## 20260602T052544Z-methodology-review-for-compiled-20k-population-stochastic-learner - passed
+
+- Timestamp: 2026-06-02T05:25:44Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T052352Z-compiled-20k-population-stochastic-learner
+- Hypothesis: Methodology review for Compiled 20k population stochastic learner should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T052352Z-compiled-20k-population-stochastic-learner passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T052544Z-methodology-review-for-compiled-20k-population-stochastic-learner/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T052352Z-compiled-20k-population-stochastic-learner", "passed": true}`
+
+## 20260602T052820Z-compiled-20k-population-gae-stochastic-actor - failed
+
+- Timestamp: 2026-06-02T05:28:20Z
+- Type: experiment
+- Gate: compiled_population_stochastic_learner_vs_20k_support
+- Hypothesis: A fresh native compiled stochastic actor/value learner with GAE targets, trained from local 20000-chip trajectories against the active 20k support checkpoint, should beat that support under matched 20k H2H.
+- Failure class: strategy_quality
+- Summary: The reviewed compiled-population falsifier trained mechanically on CUDA and wrote a valid native 9-action checkpoint from `128645` local samples, with zero Python showdown fallback and zero illegal-action probability. The matched 2000-game 20k H2H truth gate failed decisively against the active 20k online Rainbow support: mean=-0.041601, lower95=-0.062704, upper95=-0.020498. A follow-up local action-distribution diagnostic passed: all 9 actions were sampled, top action was call at 0.2283, all-in fraction was 0.2252, and mean entropy was 1.7181. This falsifies the small compiled GAE NashPG-style actor at this budget and reinforces that the current stochastic-policy gap is strategic learning quality, not action collapse or wrapper overhead.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/compiled_population_stochastic_gae_20k_h256_32x2048_seed20260841.json
+  - autoresearch-session/native_neural_nashpg/compiled_population_stochastic_gae_20k_h256_32x2048_vs_support_h2h_2000_seed20260842.json
+  - autoresearch-session/native_neural_nashpg/compiled_population_stochastic_gae_20k_h256_32x2048_action_distribution_20k_seed20260843.json
+- Key metrics: `{"train_resolved_device": "cuda", "train_samples_per_second": 13696.234, "train_n_samples": 128645, "compiled_needs_python_showdown": 0, "h2h_mean_candidate_payoff": -0.041601, "h2h_lower95_candidate_payoff": -0.062704, "h2h_upper95_candidate_payoff": -0.020498, "action_gate_passed": true, "top_action_fraction": 0.228266, "all_in_fraction": 0.225216, "mean_entropy": 1.718063}`
+- Decision: Keep the checkpoint as falsification evidence only. Do not scale this exact GAE policy-gradient recipe or add anti-collapse patches; synthesize and pivot to a stronger off-policy/empirical-game population response objective if continuing the tabula-rasa stochastic-policy branch.
+## 20260602T052919Z-failure-synthesis-for-20k-compiled-population-gae-stochastic - passed
+
+- Timestamp: 2026-06-02T05:29:19Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T052821Z-20k-compiled-population-gae-stochastic-actor-failed-support
+- Hypothesis: Failure synthesis for 20k compiled population GAE stochastic actor failed support H2H should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T052821Z-20k-compiled-population-gae-stochastic-actor-failed-support passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T052919Z-failure-synthesis-for-20k-compiled-population-gae-stochastic/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T052821Z-20k-compiled-population-gae-stochastic-actor-failed-support", "passed": true}`
