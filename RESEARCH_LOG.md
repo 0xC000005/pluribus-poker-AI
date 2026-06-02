@@ -18490,3 +18490,14 @@
 - Summary: Gate methodology-review-20260602T062648Z-native-neural-nashpg-mmd-population-learner-after-rainbow passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T062918Z-methodology-review-for-native-neural-nashpg-mmd-population/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "methodology-review-20260602T062648Z-native-neural-nashpg-mmd-population-learner-after-rainbow", "passed": true}`
+
+## 20260602T063020Z-small-nlhe-exact-mmd-sanity - passed
+
+- Timestamp: 2026-06-02T06:30:20Z
+- Type: experiment
+- Gate: small_nlhe_mmd_truth_gate
+- Hypothesis: Exact OpenSpiel MMD/dilated-entropy policy dynamics should still reduce NashConv on the locked small-NLHE sanity harness before any renewed native MMD/NashPG mechanism work.
+- Failure class: none
+- Summary: Re-ran the exact small-NLHE MMD truth gate through transient `uv run --with open-spiel`. The harness fingerprint matched the locked sanity game (`actions=4`, `max_len=7`, `nodes=637`, `uniform_nashconv=1.7000`) and MMD reduced current NashConv to `0.084198` after 200 steps, with average NashConv `0.318004` and finite regularized gap `0.044798`. This supports the regularized-dynamics principle but remains small-game evaluator evidence only; it does not promote any native HUNL checkpoint.
+- Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_exact_200_seedless_20260602T0630.json
+- Key metrics: `{"candidate_truth_gate_passed": true, "start_current_nashconv": 1.7, "best_current_nashconv": 0.08419827983160522, "small_game_exact_only": true}`
