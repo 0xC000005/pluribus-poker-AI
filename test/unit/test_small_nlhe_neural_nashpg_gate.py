@@ -105,6 +105,51 @@ def test_small_nlhe_neural_nashpg_gate_supports_gae_targets(tmp_path):
     assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["advantage_target"] == "gae"
 
 
+def test_small_nlhe_neural_nashpg_gate_supports_ppo_inner_update(tmp_path):
+    pytest.importorskip("pyspiel")
+    out = tmp_path / "neural_nashpg_gate_ppo.json"
+    repo = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_small_nlhe_neural_nashpg_gate.py",
+            "--steps",
+            "1",
+            "--eval-every",
+            "1",
+            "--batch-size",
+            "16",
+            "--seeds",
+            "1",
+            "--layers",
+            "8",
+            "--inner-update",
+            "ppo",
+            "--ppo-epochs",
+            "2",
+            "--ppo-minibatches",
+            "2",
+            "--clip-coef",
+            "0.2",
+            "--output-json",
+            str(out),
+        ],
+        check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(out.read_text())
+
+    assert data["config"]["inner_update"] == "ppo"
+    assert data["config"]["ppo_epochs"] == 2
+    assert data["config"]["ppo_minibatches"] == 2
+    assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["inner_update"] == "ppo"
+
+
 def test_small_nlhe_neural_nashpg_gate_supports_full_self_play_collector(tmp_path):
     pytest.importorskip("pyspiel")
     out = tmp_path / "neural_nashpg_gate_full_self_play.json"

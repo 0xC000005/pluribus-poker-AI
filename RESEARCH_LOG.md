@@ -18777,3 +18777,20 @@
   - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
   - Corrected gate command above -> passed and wrote the metrics file.
 - Decision: retire the earlier neural NashPG pass as stale comparator evidence. Do not scale the current neural PG/R-NaD-family objective into native 9-action HUNL. The next mechanism must either reproduce a stronger counterfactual/sequence-form-compatible objective on small-NLHE or pivot to a population/empirical-game learner that beats the corrected learner-source R-NaD baseline before any native scale-up.
+
+## 20260602T091000Z-small-nlhe-ppo-inner-nashpg - passed
+
+- Timestamp: 2026-06-02T09:10:00Z
+- Type: experiment
+- Gate: small_nlhe_ppo_inner_nashpg_truth_gate
+- Hypothesis: The corrected small-game failure is caused by the weak single-update actor-critic inner optimizer rather than by the NashPG/MMD-style reference idea itself. Replacing the inner update with a PPO-style clipped policy-gradient optimizer, using IIG benchmark defaults and full self-play with player-perspective GAE, should beat learner-source R-NaD under exact NashConv.
+- Failure class: none
+- Summary: Added opt-in `--inner-update ppo` to the neural small-NLHE NashPG gate. PPO fixes the behavior policy for a collected trajectory, computes player-perspective targets once, and performs clipped minibatch policy/value updates before the next self-play batch. The old `pg` path remains the default. The single predeclared 3-seed run used IIG PPO defaults (`lr=0.00025`, `clip=0.1`, `entropy=0.05`, `gamma=0.99`, `gae_lambda=0.95`, `4` epochs/minibatches) with `collector-mode=full-self-play` and `advantage-target=player-gae`. It passed the corrected deployable-policy gate: mean best NashConv `0.118037`, mean last `0.150055`, both below learner-source R-NaD mean last `0.211838`. Runtime was `199.698s` on the small game.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_ppo_inner_player_gae_iig_defaults_1200_seed1_3_vs_rnad_learner.json
+- Key metrics: `{"mean_start_nashconv": 1.719228, "mean_best_nashconv": 0.118037, "mean_last_nashconv": 0.150055, "baseline_rnad_learner_mean_last_nashconv": 0.211838, "best_beats_baseline": true, "last_beats_baseline": true, "candidate_truth_gate_passed": true, "seconds": 199.698, "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: NashPG proposes iterative reference regularization with a policy-gradient inner optimizer and reports scaling to No-Limit Texas Hold'em (https://arxiv.org/abs/2510.18183). Recent IIG policy-gradient work reports PPO-style methods as competitive when exact exploitability is available for evaluation (https://arxiv.org/abs/2502.08938). The theoretical PG-for-IIG line emphasizes that plain Q-style feedback is not enough and that regularized self-play structure matters (https://arxiv.org/abs/2408.00751).
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py::test_small_nlhe_neural_nashpg_gate_supports_ppo_inner_update` -> `1 passed`.
+  - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
+  - PPO-inner gate command above -> passed and wrote the metrics file.
+- Decision: PPO-inner NashPG becomes the current small-game neural lead and authorizes native mechanism translation work, not Slumbot evaluation. The next step is a native compiled PPO-inner NashPG learner using the same self-play/reference/GAE/clipped-update schema, followed by parent/population H2H and empirical-game support gates.

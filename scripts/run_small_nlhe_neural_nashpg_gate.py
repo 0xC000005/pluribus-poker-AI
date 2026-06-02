@@ -58,17 +58,29 @@ class NeuralReferencePGSolver:
         decision_weight_mode: str = "uniform",
         max_decision_weight: float = 10.0,
         collector_mode: str = "seat-aware",
+        inner_update: str = "pg",
+        ppo_epochs: int = 4,
+        ppo_minibatches: int = 4,
+        clip_coef: float = 0.2,
     ) -> None:
         if str(advantage_target) not in {"terminal", "gae", "player-gae"}:
             raise ValueError("advantage_target must be one of: terminal, gae, player-gae")
         if str(decision_weight_mode) not in {"uniform", "inverse-own-reach"}:
             raise ValueError("decision_weight_mode must be one of: uniform, inverse-own-reach")
+        if str(inner_update) not in {"pg", "ppo"}:
+            raise ValueError("inner_update must be one of: pg, ppo")
         if not (0.0 <= float(gamma) <= 1.0):
             raise ValueError("gamma must be in [0, 1]")
         if not (0.0 <= float(gae_lambda) <= 1.0):
             raise ValueError("gae_lambda must be in [0, 1]")
         if float(max_decision_weight) <= 0.0:
             raise ValueError("max_decision_weight must be positive")
+        if int(ppo_epochs) <= 0:
+            raise ValueError("ppo_epochs must be positive")
+        if int(ppo_minibatches) <= 0:
+            raise ValueError("ppo_minibatches must be positive")
+        if float(clip_coef) <= 0.0:
+            raise ValueError("clip_coef must be positive")
         self.collector = collector
         self.device = torch.device("cpu")
         self.n_actions = int(collector.n_actions)
@@ -91,6 +103,10 @@ class NeuralReferencePGSolver:
         self.decision_weight_mode = str(decision_weight_mode)
         self.max_decision_weight = float(max_decision_weight)
         self.collector_mode = str(collector_mode)
+        self.inner_update = str(inner_update)
+        self.ppo_epochs = int(ppo_epochs)
+        self.ppo_minibatches = int(ppo_minibatches)
+        self.clip_coef = float(clip_coef)
         self._rng = np.random.RandomState(int(seed))
         self.learner_steps = 0
 
@@ -203,8 +219,197 @@ class NeuralReferencePGSolver:
             "decision_weight_mode": self.decision_weight_mode,
             "mean_decision_weight": mean_weight,
             "max_decision_weight": max_weight,
+            "inner_update": "pg",
         }
         return loss, logs
+
+    def _fixed_training_rows(self, traj) -> tuple[dict[str, torch.Tensor], dict]:
+        safe_legal = torch.where(
+            traj.legal.sum(-1, keepdim=True) > 0,
+            traj.legal,
+            torch.ones_like(traj.legal),
+        )
+        with torch.no_grad():
+            pi, value, log_pi, _ = self.net(traj.obs, safe_legal)
+
+        valid = traj.valid.to(pi.dtype)
+        decision_weights = _decision_weights(
+            mode=self.decision_weight_mode,
+            action_oh=traj.action_oh,
+            behavior_policy=traj.policy,
+            valid=valid,
+            max_decision_weight=self.max_decision_weight,
+        ).to(pi.dtype)
+        weighted_valid = valid * decision_weights
+        mask = weighted_valid > 0
+
+        player = traj.player_id.long().clamp(min=0)
+        final_returns = traj.rewards[-1]
+        actor_return = torch.gather(
+            final_returns.unsqueeze(0).expand(traj.rewards.shape[0], -1, self.num_players),
+            2,
+            player.unsqueeze(-1),
+        ).squeeze(-1)
+        actor_reward = torch.gather(
+            traj.rewards,
+            2,
+            player.unsqueeze(-1),
+        ).squeeze(-1)
+        value_flat = value.squeeze(-1)
+        if self.advantage_target == "terminal":
+            value_target = actor_return
+            advantage = value_target - value_flat.detach()
+        elif self.advantage_target == "gae":
+            value_target, advantage = _linked_bootstrap_targets_and_advantages(
+                values=value_flat.detach(),
+                terminal_returns=actor_return,
+                valid=valid,
+                gamma=self.gamma,
+                gae_lambda=self.gae_lambda,
+            )
+        else:
+            value_target, advantage = _player_perspective_bootstrap_targets_and_advantages(
+                values=value_flat.detach(),
+                rewards=actor_reward,
+                terminal_returns=actor_return,
+                valid=valid,
+                player_id=traj.player_id,
+                gamma=self.gamma,
+                gae_lambda=self.gae_lambda,
+            )
+        if bool(mask.any()):
+            adv_valid = advantage[mask]
+            advantage = (advantage - adv_valid.mean()) / (adv_valid.std(unbiased=False) + 1e-5)
+        old_logp_action = (traj.action_oh * log_pi).sum(-1)
+        action_ids = traj.action_oh.argmax(dim=-1)
+
+        observed_weights = decision_weights[valid > 0]
+        logs = {
+            "collector_mode": self.collector_mode,
+            "mean_valid_decisions": float(valid.sum().detach().cpu()) / max(1, int(valid.shape[1])),
+            "advantage_target": self.advantage_target,
+            "gamma": self.gamma,
+            "gae_lambda": self.gae_lambda,
+            "decision_weight_mode": self.decision_weight_mode,
+            "mean_decision_weight": (
+                float(observed_weights.detach().mean().cpu())
+                if int(observed_weights.numel()) > 0
+                else 0.0
+            ),
+            "max_decision_weight": (
+                float(observed_weights.detach().max().cpu())
+                if int(observed_weights.numel()) > 0
+                else 0.0
+            ),
+        }
+        rows = {
+            "obs": traj.obs[mask],
+            "legal": safe_legal[mask],
+            "actions": action_ids[mask],
+            "old_logp_action": old_logp_action[mask].detach(),
+            "value_target": value_target[mask].detach(),
+            "advantage": advantage[mask].detach(),
+            "weights": weighted_valid[mask].detach(),
+        }
+        return rows, logs
+
+    def _loss_on_fixed_rows(
+        self,
+        rows: dict[str, torch.Tensor],
+        indices: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict]:
+        obs = rows["obs"][indices]
+        legal = rows["legal"][indices]
+        actions = rows["actions"][indices].long()
+        old_logp_action = rows["old_logp_action"][indices]
+        value_target = rows["value_target"][indices]
+        advantage = rows["advantage"][indices]
+        weights = rows["weights"][indices]
+        denom = weights.sum().clamp_min(1.0)
+
+        pi, value, log_pi, _ = self.net(obs, legal)
+        with torch.no_grad():
+            ref_pi, _, _, _ = self.reference_net(obs, legal)
+
+        new_logp_action = log_pi.gather(1, actions.view(-1, 1)).squeeze(1)
+        ratio = torch.exp(new_logp_action - old_logp_action)
+        clipped_ratio = torch.clamp(ratio, 1.0 - self.clip_coef, 1.0 + self.clip_coef)
+        policy_loss = (
+            torch.maximum(-advantage * ratio, -advantage * clipped_ratio) * weights
+        ).sum() / denom
+        value_loss = (((value.squeeze(-1) - value_target) ** 2) * weights).sum() / denom
+        entropy = -((pi.clamp_min(1e-9).log() * pi * legal).sum(-1) * weights).sum() / denom
+        kl = (
+            (
+                pi
+                * (pi.clamp_min(1e-9).log() - ref_pi.clamp_min(1e-9).log())
+                * legal
+            ).sum(-1)
+            * weights
+        ).sum() / denom
+        loss = (
+            policy_loss
+            + self.value_weight * value_loss
+            + self.reference_kl_weight * kl
+            - self.entropy_weight * entropy
+        )
+        with torch.no_grad():
+            approx_kl = ((ratio - 1.0) - torch.log(ratio.clamp_min(1e-9))).mean()
+            clip_fraction = (
+                (torch.abs(ratio - 1.0) > self.clip_coef)
+                .to(dtype=ratio.dtype)
+                .mean()
+            )
+        logs = {
+            "loss": float(loss.detach().cpu()),
+            "policy_loss": float(policy_loss.detach().cpu()),
+            "value_loss": float(value_loss.detach().cpu()),
+            "reference_kl": float(kl.detach().cpu()),
+            "entropy": float(entropy.detach().cpu()),
+            "approx_kl": float(approx_kl.detach().cpu()),
+            "clip_fraction": float(clip_fraction.detach().cpu()),
+        }
+        return loss, logs
+
+    def _ppo_step_on_trajectory(self, traj) -> dict:
+        rows, base_logs = self._fixed_training_rows(traj)
+        n_rows = int(rows["obs"].shape[0])
+        if n_rows <= 0:
+            return {
+                **base_logs,
+                "inner_update": "ppo",
+                "loss": 0.0,
+                "n_ppo_rows": 0,
+                "ppo_epochs": self.ppo_epochs,
+                "ppo_minibatches": self.ppo_minibatches,
+                "clip_coef": self.clip_coef,
+            }
+        minibatches = max(1, min(self.ppo_minibatches, n_rows))
+        last_logs: dict = {}
+        for _epoch_i in range(self.ppo_epochs):
+            order_np = self._rng.permutation(n_rows)
+            for mb_np in np.array_split(order_np, minibatches):
+                if mb_np.size <= 0:
+                    continue
+                mb = torch.as_tensor(mb_np, dtype=torch.long, device=self.device)
+                self.optimizer.zero_grad(set_to_none=True)
+                loss, last_logs = self._loss_on_fixed_rows(rows, mb)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10.0)
+                self.optimizer.step()
+        self.learner_steps += 1
+        if self.learner_steps % self.reference_update_every == 0:
+            self.reference_net.load_state_dict(self.net.state_dict())
+        return {
+            **base_logs,
+            **last_logs,
+            "inner_update": "ppo",
+            "n_ppo_rows": n_rows,
+            "ppo_epochs": self.ppo_epochs,
+            "ppo_minibatches": self.ppo_minibatches,
+            "clip_coef": self.clip_coef,
+            "learner_steps": int(self.learner_steps),
+        }
 
     def step(self, *, batch_size: int, trajectory_max: int) -> dict:
         traj = self.collector.collect(
@@ -213,6 +418,8 @@ class NeuralReferencePGSolver:
             int(trajectory_max),
             self._rng,
         ).to(self.device)
+        if self.inner_update == "ppo":
+            return self._ppo_step_on_trajectory(traj)
         self.optimizer.zero_grad(set_to_none=True)
         loss, logs = self._loss_on_trajectory(traj)
         loss.backward()
@@ -390,6 +597,10 @@ def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
         decision_weight_mode=str(args.decision_weight_mode),
         max_decision_weight=float(args.max_decision_weight),
         collector_mode=str(args.collector_mode),
+        inner_update=str(args.inner_update),
+        ppo_epochs=int(args.ppo_epochs),
+        ppo_minibatches=int(args.ppo_minibatches),
+        clip_coef=float(args.clip_coef),
     )
     trajectory_max = max(8, game.max_game_length() + 1)
     history = [(0, _nashconv_from_solver(game, by, solver, policy_lib, exploitability))]
@@ -472,6 +683,10 @@ def main(argv=None) -> int:
         default="uniform",
     )
     parser.add_argument("--max-decision-weight", type=float, default=10.0)
+    parser.add_argument("--inner-update", choices=("pg", "ppo"), default="pg")
+    parser.add_argument("--ppo-epochs", type=int, default=4)
+    parser.add_argument("--ppo-minibatches", type=int, default=4)
+    parser.add_argument("--clip-coef", type=float, default=0.2)
     parser.add_argument(
         "--collector-mode",
         choices=("seat-aware", "full-self-play"),
@@ -502,6 +717,12 @@ def main(argv=None) -> int:
         raise ValueError("--gae-lambda must be in [0, 1]")
     if float(args.max_decision_weight) <= 0.0:
         raise ValueError("--max-decision-weight must be positive")
+    if int(args.ppo_epochs) <= 0:
+        raise ValueError("--ppo-epochs must be positive")
+    if int(args.ppo_minibatches) <= 0:
+        raise ValueError("--ppo-minibatches must be positive")
+    if float(args.clip_coef) <= 0.0:
+        raise ValueError("--clip-coef must be positive")
     if args.collector_mode == "full-self-play" and args.advantage_target == "gae":
         parser.error(
             "full-self-play GAE is unsupported by this current-player value convention; "
@@ -597,6 +818,10 @@ def main(argv=None) -> int:
             "decision_weight_mode": str(args.decision_weight_mode),
             "max_decision_weight": float(args.max_decision_weight),
             "collector_mode": str(args.collector_mode),
+            "inner_update": str(args.inner_update),
+            "ppo_epochs": int(args.ppo_epochs),
+            "ppo_minibatches": int(args.ppo_minibatches),
+            "clip_coef": float(args.clip_coef),
             "baseline_json": args.baseline_json,
             "baseline_arm": args.baseline_arm,
         },

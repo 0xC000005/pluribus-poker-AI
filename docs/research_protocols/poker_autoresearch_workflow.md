@@ -444,12 +444,14 @@ another native 9-action HUNL learner.
 That neural truth gate now exists, but its first apparent pass used the weaker
 target-source R-NaD comparator and a best-over-training pass rule. Re-scoring
 R-NaD with the learner policy gives a stronger mean last NashConv `0.211838`.
-The gate now requires the deployable last policy to beat the baseline. The
-corrected seeded rerun failed (`mean best=0.496696`, `mean last=1.131906`), and
-later full-self-play terminal, GAE, and player-perspective GAE controls also
-failed. This keeps the neural update family as a research lead, but it does not
-authorize Slumbot evaluation, full-HUNL strength claims, or another native
-scale-up without a stronger small-game gate.
+The gate now requires the deployable last policy to beat the baseline. Plain
+sampled PG failed the corrected seeded rerun (`mean best=0.496696`, `mean
+last=1.131906`). A PPO-inner NashPG variant grounded in recent IIG policy-gradient
+benchmarks and NashPG related work then passed with full self-play and
+player-perspective GAE (`mean best=0.118037`, `mean last=0.150055`). This revives
+native translation of the neural update family, but only through the PPO-inner
+mechanism and only after native parent/population gates; it does not authorize
+Slumbot evaluation or full-HUNL strength claims.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
@@ -1190,8 +1192,10 @@ terminal-return NashPG/MMD response, unchanged V-trace actor, unchanged GAE
 compiled actor, and the small-NLHE GAE/high-entropy PG control that failed the
 R-NaD exact-NashConv baseline. The earlier neural NashPG "pass" is retired
 because it used target-source R-NaD and a best-over-training pass rule; the
-current corrected rerun against learner-source R-NaD fails. The active pivot is a reviewed
-counterfactual/sequence-form-compatible policy-gradient or population objective.
+current corrected rerun against learner-source R-NaD fails. PPO-inner NashPG is
+the active small-game lead because it beat learner-source R-NaD with the
+deployable last policy. The next native work must translate that exact mechanism
+and then pass parent/population H2H and empirical-game support before Slumbot.
 
 ## Legacy Resolver Diagnostics
 
