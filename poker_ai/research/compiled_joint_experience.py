@@ -84,6 +84,7 @@ def collect_compiled_joint_experience(
     seed: int = 20260618,
     initial_chips: int = 1000,
     max_steps_per_hand: int = 256,
+    exploration_epsilon: float = 0.0,
     device: str | torch.device = "auto",
 ) -> dict[str, Any]:
     """Collect replay-ready local trajectories under a population meta-policy."""
@@ -99,6 +100,9 @@ def collect_compiled_joint_experience(
         raise ValueError("batch_size must be positive")
     if max_steps <= 0:
         raise ValueError("max_steps_per_hand must be positive")
+    epsilon = float(exploration_epsilon)
+    if epsilon < 0.0 or epsilon > 1.0:
+        raise ValueError("exploration_epsilon must be in [0, 1]")
     chips = int(initial_chips)
     if chips <= 0:
         raise ValueError("initial_chips must be positive")
@@ -135,6 +139,7 @@ def collect_compiled_joint_experience(
     hand_indices: list[int] = []
     step_indices: list[int] = []
     forward_calls = 0
+    exploratory_actions = 0
     needs_python_showdown = 0
     started = time.perf_counter()
 
@@ -173,6 +178,11 @@ def collect_compiled_joint_experience(
                 for row_i, hand_i in enumerate(group):
                     player_i = int(current_players[hand_i])
                     action_idx = int(selected[row_i])
+                    if epsilon > 0.0 and float(rng.random()) < epsilon:
+                        legal_actions = np.flatnonzero(masks[row_i])
+                        if legal_actions.size > 0:
+                            action_idx = int(rng.choice(legal_actions))
+                            exploratory_actions += 1
                     action_array[hand_i] = action_idx
                     pending.append(
                         (
@@ -249,6 +259,9 @@ def collect_compiled_joint_experience(
         "truncated_hands": int(truncated_hands),
         "initial_chips": chips,
         "max_steps_per_hand": max_steps,
+        "exploration_epsilon": float(epsilon),
+        "exploratory_actions": int(exploratory_actions),
+        "exploratory_action_fraction": float(exploratory_actions / max(len(actions), 1)),
         "batch_size": batch_size,
         "seconds": float(seconds),
         "transitions_per_second": float(len(actions) / max(seconds, 1e-12)),

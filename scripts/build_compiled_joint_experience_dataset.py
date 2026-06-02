@@ -60,6 +60,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--initial-chips", type=int, default=1000)
     parser.add_argument("--max-steps-per-hand", type=int, default=256)
+    parser.add_argument(
+        "--exploration-epsilon",
+        type=float,
+        default=0.0,
+        help="Probability of replacing the selected policy action with a random legal action.",
+    )
     parser.add_argument("--seed", type=int, default=20260618)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--output-npz", type=Path, required=True)
@@ -82,6 +88,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         seed=args.seed,
         initial_chips=args.initial_chips,
         max_steps_per_hand=args.max_steps_per_hand,
+        exploration_epsilon=args.exploration_epsilon,
         device=resolved_device,
     )
     summary = save_joint_experience_npz(

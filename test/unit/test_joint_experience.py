@@ -119,7 +119,48 @@ def test_collect_compiled_joint_experience_records_next_state_contract():
     assert np.all(np.isfinite(dataset["returns"]))
     assert np.isclose(dataset["meta_strategy"].sum(), 1.0)
     assert set(np.unique(dataset["behavior_policy_indices"])) <= {0, 1}
+    assert dataset["exploration_epsilon"] == 0.0
+    assert dataset["exploratory_actions"] == 0
     assert dataset["needs_python_showdown"] == 0
+
+
+def test_collect_compiled_joint_experience_supports_legal_exploration():
+    from poker_ai.research.compiled_joint_experience import (
+        CompiledJointPolicy,
+        collect_compiled_joint_experience,
+    )
+
+    class FixedScorePolicy(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.register_buffer("scores", torch.arange(N_ACTIONS, dtype=torch.float32))
+
+        def forward(self, features):
+            return self.scores.expand(features.shape[0], -1)
+
+    dataset = collect_compiled_joint_experience(
+        [
+            CompiledJointPolicy(
+                kind="fixed",
+                checkpoint_path="fixed.pt",
+                algorithm="fixed",
+                module=FixedScorePolicy(),
+            )
+        ],
+        meta_strategy=[1.0],
+        n_hands=16,
+        batch_size=8,
+        seed=20260686,
+        initial_chips=100,
+        max_steps_per_hand=16,
+        exploration_epsilon=1.0,
+        device=torch.device("cpu"),
+    )
+
+    assert dataset["exploration_epsilon"] == 1.0
+    assert dataset["exploratory_actions"] == dataset["n_transitions"]
+    assert dataset["exploratory_action_fraction"] == 1.0
+    assert np.all(dataset["legal_masks"][np.arange(dataset["n_transitions"]), dataset["actions"]])
 
 
 def test_save_joint_experience_npz_writes_arrays_and_manifest(tmp_path):
@@ -259,6 +300,8 @@ def test_build_compiled_joint_experience_dataset_cli_writes_npz_and_manifest(mon
             "2",
             "--batch-size",
             "2",
+            "--exploration-epsilon",
+            "0.25",
             "--output-npz",
             str(output),
             "--manifest-json",

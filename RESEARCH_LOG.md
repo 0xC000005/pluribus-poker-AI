@@ -17733,3 +17733,27 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <oracle> --candidate-kind tianshou-rainbow --baseline <rainbow> --baseline-kind tianshou-rainbow --n-games 5000 ...` -> passed and showed clear loss.
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate <oracle> --candidate-kind tianshou-rainbow --baseline <gen3> --baseline-kind native-ppo --n-games 5000 ...` -> passed and showed clear loss.
 - Decision: retire this deterministic offline response-oracle recipe as a lead path. If response-oracle work continues, the next version must change the data-generation mechanism, for example online epsilon/soft action exploration inside the compiled collector or an online DQN/Rainbow response rollout, not just more replay updates on argmax population traces.
+## 20260602T025838Z-exploratory-joint-experience-response-oracle - passed
+
+- Timestamp: 2026-06-02T02:58:38Z
+- Type: exploratory_joint_experience_response_oracle
+- Gate: exploratory_psro_response_oracle_empirical_game_gate
+- Hypothesis: Adding local legal action exploration to compiled joint-experience collection should fix the deterministic replay oracle's missing-action-coverage failure and produce a response policy that crosses Rainbow support.
+- Failure class: strategy_quality
+- Summary: Added opt-in `--exploration-epsilon` support to the compiled joint-experience collector and reran the response-oracle gate with 20% random legal exploration under the gen3/Rainbow local population. The collector produced 146,991 local transitions with 29,520 exploratory actions, zero fallback, and CUDA rollout. The resulting Rainbow response oracle beat the saved Rainbow control and NFSP with positive lower bounds, was roughly neutral versus gen3, and the four-policy empirical game no longer solved to pure Rainbow. This is the first native local population gate in this cycle to give nonzero support to a new learned response. It is live mechanism evidence, not Slumbot promotion.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/joint_response_gen3_rainbow_eps020_32768_seed20260690.json
+  - autoresearch-session/native_neural_nashpg/joint_response_rainbow_oracle_eps020_h256_u2000_seed20260691.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_empirical_game_oracle_gen3_rainbow_nfsp_seed20260694.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_vs_rainbow_h2h_5000_seed20260692.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_vs_gen3_h2h_5000_seed20260693.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_vs_nfsp_h2h_5000_seed20260694.json
+- Key metrics: `{"dataset_transitions": 146991, "exploration_epsilon": 0.2, "exploratory_actions": 29520, "exploratory_action_fraction": 0.20082862216054045, "dataset_transitions_per_second": 115070.34859631766, "oracle_updates": 2000, "oracle_updates_per_second": 268.929318439878, "oracle_vs_rainbow_mean": 0.0156068, "oracle_vs_rainbow_lower95": 0.00618304, "oracle_vs_gen3_mean": -0.0014788, "oracle_vs_gen3_lower95": -0.00762665, "oracle_vs_nfsp_mean": 0.0663062, "oracle_vs_nfsp_lower95": 0.05373004, "empirical_meta_strategy": [0.1313834844101901, 0.7934356554939274, 0.07518086009588257, 0.0], "promotion": false}`
+- Verification:
+  - `uv run --with tianshou pytest -q test/unit/test_joint_experience.py test/unit/test_joint_experience_response_oracle.py` -> `9 passed`.
+  - `python -m py_compile poker_ai/research/compiled_joint_experience.py scripts/build_compiled_joint_experience_dataset.py` -> passed.
+  - `uv run --with tianshou python scripts/build_compiled_joint_experience_dataset.py --policy native-ppo:<gen3> --policy tianshou-rainbow:<rainbow> --meta-strategy 0.25,0.75 --n-hands 32768 --batch-size 256 --max-steps-per-hand 64 --exploration-epsilon 0.20 --device auto ...` -> passed on CUDA.
+  - `uv run --with tianshou python scripts/train_joint_experience_response_oracle.py --dataset-npz <exploratory_dataset> --updates 2000 --batch-size 1024 --hidden-dim 256 --device auto ...` -> passed on CUDA.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_empirical_game_oracle_gen3_rainbow_nfsp_seed20260694.json` -> solved complete four-policy matrix with oracle support.
+- Decision: keep exploratory joint-experience response-oracle training as the live native population-improvement mechanism. The next gate should replicate or strengthen this result, ideally with a larger exploratory dataset or online exploratory response collection, and require candidate support plus positive H2H against Rainbow before any Slumbot/RLCard promotion path.
