@@ -19571,3 +19571,19 @@
 - Verification:
   - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T112552Z-world-averaged-all-action-target-consumers-failed-h2h-synthesis --require-complete` -> passed with decision `revise`.
 - Decision: Pivot the next branch back to direct local simulator-reward policy improvement or explicit empirical-game/population objectives. Do not run Slumbot/RLCard, and do not start another local target-consumer branch without a methodology review and a predeclared H2H truth gate.
+
+## 20260602T173500Z-methodology-review-for-simulator-reward-objective - passed
+
+- Timestamp: 2026-06-02T17:35:00Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T112749Z-simulator-reward-policy-improvement-objective-after-all-action
+- Hypothesis: After retiring all-action target consumers, the next branch should be reviewed as a simulator-reward policy-improvement or empirical-game population objective before any new code or training run.
+- Failure class: none
+- Summary: Completed the methodology review with independent-verifier, related-work, benchmark-audit, mechanism-review, structured-scope, decision, and tracked manifest artifacts. Verdict is `revise`: the pivot away from detached all-action target consumers is justified, but the replacement must name one concrete estimator/objective and predeclare parent/control H2H plus empirical-game gates. The review blocks generic PPO/GAE reruns, unchanged PPO-inner/R-NaD variants already falsified in the log, Slumbot feedback, AlphaNLHoldem projection, and target-metric-only promotion.
+- Manifest: docs/research_protocols/poker_review_manifests/20260602T112749Z-simulator-reward-policy-improvement-objective-after-all-action.json
+- Key metrics: `{"decision": "revise", "methodology_review_passed": true, "next_required_family": "simulator_reward_policy_improvement_or_empirical_game_population_objective", "primary_gate": "positive_lower95_h2h_plus_empirical_game_support", "uses_slumbot_training_data": false, "promotion": false}`
+- Related work grounding: The review cites AlphaHoldem for end-to-end HUNL self-play RL, policy-gradient IIG work for counterfactual-compatible objectives, Student of Games for coupled learned policy/value plus game reasoning, and NFSP for population/average-policy learning.
+- Verification:
+  - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T112749Z-simulator-reward-policy-improvement-objective-after-all-action --require-complete` -> passed with decision `revise`.
+  - `python scripts/poker_autoresearch.py write-review-manifest --review-dir autoresearch-session/poker_reviews/20260602T112749Z-simulator-reward-policy-improvement-objective-after-all-action` -> wrote the tracked manifest.
+- Decision: The next concrete branch should be either counterfactual-compatible PG/NashPG or empirical-game population optimization, selected as a single falsifiable experiment. The first truth gate is local self-play league strength or exact small-game evidence, not target CE/pairwise accuracy.

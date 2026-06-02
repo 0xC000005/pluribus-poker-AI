@@ -1,0 +1,54 @@
+{
+  "decision": "revise",
+  "files": [
+    {
+      "bytes": 1903,
+      "path": "benchmark_audit.md",
+      "sha256": "c7bf08bbf2088e43a3573bbe79a9c6fe79826752093d41293d0769884c65f99f"
+    },
+    {
+      "bytes": 882,
+      "path": "decision.json",
+      "sha256": "defed778633f00baee950fb802b18b7f86f6e559c127365f73ec6bb5ba554e94"
+    },
+    {
+      "bytes": 2087,
+      "path": "mechanism_review.md",
+      "sha256": "16741ce449a0c414b1ef03b409e2b847fbf38e44669f9de70a82e929b28ec3c8"
+    },
+    {
+      "bytes": 2954,
+      "path": "related_work.md",
+      "sha256": "d3aeec09a7950d08bb8c0e55f8ee5e97a789b3dd56d6f6b103c8f7c4c2e70aff"
+    },
+    {
+      "bytes": 2552,
+      "path": "review.md",
+      "sha256": "3ee3301671285019598bfc55f9c83d2ae71820dc0b5c40bd1b376a10da2c3cab"
+    },
+    {
+      "bytes": 2630,
+      "path": "review_scope.json",
+      "sha256": "58ff04c865dda114f19b8b572f88f3ecfa2342f6d4eb1fadeb644593c2d40250"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "The all-action target-consumer family is retired as a promotion path, but the replacement must be a concrete simulator-reward policy-improvement or empirical-game population objective with predeclared parent/control H2H and empirical-game gates.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T112749Z-simulator-reward-policy-improvement-objective-after-all-action",
+  "review_id": "20260602T112749Z-simulator-reward-policy-improvement-objective-after-all-action",
+  "sources": [
+    "RESEARCH_LOG.md#20260602T173000Z-failure-synthesis-for-all-action-target-consumers",
+    "RESEARCH_LOG.md#20260602T172500Z-world-pairwise-target-policy-gate",
+    "RESEARCH_LOG.md#20260602T083500Z-small-nlhe-rnad-learner-policy-baseline",
+    "RESEARCH_LOG.md#20260602T102000Z-ppo-inner-repeatability-synthesis-and-population-response-plan",
+    "https://arxiv.org/abs/2408.00751",
+    "https://mlanthology.org/aaai/2022/zhao2022aaai-alphaholdem/",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC10651118/",
+    "https://arxiv.org/abs/1603.01121"
+  ],
+  "written_at": "2026-06-02T11:30:06Z"
+}
