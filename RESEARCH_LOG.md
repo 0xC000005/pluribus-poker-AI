@@ -17542,3 +17542,16 @@
 - Key metrics: `{"decision": "revise", "synthesis_validation_passed": true, "retired_hypotheses": ["compiled V-trace population response unchanged", "offline behavior-replay Rainbow from compiled joint experience unchanged", "singleton online compiled Rainbow response unchanged", "reference-regularized V-trace at tested weight/budget"], "single_next_test": "exact small-game PG/NashPG/MMD reproduction gate with NashConv before native scaling"}`
 - Verification: `uv run python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T012740Z-post-compiled-response-failures-v-trace-population-offline-synthesis --require-complete` -> passed.
 - Decision: pivot the next implementation away from native-scale V-trace/Rainbow variants and toward a small-game exact exploitability reproduction of the policy-gradient/equilibrium update rule. Native 9-action scaling resumes only after that update rule passes a cheap truth gate.
+## 20260602T013534Z-after-compiled-response-failures-the-small-nlhe-exact - passed
+
+- Timestamp: 2026-06-02T01:35:34Z
+- Type: small_nlhe_pg_truth_gate
+- Gate: small_nlhe_baseline_hardening
+- Hypothesis: After compiled-response failures, the small-NLHE exact NashConv hardening gate should verify whether generic PPO-style policy-gradient or R-NaD remains the better small-game lead before another native scaling attempt.
+- Failure class: strategy_quality
+- Summary: Ran the small-NLHE fingerprint plus stronger exact NashConv hardening gate after the compiled-response synthesis. The cheap 2-seed/400-step smoke had a weak PPO lead, but the predeclared stronger 3-seed/1200-step comparison kept R-NaD as lead: R-NaD mean last NashConv 0.6645 versus PPO FIFO 1.5469 and PPO K-best 1.4074. This validates the small-game harness and keeps R-NaD/regularized self-play as the small-game lead before any native scaling.
+- Metrics file: autoresearch-session/small_nlhe_baseline_hardening/post_compiled_response_synthesis_stronger_seed1_3.json
+- Cheap smoke file: autoresearch-session/small_nlhe_baseline_hardening/post_compiled_response_synthesis_cheap_seed1_2.json
+- Key metrics: `{"fingerprint_actions": 4, "fingerprint_nodes": 637, "uniform_nashconv": 1.7000000000000002, "cheap_2seed_rnad_mean_last": 1.2778670753648291, "cheap_2seed_ppo_fifo_mean_last": 1.178197840982644, "cheap_2seed_lead": "ppo_fifo", "stronger_3seed_rnad_mean_last": 0.6644776235626213, "stronger_3seed_rnad_std_last": 0.01655927736344629, "stronger_3seed_ppo_fifo_mean_last": 1.5469228633387389, "stronger_3seed_ppo_kbest_mean_last": 1.4074354126789327, "stronger_3seed_lead": "rnad", "ppo_beats_rnad": false}`
+- Verification: `uv run --with open-spiel python scripts/run_small_nlhe_baseline_hardening_gate.py --steps 1200 --eval-every 400 --batch-size 256 --seeds 1,2,3 --layers 128 128 --snapshot-every 200 --pool-size 3 --output-json autoresearch-session/small_nlhe_baseline_hardening/post_compiled_response_synthesis_stronger_seed1_3.json` -> passed and wrote metrics.
+- Decision: do not pivot to generic PPO from the weak 2-seed smoke. R-NaD/regularized self-play remains the small-game lead, but native scaling still needs a better realization than the failed V-trace/Rainbow response variants.
