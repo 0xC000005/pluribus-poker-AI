@@ -1,0 +1,51 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1172,
+      "path": "benchmark_audit.md",
+      "sha256": "694bcb908b9d4ba44077680501f465eee2ac87731850f78bd41c81703bac6f22"
+    },
+    {
+      "bytes": 578,
+      "path": "decision.json",
+      "sha256": "46292edd4b8fa2639a4c8934f5247e9710d83ff00758ef35a31c7052aee7c041"
+    },
+    {
+      "bytes": 1102,
+      "path": "mechanism_review.md",
+      "sha256": "1f050b7ddf70f366dff5bfa228577a9f34d2b58086a4fda78cdfb5db4c0c46ec"
+    },
+    {
+      "bytes": 1431,
+      "path": "related_work.md",
+      "sha256": "da6c9d28c8985c80ae39f41daab5dc85da599aeeb1b0c4943fcb107ef99925be"
+    },
+    {
+      "bytes": 1831,
+      "path": "review.md",
+      "sha256": "d464e06b000fc5479723a2cb597f729141b96754aedb4251823f4719a562f796"
+    },
+    {
+      "bytes": 2201,
+      "path": "review_scope.json",
+      "sha256": "9418ada44f85a65b737aebf9a4bc48cee5b2f5eb5c58f016372f07b6530e4d24"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Approve the diagnostic as a Slumbot-free local deployment-mode gate. It samples local simulator states, reports greedy and stochastic action concentration, does not consume Slumbot traces or external data, and is not a promotion gate.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T041823Z-native-rainbow-action-collapse-diagnostic",
+  "review_id": "20260602T041823Z-native-rainbow-action-collapse-diagnostic",
+  "sources": [
+    "scripts/eval_native_rainbow_action_collapse.py",
+    "test/unit/test_native_rainbow_action_collapse.py",
+    "poker_ai/research/action_collapse_gate.py",
+    "https://proceedings.mlr.press/v70/bellemare17a.html",
+    "https://arxiv.org/abs/2603.23660"
+  ],
+  "written_at": "2026-06-02T04:19:16Z"
+}

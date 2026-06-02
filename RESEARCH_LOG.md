@@ -17977,3 +17977,54 @@
 - Manifest:
   - docs/research_protocols/poker_review_manifests/20260602T040721Z-external-evaluation-route-for-native-online-support-candidate.json
 - Decision: queue exactly one sparse native Slumbot smoke with trace output and `--no-solver`; synthesize before any larger confidence run.
+## 20260602T041029Z-candidate-checkpoint-online-response-iter4-support-h256-32x2048 - passed
+
+- Timestamp: 2026-06-02T04:10:31Z
+- Type: experiment
+- Gate: slumbot-candidate-smoke-20260602T041008Z-online-response-iter4-support-h256-32x2048-u4096-seed20260717
+- Hypothesis: Candidate checkpoint online_response_iter4_support_h256_32x2048_u4096_seed20260717.pt should produce parsed live Slumbot metrics under the sparse smoke budget.
+- Failure class: none
+- Summary: The held-out smoke passed mechanically: no API errors, no parse errors, no mapping drift, and 5 policy decisions were parsed through the `tianshou-rainbow` adapter. The chip result was positive over 5 hands, but this is not strength evidence. The important diagnostic is action collapse: greedy evaluation chose preflop all-in on all 5 decisions. Do not run a larger Slumbot confidence evaluation from this mode; synthesize whether deployment should use stochastic policy sampling, local action-collapse gates, or a learner/policy calibration change without using Slumbot as training or tuning data.
+- Metrics file: autoresearch-session/poker_runs/20260602T041029Z-candidate-checkpoint-online-response-iter4-support-h256-32x2048/metrics.json
+- Key metrics: `{"avg_chips_per_hand": 160, "ci95_chips_per_hand": 43, "gate": "slumbot-candidate-smoke-20260602T041008Z-online-response-iter4-support-h256-32x2048-u4096-seed20260717", "mbb_per_hand": 1600, "passed": true, "seconds_per_hand": 0.428}`
+- Trace audit:
+  - autoresearch-session/slumbot_trace_audits/slumbot_candidate_smoke_20260602T041008Z.json
+- Decision: block larger Slumbot runs from greedy `tianshou-rainbow` mode until local, Slumbot-free diagnostics explain or fix the all-in collapse.
+
+## 20260602T041215Z-failure-synthesis-for-greedy-tianshou-rainbow-slumbot-smoke - passed
+
+- Timestamp: 2026-06-02T04:12:15Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T041138Z-greedy-tianshou-rainbow-slumbot-smoke-all-in-collapse
+- Hypothesis: Failure synthesis for greedy tianshou-rainbow Slumbot smoke all-in collapse should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T041138Z-greedy-tianshou-rainbow-slumbot-smoke-all-in-collapse passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T041215Z-failure-synthesis-for-greedy-tianshou-rainbow-slumbot-smoke/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T041138Z-greedy-tianshou-rainbow-slumbot-smoke-all-in-collapse", "passed": true}`
+## 20260602T041300Z-native-rainbow-action-collapse-diagnostic - passed
+
+- Timestamp: 2026-06-02T04:13:00Z
+- Type: local_deployment_mode_diagnostic
+- Gate: native_rainbow_action_collapse_diagnostic
+- Hypothesis: The greedy all-in streak in the 5-hand Slumbot smoke should be explainable by local action-collapse diagnostics without using Slumbot traces for training.
+- Failure class: distribution_shift
+- Summary: Added and ran a Slumbot-free local action-collapse diagnostic for native `tianshou-rainbow` checkpoints. On 512 locally sampled Slumbot-like 20k-stack hands, the seed-20260717 checkpoint did not fail the formal collapse gate: greedy top-action fraction was 0.4301 overall and greedy all-in fraction was 0.4301; stochastic softmax top-action fraction was 0.2089 and stochastic all-in fraction was 0.1414. The all-in-heavy Slumbot smoke is therefore not a universal local collapse, but it remains a deployment warning. A key follow-up finding is that current native H2H for `tianshou-rainbow` uses greedy one-hot action selection, so the local evidence is for a deterministic response policy rather than a principled stochastic poker policy.
+- Metrics file:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_action_collapse_20k_seed20260811.json
+- Key metrics: `{"n_states": 1881, "greedy_top_action": "all_in", "greedy_top_action_fraction": 0.4300903774587985, "greedy_all_in_fraction": 0.4300903774587985, "stochastic_top_action": "call", "stochastic_top_action_fraction": 0.20893141945773525, "stochastic_all_in_fraction": 0.1414141414141414, "mean_top_q_margin": 0.09744200539253582, "passed": true}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_rainbow_action_collapse.py` -> `1 passed`.
+  - `python -m py_compile scripts/eval_native_rainbow_action_collapse.py` -> passed.
+- Decision: do not spend more Slumbot hands yet. The next principled local test is to define and compare deterministic-greedy versus stochastic/mixed deployment semantics for Rainbow-style value policies in local H2H before any external confidence evaluation.
+## 20260602T041922Z-methodology-review-for-native-rainbow-action-collapse-diagnostic - passed
+
+- Timestamp: 2026-06-02T04:19:22Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T041823Z-native-rainbow-action-collapse-diagnostic
+- Hypothesis: Methodology review for Native Rainbow action-collapse diagnostic should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: The protected-surface review approved the local action-collapse diagnostic as a Slumbot-free deployment-mode gate. It samples local simulator states only, reports greedy and stochastic action concentration, does not consume Slumbot traces or external data, and is not a promotion gate.
+- Metrics file: autoresearch-session/poker_runs/20260602T041922Z-methodology-review-for-native-rainbow-action-collapse-diagnostic/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T041823Z-native-rainbow-action-collapse-diagnostic", "passed": true}`
+- Manifest:
+  - docs/research_protocols/poker_review_manifests/20260602T041823Z-native-rainbow-action-collapse-diagnostic.json
