@@ -113,6 +113,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--entropy-weight", type=float, default=0.02)
     parser.add_argument("--value-weight", type=float, default=0.5)
     parser.add_argument("--reference-update-every", type=int, default=1000000)
+    parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
+    parser.add_argument("--gamma", type=float, default=1.0)
+    parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--seed", type=int, default=20260602)
     parser.add_argument("--max-fit-current-kl", type=float, default=0.02)
     parser.add_argument("--min-target-kl-reduction", type=float, default=1e-5)
@@ -126,6 +129,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise ValueError("--target-mmd-delta must be positive")
     if args.fit_steps <= 0 or args.update_steps <= 0:
         raise ValueError("--fit-steps and --update-steps must be positive")
+    if not (0.0 <= float(args.gamma) <= 1.0):
+        raise ValueError("--gamma must be in [0, 1]")
+    if not (0.0 <= float(args.gae_lambda) <= 1.0):
+        raise ValueError("--gae-lambda must be in [0, 1]")
 
     from open_spiel.python import policy as policy_lib
     from open_spiel.python.algorithms import exploitability
@@ -161,6 +168,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         value_weight=float(args.value_weight),
         reference_update_every=int(args.reference_update_every),
         seed=int(args.seed),
+        advantage_target=str(args.advantage_target),
+        gamma=float(args.gamma),
+        gae_lambda=float(args.gae_lambda),
     )
     fit_stats = _fit_solver_policy(
         solver,
@@ -235,6 +245,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             "reference_kl_weight": float(args.reference_kl_weight),
             "entropy_weight": float(args.entropy_weight),
             "value_weight": float(args.value_weight),
+            "advantage_target": str(args.advantage_target),
+            "gamma": float(args.gamma),
+            "gae_lambda": float(args.gae_lambda),
             "seed": int(args.seed),
             "max_fit_current_kl": float(args.max_fit_current_kl),
             "min_target_kl_reduction": float(args.min_target_kl_reduction),

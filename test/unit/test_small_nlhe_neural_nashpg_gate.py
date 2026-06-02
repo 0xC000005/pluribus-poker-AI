@@ -5,6 +5,13 @@ import subprocess
 import sys
 
 import pytest
+import torch
+
+
+class _TinyCollector:
+    n_actions = 4
+    obs_dim = 6
+    n_players = 2
 
 
 def test_small_nlhe_neural_nashpg_gate_tiny(tmp_path):
@@ -53,3 +60,76 @@ def test_small_nlhe_neural_nashpg_gate_tiny(tmp_path):
     assert len(data["arms"]["neural_nashpg"]["runs"]) == 1
     for _step, value in data["arms"]["neural_nashpg"]["runs"][0]["history"]:
         assert math.isfinite(value)
+
+
+def test_small_nlhe_neural_nashpg_gate_supports_gae_targets(tmp_path):
+    pytest.importorskip("pyspiel")
+    out = tmp_path / "neural_nashpg_gate_gae.json"
+    repo = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_small_nlhe_neural_nashpg_gate.py",
+            "--steps",
+            "1",
+            "--eval-every",
+            "1",
+            "--batch-size",
+            "8",
+            "--seeds",
+            "1",
+            "--layers",
+            "8",
+            "--advantage-target",
+            "gae",
+            "--gamma",
+            "1.0",
+            "--gae-lambda",
+            "0.5",
+            "--output-json",
+            str(out),
+        ],
+        check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(out.read_text())
+
+    assert data["config"]["advantage_target"] == "gae"
+    assert data["config"]["gamma"] == 1.0
+    assert data["config"]["gae_lambda"] == 0.5
+    assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["advantage_target"] == "gae"
+
+
+def test_neural_reference_pg_solver_seed_controls_torch_initialization():
+    repo = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo / "scripts"))
+    from scripts.run_small_nlhe_neural_nashpg_gate import NeuralReferencePGSolver
+
+    first = NeuralReferencePGSolver(
+        collector=_TinyCollector(),
+        layers=(8,),
+        lr=0.001,
+        reference_kl_weight=0.05,
+        entropy_weight=0.02,
+        value_weight=0.5,
+        reference_update_every=1,
+        seed=123,
+    )
+    second = NeuralReferencePGSolver(
+        collector=_TinyCollector(),
+        layers=(8,),
+        lr=0.001,
+        reference_kl_weight=0.05,
+        entropy_weight=0.02,
+        value_weight=0.5,
+        reference_update_every=1,
+        seed=123,
+    )
+
+    for left, right in zip(first.net.parameters(), second.net.parameters(), strict=True):
+        assert torch.equal(left, right)

@@ -18589,3 +18589,36 @@
 - Summary: Gate failure-synthesis-20260602T065943Z-adaptive-proximal-native-nashpg-stress-test-h2h-lost passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T070030Z-failure-synthesis-for-adaptive-proximal-native-nashpg-stress/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T065943Z-adaptive-proximal-native-nashpg-stress-test-h2h-lost", "passed": true}`
+
+## 20260602T071041Z-methodology-review-for-counterfactual-weighted-update-estimator-bridge - passed
+
+- Timestamp: 2026-06-02T07:10:41Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T070135Z-counterfactual-weighted-update-estimator-bridge-for-native-nashpg
+- Hypothesis: Methodology review for Counterfactual weighted update estimator bridge for native NashPG MMD should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T070135Z-counterfactual-weighted-update-estimator-bridge-for-native-nashpg passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T071041Z-methodology-review-for-counterfactual-weighted-update-estimator-bridge/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T070135Z-counterfactual-weighted-update-estimator-bridge-for-native-nashpg", "passed": true}`
+
+## 20260602T071327Z-small-nlhe-gae-update-estimator-bridge - failed
+
+- Timestamp: 2026-06-02T07:13:27Z
+- Type: experiment
+- Gate: matched_small_nlhe_update_estimator_fidelity_bridge
+- Hypothesis: A bootstrapped/GAE neural update estimator should better match exact small-NLHE MMD movement near the 200-step policy than the terminal-return estimator, without shrinking the update to near-zero.
+- Failure class: estimator_fidelity
+- Summary: Added deterministic Torch seeding to the small-NLHE neural NashPG solver, exposed `--advantage-target terminal|gae` with `--gamma` and `--gae-lambda`, and wired the MMD update-fidelity bridge to record the estimator mode. Focused OpenSpiel tests passed. With deterministic initialization, the matched near-policy bridge at `lr=0.0005` still failed for both modes. Terminal mode worsened target KL by `-0.0001379` with cosine `0.6767`; GAE worsened target KL by `-0.0001448` with cosine `0.6739`. This means bootstrapping alone did not improve estimator fidelity over terminal returns. The next principled step is explicit counterfactual/reach weighting or a maintained R-NaD/MMD implementation/control, not another native HUNL run.
+- Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_gae_start200_lr5e4_seed20260692_deterministic.json
+- Key metrics: `{"terminal_target_kl_reduction": -0.00013792588887758875, "terminal_update_delta_cosine": 0.6767313126478795, "gae_target_kl_reduction": -0.0001447716040658182, "gae_update_delta_cosine": 0.6738568879886662, "deterministic_torch_seed": true, "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T071156Z-failure-synthesis-for-bootstrapped-gae-small-nlhe-update - passed
+
+- Timestamp: 2026-06-02T07:11:56Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T071115Z-bootstrapped-gae-small-nlhe-update-estimator-failed-to
+- Hypothesis: Failure synthesis for Bootstrapped GAE small-NLHE update estimator failed to improve MMD fidelity should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T071115Z-bootstrapped-gae-small-nlhe-update-estimator-failed-to passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T071156Z-failure-synthesis-for-bootstrapped-gae-small-nlhe-update/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T071115Z-bootstrapped-gae-small-nlhe-update-estimator-failed-to", "passed": true}`

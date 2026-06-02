@@ -1,0 +1,53 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1490,
+      "path": "benchmark_audit.md",
+      "sha256": "d74a4bed395db68eec0d7dfd791d0c67cd3850de98c9c67bf4b3057b2e6ea33c"
+    },
+    {
+      "bytes": 827,
+      "path": "decision.json",
+      "sha256": "dc7ad18d0b6525f41507dbecf9a52ff538d22836158afa81a4d76b660d0ca0a7"
+    },
+    {
+      "bytes": 2034,
+      "path": "mechanism_review.md",
+      "sha256": "77ff16d38ff7f46aaa548de9c3da3bc65bb181cf2f805c8f4b200bd185514706"
+    },
+    {
+      "bytes": 3084,
+      "path": "related_work.md",
+      "sha256": "2d7cd4d7a71c11a5caa7a3b90a8e782c2f6deaa93cbfc693cb0dd7559842c210"
+    },
+    {
+      "bytes": 2103,
+      "path": "review.md",
+      "sha256": "e548e2014d6531d31a784d9539b30abc83d0f674278d937d368a663f1606d52a"
+    },
+    {
+      "bytes": 2943,
+      "path": "review_scope.json",
+      "sha256": "ede3c0407d22806809f203dfc45f9b6ef3dd2ad994ddb5a118dc47ca7a4acbc6"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed narrowly with a small-game bootstrapped estimator-fidelity bridge. The proximal H2H failure shows update-size control alone is not enough; current code uses terminal returns, while related work on counterfactual regret, R-NaD, and MMD supports improving the game-theoretic update estimator before native HUNL scaling.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T070135Z-counterfactual-weighted-update-estimator-bridge-for-native-nashpg",
+  "review_id": "20260602T070135Z-counterfactual-weighted-update-estimator-bridge-for-native-nashpg",
+  "sources": [
+    "autoresearch-session/native_neural_nashpg/proximal_ab_candidate_vs_no_kl_h2h_2000_seed20260689.json",
+    "scripts/run_small_nlhe_neural_nashpg_gate.py",
+    "poker_ai/rnad/seat_collector.py",
+    "https://papers.nips.cc/paper/3306-regret-minimization-in-games-with-incomplete-information",
+    "https://arxiv.org/abs/2206.15378",
+    "https://arxiv.org/abs/2206.05825",
+    "https://arxiv.org/abs/2104.10845"
+  ],
+  "written_at": "2026-06-02T07:10:36Z"
+}

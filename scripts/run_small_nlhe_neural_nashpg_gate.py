@@ -52,12 +52,22 @@ class NeuralReferencePGSolver:
         value_weight: float,
         reference_update_every: int,
         seed: int,
+        advantage_target: str = "terminal",
+        gamma: float = 1.0,
+        gae_lambda: float = 0.95,
     ) -> None:
+        if str(advantage_target) not in {"terminal", "gae"}:
+            raise ValueError("advantage_target must be one of: terminal, gae")
+        if not (0.0 <= float(gamma) <= 1.0):
+            raise ValueError("gamma must be in [0, 1]")
+        if not (0.0 <= float(gae_lambda) <= 1.0):
+            raise ValueError("gae_lambda must be in [0, 1]")
         self.collector = collector
         self.device = torch.device("cpu")
         self.n_actions = int(collector.n_actions)
         self.obs_dim = int(collector.obs_dim)
         self.num_players = int(collector.n_players)
+        torch.manual_seed(int(seed))
         self.net = RNaDNetwork(self.obs_dim, self.n_actions, layers).to(self.device)
         self.reference_net = copy.deepcopy(self.net).to(self.device)
         self.reference_net.eval()
@@ -68,6 +78,9 @@ class NeuralReferencePGSolver:
         self.entropy_weight = float(entropy_weight)
         self.value_weight = float(value_weight)
         self.reference_update_every = max(1, int(reference_update_every))
+        self.advantage_target = str(advantage_target)
+        self.gamma = float(gamma)
+        self.gae_lambda = float(gae_lambda)
         self._rng = np.random.RandomState(int(seed))
         self.learner_steps = 0
 
@@ -105,13 +118,23 @@ class NeuralReferencePGSolver:
             player.unsqueeze(-1),
         ).squeeze(-1)
         value_flat = value.squeeze(-1)
-        advantage = actor_return - value_flat.detach()
+        if self.advantage_target == "terminal":
+            value_target = actor_return
+            advantage = value_target - value_flat.detach()
+        else:
+            value_target, advantage = _linked_bootstrap_targets_and_advantages(
+                values=value_flat.detach(),
+                terminal_returns=actor_return,
+                valid=valid,
+                gamma=self.gamma,
+                gae_lambda=self.gae_lambda,
+            )
         if bool(mask.any()):
             adv_valid = advantage[mask]
             advantage = (advantage - adv_valid.mean()) / (adv_valid.std(unbiased=False) + 1e-5)
         policy_loss = -((logp_action * advantage) * valid).sum() / denom
 
-        value_loss = (((value_flat - actor_return) ** 2) * valid).sum() / denom
+        value_loss = (((value_flat - value_target) ** 2) * valid).sum() / denom
         entropy = -((pi.clamp_min(1e-9).log() * pi * safe_legal).sum(-1) * valid).sum() / denom
         kl = (
             (
@@ -128,6 +151,9 @@ class NeuralReferencePGSolver:
             "value_loss": float(value_loss.detach().cpu()),
             "reference_kl": float(kl.detach().cpu()),
             "entropy": float(entropy.detach().cpu()),
+            "advantage_target": self.advantage_target,
+            "gamma": self.gamma,
+            "gae_lambda": self.gae_lambda,
         }
         return loss, logs
 
@@ -150,6 +176,42 @@ class NeuralReferencePGSolver:
         return logs
 
 
+def _linked_bootstrap_targets_and_advantages(
+    *,
+    values: torch.Tensor,
+    terminal_returns: torch.Tensor,
+    valid: torch.Tensor,
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute GAE-style targets over same-trajectory learner decision links."""
+    if values.shape != terminal_returns.shape or values.shape != valid.shape:
+        raise ValueError("values, terminal_returns, and valid must have matching shapes")
+    targets = torch.zeros_like(terminal_returns)
+    advantages = torch.zeros_like(terminal_returns)
+    valid_bool = valid > 0
+    for batch_i in range(values.shape[1]):
+        next_i = -1
+        next_advantage = torch.zeros((), dtype=values.dtype, device=values.device)
+        for time_i in range(values.shape[0] - 1, -1, -1):
+            if not bool(valid_bool[time_i, batch_i]):
+                continue
+            if next_i >= 0:
+                delta = float(gamma) * values[next_i, batch_i] - values[time_i, batch_i]
+                advantages[time_i, batch_i] = (
+                    delta + float(gamma) * float(gae_lambda) * next_advantage
+                )
+                targets[time_i, batch_i] = advantages[time_i, batch_i] + values[time_i, batch_i]
+            else:
+                advantages[time_i, batch_i] = (
+                    terminal_returns[time_i, batch_i] - values[time_i, batch_i]
+                )
+                targets[time_i, batch_i] = terminal_returns[time_i, batch_i]
+            next_advantage = advantages[time_i, batch_i]
+            next_i = time_i
+    return targets.detach(), advantages.detach()
+
+
 def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
     from poker_ai.rnad.seat_collector import SeatAwarePyspielCollector
 
@@ -163,6 +225,9 @@ def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
         value_weight=float(args.value_weight),
         reference_update_every=int(args.reference_update_every),
         seed=int(seed),
+        advantage_target=str(args.advantage_target),
+        gamma=float(args.gamma),
+        gae_lambda=float(args.gae_lambda),
     )
     trajectory_max = max(8, game.max_game_length() + 1)
     history = [(0, _nashconv_from_solver(game, by, solver, policy_lib, exploitability))]
@@ -217,6 +282,9 @@ def main(argv=None) -> int:
     parser.add_argument("--entropy-weight", type=float, default=0.02)
     parser.add_argument("--value-weight", type=float, default=0.5)
     parser.add_argument("--reference-update-every", type=int, default=200)
+    parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
+    parser.add_argument("--gamma", type=float, default=1.0)
+    parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument("--baseline-json")
     parser.add_argument("--baseline-arm", default="rnad")
     parser.add_argument("--output-json")
@@ -232,6 +300,10 @@ def main(argv=None) -> int:
         raise ValueError("--reference-kl-weight must be non-negative")
     if args.reference_update_every <= 0:
         raise ValueError("--reference-update-every must be positive")
+    if not (0.0 <= float(args.gamma) <= 1.0):
+        raise ValueError("--gamma must be in [0, 1]")
+    if not (0.0 <= float(args.gae_lambda) <= 1.0):
+        raise ValueError("--gae-lambda must be in [0, 1]")
 
     from open_spiel.python import policy as policy_lib
     from open_spiel.python.algorithms import exploitability
@@ -304,6 +376,9 @@ def main(argv=None) -> int:
             "entropy_weight": float(args.entropy_weight),
             "value_weight": float(args.value_weight),
             "reference_update_every": int(args.reference_update_every),
+            "advantage_target": str(args.advantage_target),
+            "gamma": float(args.gamma),
+            "gae_lambda": float(args.gae_lambda),
             "baseline_json": args.baseline_json,
             "baseline_arm": args.baseline_arm,
         },
