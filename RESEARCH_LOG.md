@@ -18501,3 +18501,14 @@
 - Summary: Re-ran the exact small-NLHE MMD truth gate through transient `uv run --with open-spiel`. The harness fingerprint matched the locked sanity game (`actions=4`, `max_len=7`, `nodes=637`, `uniform_nashconv=1.7000`) and MMD reduced current NashConv to `0.084198` after 200 steps, with average NashConv `0.318004` and finite regularized gap `0.044798`. This supports the regularized-dynamics principle but remains small-game evaluator evidence only; it does not promote any native HUNL checkpoint.
 - Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_exact_200_seedless_20260602T0630.json
 - Key metrics: `{"candidate_truth_gate_passed": true, "start_current_nashconv": 1.7, "best_current_nashconv": 0.08419827983160522, "small_game_exact_only": true}`
+
+## 20260602T063130Z-small-nlhe-neural-nashpg-sanity - passed
+
+- Timestamp: 2026-06-02T06:31:30Z
+- Type: experiment
+- Gate: small_nlhe_neural_nashpg_truth_gate
+- Hypothesis: The neural reference-regularized NashPG/MMD-style learner should reduce exact NashConv on the locked small-NLHE harness enough to justify further mechanism work, while remaining only a sanity gate.
+- Failure class: none
+- Summary: Ran a one-seed 400-step neural NashPG/MMD small-game sanity check through transient `uv run --with open-spiel`. The gate passed because exact NashConv improved from `1.795672` to best `0.478310`, but it was unstable: final NashConv drifted back to `1.076027`, and exact MMD on the same harness reached `0.084198` in 200 steps. This says the regularized-dynamics idea is valid, but the current neural translation is still weak and may explain why native HUNL NashPG/MMD variants failed against the local Rainbow/PSRO support.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_400_seed1_20260602T0631.json
+- Key metrics: `{"candidate_truth_gate_passed": true, "mean_best_nashconv": 0.47831018634481637, "mean_last_nashconv": 1.076027404737046, "small_game_exact_only": true}`
