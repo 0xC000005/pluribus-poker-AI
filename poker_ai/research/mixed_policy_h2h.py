@@ -600,6 +600,8 @@ def evaluate_loaded_policies_head_to_head(
         "promotion": False,
         "n_games": int(n_games),
         "n_pairs": int(len(pair_payoffs)),
+        "initial_chips": int(chips),
+        "max_steps_per_hand": int(max_steps),
         "eval_seconds": float(elapsed),
         "eval_steps": int(total_steps),
         "eval_games_per_second": float(int(n_games) / max(elapsed, 1e-9)),
@@ -624,6 +626,8 @@ def evaluate_mixed_policy_head_to_head(
     n_games: int = 1000,
     device: str = "auto",
     seed: int = 20260527,
+    initial_chips: int | None = None,
+    max_steps_per_hand: int | None = None,
     min_lower95_candidate_payoff: float | None = None,
     eval_state_backend: str = "full-deck",
 ) -> dict:
@@ -645,6 +649,8 @@ def evaluate_mixed_policy_head_to_head(
         n_games=n_games,
         device=device,
         seed=seed,
+        initial_chips=initial_chips,
+        max_steps_per_hand=max_steps_per_hand,
         min_lower95_candidate_payoff=min_lower95_candidate_payoff,
         eval_state_backend=eval_state_backend,
     )

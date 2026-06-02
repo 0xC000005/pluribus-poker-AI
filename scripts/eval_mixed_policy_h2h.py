@@ -29,6 +29,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--n-games", type=int, default=1000)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--seed", type=int, default=20260527)
+    parser.add_argument("--initial-chips", type=int)
+    parser.add_argument("--max-steps-per-hand", type=int)
     parser.add_argument("--min-lower95-candidate-payoff", type=float)
     parser.add_argument(
         "--eval-state-backend",
@@ -46,6 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         n_games=args.n_games,
         device=args.device,
         seed=args.seed,
+        initial_chips=args.initial_chips,
+        max_steps_per_hand=args.max_steps_per_hand,
         min_lower95_candidate_payoff=args.min_lower95_candidate_payoff,
         eval_state_backend=args.eval_state_backend,
     )

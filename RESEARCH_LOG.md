@@ -18151,3 +18151,34 @@
   - `uv run pytest -q test/unit/test_native_ppo_policy.py::test_native_ppo_policy_external_native_opponent_exports_config test/unit/test_native_ppo_policy.py::test_native_ppo_policy_external_rainbow_response_opponent_exports_config test/unit/test_native_ppo_policy.py::test_native_ppo_policy_external_opponent_rejects_combined_modes test/unit/test_native_ppo_policy.py::test_native_ppo_policy_q_expected_lambda_advantage_smoke` -> `4 passed`.
   - `python -m py_compile poker_ai/research/native_ppo_policy.py scripts/run_native_ppo_policy_pilot.py` -> passed.
 - Decision: keep the support-conditioned checkpoint as falsification evidence only. The current local bar remains the deterministic online compiled Rainbow response support checkpoint; the next step should synthesize this failure before adding another actor-loss variant or scaling this q-lambda run.
+## 20260602T050023Z-failure-synthesis-for-support-conditioned-q-lambda-actor - passed
+
+- Timestamp: 2026-06-02T05:00:23Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T045030Z-support-conditioned-q-lambda-actor-failed-current-support
+- Hypothesis: Failure synthesis for Support-conditioned q-lambda actor failed current support bar should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T045030Z-support-conditioned-q-lambda-actor-failed-current-support passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T050023Z-failure-synthesis-for-support-conditioned-q-lambda-actor/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T045030Z-support-conditioned-q-lambda-actor-failed-current-support", "passed": true}`
+
+## 20260602T050600Z-native-20k-stack-response-alignment-gate - passed
+
+- Timestamp: 2026-06-02T05:06:00Z
+- Type: local_stack_depth_alignment
+- Gate: native_20k_stack_response_alignment
+- Hypothesis: If the current local support bar is partly a stack-regime artifact, then the 1000-chip support checkpoint should not be trusted as the Slumbot-facing local truth gate; a same-schema response trained and evaluated at 20000 chips should restore local 20k H2H strength without Slumbot data.
+- Failure class: stack_depth_mismatch
+- Summary: Exposed the existing `initial_chips` and `max_steps_per_hand` overrides through the mixed-policy H2H CLI and recorded them in metrics. The old 1000-chip support checkpoint passed explicit 20k local H2H versus gen3, but failed versus iter2: mean=-0.006261, lower95=-0.017993 over 5000 games. A same-schema online compiled Rainbow response trained in the 20000-chip native simulator then passed both explicit 20k local H2H gates and passed the Slumbot-free action-collapse diagnostic. This makes stack-depth alignment a real blocker and promotes 20k-native local gates as the current evaluation surface; it is not Slumbot strength evidence.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_gen3_h2h_5000_20kchips_fast_seed20260820.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_iter2_h2h_5000_20kchips_fast_seed20260821.json
+  - autoresearch-session/native_neural_nashpg/online_response_20k_iter4_support_h256_32x2048_u4096_seed20260822.json
+  - autoresearch-session/native_neural_nashpg/online_response_20k_iter4_support_vs_iter2_h2h_5000_20kchips_fast_seed20260823.json
+  - autoresearch-session/native_neural_nashpg/online_response_20k_iter4_support_vs_gen3_h2h_5000_20kchips_fast_seed20260824.json
+  - autoresearch-session/native_neural_nashpg/online_response_20k_iter4_support_action_collapse_20k_seed20260825.json
+- Key metrics: `{"old_support_vs_gen3_20k_lower95": 0.025126, "old_support_vs_iter2_20k_lower95": -0.017993, "new_20k_train_resolved_device": "cuda", "new_20k_train_collector_transitions_per_second": 31464.93, "new_20k_train_updates_per_second": 150.53, "new_20k_vs_iter2_lower95": 0.018307, "new_20k_vs_gen3_lower95": 0.031716, "new_20k_greedy_top_action_fraction": 0.214885, "new_20k_greedy_all_in_fraction": 0.107966, "new_20k_action_collapse_passed": true}`
+- Verification:
+  - `uv run pytest -q test/unit/test_mixed_policy_h2h.py::test_evaluate_loaded_policies_head_to_head_reports_native_contract test/unit/test_mixed_policy_h2h.py::test_eval_mixed_policy_h2h_cli_writes_json test/unit/test_mixed_policy_h2h.py::test_eval_mixed_policy_h2h_cli_returns_nonzero_on_failed_gate` -> `3 passed`.
+  - `python -m py_compile poker_ai/research/mixed_policy_h2h.py scripts/eval_mixed_policy_h2h.py` -> passed.
+- Decision: Stop treating 1000-chip local H2H as sufficient for Slumbot-facing promotion. The next tabula-rasa cycle should build the local self-play/population league around 20000-chip native gates and then test whether an explicit stochastic actor can beat this new 20k-native support, instead of tuning against the stale 1000-chip bar.

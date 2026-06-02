@@ -449,7 +449,12 @@ def test_eval_mixed_policy_h2h_cli_writes_json(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli,
         "evaluate_mixed_policy_head_to_head",
-        lambda **kwargs: {**expected, "eval_state_backend": kwargs["eval_state_backend"]},
+        lambda **kwargs: {
+            **expected,
+            "eval_state_backend": kwargs["eval_state_backend"],
+            "initial_chips": kwargs["initial_chips"],
+            "max_steps_per_hand": kwargs["max_steps_per_hand"],
+        },
     )
 
     exit_code = cli.main(
@@ -464,6 +469,10 @@ def test_eval_mixed_policy_h2h_cli_writes_json(monkeypatch, tmp_path):
             "native-nfsp",
             "--eval-state-backend",
             "fast-state-canonical-deal",
+            "--initial-chips",
+            "20000",
+            "--max-steps-per-hand",
+            "128",
             "--output-json",
             str(output),
         ]
@@ -473,6 +482,8 @@ def test_eval_mixed_policy_h2h_cli_writes_json(monkeypatch, tmp_path):
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["candidate_checkpoint"] == expected["candidate_checkpoint"]
     assert payload["eval_state_backend"] == "fast-state-canonical-deal"
+    assert payload["initial_chips"] == 20000
+    assert payload["max_steps_per_hand"] == 128
 
 
 def test_eval_mixed_policy_h2h_cli_returns_nonzero_on_failed_gate(monkeypatch, tmp_path):
