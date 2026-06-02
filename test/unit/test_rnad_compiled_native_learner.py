@@ -67,6 +67,37 @@ def test_rnad_compiled_native_learner_writes_native_policy_checkpoint(tmp_path):
     assert np.all(probs[legal_mask == 0] == 0.0)
 
 
+def test_rnad_compiled_native_learner_can_export_learner_policy(tmp_path):
+    from scripts.run_rnad_compiled_native_learner import run_learner
+
+    target_checkpoint = tmp_path / "rnad_target.pt"
+    learner_checkpoint = tmp_path / "rnad_learner.pt"
+    metrics = run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260606,
+        device="cpu",
+        checkpoint_out=target_checkpoint,
+        learner_checkpoint_out=learner_checkpoint,
+    )
+
+    assert target_checkpoint.exists()
+    assert learner_checkpoint.exists()
+    assert metrics["checkpoint_path"] == str(target_checkpoint)
+    assert metrics["learner_checkpoint_path"] == str(learner_checkpoint)
+    assert metrics["rnad_policy_export"] == "target"
+    assert metrics["learner_rnad_policy_export"] == "learner"
+
+    target_payload = torch.load(target_checkpoint, map_location="cpu", weights_only=False)
+    learner_payload = torch.load(learner_checkpoint, map_location="cpu", weights_only=False)
+    assert target_payload["rnad_policy_export"] == "target"
+    assert learner_payload["rnad_policy_export"] == "learner"
+    assert learner_payload["metrics"]["checkpoint_role"] == "learner_export"
+
+
 def test_rnad_compiled_native_learner_can_continue_from_prior_checkpoint(tmp_path):
     from scripts.run_rnad_compiled_native_learner import run_learner
 

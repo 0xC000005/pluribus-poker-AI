@@ -407,6 +407,15 @@ does not train a native neural HUNL checkpoint. The next native branch must
 translate this regularized policy-dynamics lesson into a tabula-rasa neural
 self-play learner and pass parent/population H2H, not reuse the tabular solver
 as the player.
+The first native translation diagnostic after that exact gate tested R-NaD
+policy export source. The default native learner exported the target/EMA policy;
+the new opt-in `--learner-checkpoint-out` exports the current learner policy
+from the same local self-play run. At 500x512, learner export beat target export
+clearly and beat the saved NFSP control, showing that the decision object
+matters. It still lost to the saved Rainbow control, and the empirical game
+assigned all support to Rainbow. This narrows the failure: native R-NaD is not
+blocked only by target-vs-current export, but still lacks a population objective
+strong enough to beat the best saved local control.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to

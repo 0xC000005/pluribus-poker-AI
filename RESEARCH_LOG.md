@@ -17571,3 +17571,23 @@
   - `uv run --with open-spiel pytest -q test/unit/test_small_nlhe_mmd_truth_gate.py test/unit/test_small_nlhe_baseline_hardening_gate.py test/unit/test_small_nlhe.py` -> `4 passed`.
   - `uv run --with open-spiel python scripts/run_small_nlhe_mmd_truth_gate.py --steps 1000 --eval-every 100 --alpha 0.01 --baseline-json autoresearch-session/small_nlhe_baseline_hardening/post_compiled_response_synthesis_stronger_seed1_3.json --output-json autoresearch-session/small_nlhe_mmd_truth_gate/mmd_alpha001_steps1000_vs_rnad_baseline.json` -> passed and wrote metrics.
 - Decision: revive the MMD/NashPG-style regularized policy-dynamics direction as the next principled branch, but keep Slumbot/full-HUNL promotion blocked. The next implementation should translate this update family into a native tabula-rasa neural self-play learner that consumes local simulator trajectories and is judged by parent/population H2H plus empirical-game evidence, not by deploying the tabular small-game solver.
+## 20260602T015628Z-native-r-nad-learner-policy-export-should-preserve - failed
+
+- Timestamp: 2026-06-02T01:56:35Z
+- Type: native_rnad_export_source_gate
+- Gate: native_rnad_learner_export_saved_control_gate
+- Hypothesis: Native R-NaD learner-policy export should preserve MMD-style current-policy strength better than target export and close the saved-control gap after a 500x512 local self-play run.
+- Failure class: strategy_quality
+- Summary: Added `--learner-checkpoint-out` to `scripts/run_rnad_compiled_native_learner.py` so a single native R-NaD self-play run can export both the default target/EMA policy and the current learner policy. The 500x512 CUDA run produced `881487` local full-deck samples in `32.16s` (`27405.36` samples/sec), with zero Python-showdown fallback and zero illegal records. Learner export was materially stronger than target export: 2k learner-vs-target H2H mean `+0.083630`, lower95 `+0.064067`; target export lost to saved NFSP (`-0.069987`, lower95 `-0.093170`) while learner export beat saved NFSP at 5k (`+0.028245`, lower95 `+0.014906`). However, learner export still lost to the stronger saved Rainbow control (`-0.030256`, lower95 `-0.046128`), target export lost much worse to Rainbow (`-0.124124`, lower95 `-0.147648`), and the learner/target/NFSP/Rainbow empirical game solved to pure Rainbow support. This is a real mechanism improvement and a real falsifier: export source matters, but it does not solve the saved-control/population gap.
+- Metrics file: autoresearch-session/native_rnad/export_source_empirical_game_learner_target_nfsp_rainbow_seed20260652.json
+- Training file: autoresearch-session/native_rnad/export_source_500x512_seed20260644.json
+- H2H files:
+  - autoresearch-session/native_rnad/export_source_learner_vs_target_h2h_2000_seed20260645.json
+  - autoresearch-session/native_rnad/export_source_learner_vs_nfsp_h2h_5000_seed20260649.json
+  - autoresearch-session/native_rnad/export_source_learner_vs_rainbow_h2h_2000_seed20260650.json
+  - autoresearch-session/native_rnad/export_source_target_vs_rainbow_h2h_2000_seed20260651.json
+- Key metrics: `{"n_samples": 881487, "train_seconds": 32.16477082900383, "samples_per_second": 27405.356148383926, "compiled_needs_python_showdown": 0, "illegal_records": 0, "learner_vs_target_mean": 0.08362950000000001, "learner_vs_target_lower95": 0.0640668383498808, "learner_vs_nfsp_5k_mean": 0.028244799999999997, "learner_vs_nfsp_5k_lower95": 0.014905767549242775, "learner_vs_rainbow_mean": -0.0302555, "learner_vs_rainbow_lower95": -0.046128219487110836, "target_vs_rainbow_mean": -0.12412449999999998, "target_vs_rainbow_lower95": -0.1476483095967763, "empirical_meta_strategy": [0.0, 0.0, 0.0, 1.0], "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py` -> `4 passed`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
+- Decision: keep learner export available and use it for future native R-NaD diagnostics. Do not promote this candidate: Rainbow remains the empirical-game support policy. The next principled branch must address population/meta-policy training or a stronger MMD/NashPG-style neural update, not just target-vs-learner export.

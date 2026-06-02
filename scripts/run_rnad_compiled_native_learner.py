@@ -39,6 +39,7 @@ def run_learner(
     device: str = "auto",
     checkpoint_in: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
+    learner_checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
     output_json: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -55,6 +56,7 @@ def run_learner(
         device=device,
         checkpoint_in=checkpoint_in,
         checkpoint_out=checkpoint_out,
+        learner_checkpoint_out=learner_checkpoint_out,
         parent_checkpoint_out=parent_checkpoint_out,
     )
     return _write_metrics(metrics, Path(output_json) if output_json is not None else None)
@@ -74,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--checkpoint-in", type=Path)
     parser.add_argument("--checkpoint-out", type=Path)
+    parser.add_argument("--learner-checkpoint-out", type=Path)
     parser.add_argument("--parent-checkpoint-out", type=Path)
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args(argv)
@@ -90,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         device=args.device,
         checkpoint_in=args.checkpoint_in,
         checkpoint_out=args.checkpoint_out,
+        learner_checkpoint_out=args.learner_checkpoint_out,
         parent_checkpoint_out=args.parent_checkpoint_out,
         output_json=args.output_json,
     )

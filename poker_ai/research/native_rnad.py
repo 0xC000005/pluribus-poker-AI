@@ -444,6 +444,7 @@ def run_compiled_native_rnad_learner(
     device: str = "auto",
     checkpoint_in: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
+    learner_checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
 ) -> dict[str, Any]:
     """Train and optionally export a native-policy-compatible R-NaD checkpoint."""
@@ -569,11 +570,15 @@ def run_compiled_native_rnad_learner(
         "promotion": False,
         **resume_metrics,
         "checkpoint_path": str(checkpoint_out) if checkpoint_out is not None else None,
+        "learner_checkpoint_path": (
+            str(learner_checkpoint_out) if learner_checkpoint_out is not None else None
+        ),
         "parent_checkpoint_path": (
             str(parent_checkpoint_out) if parent_checkpoint_out is not None else None
         ),
         "native_policy_kind": "native-ppo",
         "rnad_policy_export": "target",
+        "learner_rnad_policy_export": "learner" if learner_checkpoint_out is not None else None,
         "passed": bool(
             finite_loss
             and total_samples > 0
@@ -590,5 +595,20 @@ def run_compiled_native_rnad_learner(
             max_steps_per_game=int(max_steps_per_game),
             metrics=metrics,
             export_source="target",
+        )
+    if learner_checkpoint_out is not None:
+        learner_metrics = {
+            **metrics,
+            "checkpoint_role": "learner_export",
+            "rnad_policy_export": "learner",
+        }
+        _save_native_rnad_checkpoint(
+            path=learner_checkpoint_out,
+            solver=solver,
+            hidden_dim=int(hidden_dim),
+            initial_chips=int(initial_chips),
+            max_steps_per_game=int(max_steps_per_game),
+            metrics=learner_metrics,
+            export_source="learner",
         )
     return metrics
