@@ -18068,3 +18068,19 @@
   - autoresearch-session/poker_reviews/20260602T042956Z-post-hoc-rainbow-q-softmax-failed-local-stochastic-synthesis/synthesis.md
   - autoresearch-session/poker_reviews/20260602T042956Z-post-hoc-rainbow-q-softmax-failed-local-stochastic-synthesis/decision.json
 - Decision: train one fresh native neural NashPG/MMD-style stochastic policy/value checkpoint against the current local support population using only the compiled native 9-action simulator, then test it by matched local H2H and empirical-game insertion. Do not use Slumbot feedback, post-hoc Q-softmax, or `--no-allin` patches.
+## 20260602T043146Z-a-fresh-native-neural-nashpg-mmd-stochastic-policy - failed
+
+- Timestamp: 2026-06-02T04:34:38Z
+- Type: experiment
+- Gate: native_nashpg_stochastic_response_to_online_support
+- Hypothesis: A fresh native neural NashPG/MMD stochastic policy trained against the current online-response support checkpoint should beat that support checkpoint under matched local H2H without Slumbot data.
+- Failure class: strategy_quality
+- Summary: Fresh native NashPG/MMD stochastic policy training against the current online-response support checkpoint ran on CUDA and wrote a valid native checkpoint, but the matched 5000-game local H2H failed versus the support checkpoint: mean=-0.032169, lower95=-0.045278, upper95=-0.019060. This falsifies the unchanged terminal-return neural NashPG/MMD native response recipe as a replacement for the current deterministic online Rainbow response candidate.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_nashpg_vs_online_support_h256_32x2048_seed20260813.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_vs_online_support_h2h_5000_seed20260814.json
+- Key metrics: `{"train_resolved_device": "cuda", "train_n_samples": 105177, "train_samples_per_second": 15826.597105933666, "train_mean_entropy": 1.5919122248888016, "train_compiled_needs_python_showdown": 0, "h2h_n_games": 5000, "h2h_mean_candidate_payoff": -0.032168999999999996, "h2h_lower95_candidate_payoff": -0.045278213460751976, "h2h_upper95_candidate_payoff": -0.01905978653924802, "h2h_eval_games_per_second": 308.03585536176047, "h2h_passed": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py::test_compiled_rollout_opponent_recognizes_online_rainbow_response_payload test/unit/test_native_neural_nashpg_compiled_learner.py::test_compiled_rollout_opponent_loads_online_rainbow_response_payload test/unit/test_native_neural_nashpg_compiled_learner.py::test_native_neural_nashpg_compiled_learner_writes_native_checkpoint` -> `3 passed`.
+  - `python -m py_compile scripts/run_local_vtrace_compiled_native_learner.py scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
+- Decision: keep the checkpoint as falsification evidence only. The next mechanism should not scale this terminal-return NashPG/MMD translation unchanged; it should either implement a stronger policy-gradient return estimator/objective that is faithful to imperfect-information stochastic policies, or return to the maintained-library learner route with an explicit learned actor/average-policy target rather than a Q-head deployment wrapper.

@@ -56,17 +56,54 @@ class _RainbowQOpponent(torch.nn.Module):
         return torch.sum(distribution * self.support.view(1, 1, -1), dim=-1)
 
 
+class _RainbowDistributionNet(torch.nn.Module):
+    def __init__(self, *, hidden_dim: int, num_atoms: int, device: torch.device) -> None:
+        super().__init__()
+        self.num_atoms = int(num_atoms)
+        self.device = device
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(N_FEATURES, int(hidden_dim)),
+            torch.nn.ReLU(),
+            torch.nn.Linear(int(hidden_dim), int(hidden_dim)),
+            torch.nn.ReLU(),
+            torch.nn.Linear(int(hidden_dim), N_ACTIONS * int(num_atoms)),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        x = torch.as_tensor(obs, dtype=torch.float32, device=self.device)
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        logits = self.net(x).view(-1, N_ACTIONS, self.num_atoms)
+        return torch.softmax(logits, dim=-1)
+
+
 def _is_rainbow_payload(payload: dict[str, Any]) -> bool:
     algorithm = str(payload.get("algorithm", ""))
-    return algorithm in {"tianshou_rainbow_dqn", "tianshou_marl_rainbow_dqn"}
+    return algorithm in {
+        "tianshou_rainbow_dqn",
+        "tianshou_marl_rainbow_dqn",
+        "compiled_tianshou_rainbow_response_oracle",
+    }
+
+
+def _rainbow_state_dicts_by_seat_from_payload(payload: dict[str, Any]) -> dict[int, dict]:
+    if payload.get("shared_model_state_dict") is not None:
+        shared = payload["shared_model_state_dict"]
+        return {0: shared, 1: shared}
+    if "agent_model_state_dicts" in payload:
+        agent_state_dicts = payload["agent_model_state_dicts"]
+        fallback_key = "player_0" if "player_0" in agent_state_dicts else sorted(agent_state_dicts)[0]
+        return {
+            seat: agent_state_dicts.get(f"player_{seat}", agent_state_dicts[fallback_key])
+            for seat in (0, 1)
+        }
+    if "model_state_dict" in payload:
+        shared = payload["model_state_dict"]
+        return {0: shared, 1: shared}
+    raise ValueError("Rainbow checkpoint is missing a loadable model state dict")
 
 
 def _load_rainbow_opponent(payload: dict[str, Any], device: torch.device) -> torch.nn.Module:
-    from scripts.run_tianshou_rainbow_native_control import (  # noqa: PLC0415
-        _RainbowDistributionNet,
-        _rainbow_state_dicts_by_seat_from_payload,
-    )
-
     if int(payload.get("num_actions", -1)) != N_ACTIONS:
         raise ValueError("Rainbow opponent action count does not match native full-deck contract")
     if int(payload.get("num_features", -1)) != N_FEATURES:

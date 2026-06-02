@@ -170,3 +170,45 @@ def test_native_neural_nashpg_compiled_learner_supports_gae_targets(tmp_path):
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     assert payload["config"]["advantage_target"] == "gae"
     assert payload["metrics"]["advantage_target"] == "gae"
+
+
+def test_compiled_rollout_opponent_recognizes_online_rainbow_response_payload():
+    from scripts.run_local_vtrace_compiled_native_learner import _is_rainbow_payload
+
+    assert _is_rainbow_payload({"algorithm": "compiled_tianshou_rainbow_response_oracle"})
+
+
+def test_compiled_rollout_opponent_loads_online_rainbow_response_payload(tmp_path):
+    from poker_ai.deep_cfr.fast_state import N_ACTIONS, N_FEATURES
+    from scripts.run_local_vtrace_compiled_native_learner import (
+        _RainbowDistributionNet,
+        _load_compiled_rollout_opponents,
+    )
+
+    checkpoint = tmp_path / "compiled_rainbow_response.pt"
+    model = _RainbowDistributionNet(
+        hidden_dim=8,
+        num_atoms=3,
+        device=torch.device("cpu"),
+    )
+    torch.save(
+        {
+            "algorithm": "compiled_tianshou_rainbow_response_oracle",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": 8,
+            "num_atoms": 3,
+            "model_state_dict": model.state_dict(),
+        },
+        checkpoint,
+    )
+
+    opponents, kinds = _load_compiled_rollout_opponents(
+        [checkpoint],
+        torch.device("cpu"),
+    )
+
+    assert kinds == ["tianshou-rainbow"]
+    q_values = opponents[0](torch.zeros((1, N_FEATURES), dtype=torch.float32))
+    assert q_values.shape == (1, N_ACTIONS)
