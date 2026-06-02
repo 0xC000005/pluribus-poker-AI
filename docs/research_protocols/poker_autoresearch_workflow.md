@@ -371,6 +371,11 @@ also failed the current-incumbent H2H gate (`mean=-0.040956`, lower95
 `-0.053230`), so do not scale that V-trace recipe unchanged; prefer a
 maintained/off-policy Rainbow-style learner consuming externally collected
 compiled transitions, or another reviewed game-dynamics change.
+That follow-up compiled joint-experience bridge now exists and is fast
+(`150482` transitions in `1.18s`), but the existing offline behavior-replay
+Rainbow response objective failed even after `2000` CUDA updates
+(`mean=-0.053094`, lower95 `-0.064691` versus the incumbent). Treat compiled
+joint-experience as a data substrate, not a solved policy-improvement operator.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to

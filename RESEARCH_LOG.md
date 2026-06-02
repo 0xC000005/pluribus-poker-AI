@@ -17476,3 +17476,18 @@
   - `uv run --with tianshou pytest -q test/unit/test_local_vtrace_compiled_native_learner.py test/unit/test_local_vtrace_compiled_native_smoke.py test/unit/test_tianshou_rainbow_native_control.py::test_tianshou_rainbow_checkpoint_h2h_against_native_nfsp` -> `6 passed, 2 warnings`.
   - `python -m py_compile scripts/run_local_vtrace_compiled_native_learner.py` -> passed.
 - Decision: compiled V-trace can now train against the real Rainbow-family local population, but this learner is not competitive. The next useful direction is a maintained/off-policy Rainbow-style learner consuming externally collected compiled transitions, or another reviewed population/objective change, not more V-trace scale with the same recipe.
+## 20260602T010116Z-a-compiled-joint-experience-dataset-from-the-current - failed
+
+- Timestamp: 2026-06-02T01:02:58Z
+- Type: compiled_joint_experience_rainbow_response
+- Gate: compiled_joint_experience_parent_h2h
+- Hypothesis: A compiled joint-experience dataset from the current Rainbow-family historical population can feed the maintained Tianshou Rainbow response-oracle trainer at a much larger local budget and produce a candidate that beats the current fast-state shared-MARL incumbent in duplicate-swapped H2H without Slumbot data or solver labels.
+- Failure class: strategy_quality
+- Summary: Built a compiled joint-experience dataset path and used it to collect 150482 local Rainbow-family population transitions in 1.18s (127837 transitions/sec, zero Python-showdown fallback). The existing maintained Tianshou Rainbow response-oracle trainer consumed the dataset on CUDA (2000 updates in 9.37s), but the candidate failed the 5000-game H2H gate versus the current fast-state shared-MARL incumbent: mean=-0.053094, lower95=-0.064691. Treat compiled joint-experience as useful infrastructure, but offline behavior-replay Rainbow is not a promotable response objective at this budget.
+- Metrics file: autoresearch-session/joint_experience_response_oracle/compiled_rainbow_population_joint32768_u2000_vs_incumbent_h2h_5000_seed20260623.json
+- Dataset file: autoresearch-session/joint_experience/compiled_rainbow_population_joint32768_seed20260621.json
+- Training file: autoresearch-session/joint_experience_response_oracle/compiled_rainbow_population_joint32768_u2000_seed20260622.json
+- Key metrics: `{"dataset_n_hands": 32768, "dataset_n_transitions": 150482, "dataset_seconds": 1.1771366100001615, "dataset_transitions_per_second": 127837.32892308851, "needs_python_showdown": 0, "train_updates": 2000, "train_seconds": 9.37151004900079, "updates_per_second": 213.41277868162177, "h2h_mean": -0.05309359999999999, "h2h_lower95": -0.06469099298508947, "h2h_upper95": -0.04149620701491051, "eval_games_per_second": 194.30125557094658, "passed": false, "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_joint_experience.py::test_collect_compiled_joint_experience_records_next_state_contract test/unit/test_joint_experience.py::test_build_compiled_joint_experience_dataset_cli_writes_npz_and_manifest` -> `2 passed`.
+- Decision: compiled population dataset generation is no longer the limiting problem. The current offline joint-experience Rainbow trainer is still a weak policy-improvement objective; the next useful branch should be online/off-policy control using compiled collection in the learning loop, prioritized replay/value bootstrapping changes with a clear mechanism, or a reviewed external game-dynamics learner.
