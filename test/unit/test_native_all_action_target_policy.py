@@ -91,3 +91,61 @@ def test_native_all_action_target_policy_supports_world_averaged_margin_gate(tmp
     payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
     assert payload["config"]["n_worlds"] == 2
     assert payload["config"]["min_target_margin"] == 0.0
+
+
+def test_pairwise_ranking_loss_rewards_correct_action_ordering():
+    from scripts.train_native_all_action_target_policy import pairwise_ranking_loss
+
+    legal_masks = torch.tensor([[1, 1, 0, 0, 0, 0, 0, 0, 1]], dtype=torch.float32)
+    values = torch.tensor([[0.1, 0.3, float("nan"), float("nan"), float("nan"), float("nan"), float("nan"), float("nan"), 0.8]])
+    good_logits = torch.tensor([[0.0, 0.2, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0]])
+    bad_logits = torch.tensor([[1.0, 0.2, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 0.0]])
+
+    good_loss, good_stats = pairwise_ranking_loss(
+        good_logits,
+        legal_masks,
+        values,
+        min_pair_margin=0.0,
+    )
+    bad_loss, bad_stats = pairwise_ranking_loss(
+        bad_logits,
+        legal_masks,
+        values,
+        min_pair_margin=0.0,
+    )
+
+    assert good_stats["ranking_pair_count"] == 3
+    assert bad_stats["ranking_pair_count"] == 3
+    assert good_loss < bad_loss
+
+
+def test_native_all_action_target_policy_supports_pairwise_ranking_mode(tmp_path):
+    from scripts.train_native_all_action_target_policy import run_training_gate
+
+    checkpoint = tmp_path / "ranking.pt"
+    metrics = run_training_gate(
+        n_train_states=4,
+        n_eval_states=3,
+        n_worlds=2,
+        rollouts_per_action=1,
+        max_steps_per_rollout=12,
+        hidden_dim=16,
+        n_steps=10,
+        batch_size=4,
+        target_temperature=0.5,
+        loss_mode="pairwise",
+        min_pair_margin=0.0,
+        seed=20260750,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["loss_mode"] == "pairwise"
+    assert metrics["train_ranking_pair_count"] > 0
+    assert metrics["eval_ranking_pair_count"] > 0
+    assert 0.0 <= metrics["eval_pairwise_accuracy"] <= 1.0
+
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["loss_mode"] == "pairwise"
+    assert payload["config"]["min_pair_margin"] == 0.0

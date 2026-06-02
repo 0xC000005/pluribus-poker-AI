@@ -157,17 +157,68 @@ def _cross_entropy_to_targets(
     return torch.sum(row_loss * weights) / weights.sum().clamp_min(1e-8)
 
 
+def pairwise_ranking_loss(
+    logits: torch.Tensor,
+    legal_masks: torch.Tensor,
+    values: torch.Tensor,
+    *,
+    min_pair_margin: float,
+    sample_weights: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Rank legal actions by local rollout value without fitting probabilities."""
+    if logits.shape != legal_masks.shape or logits.shape != values.shape:
+        raise ValueError("logits, legal_masks, and values must have matching shapes")
+    legal = legal_masks > 0
+    finite = torch.isfinite(values)
+    active = legal & finite
+    value_gap = values.unsqueeze(2) - values.unsqueeze(1)
+    logit_gap = logits.unsqueeze(2) - logits.unsqueeze(1)
+    pair_mask = (
+        active.unsqueeze(2)
+        & active.unsqueeze(1)
+        & (value_gap >= float(min_pair_margin))
+    )
+    eye = torch.eye(int(logits.shape[1]), dtype=torch.bool, device=logits.device).unsqueeze(0)
+    pair_mask = pair_mask & ~eye
+    pair_counts = pair_mask.to(dtype=logits.dtype).sum(dim=(1, 2))
+    total_pair_count = int(pair_counts.detach().sum().cpu())
+    if total_pair_count <= 0:
+        zero = logits.sum() * 0.0
+        return zero, {
+            "ranking_pair_count": 0,
+            "pairwise_accuracy": 0.0,
+            "pairwise_loss": 0.0,
+        }
+    pair_losses = torch.nn.functional.softplus(-logit_gap)
+    row_losses = (pair_losses * pair_mask.to(dtype=logits.dtype)).sum(dim=(1, 2)) / pair_counts.clamp_min(1.0)
+    active_rows = pair_counts > 0
+    if sample_weights is None:
+        weights = torch.ones_like(row_losses)
+    else:
+        weights = sample_weights.to(dtype=logits.dtype, device=logits.device)
+    weights = torch.where(active_rows, weights, torch.zeros_like(weights))
+    loss = torch.sum(row_losses * weights) / weights.sum().clamp_min(1e-8)
+    correct = ((logit_gap > 0) & pair_mask).to(dtype=logits.dtype).sum()
+    return loss, {
+        "ranking_pair_count": total_pair_count,
+        "pairwise_accuracy": float((correct / max(total_pair_count, 1)).detach().cpu()),
+        "pairwise_loss": float(loss.detach().cpu()),
+    }
+
+
 @torch.no_grad()
 def _evaluate_policy_targets(
     policy_net: torch.nn.Module,
     dataset: dict[str, np.ndarray],
     device: torch.device,
+    min_pair_margin: float = 0.0,
 ) -> dict[str, float]:
     features = torch.as_tensor(dataset["features"], dtype=torch.float32, device=device)
     legal_masks = torch.as_tensor(dataset["legal_masks"], dtype=torch.float32, device=device)
     targets = torch.as_tensor(dataset["targets"], dtype=torch.float32, device=device)
     sample_weights = torch.as_tensor(dataset["sample_weights"], dtype=torch.float32, device=device)
     log_probs = masked_log_probs(policy_net(features), legal_masks > 0)
+    logits = policy_net(features)
     safe_log_probs = torch.where(targets > 0, log_probs, torch.zeros_like(log_probs))
     ce = -torch.sum(targets * safe_log_probs, dim=1)
     legal_counts = torch.sum(legal_masks > 0, dim=1).to(dtype=torch.float32)
@@ -182,6 +233,14 @@ def _evaluate_policy_targets(
     weighted_uniform_ce = (
         torch.sum(uniform_ce * sample_weights) / sample_weights.sum().clamp_min(1e-8)
     )
+    values = torch.as_tensor(dataset["values"], dtype=torch.float32, device=device)
+    pair_loss, pair_stats = pairwise_ranking_loss(
+        logits,
+        legal_masks,
+        values,
+        min_pair_margin=float(min_pair_margin),
+        sample_weights=sample_weights,
+    )
     return {
         "cross_entropy": float(ce.mean().detach().cpu()),
         "uniform_cross_entropy": float(uniform_ce.mean().detach().cpu()),
@@ -190,6 +249,9 @@ def _evaluate_policy_targets(
         "top_action_agreement": float(agreement.detach().cpu()),
         "mean_target_margin": float(np.mean(dataset["target_margins"])),
         "mean_sample_weight": float(np.mean(dataset["sample_weights"])),
+        "pairwise_loss": float(pair_loss.detach().cpu()),
+        "pairwise_accuracy": float(pair_stats["pairwise_accuracy"]),
+        "ranking_pair_count": int(pair_stats["ranking_pair_count"]),
     }
 
 
@@ -208,6 +270,8 @@ def run_training_gate(
     target_temperature: float = 0.1,
     min_target_margin: float = 0.0,
     margin_weight_power: float = 0.0,
+    loss_mode: str = "ce",
+    min_pair_margin: float = 0.0,
     seed: int = 20260720,
     device: str = "auto",
     checkpoint_out: str | Path | None = None,
@@ -223,6 +287,10 @@ def run_training_gate(
         raise ValueError("n_steps must be positive")
     if int(batch_size) <= 0:
         raise ValueError("batch_size must be positive")
+    if str(loss_mode) not in {"ce", "pairwise"}:
+        raise ValueError("loss_mode must be one of: ce, pairwise")
+    if float(min_pair_margin) < 0.0:
+        raise ValueError("min_pair_margin must be non-negative")
 
     random.seed(int(seed))
     np.random.seed(int(seed))
@@ -256,6 +324,7 @@ def run_training_gate(
     train_features = torch.as_tensor(train["features"], dtype=torch.float32, device=resolved_device)
     train_masks = torch.as_tensor(train["legal_masks"], dtype=torch.float32, device=resolved_device)
     train_targets = torch.as_tensor(train["targets"], dtype=torch.float32, device=resolved_device)
+    train_values = torch.as_tensor(train["values"], dtype=torch.float32, device=resolved_device)
     train_weights = torch.as_tensor(train["sample_weights"], dtype=torch.float32, device=resolved_device)
     generator = torch.Generator(device=resolved_device)
     generator.manual_seed(int(seed))
@@ -272,21 +341,40 @@ def run_training_gate(
                 generator=generator,
                 device=resolved_device,
             )
-        loss = _cross_entropy_to_targets(
-            policy_net,
-            train_features[indices],
-            train_masks[indices],
-            train_targets[indices],
-            train_weights[indices],
-        )
+        if str(loss_mode) == "pairwise":
+            loss, _pair_stats = pairwise_ranking_loss(
+                policy_net(train_features[indices]),
+                train_masks[indices],
+                train_values[indices],
+                min_pair_margin=float(min_pair_margin),
+                sample_weights=train_weights[indices],
+            )
+        else:
+            loss = _cross_entropy_to_targets(
+                policy_net,
+                train_features[indices],
+                train_masks[indices],
+                train_targets[indices],
+                train_weights[indices],
+            )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(policy_net.parameters(), 10.0)
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
 
-    train_eval = _evaluate_policy_targets(policy_net, train, resolved_device)
-    holdout_eval = _evaluate_policy_targets(policy_net, eval_data, resolved_device)
+    train_eval = _evaluate_policy_targets(
+        policy_net,
+        train,
+        resolved_device,
+        min_pair_margin=float(min_pair_margin),
+    )
+    holdout_eval = _evaluate_policy_targets(
+        policy_net,
+        eval_data,
+        resolved_device,
+        min_pair_margin=float(min_pair_margin),
+    )
     improvement = float(holdout_eval["uniform_cross_entropy"] - holdout_eval["cross_entropy"])
     weighted_improvement = float(
         holdout_eval["weighted_uniform_cross_entropy"] - holdout_eval["weighted_cross_entropy"]
@@ -315,6 +403,8 @@ def run_training_gate(
         "target_temperature": float(target_temperature),
         "min_target_margin": float(min_target_margin),
         "margin_weight_power": float(margin_weight_power),
+        "loss_mode": str(loss_mode),
+        "min_pair_margin": float(min_pair_margin),
         "last_train_loss": float(losses[-1]) if losses else None,
         "train_cross_entropy": float(train_eval["cross_entropy"]),
         "train_uniform_cross_entropy": float(train_eval["uniform_cross_entropy"]),
@@ -322,6 +412,9 @@ def run_training_gate(
         "train_weighted_uniform_cross_entropy": float(train_eval["weighted_uniform_cross_entropy"]),
         "train_top_action_agreement": float(train_eval["top_action_agreement"]),
         "mean_train_target_margin": float(train_eval["mean_target_margin"]),
+        "train_pairwise_loss": float(train_eval["pairwise_loss"]),
+        "train_pairwise_accuracy": float(train_eval["pairwise_accuracy"]),
+        "train_ranking_pair_count": int(train_eval["ranking_pair_count"]),
         "eval_cross_entropy": float(holdout_eval["cross_entropy"]),
         "uniform_eval_cross_entropy": float(holdout_eval["uniform_cross_entropy"]),
         "eval_weighted_cross_entropy": float(holdout_eval["weighted_cross_entropy"]),
@@ -330,6 +423,9 @@ def run_training_gate(
         "weighted_target_kl_improvement_over_uniform": weighted_improvement,
         "eval_top_action_agreement": float(holdout_eval["top_action_agreement"]),
         "mean_eval_target_margin": float(holdout_eval["mean_target_margin"]),
+        "eval_pairwise_loss": float(holdout_eval["pairwise_loss"]),
+        "eval_pairwise_accuracy": float(holdout_eval["pairwise_accuracy"]),
+        "eval_ranking_pair_count": int(holdout_eval["ranking_pair_count"]),
         "num_actions": N_ACTIONS,
         "num_features": N_FEATURES,
         "trained_environment_native": True,
@@ -340,8 +436,14 @@ def run_training_gate(
         "promotion": False,
         "checkpoint_path": checkpoint_path,
     }
-    gate_improvement = weighted_improvement if float(margin_weight_power) > 0.0 else improvement
-    metrics["passed"] = bool(np.isfinite(gate_improvement) and gate_improvement > 0.0)
+    if str(loss_mode) == "pairwise":
+        metrics["passed"] = bool(
+            int(holdout_eval["ranking_pair_count"]) > 0
+            and float(holdout_eval["pairwise_accuracy"]) > 0.5
+        )
+    else:
+        gate_improvement = weighted_improvement if float(margin_weight_power) > 0.0 else improvement
+        metrics["passed"] = bool(np.isfinite(gate_improvement) and gate_improvement > 0.0)
 
     if checkpoint_out is not None:
         path = Path(checkpoint_out)
@@ -366,6 +468,8 @@ def run_training_gate(
                     "n_worlds": int(n_worlds),
                     "min_target_margin": float(min_target_margin),
                     "margin_weight_power": float(margin_weight_power),
+                    "loss_mode": str(loss_mode),
+                    "min_pair_margin": float(min_pair_margin),
                 },
                 "metrics": metrics,
                 "trained_environment_native": True,
@@ -399,6 +503,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target-temperature", type=float, default=0.1)
     parser.add_argument("--min-target-margin", type=float, default=0.0)
     parser.add_argument("--margin-weight-power", type=float, default=0.0)
+    parser.add_argument("--loss-mode", choices=("ce", "pairwise"), default="ce")
+    parser.add_argument("--min-pair-margin", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=20260720)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--checkpoint-out", type=Path)
@@ -418,6 +524,8 @@ def main(argv: list[str] | None = None) -> int:
         target_temperature=args.target_temperature,
         min_target_margin=args.min_target_margin,
         margin_weight_power=args.margin_weight_power,
+        loss_mode=args.loss_mode,
+        min_pair_margin=args.min_pair_margin,
         seed=args.seed,
         device=args.device,
         checkpoint_out=args.checkpoint_out,
