@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 
 from poker_ai.deep_cfr.fast_state import FastPokerState, N_ACTIONS, N_FEATURES
+from poker_ai.research.native_ppo_policy import _PolicyMLP, _ValueMLP
 from poker_ai.research.compiled_fast_rollout import (
     CompiledFastStateBatch,
     compiled_apply_actions,
@@ -23,6 +25,7 @@ from poker_ai.research.compiled_fast_rollout import (
 )
 from poker_ai.research.native_rollout_substrate import _new_seeded_fast_state
 from poker_ai.rnad.collector import Trajectory
+from poker_ai.rnad.network import RNaDNetwork
 from poker_ai.rnad.solver import RNaDConfig, RNaDSolver
 
 
@@ -307,3 +310,240 @@ def run_compiled_native_rnad_smoke(
             and illegal_records == 0
         ),
     }
+
+
+def _export_two_layer_rnad_to_native_policy(
+    rnad_net: RNaDNetwork,
+    *,
+    hidden_dim: int,
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    if tuple(rnad_net.hidden_layers) != (int(hidden_dim), int(hidden_dim)):
+        raise ValueError("native policy export currently requires a two-layer R-NaD MLP")
+    policy_net = _PolicyMLP(int(hidden_dim), input_dim=N_FEATURES)
+    value_net = _ValueMLP(int(hidden_dim), input_dim=N_FEATURES)
+    policy_state = policy_net.state_dict()
+    value_state = value_net.state_dict()
+    rnad_state = rnad_net.state_dict()
+    mapping = {
+        "net.0.weight": "torso.0.weight",
+        "net.0.bias": "torso.0.bias",
+        "net.2.weight": "torso.2.weight",
+        "net.2.bias": "torso.2.bias",
+        "net.4.weight": "policy_head.weight",
+        "net.4.bias": "policy_head.bias",
+    }
+    value_mapping = {
+        **{key: value for key, value in mapping.items() if not key.startswith("net.4")},
+        "net.4.weight": "value_head.weight",
+        "net.4.bias": "value_head.bias",
+    }
+    for dst, src in mapping.items():
+        policy_state[dst] = rnad_state[src].detach().cpu().clone()
+    for dst, src in value_mapping.items():
+        value_state[dst] = rnad_state[src].detach().cpu().clone()
+    return policy_state, value_state
+
+
+def _save_native_rnad_checkpoint(
+    *,
+    path: str | Path,
+    solver: RNaDSolver,
+    hidden_dim: int,
+    initial_chips: int,
+    max_steps_per_game: int,
+    metrics: dict[str, Any],
+    export_source: str = "target",
+) -> None:
+    source = str(export_source)
+    if source == "target":
+        export_net = solver.net_target
+    elif source == "learner":
+        export_net = solver.net
+    else:
+        raise ValueError("export_source must be one of: target, learner")
+    policy_state, value_state = _export_two_layer_rnad_to_native_policy(
+        export_net,
+        hidden_dim=int(hidden_dim),
+    )
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "algorithm": "rnad_compiled_native",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": int(hidden_dim),
+            "policy_net_state_dict": policy_state,
+            "value_net_state_dict": value_state,
+            "rnad_net_state_dict": export_net.state_dict(),
+            "rnad_policy_export": source,
+            "native_policy_kind": "native-ppo",
+            "config": {
+                "feature_mode": "flat",
+                "hidden_dim": int(hidden_dim),
+                "initial_chips": int(initial_chips),
+                "max_steps_per_hand": int(max_steps_per_game),
+                "rollout_backend": "compiled-fast-state",
+                "fsp_average_policy": False,
+                "train_environment": "poker_ai:full_deck_hu_nlhe",
+                "rnad_policy_export": source,
+            },
+            "metrics": metrics,
+            "trained_environment_native": True,
+            "native_action_projection": False,
+            "rlcard_candidate": False,
+            "uses_slumbot_data": False,
+            "uses_alphanlholdem_training_data": False,
+        },
+        output,
+    )
+
+
+def run_compiled_native_rnad_learner(
+    *,
+    train_iterations: int = 8,
+    n_games: int = 512,
+    collector_batch_size: int = 128,
+    max_steps_per_game: int = 64,
+    initial_chips: int = 1000,
+    hidden_dim: int = 128,
+    lr: float = 5e-5,
+    target_network_avg: float = 0.001,
+    seed: int = 20260602,
+    device: str = "auto",
+    checkpoint_out: str | Path | None = None,
+    parent_checkpoint_out: str | Path | None = None,
+) -> dict[str, Any]:
+    """Train and optionally export a native-policy-compatible R-NaD checkpoint."""
+    requested_device = str(device).strip().lower()
+    if requested_device == "auto":
+        resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif requested_device == "cuda":
+        if not torch.cuda.is_available():
+            raise ValueError("CUDA requested but torch.cuda.is_available() is false")
+        resolved_device = "cuda"
+    elif requested_device == "cpu":
+        resolved_device = "cpu"
+    else:
+        raise ValueError("device must be one of: auto, cpu, cuda")
+
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    collector = CompiledNativeRNaDCollector(
+        collector_batch_size=int(collector_batch_size),
+        initial_chips=int(initial_chips),
+        seed=int(seed),
+        device="cpu",
+    )
+    config = RNaDConfig(
+        trajectory_max=int(max_steps_per_game),
+        batch_size=int(n_games),
+        policy_network_layers=(int(hidden_dim), int(hidden_dim)),
+        learning_rate=float(lr),
+        target_network_avg=float(target_network_avg),
+        entropy_schedule_size=(max(1, int(train_iterations)),),
+        entropy_schedule_repeats=(1,),
+        seed=int(seed),
+    )
+    solver = RNaDSolver(config, collector, device=resolved_device)
+    parent_metrics = {
+        "algorithm": "rnad_compiled_native",
+        "environment": "poker_ai:full_deck_hu_nlhe",
+        "checkpoint_role": "initial_parent",
+        "train_iterations": 0,
+        "seed": int(seed),
+        "promotion": False,
+    }
+    if parent_checkpoint_out is not None:
+        _save_native_rnad_checkpoint(
+            path=parent_checkpoint_out,
+            solver=solver,
+            hidden_dim=int(hidden_dim),
+            initial_chips=int(initial_chips),
+            max_steps_per_game=int(max_steps_per_game),
+            metrics=parent_metrics,
+            export_source="target",
+        )
+
+    losses: list[float] = []
+    alphas: list[float] = []
+    collector_metrics: list[dict[str, Any]] = []
+    started = time.perf_counter()
+    for _ in range(int(train_iterations)):
+        step = solver.step()
+        losses.append(float(step["loss"]))
+        alphas.append(float(step["alpha"]))
+        collector_metrics.append(dict(collector.last_metrics))
+    if torch.device(resolved_device).type == "cuda":
+        torch.cuda.synchronize()
+    seconds = time.perf_counter() - started
+
+    total_samples = int(sum(int(m.get("steps", 0)) for m in collector_metrics))
+    compiled_showdown = int(sum(int(m.get("needs_python_showdown", 0)) for m in collector_metrics))
+    illegal_records = int(sum(int(m.get("illegal_records", 0)) for m in collector_metrics))
+    finite_loss = bool(losses and np.all(np.isfinite(losses)))
+    metrics: dict[str, Any] = {
+        "algorithm": "rnad_compiled_native",
+        "role": "native_full_deck_rnad_checkpoint_learner",
+        "warning": "Native 9-action R-NaD checkpoint; requires H2H/league gates before strength claims.",
+        "environment": "poker_ai:full_deck_hu_nlhe",
+        "collector_backend": "compiled-fast-state",
+        "trajectory_contract": "poker_ai.rnad.collector.Trajectory",
+        "requested_device": requested_device,
+        "resolved_device": resolved_device,
+        "torch_cuda_available": bool(torch.cuda.is_available()),
+        "torch_device_count": int(torch.cuda.device_count()) if torch.cuda.is_available() else 0,
+        "torch_device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "",
+        "seed": int(seed),
+        "num_actions": N_ACTIONS,
+        "num_features": N_FEATURES,
+        "train_iterations": int(train_iterations),
+        "n_games": int(n_games),
+        "collector_batch_size": int(collector_batch_size),
+        "max_steps_per_game": int(max_steps_per_game),
+        "initial_chips": int(initial_chips),
+        "hidden_dim": int(hidden_dim),
+        "lr": float(lr),
+        "target_network_avg": float(target_network_avg),
+        "losses": losses,
+        "last_loss": float(losses[-1]) if losses else None,
+        "alphas": alphas,
+        "rnad_loss_is_finite": finite_loss,
+        "collector_metrics": collector_metrics,
+        "compiled_needs_python_showdown": compiled_showdown,
+        "illegal_records": illegal_records,
+        "n_samples": total_samples,
+        "n_trajectories": int(n_games) * int(train_iterations),
+        "train_seconds": float(seconds),
+        "samples_per_second": float(total_samples / max(seconds, 1e-12)),
+        "trained_environment_native": True,
+        "native_action_projection": False,
+        "rlcard_candidate": False,
+        "uses_slumbot_data": False,
+        "uses_alphanlholdem_training_data": False,
+        "promotion": False,
+        "checkpoint_path": str(checkpoint_out) if checkpoint_out is not None else None,
+        "parent_checkpoint_path": (
+            str(parent_checkpoint_out) if parent_checkpoint_out is not None else None
+        ),
+        "native_policy_kind": "native-ppo",
+        "rnad_policy_export": "target",
+        "passed": bool(
+            finite_loss
+            and total_samples > 0
+            and compiled_showdown == 0
+            and illegal_records == 0
+        ),
+    }
+    if checkpoint_out is not None:
+        _save_native_rnad_checkpoint(
+            path=checkpoint_out,
+            solver=solver,
+            hidden_dim=int(hidden_dim),
+            initial_chips=int(initial_chips),
+            max_steps_per_game=int(max_steps_per_game),
+            metrics=metrics,
+            export_source="target",
+        )
+    return metrics

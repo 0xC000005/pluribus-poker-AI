@@ -17378,3 +17378,20 @@
   - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_smoke.py` -> passed.
 - Key metrics: `{"passed": true, "resolved_device": "cuda", "num_actions": 9, "num_features": 126, "updates": 2, "n_samples": 213, "rnad_loss_is_finite": true, "compiled_needs_python_showdown": 0, "illegal_records": 0, "truncated_games": 0, "samples_per_second": 439.84629631611284, "promotion": false}`
 - Decision: native R-NaD trajectory plumbing is validated. The next step is a scaled native R-NaD checkpoint learner with same-environment parent/population H2H and empirical-game gates; do not use this smoke as Slumbot or SOTA evidence.
+
+## 20260602T001611Z-a-compiled-native-r-nad-learner-can-export - passed
+
+- Timestamp: 2026-06-02T00:16:17Z
+- Type: method_change
+- Gate: native_rnad_checkpoint_learner_smoke
+- Hypothesis: A compiled native R-NaD learner can export a fresh 9-action target policy checkpoint compatible with the existing native H2H league, enabling generation-over-generation evaluation without Slumbot data or solver labels.
+- Failure class: scaling_bridge
+- Summary: Added a native compiled R-NaD checkpoint learner and native-policy export. The CUDA-resolved 4x64 smoke passed with 4 finite R-NaD updates, 851 samples, zero illegal records, zero Python-showdown fallbacks, and wrote parent/child 9-action checkpoints. A 20-game duplicate-swapped child-vs-parent H2H smoke loaded both checkpoints through the existing native-ppo adapter and returned neutral mean/lower95=0.0, so this validates league plumbing only, not strength.
+- Metrics file: autoresearch-session/native_rnad/rnad_compiled_native_child_4x64_seed20260602.json
+- H2H smoke file: autoresearch-session/native_rnad/rnad_compiled_native_child_vs_parent_h2h_20_seed20260602.json
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py` -> `2 passed`.
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py test/unit/test_rnad_compiled_native_smoke.py test/unit/test_local_vtrace_compiled_native_learner.py` -> `6 passed`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py scripts/run_rnad_compiled_native_smoke.py` -> passed.
+- Key metrics: `{"passed": true, "resolved_device": "cuda", "num_actions": 9, "num_features": 126, "train_iterations": 4, "n_samples": 851, "rnad_loss_is_finite": true, "compiled_needs_python_showdown": 0, "illegal_records": 0, "samples_per_second": 1504.5141506215566, "h2h_mean_candidate_payoff": 0.0, "h2h_lower95_candidate_payoff": 0.0, "promotion": false}`
+- Decision: checkpoint export and native H2H plumbing are validated. Strength is not shown; the next gate needs a larger native R-NaD generation run and a positive child-vs-parent/population lower95 before empirical-game or Slumbot evaluation.
