@@ -17866,3 +17866,26 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus gen3, Rainbow, and NFSP; negative/inconclusive versus iter2.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete five-policy matrix with online response support.
 - Decision: keep online compiled response learning as the live successor. The next gate should train a new online response from the empirical support mixture of iter2, gen3, and the online pivot, and require generation improvement over the current support rather than Slumbot evaluation.
+## 20260602T033611Z-online-response-support-iteration - passed
+
+- Timestamp: 2026-06-02T03:36:11Z
+- Type: online_compiled_rainbow_response_oracle_support_iteration
+- Gate: online_response_support_generation_empirical_game_gate
+- Hypothesis: Training an online response against the empirical support mixture of iter2, gen3, and the online pivot should produce a genuine generation improvement over the current support.
+- Failure class: strategy_quality
+- Summary: Ran a same-budget online compiled Rainbow response learner against the current empirical support mixture. The new support response beat the online pivot, iter2, gen3, Rainbow, and NFSP. The two high-confidence gates were positive: 20k versus iter2 and 20k versus gen3. The six-policy empirical game solved to pure support on the new online response. This is the strongest local self-play/population result so far in this branch, but it remains local evidence only; no Slumbot or RLCard promotion has been run.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_h256_32x2048_u4096_seed20260717.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_empirical_game_iter4_iter2_gen3_online_nfsp_rainbow_confidence_seed20260723.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_online_pivot_h2h_5000_fast_seed20260718.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_iter2_h2h_20000_fast_seed20260723.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_gen3_h2h_20000_fast_seed20260720.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_rainbow_h2h_5000_fast_seed20260721.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter4_support_vs_nfsp_h2h_5000_fast_seed20260722.json
+- Key metrics: `{"collector_hands": 65536, "collector_transitions": 191469, "epsilon": 0.2, "updates": 4096, "collector_transitions_per_second": 37831.99354119198, "updates_per_second": 107.32626964853743, "support_vs_online_pivot_mean": 0.0125088, "support_vs_online_pivot_lower95": 0.00086664810969065, "support_vs_iter2_20k_mean": 0.0150932, "support_vs_iter2_20k_lower95": 0.008962435322469535, "support_vs_gen3_20k_mean": 0.0252316, "support_vs_gen3_20k_lower95": 0.019191000314893028, "support_vs_rainbow_mean": 0.0211272, "support_vs_rainbow_lower95": 0.009561042938292368, "support_vs_nfsp_mean": 0.0250674, "support_vs_nfsp_lower95": 0.011685790943722374, "empirical_meta_strategy": [0.0, 0.0, 0.0, 1.0, 0.0, 0.0], "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --collect-iterations 32 --games-per-iteration 2048 --updates-per-collect 128 --epsilon 0.20 --opponent-policy <iter2> --opponent-policy <gen3> --opponent-policy <online_pivot> ...` -> passed on CUDA with zero Python-showdown fallback.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus online pivot, iter2, gen3, Rainbow, and NFSP.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete six-policy matrix with pure support on the new online response.
+- Decision: promote this candidate only to the next local gate, not to Slumbot. The next principled test is an independent same-budget online-response replication from the same support mixture, followed by a direct H2H/empirical check against this support response. If it replicates, queue the formal pre-Slumbot candidate promotion gate; if it fails, synthesize whether online response is overfitting to the current matrix.
