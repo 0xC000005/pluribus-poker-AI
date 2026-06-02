@@ -17816,3 +17816,53 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus iter1, Rainbow, and NFSP; 20k gen3 confidence gate remained inconclusive/weakly negative.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete five-policy matrix with nonzero iter2 support.
 - Decision: continue this line, but keep the promotion blocker explicit. The next gate should train iter3 from the confidence empirical population dominated by gen3 plus iter2/Rainbow support, and should require either a positive lower95 against gen3 or a justified pivot to online response collection if offline exploratory replay cannot cross gen3.
+## 20260602T032859Z-offline-iter3-response-replay - failed
+
+- Timestamp: 2026-06-02T03:28:59Z
+- Type: offline_exploratory_joint_experience_response_oracle_iter3
+- Gate: offline_iter3_generation_and_gen3_confidence_gate
+- Hypothesis: Training iter3 from the confidence empirical population dominated by gen3 plus iter2/Rainbow support should beat iter2 and produce a positive gen3 lower bound.
+- Failure class: strategy_quality
+- Summary: Built the requested gen3-dominated offline replay dataset and trained a same-budget iter3 Rainbow response oracle. Collection and training ran on CUDA with zero Python-showdown fallback, but the candidate failed the generation gate: it lost clearly to iter2 and did not produce a positive lower bound against gen3 over 20k duplicate-swapped games. This blocks another unchanged offline exploratory replay iteration.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/joint_response_iter3_empirical_pop_eps020_65536_seed20260708.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter3_rainbow_oracle_eps020_65536_h256_u4000_seed20260709.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/joint_response_iter3_eps020_65536_vs_iter2_h2h_5000_fast_seed20260710.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter3_eps020_65536_vs_gen3_h2h_20000_fast_seed20260711.json
+- Key metrics: `{"dataset_hands": 65536, "dataset_transitions": 436430, "exploration_epsilon": 0.2, "exploratory_action_fraction": 0.20032078454735008, "dataset_transitions_per_second": 64242.536737416645, "oracle_updates": 4000, "oracle_updates_per_second": 121.90750545431278, "iter3_vs_iter2_mean": -0.0251408, "iter3_vs_iter2_lower95": -0.03618858903802877, "iter3_vs_gen3_20k_mean": 0.0000843, "iter3_vs_gen3_20k_lower95": -0.0025686518246340606, "promotion": false}`
+- Decision: retire unchanged offline iter3 replay and run a synthesis/pivot review before further expansion.
+## 20260602T032440Z-offline-response-replay-synthesis - passed
+
+- Timestamp: 2026-06-02T03:24:40Z
+- Type: failure_synthesis
+- Gate: failure-synthesis-20260602T032440Z-offline-exploratory-response-replay-failed-iter3-generation-gate
+- Hypothesis: The offline exploratory response replay failure should identify a causal model and one next falsifier before another mechanism variant is run.
+- Failure class: eval_invalid
+- Summary: The synthesis concluded that offline replay solved initial missing action coverage but failed as a repeated generation mechanism once the population became gen3-dominated. The selected revision was online compiled response collection, where the learner gathers semi-MDP transitions with its current policy against the empirical population instead of training only on a stale fixed `.npz`.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T032440Z-offline-exploratory-response-replay-failed-iter3-generation-gate-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T032440Z-offline-exploratory-response-replay-failed-iter3-generation-gate-synthesis/decision.json
+- Decision: revise from unchanged offline exploratory replay to online compiled Rainbow response collection against the confidence empirical population.
+## 20260602T032859Z-online-response-iter3-pivot - passed
+
+- Timestamp: 2026-06-02T03:28:59Z
+- Type: online_compiled_rainbow_response_oracle
+- Gate: online_response_iter3_pivot_empirical_game_gate
+- Hypothesis: Online compiled response collection against the confidence empirical population should repair the stale-replay failure and cross the gen3 lower-bound gate.
+- Failure class: strategy_quality
+- Summary: Ran the existing compiled online Rainbow response learner against the same confidence empirical population. The online candidate crossed the key gen3 blocker with a positive 20k lower bound and beat Rainbow and NFSP with positive lower bounds. It did not beat iter2, so it is not a new promoted champion, but the empirical game gave it nonzero support alongside iter2 and gen3 while dropping Rainbow/NFSP. This supports the synthesis: online collection is a better successor than another unchanged offline replay iteration.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter3_pivot_h256_32x2048_u4096_seed20260712.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter3_pivot_empirical_game_online_iter2_gen3_nfsp_rainbow_seed20260716.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/online_response_iter3_pivot_vs_iter2_h2h_5000_fast_seed20260713.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter3_pivot_vs_gen3_h2h_20000_fast_seed20260714.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter3_pivot_vs_rainbow_h2h_5000_fast_seed20260715.json
+  - autoresearch-session/native_neural_nashpg/online_response_iter3_pivot_vs_nfsp_h2h_5000_fast_seed20260716.json
+- Key metrics: `{"collector_hands": 65536, "collector_transitions": 170477, "epsilon": 0.2, "updates": 4096, "collector_transitions_per_second": 60193.59852612463, "updates_per_second": 168.8133093751854, "online_vs_iter2_mean": -0.007641, "online_vs_iter2_lower95": -0.017113905262999145, "online_vs_gen3_20k_mean": 0.0062523, "online_vs_gen3_20k_lower95": 0.004166617887407748, "online_vs_rainbow_mean": 0.0042116, "online_vs_rainbow_lower95": 0.0003625780728124567, "online_vs_nfsp_mean": 0.0533256, "online_vs_nfsp_lower95": 0.040727486329500795, "empirical_meta_strategy": [0.4123718819665211, 0.5039639092983683, 0.08366420873511062, 0.0, 0.0], "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/run_compiled_rainbow_response_oracle.py --collect-iterations 32 --games-per-iteration 2048 --updates-per-collect 128 --epsilon 0.20 --opponent-policy <iter2> --opponent-policy <gen3> --opponent-policy <rainbow> ...` -> passed on CUDA with zero Python-showdown fallback.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus gen3, Rainbow, and NFSP; negative/inconclusive versus iter2.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete five-policy matrix with online response support.
+- Decision: keep online compiled response learning as the live successor. The next gate should train a new online response from the empirical support mixture of iter2, gen3, and the online pivot, and require generation improvement over the current support rather than Slumbot evaluation.
