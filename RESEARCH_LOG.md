@@ -18794,3 +18794,19 @@
   - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
   - PPO-inner gate command above -> passed and wrote the metrics file.
 - Decision: PPO-inner NashPG becomes the current small-game neural lead and authorizes native mechanism translation work, not Slumbot evaluation. The next step is a native compiled PPO-inner NashPG learner using the same self-play/reference/GAE/clipped-update schema, followed by parent/population H2H and empirical-game support gates.
+
+## 20260602T092000Z-native-ppo-inner-nashpg-smoke - passed
+
+- Timestamp: 2026-06-02T09:20:00Z
+- Type: experiment
+- Gate: native_ppo_inner_nashpg_compiled_smoke
+- Hypothesis: The small-game PPO-inner NashPG mechanism can be translated into the native full-deck 9-action environment without changing the simulator contract, using compiled local self-play, stored behavior log-probs, clipped PPO updates, player GAE, and moving reference-policy KL.
+- Failure class: none
+- Summary: Added `inner_update=ppo` support to `scripts/run_native_neural_nashpg_compiled_learner.py`. The native learner now freezes behavior log-probs from the compiled collector, prepares fixed value/advantage rows for the batch, and runs clipped minibatch policy/value updates before the next rollout. A focused unit smoke verifies checkpoint writing and config/metrics fields. The first native command used 20k chips, `2x512` games, hidden dim `128`, IIG-style PPO settings, and `device=auto`; it resolved to CUDA and passed the plumbing gate with finite loss, zero illegal action probability, and zero Python showdown fallback.
+- Metrics file: autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_smoke_seed20260681.json
+- Key metrics: `{"resolved_device": "cuda", "train_iterations": 2, "games_per_iteration": 512, "n_samples": 3754, "samples_per_second": 914.158428, "collector_seconds": 3.818946, "train_seconds": 4.106509, "last_loss": 0.165452, "mean_entropy": 1.731937, "mean_reference_kl": 0.000465, "illegal_action_probability": 0.0, "compiled_needs_python_showdown": 0, "passed": true, "promotion": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py::test_native_neural_nashpg_compiled_learner_supports_ppo_inner_update` -> `1 passed`.
+  - `python -m py_compile scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
+  - Native smoke command above -> passed and wrote the metrics/checkpoint artifacts.
+- Decision: native PPO-inner NashPG plumbing is valid and CUDA-capable. This does not prove strength. The next gate is a larger native PPO-inner generation followed by duplicate-swapped parent/population H2H and empirical-game support against current native controls.

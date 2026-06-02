@@ -437,6 +437,14 @@ gen2, remained positive versus NFSP, still lost to Rainbow (`mean=-0.017587`,
 upper95 `-0.006654`), and the empirical game again solved to pure Rainbow
 support. Keep population-opponent collection as infrastructure and evidence;
 do not repeat the same direct response recipe unchanged.
+After the corrected small-game gate, PPO-inner NashPG became the current neural
+translation lead: the native compiled learner now supports the same clipped
+behavior-policy update used in the small-game pass. The first native smoke used
+the 20k-chip, 9-action local environment on CUDA and passed only the plumbing
+contract (`3754` samples, finite loss, zero illegal probability, zero compiled
+showdown fallback). This is not population strength. The next native test must
+be a larger PPO-inner generation followed by duplicate-swapped parent/control
+H2H and empirical-game support; Slumbot remains blocked.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling

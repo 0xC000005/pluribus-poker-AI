@@ -172,6 +172,42 @@ def test_native_neural_nashpg_compiled_learner_supports_gae_targets(tmp_path):
     assert payload["metrics"]["advantage_target"] == "gae"
 
 
+def test_native_neural_nashpg_compiled_learner_supports_ppo_inner_update(tmp_path):
+    from scripts.run_native_neural_nashpg_compiled_learner import run_learner
+
+    checkpoint = tmp_path / "ppo_inner.pt"
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=8,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        lr=0.00025,
+        entropy_weight=0.05,
+        inner_update="ppo",
+        ppo_epochs=2,
+        ppo_minibatches=2,
+        clip_coef=0.1,
+        advantage_target="gae",
+        gamma=0.99,
+        gae_lambda=0.95,
+        seed=20260680,
+        device="cpu",
+        checkpoint_out=checkpoint,
+    )
+
+    assert checkpoint.exists()
+    assert metrics["inner_update"] == "ppo"
+    assert metrics["ppo_epochs"] == 2
+    assert metrics["ppo_minibatches"] == 2
+    assert metrics["clip_coef"] == 0.1
+    assert metrics["advantage_target"] == "gae"
+    assert metrics["passed"] is True
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    assert payload["config"]["inner_update"] == "ppo"
+    assert payload["metrics"]["inner_update"] == "ppo"
+
+
 def test_compiled_rollout_opponent_recognizes_online_rainbow_response_payload():
     from scripts.run_local_vtrace_compiled_native_learner import _is_rainbow_payload
 

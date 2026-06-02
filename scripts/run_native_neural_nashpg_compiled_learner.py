@@ -161,6 +161,136 @@ def _policy_value_reference_loss(
     return loss, stats, int(actions.numel())
 
 
+def _prepare_ppo_fixed_rows(
+    *,
+    policy_net: torch.nn.Module,
+    value_net: torch.nn.Module,
+    batch: dict[str, np.ndarray],
+    device: torch.device,
+    advantage_target: str,
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[dict[str, torch.Tensor], dict[str, float], int]:
+    if int(batch["actions"].shape[0]) <= 0:
+        return {}, {}, 0
+    features = torch.as_tensor(batch["features"], dtype=torch.float32, device=device)
+    legal_masks = torch.as_tensor(batch["legal_masks"] > 0, dtype=torch.bool, device=device)
+    actions = torch.as_tensor(batch["actions"], dtype=torch.long, device=device)
+    old_log_probs = torch.as_tensor(batch["old_log_probs"], dtype=torch.float32, device=device)
+    returns = torch.as_tensor(batch["rewards"], dtype=torch.float32, device=device)
+    with torch.no_grad():
+        values = value_net(features).reshape(-1)
+    target_mode = str(advantage_target)
+    if target_mode == "terminal":
+        value_targets = returns
+        advantages = value_targets - values
+    elif target_mode == "gae":
+        value_targets, advantages = _linked_bootstrap_targets_and_advantages(
+            values=values,
+            terminal_returns=returns,
+            batch=batch,
+            gamma=float(gamma),
+            gae_lambda=float(gae_lambda),
+        )
+    else:
+        raise ValueError("advantage_target must be one of: terminal, gae")
+    if int(advantages.numel()) > 1:
+        advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-5)
+    rows = {
+        "features": features,
+        "legal_masks": legal_masks,
+        "actions": actions,
+        "old_log_probs": old_log_probs.detach(),
+        "value_targets": value_targets.detach(),
+        "advantages": advantages.detach(),
+    }
+    stats = {
+        "advantage_target": target_mode,
+        "mean_value_target": float(value_targets.detach().mean().cpu()),
+        "std_value_target": float(value_targets.detach().std(unbiased=False).cpu()),
+        "mean_return": float(returns.detach().mean().cpu()),
+        "std_return": float(returns.detach().std(unbiased=False).cpu()),
+    }
+    return rows, stats, int(actions.numel())
+
+
+def _policy_value_reference_ppo_loss_on_rows(
+    *,
+    policy_net: torch.nn.Module,
+    value_net: torch.nn.Module,
+    reference_policy: torch.nn.Module | None,
+    rows: dict[str, torch.Tensor],
+    indices: torch.Tensor,
+    value_weight: float,
+    entropy_weight: float,
+    reference_kl_weight: float,
+    clip_coef: float,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    features = rows["features"][indices]
+    legal_masks = rows["legal_masks"][indices]
+    actions = rows["actions"][indices]
+    old_log_probs = rows["old_log_probs"][indices]
+    value_targets = rows["value_targets"][indices]
+    advantages = rows["advantages"][indices]
+
+    logits = policy_net(features)
+    log_probs = masked_log_probs(logits, legal_masks)
+    probs = torch.exp(log_probs)
+    values = value_net(features).reshape(-1)
+    action_log_probs = log_probs.gather(1, actions.view(-1, 1)).squeeze(1)
+    ratio = torch.exp(action_log_probs - old_log_probs)
+    clipped_ratio = torch.clamp(ratio, 1.0 - float(clip_coef), 1.0 + float(clip_coef))
+    policy_loss = torch.maximum(
+        -advantages * ratio,
+        -advantages * clipped_ratio,
+    ).mean()
+    value_loss = torch.mean(torch.square(values - value_targets))
+    entropy = -torch.sum(probs * torch.nan_to_num(log_probs, neginf=0.0), dim=1).mean()
+
+    reference_kl = torch.zeros((), dtype=torch.float32, device=features.device)
+    if reference_policy is not None and float(reference_kl_weight) > 0.0:
+        with torch.no_grad():
+            reference_logits = reference_policy(features)
+            reference_log_probs = masked_log_probs(reference_logits, legal_masks)
+        kl_terms = probs * (
+            torch.nan_to_num(log_probs, neginf=0.0)
+            - torch.nan_to_num(reference_log_probs, neginf=0.0)
+        )
+        kl_terms = torch.where(legal_masks, kl_terms, torch.zeros_like(kl_terms))
+        reference_kl = torch.sum(kl_terms, dim=1).mean()
+
+    illegal_probability = torch.where(
+        legal_masks,
+        torch.zeros_like(probs),
+        probs,
+    ).sum(dim=1).max()
+    loss = (
+        policy_loss
+        + float(value_weight) * value_loss
+        + float(reference_kl_weight) * reference_kl
+        - float(entropy_weight) * entropy
+    )
+    with torch.no_grad():
+        approx_kl = ((ratio - 1.0) - torch.log(ratio.clamp_min(1e-9))).mean()
+        clip_fraction = (
+            (torch.abs(ratio - 1.0) > float(clip_coef))
+            .to(dtype=ratio.dtype)
+            .mean()
+        )
+    stats = {
+        "loss": float(loss.detach().cpu()),
+        "policy_loss": float(policy_loss.detach().cpu()),
+        "value_loss": float(value_loss.detach().cpu()),
+        "entropy": float(entropy.detach().cpu()),
+        "reference_kl": float(reference_kl.detach().cpu()),
+        "reference_kl_weight": float(reference_kl_weight),
+        "illegal_action_probability": float(illegal_probability.detach().cpu()),
+        "approx_kl": float(approx_kl.detach().cpu()),
+        "clip_fraction": float(clip_fraction.detach().cpu()),
+    }
+    return loss, stats
+
+
 @torch.no_grad()
 def _policy_snapshot_for_kl(
     policy_net: torch.nn.Module,
@@ -344,6 +474,10 @@ def run_learner(
     entropy_weight: float = 0.02,
     reference_kl_weight: float = 0.05,
     reference_update_every: int = 4,
+    inner_update: str = "pg",
+    ppo_epochs: int = 4,
+    ppo_minibatches: int = 4,
+    clip_coef: float = 0.1,
     adaptive_policy_kl_target: float = 0.0,
     adaptive_policy_kl_max_backtracks: int = 4,
     adaptive_policy_kl_backtrack_factor: float = 0.5,
@@ -366,8 +500,18 @@ def run_learner(
         raise ValueError("reference_update_every must be positive")
     if float(reference_kl_weight) < 0.0:
         raise ValueError("reference_kl_weight must be non-negative")
+    if str(inner_update) not in {"pg", "ppo"}:
+        raise ValueError("inner_update must be one of: pg, ppo")
+    if int(ppo_epochs) <= 0:
+        raise ValueError("ppo_epochs must be positive")
+    if int(ppo_minibatches) <= 0:
+        raise ValueError("ppo_minibatches must be positive")
+    if float(clip_coef) <= 0.0:
+        raise ValueError("clip_coef must be positive")
     if float(adaptive_policy_kl_target) < 0.0:
         raise ValueError("adaptive_policy_kl_target must be non-negative")
+    if str(inner_update) == "ppo" and float(adaptive_policy_kl_target) > 0.0:
+        raise ValueError("adaptive_policy_kl_target is supported only for inner_update=pg")
     if int(adaptive_policy_kl_max_backtracks) < 0:
         raise ValueError("adaptive_policy_kl_max_backtracks must be non-negative")
     if not (0.0 < float(adaptive_policy_kl_backtrack_factor) < 1.0):
@@ -450,30 +594,54 @@ def run_learner(
         collector_seconds += float(collector_metrics.get("seconds", 0.0))
         compiled_needs_python_showdown += int(collector_metrics.get("needs_python_showdown", 0))
 
-        loss, stats, batch_samples = _policy_value_reference_loss(
-            policy_net=policy_net,
-            value_net=value_net,
-            reference_policy=reference_policy,
-            batch=batch,
-            device=resolved_device,
-            value_weight=float(value_weight),
-            entropy_weight=float(entropy_weight),
-            reference_kl_weight=float(reference_kl_weight),
-            advantage_target=str(advantage_target),
-            gamma=float(gamma),
-            gae_lambda=float(gae_lambda),
-        )
-        if batch_samples <= 0:
-            continue
-        step_features = torch.as_tensor(batch["features"], dtype=torch.float32, device=resolved_device)
-        step_legal_masks = torch.as_tensor(
-            batch["legal_masks"] > 0,
-            dtype=torch.bool,
-            device=resolved_device,
-        )
-
-        def _rebuild_step_loss() -> torch.Tensor:
-            rebuilt_loss, _rebuilt_stats, _rebuilt_samples = _policy_value_reference_loss(
+        if str(inner_update) == "ppo":
+            rows, base_stats, batch_samples = _prepare_ppo_fixed_rows(
+                policy_net=policy_net,
+                value_net=value_net,
+                batch=batch,
+                device=resolved_device,
+                advantage_target=str(advantage_target),
+                gamma=float(gamma),
+                gae_lambda=float(gae_lambda),
+            )
+            if batch_samples <= 0:
+                continue
+            minibatches = max(1, min(int(ppo_minibatches), int(batch_samples)))
+            last_stats: dict[str, float] = {}
+            for _epoch_i in range(int(ppo_epochs)):
+                order = np.random.permutation(int(batch_samples))
+                for mb_np in np.array_split(order, minibatches):
+                    if mb_np.size <= 0:
+                        continue
+                    mb = torch.as_tensor(mb_np, dtype=torch.long, device=resolved_device)
+                    optimizer.zero_grad(set_to_none=True)
+                    loss, last_stats = _policy_value_reference_ppo_loss_on_rows(
+                        policy_net=policy_net,
+                        value_net=value_net,
+                        reference_policy=reference_policy,
+                        rows=rows,
+                        indices=mb,
+                        value_weight=float(value_weight),
+                        entropy_weight=float(entropy_weight),
+                        reference_kl_weight=float(reference_kl_weight),
+                        clip_coef=float(clip_coef),
+                    )
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        list(policy_net.parameters()) + list(value_net.parameters()),
+                        10.0,
+                    )
+                    optimizer.step()
+            stats = {**base_stats, **last_stats}
+            step_stats = {
+                "policy_update_kl": None,
+                "policy_update_backtracks": 0,
+                "policy_update_lr_scale": 1.0,
+                "policy_update_accepted": True,
+                "policy_update_skipped": False,
+            }
+        else:
+            loss, stats, batch_samples = _policy_value_reference_loss(
                 policy_net=policy_net,
                 value_net=value_net,
                 reference_policy=reference_policy,
@@ -486,20 +654,43 @@ def run_learner(
                 gamma=float(gamma),
                 gae_lambda=float(gae_lambda),
             )
-            return rebuilt_loss
+            if batch_samples <= 0:
+                continue
+            step_features = torch.as_tensor(batch["features"], dtype=torch.float32, device=resolved_device)
+            step_legal_masks = torch.as_tensor(
+                batch["legal_masks"] > 0,
+                dtype=torch.bool,
+                device=resolved_device,
+            )
 
-        step_stats = _optimizer_step_with_optional_policy_kl_control(
-            policy_net=policy_net,
-            value_net=value_net,
-            optimizer=optimizer,
-            loss=loss,
-            loss_builder=_rebuild_step_loss,
-            features=step_features,
-            legal_masks=step_legal_masks,
-            max_policy_kl=float(adaptive_policy_kl_target),
-            max_backtracks=int(adaptive_policy_kl_max_backtracks),
-            backtrack_factor=float(adaptive_policy_kl_backtrack_factor),
-        )
+            def _rebuild_step_loss() -> torch.Tensor:
+                rebuilt_loss, _rebuilt_stats, _rebuilt_samples = _policy_value_reference_loss(
+                    policy_net=policy_net,
+                    value_net=value_net,
+                    reference_policy=reference_policy,
+                    batch=batch,
+                    device=resolved_device,
+                    value_weight=float(value_weight),
+                    entropy_weight=float(entropy_weight),
+                    reference_kl_weight=float(reference_kl_weight),
+                    advantage_target=str(advantage_target),
+                    gamma=float(gamma),
+                    gae_lambda=float(gae_lambda),
+                )
+                return rebuilt_loss
+
+            step_stats = _optimizer_step_with_optional_policy_kl_control(
+                policy_net=policy_net,
+                value_net=value_net,
+                optimizer=optimizer,
+                loss=loss,
+                loss_builder=_rebuild_step_loss,
+                features=step_features,
+                legal_masks=step_legal_masks,
+                max_policy_kl=float(adaptive_policy_kl_target),
+                max_backtracks=int(adaptive_policy_kl_max_backtracks),
+                backtrack_factor=float(adaptive_policy_kl_backtrack_factor),
+            )
 
         losses.append(float(stats["loss"]))
         entropy_values.append(float(stats["entropy"]))
@@ -545,6 +736,10 @@ def run_learner(
         "entropy_weight": float(entropy_weight),
         "reference_kl_weight": float(reference_kl_weight),
         "reference_update_every": int(reference_update_every),
+        "inner_update": str(inner_update),
+        "ppo_epochs": int(ppo_epochs),
+        "ppo_minibatches": int(ppo_minibatches),
+        "clip_coef": float(clip_coef),
         "adaptive_policy_kl_enabled": bool(float(adaptive_policy_kl_target) > 0.0),
         "adaptive_policy_kl_target": float(adaptive_policy_kl_target),
         "adaptive_policy_kl_max_backtracks": int(adaptive_policy_kl_max_backtracks),
@@ -642,6 +837,10 @@ def run_learner(
                     "reference_policy_kind": reference_kind,
                     "reference_kl_weight": float(reference_kl_weight),
                     "reference_update_every": int(reference_update_every),
+                    "inner_update": str(inner_update),
+                    "ppo_epochs": int(ppo_epochs),
+                    "ppo_minibatches": int(ppo_minibatches),
+                    "clip_coef": float(clip_coef),
                     "adaptive_policy_kl_enabled": bool(float(adaptive_policy_kl_target) > 0.0),
                     "adaptive_policy_kl_target": float(adaptive_policy_kl_target),
                     "adaptive_policy_kl_max_backtracks": int(adaptive_policy_kl_max_backtracks),
@@ -680,6 +879,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--entropy-weight", type=float, default=0.02)
     parser.add_argument("--reference-kl-weight", type=float, default=0.05)
     parser.add_argument("--reference-update-every", type=int, default=4)
+    parser.add_argument("--inner-update", choices=("pg", "ppo"), default="pg")
+    parser.add_argument("--ppo-epochs", type=int, default=4)
+    parser.add_argument("--ppo-minibatches", type=int, default=4)
+    parser.add_argument("--clip-coef", type=float, default=0.1)
     parser.add_argument(
         "--adaptive-policy-kl-target",
         type=float,
@@ -720,6 +923,10 @@ def main(argv: list[str] | None = None) -> int:
         entropy_weight=args.entropy_weight,
         reference_kl_weight=args.reference_kl_weight,
         reference_update_every=args.reference_update_every,
+        inner_update=args.inner_update,
+        ppo_epochs=args.ppo_epochs,
+        ppo_minibatches=args.ppo_minibatches,
+        clip_coef=args.clip_coef,
         adaptive_policy_kl_target=args.adaptive_policy_kl_target,
         adaptive_policy_kl_max_backtracks=args.adaptive_policy_kl_max_backtracks,
         adaptive_policy_kl_backtrack_factor=args.adaptive_policy_kl_backtrack_factor,
