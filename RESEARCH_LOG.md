@@ -17792,3 +17792,27 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> passed for Rainbow and NFSP lower-bound gates; gen3 H2H was negative.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete four-policy matrix with nonzero oracle support.
 - Decision: keep exploratory local response learning as the live mechanism. The next principled step is to make it iterative: train a second response against the empirical-game-supported population including gen3, Rainbow, and the replicated oracle, with local exploration and the same H2H/empirical support gates. Do not promote to Slumbot while direct gen3 H2H is negative.
+## 20260602T031757Z-iterative-exploratory-response-oracle - passed
+
+- Timestamp: 2026-06-02T03:17:57Z
+- Type: iterative_exploratory_joint_experience_response_oracle
+- Gate: iter2_exploratory_response_oracle_parent_population_empirical_game_gate
+- Hypothesis: Training a second exploratory response oracle against the empirical-game-supported population should improve over iter1 and preserve support against gen3/Rainbow/NFSP.
+- Failure class: strategy_quality
+- Summary: Built a fresh 65,536-hand local compiled dataset from the empirical-game-supported population: iter1 oracle, gen3 NashPG, and Rainbow, using the prior support weights with zero-support NFSP removed. The iter2 response oracle trained on CUDA and beat iter1, Rainbow, and NFSP with positive lower bounds. A 20k confidence check versus gen3 was weakly negative with CI crossing zero, so the mechanism shows real iterative population improvement but not full parent/population dominance. The confidence empirical game kept iter2 in support, but most support stayed on gen3. This is the strongest native local self-play/population result in this cycle, not Slumbot evidence.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/joint_response_empirical_pop_eps020_65536_seed20260701.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter2_rainbow_oracle_eps020_65536_h256_u4000_seed20260702.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter2_eps020_65536_empirical_game_iter2_iter1_gen3_nfsp_rainbow_confidence_seed20260707.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/joint_response_iter2_eps020_65536_vs_iter1_h2h_5000_fast_seed20260703.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter2_eps020_65536_vs_gen3_h2h_20000_fast_seed20260707.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter2_eps020_65536_vs_rainbow_h2h_5000_fast_seed20260705.json
+  - autoresearch-session/native_neural_nashpg/joint_response_iter2_eps020_65536_vs_nfsp_h2h_5000_fast_seed20260706.json
+- Key metrics: `{"dataset_hands": 65536, "dataset_transitions": 387304, "exploration_epsilon": 0.2, "exploratory_action_fraction": 0.2009196909920889, "dataset_transitions_per_second": 140382.30664324076, "oracle_updates": 4000, "oracle_updates_per_second": 286.1961589502726, "iter2_vs_iter1_mean": 0.0181772, "iter2_vs_iter1_lower95": 0.010312791701087062, "iter2_vs_gen3_20k_mean": -0.0012685, "iter2_vs_gen3_20k_lower95": -0.0043053012938332105, "iter2_vs_rainbow_mean": 0.0283078, "iter2_vs_rainbow_lower95": 0.017837160661805226, "iter2_vs_nfsp_mean": 0.0789864, "iter2_vs_nfsp_lower95": 0.06634875418257619, "confidence_empirical_meta_strategy": [0.08035608788393256, 0.0, 0.8802012400266164, 0.0, 0.03944267208945108], "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/build_compiled_joint_experience_dataset.py --policy tianshou-rainbow:<iter1> --policy native-ppo:<gen3> --policy tianshou-rainbow:<rainbow> --meta-strategy 0.07706254044270033,0.630682478954886,0.2922549806024136 --n-hands 65536 --exploration-epsilon 0.20 --seed 20260701 --device auto ...` -> passed on CUDA with zero fallback.
+  - `uv run --with tianshou python scripts/train_joint_experience_response_oracle.py --dataset-npz <iter2_dataset> --updates 4000 --batch-size 1024 --hidden-dim 256 --seed 20260702 --device auto ...` -> passed on CUDA.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> positive lower bounds versus iter1, Rainbow, and NFSP; 20k gen3 confidence gate remained inconclusive/weakly negative.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete five-policy matrix with nonzero iter2 support.
+- Decision: continue this line, but keep the promotion blocker explicit. The next gate should train iter3 from the confidence empirical population dominated by gen3 plus iter2/Rainbow support, and should require either a positive lower95 against gen3 or a justified pivot to online response collection if offline exploratory replay cannot cross gen3.
