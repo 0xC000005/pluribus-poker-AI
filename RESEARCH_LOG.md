@@ -17425,3 +17425,24 @@
 - Parent-vs-NFSP H2H file: autoresearch-session/native_rnad/rnad_parent500_vs_nfsp_population_dueling_h2h_2000_seed20260609.json
 - Key metrics: `{"candidate_parent_lower95": 0.011623093375971349, "candidate_vs_nfsp_mean": -0.07428950000000001, "candidate_vs_nfsp_lower95": -0.09757499776922332, "candidate_vs_rainbow_mean": -0.12116550000000001, "candidate_vs_rainbow_lower95": -0.14428881088113726, "parent_vs_nfsp_mean": -0.09671900000000001, "parent_vs_nfsp_lower95": -0.12061486868196862, "empirical_off_diagonal_coverage": 1.0, "empirical_meta_strategy": [0.0, 0.0, 1.0], "candidate_support": 0.0, "promotion": false}`
 - Decision: this R-NaD generation is useful evidence that the compiled learner can improve over a weak parent, but it is not a local incumbent and must not route to Slumbot or RLCard AlphaNLHoldem gates. Next work should change the population/self-play regime or train multi-generation R-NaD against stronger local controls before another promotion attempt.
+
+## 20260602T003422Z-a-checkpoint-in-native-r-nad-generation-can - failed
+
+- Timestamp: 2026-06-02T00:34:30Z
+- Type: experiment
+- Gate: native_rnad_checkpoint_continuation_population_gate
+- Hypothesis: A checkpoint-in native R-NaD generation can continue from gen1, beat its parent, and begin closing the saved-control gap without Slumbot data or solver labels.
+- Failure class: self_play_strength
+- Summary: Added `--checkpoint-in` support for native compiled R-NaD so generation N+1 can initialize from generation N instead of restarting from random weights. The continuation mechanism passed unit and CUDA smoke checks, and gen2 beat gen1 in 5000-game duplicate-swapped H2H. However, gen2 still lost clearly to saved native NFSP and Rainbow controls; the gen2/gen1/NFSP empirical game solved to pure NFSP support. Simple R-NaD continuation is therefore useful plumbing and generation-improvement evidence, but not a promotable candidate.
+- Metrics file: autoresearch-session/empirical_game/rnad_gen2_gen1_nfsp_matrix_seed20260614.json
+- Training file: autoresearch-session/native_rnad/rnad_compiled_native_gen2_500x512_seed20260610.json
+- Parent H2H file: autoresearch-session/native_rnad/rnad_gen2_vs_gen1_h2h_5000_seed20260611.json
+- NFSP H2H file: autoresearch-session/native_rnad/rnad_gen2_vs_nfsp_population_dueling_h2h_2000_seed20260612.json
+- Rainbow H2H file: autoresearch-session/native_rnad/rnad_gen2_vs_fast_rainbow_h2h_2000_seed20260613.json
+- Related-work grounding: NFSP motivates average/historical self-play in imperfect-information games (https://arxiv.org/abs/1603.01121); AlphaHoldem reports competing with historical model versions on one PC (https://mlanthology.org/aaai/2022/zhao2022aaai-alphaholdem/); empirical-game/PSRO analysis motivates judging policies by meta-game support, not only Elo/parent wins (https://link.springer.com/article/10.1007/s10458-019-09432-y); DeepNash/R-NaD motivates model-free game-theoretic self-play but does not remove the need for population-strength gates (https://arxiv.org/abs/2206.15378).
+- Key metrics: `{"continued_from_checkpoint": true, "resolved_device": "cuda", "train_iterations": 500, "n_samples": 920206, "train_seconds": 35.149006193001696, "samples_per_second": 26180.14275986035, "compiled_needs_python_showdown": 0, "illegal_records": 0, "gen2_vs_gen1_mean": 0.0308312, "gen2_vs_gen1_lower95": 0.023184197863888603, "gen2_vs_nfsp_mean": -0.045882000000000006, "gen2_vs_nfsp_lower95": -0.06880433564263633, "gen2_vs_rainbow_mean": -0.10154600000000001, "gen2_vs_rainbow_lower95": -0.12373248620214505, "empirical_off_diagonal_coverage": 1.0, "empirical_meta_strategy": [0.0, 0.0, 1.0], "candidate_support": 0.0, "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py::test_rnad_compiled_native_learner_can_continue_from_prior_checkpoint` -> `1 passed`.
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py test/unit/test_rnad_compiled_native_smoke.py test/unit/test_rnad_torch.py` -> `11 passed, 1 warning`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py scripts/run_rnad_compiled_native_smoke.py` -> passed.
+- Decision: do not repeat same-budget R-NaD continuation unchanged. The next R-NaD-family step must either train against empirical-game/meta-policy support, add a principled average/historical population objective, or pivot to another tabula-rasa game-theoretic learner that can beat saved native controls before any Slumbot/RLCard evaluation.

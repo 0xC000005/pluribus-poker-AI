@@ -400,6 +400,36 @@ def _save_native_rnad_checkpoint(
     )
 
 
+def _load_native_rnad_checkpoint(
+    *,
+    path: str | Path,
+    solver: RNaDSolver,
+    hidden_dim: int,
+) -> dict[str, Any]:
+    payload = torch.load(Path(path), map_location=solver.device, weights_only=False)
+    if payload.get("algorithm") != "rnad_compiled_native":
+        raise ValueError("checkpoint_in must be a rnad_compiled_native checkpoint")
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("checkpoint_in action count does not match native R-NaD")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("checkpoint_in feature count does not match native R-NaD")
+    if int(payload.get("hidden_dim", -1)) != int(hidden_dim):
+        raise ValueError("checkpoint_in hidden_dim does not match the requested learner")
+    state = payload.get("rnad_net_state_dict")
+    if not isinstance(state, dict):
+        raise ValueError("checkpoint_in is missing rnad_net_state_dict")
+    solver.net.load_state_dict(state)
+    solver.net_target.load_state_dict(state)
+    solver.net_prev.load_state_dict(state)
+    solver.net_prev_.load_state_dict(state)
+    return {
+        "checkpoint_in": str(path),
+        "checkpoint_in_algorithm": payload.get("algorithm"),
+        "checkpoint_in_role": payload.get("metrics", {}).get("checkpoint_role"),
+        "checkpoint_in_rnad_policy_export": payload.get("rnad_policy_export"),
+    }
+
+
 def run_compiled_native_rnad_learner(
     *,
     train_iterations: int = 8,
@@ -412,6 +442,7 @@ def run_compiled_native_rnad_learner(
     target_network_avg: float = 0.001,
     seed: int = 20260602,
     device: str = "auto",
+    checkpoint_in: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -447,13 +478,26 @@ def run_compiled_native_rnad_learner(
         seed=int(seed),
     )
     solver = RNaDSolver(config, collector, device=resolved_device)
+    resume_metrics: dict[str, Any] = {
+        "checkpoint_in": str(checkpoint_in) if checkpoint_in is not None else None,
+        "continued_from_checkpoint": False,
+    }
+    if checkpoint_in is not None:
+        loaded = _load_native_rnad_checkpoint(
+            path=checkpoint_in,
+            solver=solver,
+            hidden_dim=int(hidden_dim),
+        )
+        resume_metrics.update(loaded)
+        resume_metrics["continued_from_checkpoint"] = True
     parent_metrics = {
         "algorithm": "rnad_compiled_native",
         "environment": "poker_ai:full_deck_hu_nlhe",
-        "checkpoint_role": "initial_parent",
+        "checkpoint_role": "continued_parent" if checkpoint_in is not None else "initial_parent",
         "train_iterations": 0,
         "seed": int(seed),
         "promotion": False,
+        **resume_metrics,
     }
     if parent_checkpoint_out is not None:
         _save_native_rnad_checkpoint(
@@ -523,6 +567,7 @@ def run_compiled_native_rnad_learner(
         "uses_slumbot_data": False,
         "uses_alphanlholdem_training_data": False,
         "promotion": False,
+        **resume_metrics,
         "checkpoint_path": str(checkpoint_out) if checkpoint_out is not None else None,
         "parent_checkpoint_path": (
             str(parent_checkpoint_out) if parent_checkpoint_out is not None else None

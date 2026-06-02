@@ -37,6 +37,7 @@ def run_learner(
     target_network_avg: float = 0.001,
     seed: int = 20260602,
     device: str = "auto",
+    checkpoint_in: str | Path | None = None,
     checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
     output_json: str | Path | None = None,
@@ -52,6 +53,7 @@ def run_learner(
         target_network_avg=float(target_network_avg),
         seed=int(seed),
         device=device,
+        checkpoint_in=checkpoint_in,
         checkpoint_out=checkpoint_out,
         parent_checkpoint_out=parent_checkpoint_out,
     )
@@ -70,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--target-network-avg", type=float, default=0.001)
     parser.add_argument("--seed", type=int, default=20260602)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    parser.add_argument("--checkpoint-in", type=Path)
     parser.add_argument("--checkpoint-out", type=Path)
     parser.add_argument("--parent-checkpoint-out", type=Path)
     parser.add_argument("--output-json", type=Path)
@@ -85,6 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         target_network_avg=args.target_network_avg,
         seed=args.seed,
         device=args.device,
+        checkpoint_in=args.checkpoint_in,
         checkpoint_out=args.checkpoint_out,
         parent_checkpoint_out=args.parent_checkpoint_out,
         output_json=args.output_json,

@@ -67,6 +67,46 @@ def test_rnad_compiled_native_learner_writes_native_policy_checkpoint(tmp_path):
     assert np.all(probs[legal_mask == 0] == 0.0)
 
 
+def test_rnad_compiled_native_learner_can_continue_from_prior_checkpoint(tmp_path):
+    from scripts.run_rnad_compiled_native_learner import run_learner
+
+    source = tmp_path / "rnad_source.pt"
+    continued_parent = tmp_path / "rnad_continued_parent.pt"
+    continued_child = tmp_path / "rnad_continued_child.pt"
+
+    run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260604,
+        device="cpu",
+        checkpoint_out=source,
+    )
+    metrics = run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260605,
+        device="cpu",
+        checkpoint_in=source,
+        parent_checkpoint_out=continued_parent,
+        checkpoint_out=continued_child,
+    )
+
+    assert metrics["checkpoint_in"] == str(source)
+    assert metrics["continued_from_checkpoint"] is True
+    assert continued_parent.exists()
+    assert continued_child.exists()
+    source_payload = torch.load(source, map_location="cpu", weights_only=False)
+    parent_payload = torch.load(continued_parent, map_location="cpu", weights_only=False)
+    for key, tensor in source_payload["rnad_net_state_dict"].items():
+        assert torch.equal(tensor, parent_payload["rnad_net_state_dict"][key])
+
+
 def test_rnad_compiled_native_checkpoint_h2h_self_smoke(tmp_path):
     from poker_ai.research.mixed_policy_h2h import evaluate_mixed_policy_head_to_head
     from scripts.run_rnad_compiled_native_learner import run_learner

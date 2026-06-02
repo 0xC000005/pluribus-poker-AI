@@ -126,6 +126,17 @@ R-NaD step must change the population/self-play regime or train
 multi-generation candidates that beat saved native controls before Slumbot or
 RLCard evaluation.
 
+A direct checkpoint-continuation version was then tested: gen2 initialized from
+gen1, trained another `500x512` native compiled R-NaD update budget, and beat
+gen1 in duplicate-swapped H2H. This validates generation-to-generation
+continuation, but it still failed saved native NFSP and Rainbow controls, and
+the gen2/gen1/NFSP empirical game again solved to pure NFSP support. Do not
+repeat same-budget R-NaD continuation unchanged. The next R-NaD-family step
+must train against empirical-game/meta-policy support, add a principled
+historical/average population objective, or pivot to another tabula-rasa
+game-theoretic learner that can beat saved native controls before any
+Slumbot/RLCard gate.
+
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
 
