@@ -18369,6 +18369,7 @@
 - Summary: The reviewed Global-PSRO-style population-expansion falsifier passed. A fresh compiled online Rainbow response trained on CUDA from the local 20k simulator against active support only, collecting 84,703 transitions in 7.72s with zero Python-showdown fallback. It passed all 2,000-game 20k H2H support edges: vs active 20k support mean=+0.036804 lower95=+0.017545; vs iter2 lower95=+0.015719; vs iter3 lower95=+0.028086; vs old iter4 lower95=+0.008823; vs raw-sequence PPO lower95=+0.014515. The complete six-policy empirical game solved to pure support on the new candidate. Action-distribution diagnostic used all 9 actions with top action call at 0.4106 and all-in fraction 0.0639. This is local 20k population progress, not Slumbot or SOTA proof.
 - Metrics file: autoresearch-session/empirical_game/native_20k_global_psro_response_expansion_seed20260858.json
 - Key metrics: `{"gate": null, "passed": null}`
+
 ## 20260602T060008Z-the-new-20k-global-psro-response-candidate-should - passed
 
 - Timestamp: 2026-06-02T06:00:18Z
@@ -18379,6 +18380,7 @@
 - Summary: The new 20k Global-PSRO response candidate retained a strong confidence edge over the previous active 20k support: 10,000 duplicate-swapped H2H games, mean=+0.040936, lower95=+0.032377, upper95=+0.049495, 244.19 games/sec, native 9-action full-deck environment, 20,000-chip stack, no Slumbot training data. This confirms the candidate as the current local 20k support lead, but it remains internal local evidence rather than Slumbot/SOTA proof.
 - Metrics file: autoresearch-session/native_neural_nashpg/global_psro_response_to_20k_support_vs_prev_support_h2h_10000_seed20260860.json
 - Key metrics: `{"gate": null, "passed": true}`
+
 ## 20260602T060537Z-a-second-reviewed-global-psro-style-compiled-rainbow - passed
 
 - Timestamp: 2026-06-02T06:05:47Z
@@ -18389,3 +18391,25 @@
 - Summary: The second Global-PSRO-style compiled Rainbow response trained on CUDA from 66,204 local 20k transitions against the current support. It passed support H2H versus iteration 1 at 2k games (mean=+0.027132, lower95=+0.013057) and 10k confidence (mean=+0.025165, lower95=+0.018661). The complete seven-policy empirical game solved to pure support on iteration 2. Historical edges were mixed at 2k confidence (iter2 lower95=-0.001130; old iter4 lower95=-0.002642), but the solved population support and parent-confidence gate both passed. This is local population progress only, not Slumbot/SOTA proof.
 - Metrics file: autoresearch-session/empirical_game/native_20k_global_psro_iter2_expansion_seed20260867.json
 - Key metrics: `{"gate": null, "passed": null}`
+
+## 20260602T060745Z-a-third-fixed-recipe-global-psro-compiled-rainbow - failed
+
+- Timestamp: 2026-06-02T06:07:52Z
+- Type: experiment
+- Gate: 20k_global_psro_iter3_parent_h2h
+- Hypothesis: A third fixed-recipe Global-PSRO compiled Rainbow response trained against iteration-2 support should beat its parent support before any expanded matrix work.
+- Failure class: strategy_quality
+- Summary: The third fixed-recipe Global-PSRO compiled Rainbow response trained mechanically on CUDA from 60,524 local 20k transitions but failed the required parent H2H versus iteration-2 support: 2,000 duplicate-swapped games, mean=-0.001365, lower95=-0.013115, upper95=+0.010385. This indicates the simple single-support response loop is saturating at iteration 2; do not run another same-recipe iteration without synthesis or a changed population/meta-policy mechanism.
+- Metrics file: autoresearch-session/native_neural_nashpg/global_psro_response_iter3_to_support_vs_current_h2h_2000_seed20260870.json
+- Key metrics: `{"gate": null, "passed": false}`
+
+## 20260602T060828Z-failure-synthesis-for-20k-global-psro-response-loop - passed
+
+- Timestamp: 2026-06-02T06:08:28Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T060757Z-20k-global-psro-response-loop-saturated-at-iteration
+- Hypothesis: Failure synthesis for 20k Global-PSRO response loop saturated at iteration 3 should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T060757Z-20k-global-psro-response-loop-saturated-at-iteration passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T060828Z-failure-synthesis-for-20k-global-psro-response-loop/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T060757Z-20k-global-psro-response-loop-saturated-at-iteration", "passed": true}`
