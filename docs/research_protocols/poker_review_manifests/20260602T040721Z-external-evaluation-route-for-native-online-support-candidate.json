@@ -1,0 +1,52 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1306,
+      "path": "benchmark_audit.md",
+      "sha256": "741ad61cb4c0cccee1a627285379e282053c84d2ef94133bd9d46799a618ba1b"
+    },
+    {
+      "bytes": 797,
+      "path": "decision.json",
+      "sha256": "182bc518b07dca19b3b5bf2162d3953849922f3d9b81c8237444f537217eff94"
+    },
+    {
+      "bytes": 1421,
+      "path": "mechanism_review.md",
+      "sha256": "2737d4968dec47717835222ac49c979b122686fd67321efa5364cf5bbeeb3012"
+    },
+    {
+      "bytes": 2304,
+      "path": "related_work.md",
+      "sha256": "9c95bc1cd671fe970c523b2ae1b0464cfd15c95e34cc901e3a477f960e2ce7c7"
+    },
+    {
+      "bytes": 1763,
+      "path": "review.md",
+      "sha256": "66d0fcce7c7647a91bb4ac0c353beda015f64ae9092c6e092d4fe5b5fa532299"
+    },
+    {
+      "bytes": 2190,
+      "path": "review_scope.json",
+      "sha256": "51518faa4fa36eb6a713809e0acc996f613a8660a9b2b7a9d2a719e632afe0cf"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Allow one tiny native Slumbot smoke before RLCard evidence because the candidate has passed native local gates, the adapter is reviewed, and the smoke is diagnostic held-out evaluation only. RLCard/AlphaHoldem remains a separate same-philosophy environment-native benchmark, not a prerequisite for this smoke and not waived for final evidence.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T040721Z-external-evaluation-route-for-native-online-support-candidate",
+  "review_id": "20260602T040721Z-external-evaluation-route-for-native-online-support-candidate",
+  "sources": [
+    "RESEARCH_LOG.md",
+    "autoresearch-session/native_neural_nashpg/online_response_iter4_support_native_local_precheck_seed20260723.json",
+    "autoresearch-session/poker_reviews/20260602T040107Z-tianshou-rainbow-slumbot-adapter/decision.json",
+    "https://arxiv.org/abs/1910.04376",
+    "https://arxiv.org/abs/2603.23660",
+    "https://arxiv.org/abs/2201.11580"
+  ],
+  "written_at": "2026-06-02T04:09:28Z"
+}

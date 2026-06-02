@@ -17964,3 +17964,16 @@
 - Metrics file: autoresearch-session/poker_runs/20260602T040358Z-methodology-review-for-tianshou-rainbow-slumbot-adapter-should/metrics.json
 - Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T040107Z-tianshou-rainbow-slumbot-adapter", "passed": true}`
 
+## 20260602T040932Z-methodology-review-for-external-evaluation-route-for-native - passed
+
+- Timestamp: 2026-06-02T04:09:32Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T040721Z-external-evaluation-route-for-native-online-support-candidate
+- Hypothesis: Methodology review for External evaluation route for native online support candidate should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: The review approved one tiny native Slumbot smoke before RLCard evidence, but only as held-out diagnostic evaluation. It keeps RLCard/AlphaHoldem as a separate same-philosophy environment-native benchmark with fresh RLCard-native training, and it forbids using Slumbot results as replay data, checkpoint selection, or hyperparameter feedback.
+- Metrics file: autoresearch-session/poker_runs/20260602T040932Z-methodology-review-for-external-evaluation-route-for-native/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T040721Z-external-evaluation-route-for-native-online-support-candidate", "passed": true}`
+- Manifest:
+  - docs/research_protocols/poker_review_manifests/20260602T040721Z-external-evaluation-route-for-native-online-support-candidate.json
+- Decision: queue exactly one sparse native Slumbot smoke with trace output and `--no-solver`; synthesize before any larger confidence run.
