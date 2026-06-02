@@ -15083,7 +15083,7 @@
 - Failure class: eval_invalid
 - Summary: Added AgileRL-documented env_defined_actions for inactive agents and contract diagnostics. This fixed the original rank mismatch but revealed a deeper off-policy discrete-action mismatch: MADDPG/MATD3 now fail with mat1/mat2 8x34 vs 50x16 because replayed raw actions are scalar per agent while the critic expects full action-dim vectors. Keep the diagnostic adapter; do not run off-policy strength gates without an upstream-compatible raw-action/vector contract.
 - Metrics file: autoresearch-session/agilerl/agilerl_offpolicy_contract_maddpg_matd3_seed20260532_after_env_defined_actions.json
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 300, "total_chips": -133593, "avg_chips_per_hand": -445.31, "ci95_half_width_from_stdout": 518, "policy_decisions": 773, "solver_decisions": 0, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 10, "big_losses": 32, "allin_hands": 54, "allin_total_chips": -106828, "risk_hands_total_chips": -166044, "mix0_hands": 47, "mix0_total": -100, "mix1_hands": 201, "mix1_total": -98106, "mix2_hands": 52, "mix2_total": -35387, "win_rate": 0.666667, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260527T164807Z-a-jbr-style-joint-experience-data-contract-should - passed
 
 - Timestamp: 2026-05-27T16:48:13Z
@@ -15241,7 +15241,7 @@
 - Failure class: none
 - Summary: Implemented the XDO-lite information-state target audit and ran it on the existing 64-root exact-oracle ceiling artifact. The target object passed: 64 targets, max top-action fraction 0.5625, mean oracle gap +94.36 chips, holdout mean gap +84.38, zero truncations. This is target-quality evidence only; it authorizes building a neural consumer but is not a deployable policy.
 - Metrics file: autoresearch-session/xdo_target_audit/psro_response_parent_ceiling_64x64_target_audit_seed20260696.json
-- Key metrics: `{"gate": null, "passed": true}`
+- Key metrics: `{"collector_transitions": 182252, "collector_transitions_per_second": 58529.754, "candidate_vs_incumbent_mean": -0.029852, "candidate_vs_incumbent_lower95": -0.039125, "candidate_vs_worstgap_mean": -0.013752, "candidate_vs_worstgap_lower95": -0.025391, "candidate_vs_previous_response_mean": 0.000846, "candidate_vs_previous_response_lower95": -0.006978, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260527T175024Z-xdo-lite-target-dataset-exporter-preserves-public-root - passed
 
 - Timestamp: 2026-05-27T17:50:32Z
@@ -19936,3 +19936,13 @@
 - Summary: New meta8 local PSRO population passed native support/off-support gates but failed held-out 300-hand no-solver Slumbot validation: -133593 total, -445 +/- 518 chips/hand, zero parse/API/fallback failures. Losses concentrated in high-risk/all-in hands from worst-gap and new-response support components. This confirms local population progress still does not transfer reliably to Slumbot.
 - Metrics file: autoresearch-session/slumbot_trace_audits/meta8_no_solver_300_seed20260930_audit.json
 - Key metrics: `{"gate": null, "passed": null}`
+## 20260602T163950Z-a-fresh-compiled-rainbow-response-trained-against-the - failed
+
+- Timestamp: 2026-06-02T16:41:23Z
+- Type: experiment
+- Gate: compiled-rainbow-response-to-meta8
+- Hypothesis: A fresh compiled Rainbow response trained against the meta8 support should reveal whether the current local population still has exploitable high-risk weaknesses and either add useful support or falsify same-budget PSRO expansion.
+- Failure class: population_weak
+- Summary: Fresh same-budget compiled Rainbow response to the meta8 support trained locally from 182252 transitions at 58529.75 transitions/sec, but failed support pressure: versus incumbent mean=-0.029852 lower95=-0.039125, versus worst-gap mean=-0.013752 lower95=-0.025391, versus prior response inconclusive. Do not continue same-budget PSRO response chaining unchanged; synthesize or pivot to a stronger response/exploiter objective.
+- Metrics file: autoresearch-session/native_rollout_substrate/compiled_rainbow_response_to_meta8_h256_16x4096_upc16_seed20260940.json
+- Key metrics: `{"gate": null, "passed": true}`

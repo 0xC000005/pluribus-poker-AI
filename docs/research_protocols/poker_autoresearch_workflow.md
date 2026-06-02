@@ -164,6 +164,11 @@ next branch should continue PSRO-style local expansion with a stronger local
 anti-risk/exploiter gate, or run a methodology review for a learner objective
 that makes high-variance stack exposure emerge from local self-play rather than
 from Slumbot diagnostics.
+One immediate same-budget continuation was already falsified: a fresh compiled
+Rainbow response to the meta8 support trained cleanly but lost decisively to
+current and worst-gap support members. Do not rerun the same-budget
+response-chain recipe unchanged; the next response/exploiter must change the
+objective, budget, or population pressure in a reviewed way.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
