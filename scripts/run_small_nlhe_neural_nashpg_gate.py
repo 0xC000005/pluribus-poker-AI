@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+"""Neural NashPG/MMD-style truth gate on the locked small-NLHE harness.
+
+This gate asks whether a neural reference-regularized policy-gradient update
+can reproduce the exact small-game improvement signal before another native
+HUNL scaling attempt. It trains only from local self-play trajectories and
+scores with exact OpenSpiel NashConv. It is not Slumbot training and not
+promotion evidence.
+"""
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import math
+import time
+from pathlib import Path
+from statistics import fmean
+from typing import Sequence
+
+import numpy as np
+import torch
+
+from poker_ai.rnad.network import RNaDNetwork
+from run_small_nlhe_baseline_hardening_gate import (
+    _fingerprint,
+    _nashconv_from_solver,
+    _obs_lookup,
+    _stats,
+)
+from run_small_nlhe_mmd_truth_gate import _load_baseline
+
+
+def _parse_layers(values: Sequence[int]) -> tuple[int, ...]:
+    layers = tuple(int(v) for v in values)
+    if not layers or any(v <= 0 for v in layers):
+        raise ValueError("--layers must contain positive hidden sizes")
+    return layers
+
+
+class NeuralReferencePGSolver:
+    """Small-game neural policy-gradient learner with a moving reference policy."""
+
+    def __init__(
+        self,
+        *,
+        collector,
+        layers: tuple[int, ...],
+        lr: float,
+        reference_kl_weight: float,
+        entropy_weight: float,
+        value_weight: float,
+        reference_update_every: int,
+        seed: int,
+    ) -> None:
+        self.collector = collector
+        self.device = torch.device("cpu")
+        self.n_actions = int(collector.n_actions)
+        self.obs_dim = int(collector.obs_dim)
+        self.num_players = int(collector.n_players)
+        self.net = RNaDNetwork(self.obs_dim, self.n_actions, layers).to(self.device)
+        self.reference_net = copy.deepcopy(self.net).to(self.device)
+        self.reference_net.eval()
+        for param in self.reference_net.parameters():
+            param.requires_grad_(False)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=float(lr))
+        self.reference_kl_weight = float(reference_kl_weight)
+        self.entropy_weight = float(entropy_weight)
+        self.value_weight = float(value_weight)
+        self.reference_update_every = max(1, int(reference_update_every))
+        self._rng = np.random.RandomState(int(seed))
+        self.learner_steps = 0
+
+    @torch.no_grad()
+    def _policy_fn(self, obs_np, legal_np):
+        obs = torch.as_tensor(obs_np, dtype=torch.float32, device=self.device)
+        legal = torch.as_tensor(legal_np, dtype=torch.float32, device=self.device)
+        pi, _, _, _ = self.net(obs, legal)
+        return pi.detach().cpu().numpy()
+
+    @torch.no_grad()
+    def action_probabilities(self, obs_np, legal_np):
+        return self._policy_fn(obs_np, legal_np)
+
+    def _loss_on_trajectory(self, traj) -> tuple[torch.Tensor, dict]:
+        safe_legal = torch.where(
+            traj.legal.sum(-1, keepdim=True) > 0,
+            traj.legal,
+            torch.ones_like(traj.legal),
+        )
+        pi, value, log_pi, _ = self.net(traj.obs, safe_legal)
+        with torch.no_grad():
+            ref_pi, _, _, _ = self.reference_net(traj.obs, safe_legal)
+
+        valid = traj.valid.to(pi.dtype)
+        mask = valid > 0
+        denom = valid.sum().clamp_min(1.0)
+        logp_action = (traj.action_oh * log_pi).sum(-1)
+
+        returns = traj.rewards[-1]
+        player = traj.player_id.long().clamp(min=0)
+        actor_return = torch.gather(
+            returns.unsqueeze(0).expand(traj.rewards.shape[0], -1, self.num_players),
+            2,
+            player.unsqueeze(-1),
+        ).squeeze(-1)
+        value_flat = value.squeeze(-1)
+        advantage = actor_return - value_flat.detach()
+        if bool(mask.any()):
+            adv_valid = advantage[mask]
+            advantage = (advantage - adv_valid.mean()) / (adv_valid.std(unbiased=False) + 1e-5)
+        policy_loss = -((logp_action * advantage) * valid).sum() / denom
+
+        value_loss = (((value_flat - actor_return) ** 2) * valid).sum() / denom
+        entropy = -((pi.clamp_min(1e-9).log() * pi * safe_legal).sum(-1) * valid).sum() / denom
+        kl = (
+            (
+                pi
+                * (pi.clamp_min(1e-9).log() - ref_pi.clamp_min(1e-9).log())
+                * safe_legal
+            ).sum(-1)
+            * valid
+        ).sum() / denom
+        loss = policy_loss + self.value_weight * value_loss + self.reference_kl_weight * kl - self.entropy_weight * entropy
+        logs = {
+            "loss": float(loss.detach().cpu()),
+            "policy_loss": float(policy_loss.detach().cpu()),
+            "value_loss": float(value_loss.detach().cpu()),
+            "reference_kl": float(kl.detach().cpu()),
+            "entropy": float(entropy.detach().cpu()),
+        }
+        return loss, logs
+
+    def step(self, *, batch_size: int, trajectory_max: int) -> dict:
+        traj = self.collector.collect(
+            self._policy_fn,
+            int(batch_size),
+            int(trajectory_max),
+            self._rng,
+        ).to(self.device)
+        self.optimizer.zero_grad(set_to_none=True)
+        loss, logs = self._loss_on_trajectory(traj)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.net.parameters(), 10.0)
+        self.optimizer.step()
+        self.learner_steps += 1
+        if self.learner_steps % self.reference_update_every == 0:
+            self.reference_net.load_state_dict(self.net.state_dict())
+        logs["learner_steps"] = int(self.learner_steps)
+        return logs
+
+
+def _run_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
+    from poker_ai.rnad.seat_collector import SeatAwarePyspielCollector
+
+    collector = SeatAwarePyspielCollector(game, device="cpu")
+    solver = NeuralReferencePGSolver(
+        collector=collector,
+        layers=_parse_layers(args.layers),
+        lr=float(args.lr),
+        reference_kl_weight=float(args.reference_kl_weight),
+        entropy_weight=float(args.entropy_weight),
+        value_weight=float(args.value_weight),
+        reference_update_every=int(args.reference_update_every),
+        seed=int(seed),
+    )
+    trajectory_max = max(8, game.max_game_length() + 1)
+    history = [(0, _nashconv_from_solver(game, by, solver, policy_lib, exploitability))]
+    losses: list[dict] = []
+    t0 = time.time()
+    for step in range(1, int(args.steps) + 1):
+        losses.append(solver.step(batch_size=args.batch_size, trajectory_max=trajectory_max))
+        if step % int(args.eval_every) == 0 or step == int(args.steps):
+            history.append((step, _nashconv_from_solver(game, by, solver, policy_lib, exploitability)))
+    values = [float(v) for _, v in history]
+    return {
+        "seed": int(seed),
+        "history": history,
+        "start": float(values[0]),
+        "last": float(values[-1]),
+        "best": float(min(values)),
+        "descended": bool(values[-1] < values[0]),
+        "loss_last": losses[-1] if losses else {},
+        "seconds": round(time.time() - t0, 3),
+    }
+
+
+def _summarize(name: str, runs: list[dict]) -> dict:
+    last = [float(run["last"]) for run in runs]
+    best = [float(run["best"]) for run in runs]
+    return {
+        "name": name,
+        "seeds": [int(run["seed"]) for run in runs],
+        "last_nashconv": last,
+        "best_nashconv": best,
+        "mean_last_nashconv": _stats(last)["mean"],
+        "std_last_nashconv": _stats(last)["std"],
+        "mean_best_nashconv": _stats(best)["mean"],
+        "std_best_nashconv": _stats(best)["std"],
+        "runs": runs,
+    }
+
+
+def _finite_values(values: Sequence[float]) -> bool:
+    return all(math.isfinite(float(value)) for value in values)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--steps", type=int, default=1200)
+    parser.add_argument("--eval-every", type=int, default=400)
+    parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument("--seeds", default="1,2,3")
+    parser.add_argument("--layers", type=int, nargs="+", default=[128, 128])
+    parser.add_argument("--lr", type=float, default=0.005)
+    parser.add_argument("--reference-kl-weight", type=float, default=0.05)
+    parser.add_argument("--entropy-weight", type=float, default=0.02)
+    parser.add_argument("--value-weight", type=float, default=0.5)
+    parser.add_argument("--reference-update-every", type=int, default=200)
+    parser.add_argument("--baseline-json")
+    parser.add_argument("--baseline-arm", default="rnad")
+    parser.add_argument("--output-json")
+    args = parser.parse_args(argv)
+
+    if args.steps < 0:
+        raise ValueError("--steps must be non-negative")
+    if args.eval_every <= 0:
+        raise ValueError("--eval-every must be positive")
+    if args.batch_size <= 0:
+        raise ValueError("--batch-size must be positive")
+    if args.reference_kl_weight < 0:
+        raise ValueError("--reference-kl-weight must be non-negative")
+    if args.reference_update_every <= 0:
+        raise ValueError("--reference-update-every must be positive")
+
+    from open_spiel.python import policy as policy_lib
+    from open_spiel.python.algorithms import exploitability
+    from poker_ai.rnad.small_nlhe import load_small_nlhe
+
+    seeds = [int(s.strip()) for s in str(args.seeds).split(",") if s.strip()]
+    game = load_small_nlhe()
+    by = _obs_lookup(game)
+    fp = _fingerprint(game, policy_lib, exploitability)
+    baseline = _load_baseline(args.baseline_json, args.baseline_arm)
+
+    t0 = time.time()
+    runs = [_run_seed(args, seed, game, by, policy_lib, exploitability) for seed in seeds]
+    arm = _summarize("neural_nashpg", runs)
+    all_values = [float(v) for run in runs for _, v in run["history"]]
+    harness_passed = bool(
+        fp["num_players"] == 2
+        and fp["num_distinct_actions"] == 4
+        and fp["max_game_length"] == 7
+        and abs(fp["uniform_nashconv"] - 1.7) < 1e-3
+    )
+    improved_from_uniform = bool(arm["mean_best_nashconv"] < fp["uniform_nashconv"])
+    compared_to_baseline = None
+    beats_baseline = None
+    if baseline is not None:
+        beats_baseline = bool(arm["mean_best_nashconv"] < baseline["mean_last_nashconv"])
+        compared_to_baseline = {
+            "baseline_arm": baseline["arm"],
+            "baseline_mean_last_nashconv": baseline["mean_last_nashconv"],
+            "neural_best_beats_baseline_last": beats_baseline,
+        }
+    decision = {
+        "primary_metric": "exact_open_spiel_nashconv_lower_is_better",
+        "harness_passed": harness_passed,
+        "all_metrics_finite": _finite_values(all_values),
+        "small_game_exact_only": True,
+        "improved_from_uniform": improved_from_uniform,
+        "beats_baseline": beats_baseline,
+        "candidate_truth_gate_passed": bool(
+            harness_passed
+            and _finite_values(all_values)
+            and improved_from_uniform
+            and (beats_baseline is not False)
+        ),
+        "slumbot_full_hunl_blocked": True,
+        "compared_to_baseline": compared_to_baseline,
+        "interpretation": (
+            "Neural reference-regularized policy gradient is a small-game truth gate "
+            "for a NashPG/MMD-style update. Passing authorizes native mechanism work; "
+            "it does not promote any HUNL checkpoint."
+        ),
+    }
+    out = {
+        "gate": "small_nlhe_neural_nashpg_truth_gate",
+        "algorithm": "neural_reference_regularized_policy_gradient",
+        "candidate_family": "neural_mmd_nashpg_style_regularized_policy_dynamics",
+        "created_at_unix": int(time.time()),
+        "seconds": round(time.time() - t0, 3),
+        "uses_slumbot_training_data": False,
+        "promotion": False,
+        "fingerprint": fp,
+        "config": {
+            "steps": int(args.steps),
+            "eval_every": int(args.eval_every),
+            "batch_size": int(args.batch_size),
+            "seeds": seeds,
+            "layers": list(_parse_layers(args.layers)),
+            "lr": float(args.lr),
+            "reference_kl_weight": float(args.reference_kl_weight),
+            "entropy_weight": float(args.entropy_weight),
+            "value_weight": float(args.value_weight),
+            "reference_update_every": int(args.reference_update_every),
+            "baseline_json": args.baseline_json,
+            "baseline_arm": args.baseline_arm,
+        },
+        "baseline": baseline,
+        "arms": {"neural_nashpg": arm},
+        "summary": {
+            "mean_last_nashconv": arm["mean_last_nashconv"],
+            "mean_best_nashconv": arm["mean_best_nashconv"],
+            "mean_start_nashconv": float(fmean([float(run["start"]) for run in runs])),
+        },
+        "decision": decision,
+    }
+
+    print(
+        "[fingerprint] "
+        f"actions={fp['num_distinct_actions']} max_len={fp['max_game_length']} "
+        f"nodes={fp['tree_nodes']} uniform_nashconv={fp['uniform_nashconv']:.4f}",
+        flush=True,
+    )
+    print(
+        f"[neural-nashpg] steps={args.steps} seeds={seeds} "
+        f"mean_best={arm['mean_best_nashconv']:.6f} mean_last={arm['mean_last_nashconv']:.6f}",
+        flush=True,
+    )
+    print(
+        f"[decision] passed={decision['candidate_truth_gate_passed']} "
+        f"small_game_exact_only={decision['small_game_exact_only']}",
+        flush=True,
+    )
+    if args.output_json:
+        path = Path(args.output_json)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(out, indent=2))
+        print(f"WROTE {path}", flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

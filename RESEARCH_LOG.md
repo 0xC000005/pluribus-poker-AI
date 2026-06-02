@@ -17646,3 +17646,18 @@
 - Key metrics: `{"decision": "revise", "synthesis_validation_passed": true, "retired_hypotheses": ["target/EMA export is the right deployed native R-NaD object", "parent-only learner-export continuation closes the Rainbow gap", "direct saved-population behavior trajectories are enough to create a stronger R-NaD response"], "single_next_test": "neural MMD/NashPG-style exact small-NLHE truth gate with NashConv before native scaling"}`
 - Verification: `python scripts/poker_autoresearch.py gate failure-synthesis-20260602T021540Z-post-mmd-native-r-nad-translation-failures --run-dir autoresearch-session/poker_runs/20260602T021540Z-failure-synthesis-for-post-mmd-native-r-nad` -> passed.
 - Decision: stop expanding native R-NaD variants until a neural MMD/NashPG-style update passes the locked small-NLHE exact NashConv gate against the existing R-NaD/PPO baselines.
+## 20260602T022223Z-a-neural-mmd-nashpg-style-reference-regularized-policy - passed
+
+- Timestamp: 2026-06-02T02:24:00Z
+- Type: small_nlhe_neural_nashpg_truth_gate
+- Gate: exact_small_nlhe_neural_nashpg_nashconv_gate
+- Hypothesis: A neural MMD/NashPG-style reference-regularized policy-gradient update should reduce exact small-NLHE NashConv enough to beat the current small-game R-NaD baseline before another native HUNL scaling attempt.
+- Failure class: strategy_quality
+- Summary: Added and ran a neural MMD/NashPG-style exact small-NLHE truth gate. The 3-seed 1200-step neural reference-regularized PG run reached mean best exact NashConv 0.206352 and mean last 0.239625, beating the prior small-game R-NaD baseline mean last 0.664478, though still weaker than tabular exact MMD. This authorizes a native neural update translation, not Slumbot/full-HUNL promotion.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_1200_seed1_3_vs_rnad_baseline.json
+- Key metrics: `{"mean_start_nashconv": 1.7159850269629346, "mean_best_nashconv": 0.20635216479812377, "mean_last_nashconv": 0.239624591873314, "baseline_rnad_mean_last": 0.6644776235626213, "beats_baseline": true, "tabular_mmd_best_current": 0.0661536390623034, "candidate_truth_gate_passed": true, "small_game_exact_only": true, "promotion": false}`
+- Verification:
+  - `uv run --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py test/unit/test_small_nlhe_mmd_truth_gate.py test/unit/test_small_nlhe_baseline_hardening_gate.py test/unit/test_small_nlhe.py` -> `5 passed`.
+  - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
+  - `uv run --with open-spiel python scripts/run_small_nlhe_neural_nashpg_gate.py --steps 1200 --eval-every 400 --batch-size 256 --seeds 1,2,3 --layers 128 128 --lr 0.005 --reference-kl-weight 0.05 --entropy-weight 0.02 --value-weight 0.5 --reference-update-every 200 --baseline-json autoresearch-session/small_nlhe_baseline_hardening/post_compiled_response_synthesis_stronger_seed1_3.json --baseline-arm rnad --output-json autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_1200_seed1_3_vs_rnad_baseline.json` -> passed and wrote exact NashConv metrics.
+- Decision: proceed to native translation of this neural reference-regularized update family. Do not claim SOTA or Slumbot readiness; exact small-game pass only authorizes a native 9-action implementation with parent/population H2H and empirical-game gates.

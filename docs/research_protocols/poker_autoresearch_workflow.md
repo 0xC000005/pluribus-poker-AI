@@ -438,6 +438,12 @@ The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
 another native 9-action HUNL learner.
+That neural truth gate now exists and passed its first 3-seed run: mean best
+exact NashConv `0.206352` and mean last `0.239625`, beating the small-game R-NaD
+baseline `0.664478` while remaining weaker than tabular exact MMD `0.066154`.
+This authorizes a native translation of the neural reference-regularized update
+family. It does not authorize Slumbot evaluation, full-HUNL strength claims, or
+more native R-NaD continuation experiments.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
