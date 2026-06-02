@@ -18468,3 +18468,14 @@
 - Summary: Implemented a read-only native expansion-quality selector (`poker_ai/research/expansion_quality_selector.py`, `scripts/eval_expansion_quality_selector.py`) with tests. On the existing slate of the third single-support response and the equal-mixture response, the selector correctly selected no candidate. Both candidates had zero empirical-game support against the active iteration-2 support and negative direct H2H lower95 (`-0.013115` and `-0.031493`). This validates the guardrail and confirms the current slate should not be inserted; the next useful research step is to generate a new predeclared fixed slate or pivot to a stronger tabula-rasa population learner, not tune the failed slate.
 - Metrics file: autoresearch-session/native_neural_nashpg/expansion_quality_selector_failed_slate_iter3_meta_seed20260874.json
 - Key metrics: `{"passed": false, "selected_candidate": null, "candidate_count": 2, "uses_slumbot_training_data": false}`
+
+## 20260602T062605Z-failure-synthesis-for-native-expansion-quality-selector-selected - passed
+
+- Timestamp: 2026-06-02T06:26:05Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T062525Z-native-expansion-quality-selector-selected-no-candidate-from
+- Hypothesis: Failure synthesis for Native expansion-quality selector selected no candidate from existing 20k slate should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T062525Z-native-expansion-quality-selector-selected-no-candidate-from passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T062605Z-failure-synthesis-for-native-expansion-quality-selector-selected/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T062525Z-native-expansion-quality-selector-selected-no-candidate-from", "passed": true}`
