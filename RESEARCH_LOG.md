@@ -18984,3 +18984,19 @@
   - 10k parent H2H command -> completed; positive mean but failed positive-lower95 promotion.
   - Action-distribution diagnostic -> passed.
 - Decision: keep gen2 as local incumbent. This falsifies the simplest compute-only explanation for the gen3 failures. The current PPO-inner rollout objective is not a reliable monotonic improvement operator at this stage. Next work should stop scaling plain continuation and instead change the game-theoretic learning objective: empirical-game/meta-policy optimization, MMD/R-NaD-style regularized updates with stronger last-iterate guarantees, or a counterfactual-compatible policy-gradient estimator. Slumbot/RLCard remain blocked.
+
+## 20260602T111000Z-small-nlhe-ppo-inner-inverse-reach - failed
+
+- Timestamp: 2026-06-02T11:10:00Z
+- Type: experiment
+- Gate: small_nlhe_ppo_inner_inverse_reach_truth_gate
+- Hypothesis: Combining the prior successful small-game PPO-inner NashPG update with inverse-own-reach decision weighting should move the sampled PPO objective closer to counterfactual occupancy and improve exact NashConv versus learner-source R-NaD before any native reach-weighted integration.
+- Failure class: small_game_counterfactual_weighting
+- Summary: Ran the exact small-NLHE gate with the prior PPO-inner settings (`player-gae`, full self-play, IIG PPO defaults) and changed only `decision_weight_mode` from `uniform` to `inverse-own-reach` with cap `10`. The candidate improved from uniform but failed the corrected promotion comparator: mean best NashConv `0.277266` and mean last `0.340977`, both worse than learner-source R-NaD mean last `0.211838`. It was also worse than the prior uniform PPO-inner pass (`mean best=0.118037`, `mean last=0.150055`). Seed-level last NashConv was `[0.354011, 0.478085, 0.190835]`; only seed 3 beat the R-NaD mean last. Inverse-own-reach weighting is therefore not a valid native integration path in its current sampled form.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_ppo_inner_inverse_reach_player_gae_1200_seed1_3_vs_rnad_learner.json
+- Key metrics: `{"mean_start_nashconv": 1.719228, "mean_best_nashconv": 0.277266, "mean_last_nashconv": 0.340977, "baseline_rnad_learner_mean_last_nashconv": 0.211838, "uniform_ppo_inner_mean_last_nashconv": 0.150055, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - Exact OpenSpiel small-NLHE command above -> completed and wrote artifact.
+  - Harness fingerprint passed: `actions=4`, `max_len=7`, `nodes=637`, `uniform_nashconv=1.7000`.
+  - Decision block reports `candidate_truth_gate_passed=false`, `best_beats_baseline=false`, `last_beats_baseline=false`.
+- Decision: do not integrate inverse-own-reach decision weighting into the native 9-action PPO-inner learner. The sampled reach correction is directionally motivated by CFR/MCCFR but empirically worsens the only small-game neural gate that had passed. The next objective should be either a maintained/faithful R-NaD or MMD implementation, an exact sequence-form-compatible small-game bridge, or an empirical-game/meta-policy learner that directly optimizes population support rather than reweighting sampled PPO rows.

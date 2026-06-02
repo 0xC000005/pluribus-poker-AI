@@ -493,6 +493,11 @@ A 4x compute-scaling falsifier also failed: `256x2048` plain continuation from
 gen2 trained cleanly at `25819` samples/sec but still did not clear the 10k
 parent lower95 gate. This makes the current blocker the PPO-inner continuation
 objective, not rollout throughput, GPU availability, or action collapse.
+The obvious counterfactual-weighting extension also failed before native
+integration: small-NLHE PPO-inner plus inverse-own-reach decision weights
+worsened exact NashConv versus both learner-source R-NaD and the prior uniform
+PPO-inner pass. Do not port sampled inverse-reach weighting into native PPO
+without a new small-game mechanism.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
