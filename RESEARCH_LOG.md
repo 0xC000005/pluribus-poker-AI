@@ -19422,3 +19422,22 @@
 - Verification:
   - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T155500Z-native-inverse-reach-matched-gate-failed-synthesis --require-complete` -> passed with decision `revise`.
 - Decision: The next branch should build and falsify a small native all-action counterfactual rollout target builder for selected decision states. It must use only the local simulator and compare target action preferences against higher-budget local continuation evaluation before any new checkpoint training.
+
+## 20260602T161500Z-native-all-action-counterfactual-target-builder - mixed
+
+- Timestamp: 2026-06-02T16:15:00Z
+- Type: implementation_smoke
+- Gate: native_all_action_counterfactual_target_consistency
+- Hypothesis: A local-simulator target builder that forces every legal root action can provide a more faithful native analogue of the exact small-game counterfactual action-value rows than sampled trajectory row weighting alone.
+- Failure class: target_variance
+- Summary: Added `scripts/build_native_all_action_counterfactual_targets.py`, which samples native fast-state decision states, forces each legal root action, rolls out with local uniform stochastic continuation, and compares low-budget action values to higher-budget local continuation estimates. The builder passed exact fold-payoff and tiny gate tests, and wrote JSON artifacts without Slumbot/solver/AlphaNLHoldem data. Mechanically this is the right object, but naive low-budget estimates are noisy: low2/high8 top-action agreement was `0.50`; low8/high32 improved to `0.6875` with lower mean legal L1, but still is not clean enough to train a policy.
+- Artifacts:
+  - autoresearch-session/native_neural_nashpg/all_action_targets_consistency_16_low2_high8_seed20260712.json
+  - autoresearch-session/native_neural_nashpg/all_action_targets_consistency_32_low8_high32_seed20260713.json
+- Key metrics: `{"low2_high8_top_action_agreement": 0.5, "low2_high8_mean_legal_l1": 0.257883, "low8_high32_top_action_agreement": 0.6875, "low8_high32_mean_legal_l1": 0.123379, "total_truncations": 0, "uses_slumbot_training_data": false, "uses_solver_labels": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_all_action_counterfactual_targets.py` -> `2 passed`.
+  - `python -m py_compile scripts/build_native_all_action_counterfactual_targets.py` -> passed.
+  - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 16 --low-rollouts-per-action 2 --high-rollouts-per-action 8 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260712 --output-json autoresearch-session/native_neural_nashpg/all_action_targets_consistency_16_low2_high8_seed20260712.json` -> passed.
+  - `python scripts/build_native_all_action_counterfactual_targets.py --n-states 32 --low-rollouts-per-action 8 --high-rollouts-per-action 32 --max-steps-per-rollout 64 --initial-chips 1000 --seed 20260713 --output-json autoresearch-session/native_neural_nashpg/all_action_targets_consistency_32_low8_high32_seed20260713.json` -> passed.
+- Decision: Do not train from naive all-action targets yet. The next small step should add variance reduction, starting with paired/common-random continuation seeds and margin-aware reporting, then require stronger low-vs-high action-preference agreement before learner integration.
