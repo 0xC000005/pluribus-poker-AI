@@ -1,0 +1,54 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1854,
+      "path": "benchmark_audit.md",
+      "sha256": "509ca109b37dca0cfa1843e0992cf73aefc25dd4fa99faf66b81e9fd149bf722"
+    },
+    {
+      "bytes": 1121,
+      "path": "decision.json",
+      "sha256": "e5e89d8362fd994adfa9de959dc92f9e8c55e59b599f3fa560a2bc96219e90c4"
+    },
+    {
+      "bytes": 2328,
+      "path": "mechanism_review.md",
+      "sha256": "71d75733bcadff8d83d1c049af627a8b70a6924cd0f8c8f7543d42dd000eadf8"
+    },
+    {
+      "bytes": 3244,
+      "path": "related_work.md",
+      "sha256": "6d30fe70c7d0188733b1f19705d01d5707f8a0fd86df8ee0a4d1864341c991af"
+    },
+    {
+      "bytes": 2497,
+      "path": "review.md",
+      "sha256": "a58e4b03d384753a972bc999a8b1bb63c6814cfc0bd6bb959eea2c8734283953"
+    },
+    {
+      "bytes": 3006,
+      "path": "review_scope.json",
+      "sha256": "add0cde408e990ef41a00d53082ab40881575427ece022020d087fb57558e7d3"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed narrowly because local artifacts show correct small-game MMD direction can overshoot near a strong policy unless the neural step is tiny, and primary related work supports proximal/mirror or KL-constrained policy movement. This authorizes an off-by-default adaptive policy-KL step controller with telemetry and matched native controls; it does not authorize promotion, Slumbot evaluation, solver-label training, or poker-specific patches.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg",
+  "review_id": "20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg",
+  "sources": [
+    "autoresearch-session/small_nlhe_mmd_truth_gate/mmd_exact_200_seedless_20260602T0630.json",
+    "autoresearch-session/small_nlhe_mmd_truth_gate/mmd_policy_fit_200steps_h128_seed20260602.json",
+    "autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_start200_delta1_h128_seed20260603.json",
+    "autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_start200_delta1_h128_lr5e5_seed20260603.json",
+    "https://arxiv.org/abs/2206.05825",
+    "https://arxiv.org/abs/2410.23398",
+    "https://arxiv.org/abs/1502.05477",
+    "https://arxiv.org/abs/1707.06347"
+  ],
+  "written_at": "2026-06-02T06:56:26Z"
+}

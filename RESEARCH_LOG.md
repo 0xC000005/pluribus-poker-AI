@@ -18545,3 +18545,25 @@
 - Summary: Added `scripts/analyze_small_nlhe_mmd_update_fidelity.py` and a tiny OpenSpiel-skipping test. The bridge passed from uniform start at `lr=0.005` (`target_kl_reduction=+0.000176`, cosine `0.5407`). From the stronger 200-step MMD policy, the same update overshot badly at `lr=0.005` (`target_kl_reduction=-0.002586`) and still worsened at `lr=0.0005` (`-0.000143`), but passed at `lr=0.00005` (`target_kl_reduction=+0.00000174`, cosine `0.7587`). This isolates the native NashPG/MMD gap as update-scale/proximal-control fidelity near strong policies, not representation capacity or simple action collapse.
 - Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_update_fidelity_start200_delta1_h128_lr5e5_seed20260603.json
 - Key metrics: `{"uniform_lr005_passed": true, "near_policy_lr005_passed": false, "near_policy_lr0005_passed": false, "near_policy_lr00005_passed": true, "near_policy_lr00005_target_kl_reduction": 1.7369847449603441e-06, "near_policy_lr00005_update_delta_cosine": 0.758708585646791}`
+
+## 20260602T065626Z-adaptive-proximal-native-nashpg-step-control - passed
+
+- Timestamp: 2026-06-02T06:56:26Z
+- Type: methodology_update
+- Gate: methodology-review-20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg + native_neural_nashpg_compiled_smoke
+- Hypothesis: After the small-NLHE bridge showed correct MMD direction can overshoot near strong policies, the native neural NashPG/MMD learner should support an opt-in realized policy-KL/proximal step controller before another HUNL candidate run.
+- Failure class: none
+- Summary: Completed the methodology review with independent-verifier, related-work, mechanism, and benchmark-hacking artifacts, then added an off-by-default adaptive legal-action policy-KL controller to `scripts/run_native_neural_nashpg_compiled_learner.py`. The helper snapshots the pre-update stochastic policy, attempts the actor/value optimizer step, measures realized masked KL over legal actions, and rolls back/backtracks if the step exceeds the requested budget. Focused tests cover illegal-action masking, accept/skip rollback behavior, existing learner contracts, and the new telemetry. A CUDA tiny native smoke passed with `resolved_device=cuda`, zero illegal probability, `max_policy_update_kl=5.517e-6`, no backtracking, and one accepted step. This is plumbing and update-fidelity evidence only; it is not Slumbot strength evidence and does not promote a checkpoint.
+- Metrics file: autoresearch-session/native_neural_nashpg/proximal_smoke_seed20260687.json
+- Key metrics: `{"methodology_review_passed": true, "resolved_device": "cuda", "adaptive_policy_kl_target": 0.01, "policy_update_accepted_steps": 1, "policy_update_skipped_steps": 0, "max_policy_update_kl": 5.5170316954900045e-06, "compiled_needs_python_showdown": 0, "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T065712Z-methodology-review-for-adaptive-proximal-step-control-for - passed
+
+- Timestamp: 2026-06-02T06:57:12Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg
+- Hypothesis: Methodology review for Adaptive proximal step control for native neural NashPG MMD learner should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T065712Z-methodology-review-for-adaptive-proximal-step-control-for/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T064515Z-adaptive-proximal-step-control-for-native-neural-nashpg", "passed": true}`
