@@ -19338,3 +19338,23 @@
   - `python -m py_compile scripts/run_small_nlhe_exact_cfpg_neural_gate.py` -> passed.
   - `uv run --no-project --with open-spiel python scripts/run_small_nlhe_exact_cfpg_neural_gate.py --steps 1200 --eval-every 400 --seeds 1,2,3 --layers 128 128 --lr 0.01 --fit-epochs-per-step 4 --advantage-temperature 1.0 --reference-regularization-weight 0.2 --reference-update-every 100 --baseline-json autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json --baseline-arm rnad --output-json autoresearch-session/small_nlhe_neural_nashpg/reference_regularized_exact_cfpg_1200_seed1_3_eta02_reset100.json` -> completed and passed the comparator.
 - Decision: This authorizes one native-design branch: approximate the same reference-regularized counterfactual update with sampled/vectorized native trajectories and then require native 20k multi-seed parent/control H2H plus empirical-game insertion. Do not run Slumbot/RLCard from this small-game result alone.
+
+## 20260602T154000Z-methodology-review-for-native-sampled-reference-regularized-cfpg - passed
+
+- Timestamp: 2026-06-02T15:40:00Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient
+- Hypothesis: The native sampled approximation of the reference-regularized exact-CFPG mechanism should be reviewed before implementation and should preserve the same counterfactual/proximal object while requiring native multi-seed self-play league gates.
+- Failure class: none
+- Summary: Completed the methodology review. Decision is `proceed` only to a native prototype/design branch. The review confirms that the small-game pass authorizes translating the mechanism, not promoting any checkpoint. The native learner must approximate current-policy counterfactual action advantages plus current-vs-reference regularization, train only from local native simulator data, and pass native 20k multi-seed parent/control H2H plus empirical-game support before Slumbot/RLCard.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient/review.md
+  - autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient/related_work.md
+  - autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient/benchmark_audit.md
+  - autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient/mechanism_review.md
+  - autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient/review_scope.json
+  - autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient/decision.json
+- Key metrics: `{"decision": "proceed", "methodology_review_passed": true, "native_design_only": true, "requires_native_multiseed_self_play_league_gate": true, "external_evaluation_blocked": true, "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient --require-complete` -> passed with decision `proceed`.
+- Decision: Proceed to native sampled/vectorized reference-regularized counterfactual PG prototype design. Do not run Slumbot/RLCard or claim SOTA until the native self-play league gates pass.

@@ -1,0 +1,50 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1614,
+      "path": "benchmark_audit.md",
+      "sha256": "0d1e632abca70229e221b49aff029ccf42c135e22a3c35dfdf1bb4317a0b7c15"
+    },
+    {
+      "bytes": 586,
+      "path": "decision.json",
+      "sha256": "30888f26b01fe6e1a6e22c11b1c1f1e06153c0b9f9bb6e8cf19728f3f6bb063a"
+    },
+    {
+      "bytes": 1879,
+      "path": "mechanism_review.md",
+      "sha256": "05c9a5529306b4ca56a77410198cf3d2633bdd3f7f6ae641cae105a958a0864e"
+    },
+    {
+      "bytes": 2592,
+      "path": "related_work.md",
+      "sha256": "906c489ad64aa69c0415fbeac19d3830d085d111118353c4fca9796da4a58f24"
+    },
+    {
+      "bytes": 1862,
+      "path": "review.md",
+      "sha256": "d2705c15cecfdb3c2f60479b6d7fa0aa349f96dd95fe9f9104332a53bad59a72"
+    },
+    {
+      "bytes": 2412,
+      "path": "review_scope.json",
+      "sha256": "7cbe1ede239c83eee45e43fabaaf073b478c766a1cc22aecfc6de5413cee06bb"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed only to a native sampled/vectorized prototype that preserves the reference-regularized counterfactual update object proven on exact small-NLHE; Slumbot/RLCard and incumbent claims remain blocked until native multi-seed H2H and empirical-game gates pass.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient",
+  "review_id": "20260602T103609Z-native-sampled-reference-regularized-counterfactual-neural-policy-gradient",
+  "sources": [
+    "autoresearch-session/small_nlhe_neural_nashpg/reference_regularized_exact_cfpg_1200_seed1_3_eta02_reset100.json",
+    "https://arxiv.org/abs/2408.00751",
+    "https://arxiv.org/abs/2510.18183",
+    "https://arxiv.org/abs/2206.15378"
+  ],
+  "written_at": "2026-06-02T10:38:37Z"
+}
