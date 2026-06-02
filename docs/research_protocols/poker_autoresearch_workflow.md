@@ -401,12 +401,15 @@ The exact small-NLHE MMD truth gate now exists as that reproduction check:
 OpenSpiel `MMDDilatedEnt` with `alpha=0.01` on the locked 637-node small-NLHE
 harness reached best current exact NashConv `0.066154` and last average
 NashConv `0.118786` in `1000` iterations, beating the prior R-NaD hardening
-baseline (`0.664478` mean last NashConv). This revives the
-MMD/NashPG-family update as a principled exact-game reference, but it still
-does not train a native neural HUNL checkpoint. The next native branch must
-translate this regularized policy-dynamics lesson into a tabula-rasa neural
-self-play learner and pass parent/population H2H, not reuse the tabular solver
-as the player.
+target-policy baseline (`0.664478` mean last NashConv). A later source audit
+showed that target/EMA scoring understated R-NaD strength: the current learner
+policy reached mean last NashConv `0.211838` over the same 3 seeds. This keeps
+MMD/NashPG-family dynamics as a principled exact-game reference, but it raises
+the neural promotion comparator. Future small-game neural PG claims must compare
+against learner-source R-NaD unless a review explicitly deploys the target/EMA
+policy. The next native branch must translate this regularized policy-dynamics
+lesson into a tabula-rasa neural self-play learner and pass parent/population
+H2H, not reuse the tabular solver as the player.
 The first native translation diagnostic after that exact gate tested R-NaD
 policy export source. The default native learner exported the target/EMA policy;
 the new opt-in `--learner-checkpoint-out` exports the current learner policy
@@ -438,12 +441,14 @@ The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
 another native 9-action HUNL learner.
-That neural truth gate now exists and passed its first 3-seed run: mean best
-exact NashConv `0.206352` and mean last `0.239625`, beating the small-game R-NaD
-baseline `0.664478` while remaining weaker than tabular exact MMD `0.066154`.
-This authorizes a native translation of the neural reference-regularized update
-family. It does not authorize Slumbot evaluation, full-HUNL strength claims, or
-more native R-NaD continuation experiments.
+That neural truth gate now exists, but its first apparent pass used the weaker
+target-source R-NaD comparator. Re-scoring R-NaD with the learner policy gives a
+stronger mean last NashConv `0.211838`; the neural gate's `mean best=0.206352`
+and `mean last=0.239625` are near that comparator, not a clean promotion pass.
+Later full-self-play terminal, GAE, and player-perspective GAE controls failed
+even the weaker target-source comparator. This keeps the neural update family as
+a research lead, but it does not authorize Slumbot evaluation, full-HUNL
+strength claims, or another native scale-up without a stronger small-game gate.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to
@@ -1168,8 +1173,9 @@ small-game and native population gates.
 Required A/B before native 9-action scale-up:
 
 - exact small-NLHE sanity: finite metrics, stable harness fingerprint, and
-  exact NashConv improvement that beats the current R-NaD baseline under matched
-  seeds or explains why the baseline is not the right comparator;
+  exact NashConv improvement that beats learner-source R-NaD under matched seeds
+  or explains why target/EMA is the deployed policy source and the right
+  comparator;
 - update-fidelity or mechanism check: evidence that the neural update is not
   merely correcting fit residuals, overfitting one seed, or drifting back toward
   uniform/high exploitability;
@@ -1181,7 +1187,9 @@ Required A/B before native 9-action scale-up:
 Current retired/falsified variants include post-hoc Rainbow Q-softmax, unchanged
 terminal-return NashPG/MMD response, unchanged V-trace actor, unchanged GAE
 compiled actor, and the small-NLHE GAE/high-entropy PG control that failed the
-R-NaD exact-NashConv baseline. The active pivot is a reviewed
+R-NaD exact-NashConv baseline. The earlier neural NashPG "pass" must be treated
+as provisional because it used target-source R-NaD; learner-source R-NaD is the
+current small-game comparator. The active pivot is a reviewed
 counterfactual/sequence-form-compatible policy-gradient or population objective.
 
 ## Legacy Resolver Diagnostics

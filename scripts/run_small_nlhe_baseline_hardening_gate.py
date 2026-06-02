@@ -87,6 +87,14 @@ def _net_policy_fn(net):
     return fn
 
 
+def _rnad_policy_fn(solver, source: str):
+    if source == "target":
+        return solver.action_probabilities
+    if source == "learner":
+        return _net_policy_fn(solver.net)
+    raise ValueError("rnad policy source must be one of: target, learner")
+
+
 def _ppo_step_with_opponent(solver, opponent_policy_fn=None) -> dict:
     traj = solver.collector.collect(
         solver._policy_fn,
@@ -144,14 +152,17 @@ def _run_rnad_seed(args, seed: int, game, by, policy_lib, exploitability) -> dic
         seed=seed,
     )
     solver = RNaDSolver(cfg, collector, device="cpu")
-    history = [(0, _nashconv_from_solver(game, by, solver, policy_lib, exploitability))]
+    policy_fn = _rnad_policy_fn(solver, args.rnad_policy_source)
+    history = [(0, _nashconv_from_policy_fn(game, by, policy_fn, policy_lib, exploitability))]
     t0 = time.time()
     for step in range(1, args.steps + 1):
         solver.step()
         if step % args.eval_every == 0 or step == args.steps:
-            history.append((step, _nashconv_from_solver(game, by, solver, policy_lib, exploitability)))
+            policy_fn = _rnad_policy_fn(solver, args.rnad_policy_source)
+            history.append((step, _nashconv_from_policy_fn(game, by, policy_fn, policy_lib, exploitability)))
     return {
         "seed": seed,
+        "policy_source": str(args.rnad_policy_source),
         "history": history,
         "start": history[0][1],
         "last": history[-1][1],
@@ -249,6 +260,7 @@ def main(argv=None) -> int:
     parser.add_argument("--seeds", default="1,2,3")
     parser.add_argument("--layers", type=int, nargs="+", default=[128, 128])
     parser.add_argument("--rnad-lr", type=float, default=0.005)
+    parser.add_argument("--rnad-policy-source", choices=("target", "learner"), default="target")
     parser.add_argument("--ppo-lr", type=float, default=0.005)
     parser.add_argument("--reset-every", type=int, default=1000)
     parser.add_argument("--snapshot-every", type=int, default=200)
@@ -326,6 +338,7 @@ def main(argv=None) -> int:
             "seeds": seeds,
             "layers": args.layers,
             "rnad_lr": args.rnad_lr,
+            "rnad_policy_source": args.rnad_policy_source,
             "ppo_lr": args.ppo_lr,
             "reset_every": args.reset_every,
             "snapshot_every": args.snapshot_every,

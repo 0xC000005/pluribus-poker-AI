@@ -18746,3 +18746,18 @@
   - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py test/unit/test_small_nlhe_mmd_update_fidelity_bridge.py test/unit/test_small_nlhe.py` -> `14 passed`.
   - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
 - Decision: keep `player-gae` as a correctness repair and diagnostic, but do not scale it to native HUNL. The remaining gap is not just player-perspective bootstrapping; the learner still lacks a stable counterfactual/sequence-form or regularized equilibrium objective. Next action should be synthesis or a maintained R-NaD/NashPG-style objective reproduction, not another entropy/model-size/collector sweep.
+
+## 20260602T083500Z-small-nlhe-rnad-learner-policy-baseline - passed
+
+- Timestamp: 2026-06-02T08:35:00Z
+- Type: experiment
+- Gate: small_nlhe_rnad_policy_source_baseline
+- Hypothesis: The prior small-NLHE R-NaD comparator may be too weak because it scored the target/EMA policy rather than the current learner policy. Before scaling another neural PG/R-NaD-family variant, the baseline gate should expose which R-NaD policy source is being evaluated.
+- Failure class: none
+- Summary: Added `--rnad-policy-source target|learner` to `scripts/run_small_nlhe_baseline_hardening_gate.py` and kept `target` as the default for backward compatibility. A focused test verifies that learner-source scoring is accepted and recorded in the artifact. The stronger 3-seed learner-source R-NaD gate reached mean last exact NashConv `0.211838` with per-seed values `[0.192772, 0.255357, 0.187384]`, while PPO FIFO and K-best stayed much weaker (`1.546923` and `1.407436`). This raises the promotion comparator: earlier neural NashPG results that beat target-source R-NaD `0.664478` are near, not clearly above, the learner-source R-NaD baseline.
+- Metrics file: autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json
+- Key metrics: `{"rnad_policy_source": "learner", "rnad_mean_last_nashconv": 0.211838, "rnad_last_nashconv": [0.192772, 0.255357, 0.187384], "ppo_fifo_mean_last_nashconv": 1.546923, "ppo_kbest_mean_last_nashconv": 1.407436, "old_target_source_rnad_mean_last_nashconv": 0.664478, "promotion_comparator_raised": true, "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_baseline_hardening_gate.py` -> `2 passed`.
+  - `uv run --no-project --with open-spiel python scripts/run_small_nlhe_baseline_hardening_gate.py --steps 1200 --eval-every 400 --batch-size 256 --seeds 1,2,3 --layers 128 128 --rnad-policy-source learner --snapshot-every 200 --pool-size 3 --output-json autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json` -> passed.
+- Decision: future small-game neural PG/R-NaD-family promotion claims must compare against learner-source R-NaD or explicitly justify why the target/EMA policy is the deployed comparator. The current player-GAE and GAE PG variants remain failed, and the earlier neural NashPG gate is provisional rather than promotion evidence.
