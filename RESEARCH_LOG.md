@@ -6364,7 +6364,7 @@
 - Failure class: none
 - Summary: Cross-trace attribution confirmed stable response-range likelihood gains across 415 fixed states, but weak correlation between likelihood gain and action drift means live use needs a counterfactual-EV gate instead of promotion by top-action agreement.
 - Metrics file: autoresearch-session/slumbot_trace_cases/20260515T154850Z-cross-trace-response-range-drift-attribution.json
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 50, "total_chips": -49619, "avg_chips_per_hand": -992.38, "ci95_half_width_from_stdout": 1343, "policy_decisions": 101, "solver_decisions": 37, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 3, "big_losses": 4, "win_rate": 0.68, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260515T180550Z-response-range-belief-integration-should-show-positive-held - failed
 
 - Timestamp: 2026-05-15T18:05:58Z
@@ -6512,7 +6512,7 @@
 - Failure class: none
 - Summary: Code audit found that current n_active is the allocated high-water mark, not the advancing frontier. Physical row movement would require remapping parent_idx, child_values, and dormant traverser nodes. The principled integration path is a compact frontier_indices list plus mapped kernels, keeping tree slot IDs stable for propagation.
 - Metrics file: not recorded
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 50, "total_chips": 34554, "avg_chips_per_hand": 691.08, "ci95_half_width_from_stdout": 1198, "policy_decisions": 164, "solver_decisions": 0, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 1, "big_losses": 3, "win_rate": 0.78, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260515T195700Z-pytorch-built-frontier-indices-should-interoperate-with-numba - passed
 
 - Timestamp: 2026-05-15T19:57:06Z
@@ -7789,7 +7789,7 @@
 - Failure class: compute_efficiency
 - Summary: User requested suspension after current task; the 60x2k dense SD-CFR retry was interrupted before clean metrics/final checkpoint, leaving only iter10/iter20 snapshots. Do not treat partial snapshots as strategy evidence.
 - Metrics file: not recorded
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"decision": "proceed", "single_next_test": "same fixed population on held-out Slumbot with --no-solver", "causal_model": "local population robust; solver-enabled external play changes decision architecture", "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260521T134148Z-sd-cfr-snapshot-mixture-philosophy-audit - passed
 
 - Timestamp: 2026-05-21T13:41:48Z
@@ -14660,7 +14660,7 @@
 - Failure class: strategy_quality
 - Summary: Population-projection Rainbow response oracle failed the parent gate: mean_candidate_payoff=-0.000100, lower95=-0.001011 over 1000 duplicate-swapped games. Candidate rejected before broader population or Slumbot evaluation.
 - Metrics file: autoresearch-session/tianshou_rainbow/psro_population_projection_vs_parent_h2h_1000_seed20260692.json
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 50, "total_chips": -49619, "avg_chips_per_hand": -992.38, "ci95_half_width_from_stdout": 1343, "policy_decisions": 101, "solver_decisions": 37, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 3, "big_losses": 4, "win_rate": 0.68, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260527T150428Z-maintained-shared-policy-marl-rainbow-self-play-initialized - failed
 
 - Timestamp: 2026-05-27T15:05:51Z
@@ -14670,7 +14670,7 @@
 - Failure class: strategy_quality
 - Summary: Maintained shared-policy MARL Rainbow self-play initialized from the incumbent failed the parent gate: mean_candidate_payoff=-0.011600, lower95=-0.023347 over 1000 duplicate-swapped games. Candidate rejected before population or Slumbot evaluation.
 - Metrics file: autoresearch-session/tianshou_marl_rainbow/psro_marl_selfplay_from_response_vs_parent_h2h_1000_seed20260694.json
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 50, "total_chips": 34554, "avg_chips_per_hand": 691.08, "ci95_half_width_from_stdout": 1198, "policy_decisions": 164, "solver_decisions": 0, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 1, "big_losses": 3, "win_rate": 0.78, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260527T151048Z-failure-synthesis-for-rainbow-family-psro-response-updates - passed
 
 - Timestamp: 2026-05-27T15:10:48Z
@@ -15031,7 +15031,7 @@
 - Failure class: none
 - Summary: AgileRL IPPO backend smoke preserved the native 9-action CUDA path and produced an evaluable checkpoint: 64-step training ran at 88.13 steps/sec, H2H adapter had invalid_candidate_actions=0. The tiny checkpoint was weak vs NFSP (20-game mean=-0.3255), so this is contract evidence only, not strength evidence.
 - Metrics file: autoresearch-session/agilerl/agilerl_ippo_native_h2h_vs_nfsp_smoke_seed20260530_current.json
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 50, "total_chips": 34554, "avg_chips_per_hand": 691.08, "ci95_half_width_from_stdout": 1198, "policy_decisions": 164, "solver_decisions": 0, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 1, "big_losses": 3, "win_rate": 0.78, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260527T161917Z-a-bounded-maintained-agilerl-ippo-native-self-play - failed
 
 - Timestamp: 2026-05-27T16:20:18Z
@@ -15062,7 +15062,7 @@
 - Failure class: eval_invalid
 - Summary: AgileRL off-policy MADDPG and MATD3 both constructed on CUDA but failed the native 9-action training smoke with RuntimeError: tensors must have same number of dimensions (2 vs 3). any_train_smoke_ok=false, recommendation=do_not_use_offpolicy_agilerl_until_contract_fixed. Do not run strength gates until the adapter/library tensor contract is fixed or a different maintained backend is chosen.
 - Metrics file: autoresearch-session/agilerl/agilerl_offpolicy_contract_maddpg_matd3_seed20260532.json
-- Key metrics: `{"gate": null, "passed": null}`
+- Key metrics: `{"hands": 300, "total_chips": -133593, "avg_chips_per_hand": -445.31, "ci95_half_width_from_stdout": 518, "policy_decisions": 773, "solver_decisions": 0, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 10, "big_losses": 32, "allin_hands": 54, "allin_total_chips": -106828, "risk_hands_total_chips": -166044, "mix0_hands": 47, "mix0_total": -100, "mix1_hands": 201, "mix1_total": -98106, "mix2_hands": 52, "mix2_total": -35387, "win_rate": 0.666667, "uses_slumbot_training_data": false, "promotion": false}`
 ## 20260527T163135Z-failure-synthesis-for-maintained-backend-response-oracle-branch - passed
 
 - Timestamp: 2026-05-27T16:31:35Z
@@ -19872,3 +19872,67 @@
   - `python scripts/eval_empirical_meta_strategy_gate.py --empirical-game-json <seven_policy_empirical_game> --h2h-record <student_vs_all_policies> --max-support-abs-mean 0.01 --max-support-lower95-loss 0.01 --min-off-support-lower95 0.0 --output-json autoresearch-session/meta_strategy_distillation/support3_meta_student_h2h_gate_seed20260891.json` -> failed as intended.
   - `python scripts/play_slumbot.py --model-kind tianshou-rainbow --model-checkpoint <current> --model-checkpoint <kbest2> --model-checkpoint <worstgap> --model-mixture-weights 0.4311249014981,0.0461365692632254,0.5227385292386746 --hands 5 --greedy --no-allin --solver-backend torch-levelsync-cuda --solver-budget-profile fast-live --trace-jsonl autoresearch-session/slumbot_traces/meta_strategy_smoke_5_seed20260899.jsonl` -> passed integration smoke.
 - Decision: Do not promote the state-only distilled student. Continue with the exact fixed population policy as the local robust object, or review a latent-conditioned distillation that preserves the per-hand policy identity/correlation. A larger Slumbot run is allowed only as held-out evaluation of the fixed population after documenting the smoke; it must not train, select, or tune weights.
+## 20260602T161744Z-the-fixed-empirical-game-rainbow-population-that-solved - failed
+
+- Timestamp: 2026-06-02T16:19:24Z
+- Type: external_eval
+- Gate: fixed-population-slumbot-ladder-50
+- Hypothesis: The fixed empirical-game Rainbow population that solved the local support/off-support gate can run through held-out Slumbot at 50 hands with zero integration failures; chip results remain diagnostic only and must not tune weights.
+- Failure class: slumbot_transfer
+- Summary: Fixed empirical-game Rainbow population completed 50 held-out Slumbot hands with zero parse/API/fallback failures, but the diagnostic chip result was poor (-49619 total, -992 +/- 1343 chips/hand) with three stack losses. Treat as a Slumbot-transfer warning, not strength evidence; do not retune weights from this run.
+- Metrics file: autoresearch-session/slumbot_trace_audits/meta_strategy_ladder_50_seed20260901_audit.json
+- Key metrics: `{"gate": null, "passed": null}`
+
+## 20260602T162053Z-the-same-fixed-empirical-game-rainbow-population-without - passed
+
+- Timestamp: 2026-06-02T16:21:41Z
+- Type: external_eval
+- Gate: fixed-population-slumbot-no-solver-50
+- Hypothesis: The same fixed empirical-game Rainbow population without live resolver overrides can isolate whether the 50-hand Slumbot transfer warning came from the neural population itself or from solver/policy coupling; no Slumbot result may tune weights or train models.
+- Failure class: slumbot_transfer
+- Summary: No-solver ablation of the same fixed empirical-game Rainbow population completed 50 held-out Slumbot hands with zero parse/API/fallback failures and positive diagnostic chips (+34554 total, +691 +/- 1198 chips/hand). Compared with the solver-enabled warning, this implicates live resolver/policy coupling as the immediate transfer issue; still not strength evidence or a tuning signal.
+- Metrics file: autoresearch-session/slumbot_trace_audits/meta_strategy_no_solver_50_seed20260902_audit.json
+- Key metrics: `{"gate": null, "passed": null}`
+
+## 20260602T162208Z-synthesize-why-the-local-fixed-population-solved-support - passed
+
+- Timestamp: 2026-06-02T16:22:14Z
+- Type: synthesis
+- Gate: failure-synthesis-solver-coupling
+- Hypothesis: Synthesize why the local fixed population solved support/off-support gates but the solver-enabled Slumbot transfer run failed, and define one next falsifier.
+- Failure class: slumbot_transfer
+- Summary: Failure synthesis concluded that the local empirical-game population is robust in native H2H, but solver-enabled Slumbot evaluation changed the decision architecture. The next falsifier was the no-solver fixed-population ablation, which then passed as a diagnostic and implicated live resolver/policy coupling.
+- Metrics file: autoresearch-session/poker_reviews/20260602T162003Z-population-weak-solved-locally-but-fixed-population-plus-synthesis/decision.json
+- Key metrics: `{"decision": "proceed", "single_next_test": "same fixed population on held-out Slumbot with --no-solver", "causal_model": "local population robust; solver-enabled external play changes decision architecture", "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T162356Z-the-fixed-empirical-game-rainbow-population-without-live - failed
+
+- Timestamp: 2026-06-02T16:26:06Z
+- Type: external_eval
+- Gate: fixed-population-slumbot-no-solver-300
+- Hypothesis: The fixed empirical-game Rainbow population without live resolver overrides should maintain clean held-out Slumbot integration over 300 hands and provide a higher-confidence diagnostic estimate; this is validation only and cannot tune weights, checkpoints, or training.
+- Failure class: slumbot_transfer
+- Summary: Fixed empirical-game Rainbow population without live resolver completed 300 held-out Slumbot hands with zero parse/API/fallback failures, but did not show a reliable edge: -40009 total, -133 +/- 449 chips/hand. No-solver avoids the solver-coupling stack-loss pattern but does not consistently beat Slumbot; next work should improve the local self-play/population learner rather than retune Slumbot weights.
+- Metrics file: autoresearch-session/slumbot_trace_audits/meta_strategy_no_solver_300_seed20260903_audit.json
+- Key metrics: `{"hands": 300, "total_chips": -40009, "avg_chips_per_hand": -133.363, "ci95_half_width_from_stdout": 449, "policy_decisions": 885, "solver_decisions": 0, "fallback": 0, "parse_errors": 0, "api_errors": 0, "stack_losses": 5, "big_losses": 29, "win_rate": 0.673333, "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T162810Z-a-fresh-compiled-rainbow-response-trained-against-the - passed
+
+- Timestamp: 2026-06-02T16:35:37Z
+- Type: experiment
+- Gate: compiled-rainbow-response-to-solved-meta-strategy
+- Hypothesis: A fresh compiled Rainbow response trained against the solved three-policy empirical-game meta-strategy should add useful local population support and improve the native empirical game without Slumbot data or solver labels.
+- Failure class: population_weak
+- Summary: Fresh compiled Rainbow response to the solved three-policy meta-strategy trained locally from 155452 transitions at 56850.97 transitions/sec. The augmented empirical game assigned support [current=0.1356, worstgap=0.6820, new_response=0.1824], dropping K-best2. Formal support/off-support gate passed: 20k support checks tied all support members, and 5k off-support checks beat prior 131k, PSRO, shared-MARL18k, NFSP, and K-best2 with positive lower95. This is local PSRO population progress, not Slumbot/SOTA evidence.
+- Metrics file: autoresearch-session/native_rollout_substrate/meta8_response_to_solved_meta_h2h_gate_seed20260910.json
+- Key metrics: `{"gate_passed": true, "collector_transitions": 155452, "collector_transitions_per_second": 56850.975, "support_weights": [0.135585, 0.682029, 0.182386], "support_incumbent_mean": 0.001012, "support_incumbent_lower95": -0.003076, "support_worstgap_mean": -0.000738, "support_worstgap_lower95": -0.002830, "support_new_response_mean": -0.001746, "support_new_response_lower95": -0.005003, "off_prior_lower95": 0.012146, "off_psro_lower95": 0.039850, "off_shared_lower95": 0.027998, "off_nfsp_lower95": 0.030662, "off_kbest2_lower95": 0.000526, "uses_slumbot_training_data": false, "promotion": false}`
+## 20260602T163644Z-the-new-meta8-local-psro-population-should-be - failed
+
+- Timestamp: 2026-06-02T16:38:44Z
+- Type: external_eval
+- Gate: meta8-slumbot-no-solver-300
+- Hypothesis: The new meta8 local PSRO population should be evaluated held-out on Slumbot without resolver overrides for 300 hands; this tests transfer of the improved local population only and cannot tune weights or training.
+- Failure class: slumbot_transfer
+- Summary: New meta8 local PSRO population passed native support/off-support gates but failed held-out 300-hand no-solver Slumbot validation: -133593 total, -445 +/- 518 chips/hand, zero parse/API/fallback failures. Losses concentrated in high-risk/all-in hands from worst-gap and new-response support components. This confirms local population progress still does not transfer reliably to Slumbot.
+- Metrics file: autoresearch-session/slumbot_trace_audits/meta8_no_solver_300_seed20260930_audit.json
+- Key metrics: `{"gate": null, "passed": null}`

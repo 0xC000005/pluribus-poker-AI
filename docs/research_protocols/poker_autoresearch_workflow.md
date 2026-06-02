@@ -144,10 +144,26 @@ The first state-only single-network distillation did not preserve support: it
 fit behavior labels well but lost to K-best2 with upper95 still below zero. The
 direct fixed-population Slumbot path is now wired for native Rainbow checkpoints
 and passed a 5-hand integration smoke with no fallbacks, parse errors, or API
-errors. The next branch should either evaluate the fixed local population policy
-through a higher-confidence held-out Slumbot ladder, or use a reviewed
-latent-conditioned distillation that preserves per-hand correlation before
-re-running the same support/off-support gate.
+errors. A 50-hand solver-enabled held-out Slumbot ladder then completed cleanly
+but lost `-49,619` chips with three stack losses. The matched no-solver
+fixed-population ablation completed cleanly and was positive over the same small
+budget (`+34,554` chips), so the active transfer blocker is now
+resolver/policy coupling: the local gates evaluate the neural population, while
+solver-enabled Slumbot play changes the deployed decision architecture. The
+higher-confidence 300-hand no-solver validation was mechanically clean but
+negative/inconclusive (`-40,009` chips, `-133 +/- 449` chips/hand), so the fixed
+population is not yet a reliable Slumbot beater. The next local branch did
+improve the population: a fresh compiled Rainbow response to the solved
+three-policy meta-strategy produced an eight-policy empirical game with support
+`[current=0.1356, worstgap=0.6820, new_response=0.1824]`, dropped K-best2 from
+support, and passed the formal support/off-support gate. The next branch should
+not assume transfer: the 300-hand no-solver meta8 Slumbot check failed
+(`-133,593` chips, `-445 +/- 518` chips/hand) with losses concentrated in
+high-risk/all-in hands from worst-gap and new-response support components. The
+next branch should continue PSRO-style local expansion with a stronger local
+anti-risk/exploiter gate, or run a methodology review for a learner objective
+that makes high-variance stack exposure emerge from local self-play rather than
+from Slumbot diagnostics.
 
 The goal contract is specific but not brittle. Failed mechanisms are expected
 research evidence, not completion of the outer objective:
