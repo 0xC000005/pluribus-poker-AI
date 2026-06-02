@@ -339,4 +339,19 @@ def load_compiled_joint_policy(
             algorithm=str(payload.get("algorithm", "native_ppo_policy")),
             module=policy.to(resolved_device),
         )
+    if normalized_kind in {"native-nfsp", "native_nfsp"}:
+        from poker_ai.research.native_nfsp import (  # noqa: PLC0415
+            _load_native_checkpoint_networks,
+        )
+
+        payload, _q_net, avg_net = _load_native_checkpoint_networks(
+            str(checkpoint),
+            resolved_device,
+        )
+        return CompiledJointPolicy(
+            kind="native-nfsp",
+            checkpoint_path=str(checkpoint),
+            algorithm=str(payload.get("algorithm", "native_nfsp")),
+            module=avg_net.to(resolved_device),
+        )
     raise ValueError(f"unsupported compiled joint policy kind: {kind}")

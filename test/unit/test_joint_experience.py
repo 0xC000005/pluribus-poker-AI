@@ -163,6 +163,35 @@ def test_collect_compiled_joint_experience_supports_legal_exploration():
     assert np.all(dataset["legal_masks"][np.arange(dataset["n_transitions"]), dataset["actions"]])
 
 
+def test_load_compiled_joint_policy_supports_native_nfsp_checkpoint(tmp_path):
+    from poker_ai.research.compiled_joint_experience import load_compiled_joint_policy
+    from poker_ai.research.native_nfsp import _MLP
+
+    checkpoint = tmp_path / "native_nfsp.pt"
+    q_net = _MLP(hidden_dim=16)
+    avg_net = _MLP(hidden_dim=16)
+    torch.save(
+        {
+            "algorithm": "native_nfsp_dqn",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": 16,
+            "q_net_state_dict": q_net.state_dict(),
+            "avg_net_state_dict": avg_net.state_dict(),
+            "config": {"hidden_dim": 16},
+        },
+        checkpoint,
+    )
+
+    policy = load_compiled_joint_policy(checkpoint, kind="native-nfsp", device="cpu")
+    scores = policy.module(torch.zeros(3, N_FEATURES, dtype=torch.float32))
+
+    assert policy.kind == "native-nfsp"
+    assert policy.algorithm == "native_nfsp_dqn"
+    assert scores.shape == (3, N_ACTIONS)
+
+
 def test_save_joint_experience_npz_writes_arrays_and_manifest(tmp_path):
     dataset = {
         "algorithm": "joint_experience_meta_policy_dataset",

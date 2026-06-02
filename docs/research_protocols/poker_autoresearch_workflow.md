@@ -383,9 +383,15 @@ a normal `tianshou-rainbow` checkpoint. The first h256 `16x4096` run was fast
 (`166492` learner transitions, `57568.89` transitions/sec, zero fallback), but
 failed the 5000-game H2H gate against the current incumbent (`mean=-0.016945`,
 lower95 `-0.027931`). Treat this as useful collector/checkpoint
-infrastructure. Do not repeat the exact online Rainbow response recipe
-unchanged; the next response-objective branch needs a real mechanism change
-such as stronger bootstrapping/priority semantics, empirical-game-aware
+infrastructure. The current-support uniform-population follow-up trained
+against five fixed support policies, including native NFSP through the compiled
+average-policy loader. It beat the active incumbent strongly and solved the
+expanded empirical game to pure candidate by mean payoff, but failed the 20000-
+game population lower-bound tie-break against the prior 131k Rainbow response
+(`mean=+0.000206`, lower95 `-0.003930`). Do not promote it, run Slumbot/RLCard,
+or retune support weights from this result. The next response-objective branch
+needs either a stronger same-support compute/coverage check or a real mechanism
+change such as stronger bootstrapping/priority semantics, empirical-game-aware
 training, NashPG/MMD/R-NaD-family dynamics, or a reviewed maintained
 game-dynamics learner.
 A direct NashPG/MMD-style reference-regularized V-trace variant was then
