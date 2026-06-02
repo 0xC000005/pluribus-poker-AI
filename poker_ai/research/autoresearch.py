@@ -4308,6 +4308,32 @@ def _pop_next_cycle_for_synthesis_state(
     return None, queue
 
 
+def _queued_review_like_cycle_is_complete(item: dict) -> bool:
+    """Return True for queued review artifacts that already validate complete."""
+    try:
+        cycle_type = str(item.get("type", ""))
+        if cycle_type == "methodology_review" and item.get("review_dir"):
+            return bool(validate_methodology_review(item["review_dir"]).get("passed"))
+        if cycle_type == "synthesis" and item.get("synthesis_dir"):
+            return bool(validate_failure_synthesis(item["synthesis_dir"]).get("passed"))
+        if cycle_type == "innovation_review" and item.get("innovation_dir"):
+            return bool(validate_paradigm_innovation_review(item["innovation_dir"]).get("passed"))
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+    return False
+
+
+def _drop_completed_review_like_queue_items(queue: list[dict]) -> tuple[list[dict], list[dict]]:
+    pending: list[dict] = []
+    skipped: list[dict] = []
+    for item in queue:
+        if _queued_review_like_cycle_is_complete(item):
+            skipped.append(item)
+        else:
+            pending.append(item)
+    return pending, skipped
+
+
 def continuous(
     root: str | Path,
     *,
@@ -4336,12 +4362,23 @@ def continuous(
 
         state = _read_json(_state_path(root))
         queue = state.get("hypothesis_queue", [])
+        queue, skipped_completed = _drop_completed_review_like_queue_items(queue)
+        if skipped_completed:
+            state["hypothesis_queue"] = queue
+            state["updated_at"] = _now()
+            _write_json(_state_path(root), state)
         if not queue:
             if max_cycles is not None:
-                return {"cycles_completed": cycles_completed, "stopped_reason": "empty_queue"}
+                result = {"cycles_completed": cycles_completed, "stopped_reason": "empty_queue"}
+                if skipped_completed:
+                    result["skipped_completed_cycles"] = len(skipped_completed)
+                return result
             idle_checks += 1
             if max_idle_checks is not None and idle_checks >= max_idle_checks:
-                return {"cycles_completed": cycles_completed, "stopped_reason": "idle_limit"}
+                result = {"cycles_completed": cycles_completed, "stopped_reason": "idle_limit"}
+                if skipped_completed:
+                    result["skipped_completed_cycles"] = len(skipped_completed)
+                return result
             time.sleep(sleep_seconds)
             continue
         idle_checks = 0

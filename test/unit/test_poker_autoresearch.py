@@ -1169,6 +1169,60 @@ def test_continuous_runs_queued_synthesis_ahead_of_blocked_experiment(tmp_path):
     assert state_after["hypothesis_queue"][0]["id"] == "next-exp"
 
 
+def test_continuous_skips_completed_queued_synthesis_before_next_cycle(tmp_path):
+    init_state(tmp_path)
+    state_path = tmp_path / "autoresearch-session" / "poker_state.json"
+    synthesis_dir = (
+        tmp_path
+        / "autoresearch-session"
+        / "poker_reviews"
+        / "already-complete-synthesis"
+    )
+    synthesis_dir.mkdir(parents=True)
+    (synthesis_dir / "synthesis.md").write_text(
+        "# Failure Synthesis\n\n"
+        "- Current causal model: already complete\n"
+        "- Retired hypotheses: stale synthesis queue entry\n"
+        "- Live hypotheses: run the next queued cycle\n"
+        "- Single next test: normal queued experiment\n"
+        "\nVerdict: REVISE\n",
+        encoding="utf-8",
+    )
+    (synthesis_dir / "decision.json").write_text(
+        json.dumps({"decision": "revise", "reason": "complete", "sources": []}),
+        encoding="utf-8",
+    )
+    state = _read_json(state_path)
+    state["hypothesis_queue"] = [
+        {
+            "id": "completed-synthesis",
+            "type": "synthesis",
+            "hypothesis": "This completed synthesis should not replay.",
+            "failure_class": "eval_invalid",
+            "gate": "tier0",
+            "synthesis_dir": str(synthesis_dir),
+        },
+        {
+            "id": "next-exp",
+            "type": "experiment",
+            "hypothesis": "This experiment should run after stale synthesis is skipped.",
+            "failure_class": "strategy_quality",
+            "gate": "tier0",
+        },
+    ]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+
+    result = continuous(tmp_path, max_cycles=1, runner=_ok_runner, sleep_seconds=0.0)
+
+    state_after = _read_json(state_path)
+    assert result == {"cycles_completed": 1, "stopped_reason": "max_cycles"}
+    assert state_after["history"][-1]["type"] == "experiment"
+    assert state_after["history"][-1]["hypothesis"] == (
+        "This experiment should run after stale synthesis is skipped."
+    )
+    assert state_after["hypothesis_queue"] == []
+
+
 def _xdo_target_drift_history():
     return [
         {

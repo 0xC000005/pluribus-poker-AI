@@ -19273,3 +19273,43 @@
 - Verification:
   - `python scripts/poker_methodology_review.py --review-dir autoresearch-session/poker_reviews/20260602T101331Z-counterfactual-compatible-multi-seed-native-learner-after-ppo --require-complete` -> passed with decision `revise`.
 - Decision: The next implementation branch must specify one concrete estimator. It should not start by tuning PPO-inner hyperparameters. Candidate directions are: exact small-game counterfactual-compatible stochastic PG reproduction, faithful sequence-form/NashPG/MMD bridge, or maintained R-NaD-style objective. Native scaling is blocked until the exact small-game comparator is passed.
+
+## 20260602T150500Z-small-nlhe-exact-counterfactual-neural-pg-plan - planned
+
+- Timestamp: 2026-06-02T15:05:00Z
+- Type: predeclared_experiment
+- Gate: small_nlhe_exact_counterfactual_neural_pg
+- Hypothesis: A neural policy updated from exact current-policy counterfactual action advantages on the locked small-NLHE tree should reproduce the game-theoretic self-play signal that sampled PPO/R-NaD translations have been missing. If the estimator is faithful, the deployable last policy should beat the learner-source R-NaD comparator on exact small-NLHE NashConv before any native 9-action work.
+- Controls: use only the local small-NLHE OpenSpiel simulator, legal masks, observations, current-policy reach, and terminal rewards. Do not use Slumbot/AlphaNLHoldem data, human poker tactics, solver labels, MMD snapshot imitation, or exact NashConv as a training target. Exact NashConv remains evaluator-only.
+- Decision rule: pass only if the harness fingerprint is stable, all metrics are finite, the last policy improves from uniform, and both best and last neural NashConv beat learner-source R-NaD mean last NashConv from `autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json`. If it fails, synthesize the estimator gap and do not scale it to native HUNL.
+
+## 20260602T151000Z-small-nlhe-exact-counterfactual-neural-pg - failed
+
+- Timestamp: 2026-06-02T15:10:00Z
+- Type: experiment
+- Gate: small_nlhe_exact_counterfactual_neural_pg
+- Hypothesis: Exact current-policy counterfactual action advantages plus a neural mirror-descent policy update should produce a deployable last policy that beats learner-source R-NaD on the locked small-NLHE exact NashConv gate.
+- Failure class: last_iterate_instability
+- Summary: Added `scripts/run_small_nlhe_exact_cfpg_neural_gate.py` and focused tests for exact counterfactual training rows. The gate computes exact opponent/chance-reach-weighted action advantages from the current policy, converts them into legal exponentiated-gradient policy targets, and trains a neural stochastic policy from local small-game observations, legal masks, and terminal rewards. The 3-seed 1200-step run improved strongly from uniform and had a mean best NashConv below the learner-source R-NaD comparator, but the deployable last policy failed the comparator. This shows the exact counterfactual signal is useful, but the current neural last-iterate update is still unstable/proximal-control limited, so native 9-action scaling remains blocked.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/exact_cfpg_1200_seed1_3_lr001_temp1.json
+- Key metrics: `{"baseline_mean_last_nashconv": 0.211838, "mean_best_nashconv": 0.184549, "mean_last_nashconv": 0.309595, "last_nashconv": [0.266638, 0.393171, 0.268975], "best_nashconv": [0.151048, 0.133677, 0.268921], "best_beats_baseline": true, "last_beats_baseline": false, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_exact_cfpg_gate.py test/unit/test_small_nlhe_neural_nashpg_gate.py` -> `12 passed`.
+  - `uv run --no-project --with open-spiel python scripts/run_small_nlhe_exact_cfpg_neural_gate.py --steps 1200 --eval-every 400 --seeds 1,2,3 --layers 128 128 --lr 0.01 --fit-epochs-per-step 4 --advantage-temperature 1.0 --baseline-json autoresearch-session/small_nlhe_baseline_hardening/rnad_learner_policy_stronger_seed1_3.json --baseline-arm rnad --output-json autoresearch-session/small_nlhe_neural_nashpg/exact_cfpg_1200_seed1_3_lr001_temp1.json` -> completed and wrote metrics.
+- Decision: Do not scale exact-CFPG to native HUNL. The next branch should target last-iterate stability without benchmark-specific knobs: faithful QFR/NashPG-style regularization, sequence-form-compatible proximal control, or a maintained regularized self-play primitive. Exact-CFPG remains useful as evidence that counterfactual advantages can find strong policies, but best-iterate strength is not enough for the goal.
+
+## 20260602T151500Z-failure-synthesis-for-exact-cfpg-last-iterate-instability - passed
+
+- Timestamp: 2026-06-02T15:15:00Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T102658Z-exact-cfpg-small-nlhe-best-iterate-passed-but
+- Hypothesis: The exact-CFPG failure synthesis should identify whether the blocker is counterfactual signal quality or last-iterate/proximal-control stability before another mechanism branch.
+- Failure class: none
+- Summary: Completed the synthesis bundle. The causal model is that exact current-policy counterfactual advantages can locate strong small-game policies, but the plain neural mirror-descent target does not preserve last-iterate stability. This agrees with the related-work split: QFR-style policy gradients support best-iterate behavior, while newer regularized alternating/NashPG-style work emphasizes last-iterate convergence through explicit regularized/proximal dynamics.
+- Artifacts:
+  - autoresearch-session/poker_reviews/20260602T102658Z-exact-cfpg-small-nlhe-best-iterate-passed-but-synthesis/synthesis.md
+  - autoresearch-session/poker_reviews/20260602T102658Z-exact-cfpg-small-nlhe-best-iterate-passed-but-synthesis/decision.json
+- Key metrics: `{"decision": "revise", "synthesis_passed": true, "exact_cfpg_mean_best_nashconv": 0.184549, "exact_cfpg_mean_last_nashconv": 0.309595, "baseline_mean_last_nashconv": 0.211838, "uses_slumbot_training_data": false}`
+- Verification:
+  - `python scripts/poker_synthesis_review.py --synthesis-dir autoresearch-session/poker_reviews/20260602T102658Z-exact-cfpg-small-nlhe-best-iterate-passed-but-synthesis --require-complete` -> passed with decision `revise`.
+- Decision: The next branch should not tune exact-CFPG temperature/learning rate. It should add one reviewed sequence-form/QFR/NashPG-style proximal-control mechanism to the exact counterfactual row builder and require last-policy exact NashConv to beat learner-source R-NaD before native scaling.
