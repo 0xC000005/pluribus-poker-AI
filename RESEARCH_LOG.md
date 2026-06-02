@@ -18286,3 +18286,34 @@
 - Summary: Gate failure-synthesis-20260602T052821Z-20k-compiled-population-gae-stochastic-actor-failed-support passed.
 - Metrics file: autoresearch-session/poker_runs/20260602T052919Z-failure-synthesis-for-20k-compiled-population-gae-stochastic/metrics.json
 - Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T052821Z-20k-compiled-population-gae-stochastic-actor-failed-support", "passed": true}`
+
+## 20260602T053550Z-compiled-replay-soft-q-actor - failed
+
+- Timestamp: 2026-06-02T05:35:50Z
+- Type: experiment
+- Gate: compiled_replay_soft_q_actor_vs_20k_support
+- Hypothesis: A replay/off-policy stochastic actor trained from compiled 20k population experience should preserve more strategic signal than small on-policy actor updates and beat the active 20k support under matched H2H.
+- Failure class: strategy_quality
+- Summary: Added `poker_ai/research/compiled_replay_soft_q_actor.py`, `scripts/run_compiled_replay_soft_q_actor.py`, and focused tests. The new learner collects compiled joint experience from the local 20k population, fits a Q network to local terminal returns, and trains a fresh stochastic actor to maximize the learned Q under legal masks. It writes native 9-action checkpoints compatible with existing H2H adapters and uses no Slumbot, AlphaNLHoldem, human, or solver-label data. The first 4096-hand support replay trained on CUDA from `24811` transitions and reached near parity versus the active 20k support, but failed the 2000-game H2H lower-bound gate: mean=+0.001049, lower95=-0.018493. Scaling the same mechanism to 16384 hands and 12000 updates stayed near parity but also failed: mean=-0.002967, lower95=-0.022009. Both policies passed the broad action-collapse gate, but probability entropy was low (`0.1843` then `0.0738`), so the mechanism is useful infrastructure and a stronger signal than the GAE actor, not a promotable stochastic equilibrium policy.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/compiled_replay_soft_q_actor_20k_support_h256_4096h_seed20260844.json
+  - autoresearch-session/native_neural_nashpg/compiled_replay_soft_q_actor_20k_support_h256_4096h_vs_support_h2h_2000_seed20260845.json
+  - autoresearch-session/native_neural_nashpg/compiled_replay_soft_q_actor_20k_support_h256_4096h_action_distribution_20k_seed20260846.json
+  - autoresearch-session/native_neural_nashpg/compiled_replay_soft_q_actor_20k_support_h256_16k_seed20260847.json
+  - autoresearch-session/native_neural_nashpg/compiled_replay_soft_q_actor_20k_support_h256_16k_vs_support_h2h_2000_seed20260848.json
+  - autoresearch-session/native_neural_nashpg/compiled_replay_soft_q_actor_20k_support_h256_16k_action_distribution_20k_seed20260849.json
+- Key metrics: `{"small_train_transitions": 24811, "small_updates_per_second": 1516.638, "small_h2h_mean": 0.001049, "small_h2h_lower95": -0.018493, "small_mean_entropy": 0.184256, "scaled_train_transitions": 99012, "scaled_updates_per_second": 1561.733, "scaled_h2h_mean": -0.002967, "scaled_h2h_lower95": -0.022009, "scaled_mean_entropy": 0.073825}`
+- Verification:
+  - `uv run pytest -q test/unit/test_compiled_replay_soft_q_actor.py test/unit/test_joint_experience.py::test_collect_compiled_joint_experience_records_next_state_contract test/unit/test_mixed_policy_h2h.py::test_load_policy_adapter_supports_native_ppo_average_policy` -> `5 passed`.
+  - `python -m py_compile poker_ai/research/compiled_replay_soft_q_actor.py scripts/run_compiled_replay_soft_q_actor.py` -> passed.
+- Decision: Keep compiled replay soft-Q as live infrastructure but do not promote these checkpoints. The next mechanism should preserve the replay/off-policy population substrate while correcting the equilibrium-policy object, for example with NFSP-style average/best-response separation or an entropy-regularized objective that keeps a genuinely stochastic policy without Slumbot-specific patches.
+## 20260602T053709Z-failure-synthesis-for-20k-compiled-replay-soft-q - passed
+
+- Timestamp: 2026-06-02T05:37:09Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T053550Z-20k-compiled-replay-soft-q-actor-near-parity
+- Hypothesis: Failure synthesis for 20k compiled replay soft-Q actor near parity but failed support gate should identify the causal model and one next falsifier before further expansion.
+- Failure class: none
+- Summary: Gate failure-synthesis-20260602T053550Z-20k-compiled-replay-soft-q-actor-near-parity passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T053709Z-failure-synthesis-for-20k-compiled-replay-soft-q/metrics.json
+- Key metrics: `{"decision": "revise", "gate": "failure-synthesis-20260602T053550Z-20k-compiled-replay-soft-q-actor-near-parity", "passed": true}`
