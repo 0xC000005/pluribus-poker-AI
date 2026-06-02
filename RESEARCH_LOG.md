@@ -18122,3 +18122,16 @@
   - autoresearch-session/poker_reviews/20260602T043900Z-stochastic-actor-learners-failed-current-online-support-bar-synthesis/synthesis.md
   - autoresearch-session/poker_reviews/20260602T043900Z-stochastic-actor-learners-failed-current-online-support-bar-synthesis/decision.json
 - Decision: add a reviewed external-local-opponent mode to the native PPO/q-lambda pilot, train one small raw-sequence q-lambda response checkpoint against `online_response_iter4_support_h256_32x2048_u4096_seed20260717.pt`, and require positive local H2H lower95 versus that support checkpoint before any further promotion.
+## 20260602T044313Z-methodology-review-for-support-conditioned-native-q-lambda - passed
+
+- Timestamp: 2026-06-02T04:43:13Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T044029Z-support-conditioned-native-q-lambda-actor-training
+- Hypothesis: Methodology review for Support-conditioned native q-lambda actor training should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: The review approved a bounded opt-in training-surface change: add local external-opponent support to the native PPO/q-lambda pilot so a fresh stochastic actor can train against the current online-response support checkpoint. The review forbids evaluator changes, Slumbot feedback, solver labels, action patches, and promotion threshold changes. The single next gate is local H2H lower95 versus the current support checkpoint.
+- Metrics file: autoresearch-session/poker_runs/20260602T044313Z-methodology-review-for-support-conditioned-native-q-lambda/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T044029Z-support-conditioned-native-q-lambda-actor-training", "passed": true}`
+- Manifest:
+  - docs/research_protocols/poker_review_manifests/20260602T044029Z-support-conditioned-native-q-lambda-actor-training.json
+- Decision: implement the opt-in support-conditioned q-lambda training mode, preserve default self-play behavior, then run one raw-sequence q-lambda response against the current support checkpoint.

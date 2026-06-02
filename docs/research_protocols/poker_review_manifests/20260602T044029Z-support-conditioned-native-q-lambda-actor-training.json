@@ -1,0 +1,54 @@
+{
+  "decision": "proceed",
+  "files": [
+    {
+      "bytes": 1444,
+      "path": "benchmark_audit.md",
+      "sha256": "5ce7febd0f69b7a4979fd0be833f45005bbfa46be48f7e863d9aa8f0f868f25e"
+    },
+    {
+      "bytes": 739,
+      "path": "decision.json",
+      "sha256": "335deab25edbe27dea1ab4a658f4f5dfdc41467a54b6a31419e47dc85387c16c"
+    },
+    {
+      "bytes": 1729,
+      "path": "mechanism_review.md",
+      "sha256": "3ecec4ad1717fadc35054be8d0443fdec22770975c1122eec774325c2dc864ed"
+    },
+    {
+      "bytes": 2982,
+      "path": "related_work.md",
+      "sha256": "cd144eea7aa0edc54859cfd0a9d231d6bc5befd1ecd189d03a4d2f3e8ddbaa3e"
+    },
+    {
+      "bytes": 1942,
+      "path": "review.md",
+      "sha256": "e86dd87873fefe66efcd6d26b6618447589cb242c68306ad9bde85472acbe897"
+    },
+    {
+      "bytes": 3242,
+      "path": "review_scope.json",
+      "sha256": "c29ae27e23e7c6283d1a496ab66e02b6ca20aabe758e1037da29e3ba65a83e3d"
+    },
+    {
+      "bytes": 396,
+      "path": "team_review.md",
+      "sha256": "3199eab7652b14f7b1e98b035d8787f8a7ff11c415b5084412d36b5a77ba620a"
+    }
+  ],
+  "reason": "Proceed with a bounded opt-in support-conditioned q-lambda actor-training mode. The change targets learner distribution, not evaluation surfaces, and the single promotion-relevant local gate is positive H2H lower95 versus the current support checkpoint.",
+  "review_dir": "autoresearch-session/poker_reviews/20260602T044029Z-support-conditioned-native-q-lambda-actor-training",
+  "review_id": "20260602T044029Z-support-conditioned-native-q-lambda-actor-training",
+  "sources": [
+    "RESEARCH_LOG.md#20260602T043951Z-failure-synthesis-for-stochastic-actor-learners-failed-current",
+    "poker_ai/research/native_ppo_policy.py",
+    "scripts/run_native_ppo_policy_pilot.py",
+    "poker_ai/research/mixed_policy_h2h.py",
+    "https://arxiv.org/abs/1603.01121",
+    "https://arxiv.org/abs/2206.15378",
+    "https://arxiv.org/abs/2502.08938",
+    "https://arxiv.org/abs/2605.19235"
+  ],
+  "written_at": "2026-06-02T04:43:08Z"
+}
