@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import pytest
 import torch
 
 
@@ -131,3 +132,46 @@ def test_local_vtrace_compiled_native_learner_supports_frozen_parent_population(
     payload = torch.load(child, map_location="cpu", weights_only=False)
     assert payload["metrics"]["population_training"] is True
     assert payload["metrics"]["opponent_population_size"] == 1
+
+
+def test_local_vtrace_compiled_native_learner_supports_rainbow_population_opponent(tmp_path):
+    pytest.importorskip("tianshou")
+
+    from scripts.run_local_vtrace_compiled_native_learner import run_learner
+    from scripts.run_tianshou_rainbow_native_control import run_control
+
+    rainbow = tmp_path / "rainbow.pt"
+    child = tmp_path / "child.pt"
+    run_control(
+        train_steps=4,
+        updates=1,
+        batch_size=4,
+        hidden_dim=16,
+        num_atoms=11,
+        warmup_steps=4,
+        eval_games=1,
+        device="cpu",
+        seed=20260563,
+        checkpoint_out=str(rainbow),
+    )
+
+    metrics = run_learner(
+        train_iterations=1,
+        games_per_iteration=4,
+        collector_batch_size=4,
+        max_steps_per_game=16,
+        hidden_dim=16,
+        seed=20260564,
+        device="cpu",
+        opponent_checkpoints=[rainbow],
+        checkpoint_out=child,
+    )
+
+    assert child.exists()
+    assert metrics["population_training"] is True
+    assert metrics["opponent_population_size"] == 1
+    assert metrics["opponent_kind"] == "tianshou-rainbow"
+    assert metrics["opponent_kinds"] == ["tianshou-rainbow"]
+    assert metrics["passed"] is True
+    payload = torch.load(child, map_location="cpu", weights_only=False)
+    assert payload["metrics"]["opponent_kinds"] == ["tianshou-rainbow"]

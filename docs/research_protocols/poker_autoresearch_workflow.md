@@ -360,9 +360,17 @@ self-play, cleared the 20k duplicate-swapped parent H2H gate
 complete 5-policy empirical game against the prior incumbent, PSRO response,
 shared-MARL 18k, and native NFSP controls. This is local population evidence
 only; Slumbot remains held out until further internal league progress is
-repeatable. The next step is a same-path N+1 fast-state self-play continuation
-that must beat this parent and remain in empirical-game support, not another
-singleton fixed-opponent response recipe.
+repeatable. Later same-budget gen2 repeats, singleton response oracles, and
+frozen-population response retries failed parent/population gates, so do not
+repeat those recipes unchanged. The next candidate must either change the
+population/objective update in a reviewed way or route a stronger learner
+through the compiled/batched rollout substrate, then pass parent H2H and
+empirical-game insertion before any Slumbot or public-reference evaluation.
+The first compiled V-trace population response using Rainbow-family opponents
+also failed the current-incumbent H2H gate (`mean=-0.040956`, lower95
+`-0.053230`), so do not scale that V-trace recipe unchanged; prefer a
+maintained/off-policy Rainbow-style learner consuming externally collected
+compiled transitions, or another reviewed game-dynamics change.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to

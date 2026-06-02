@@ -41,12 +41,72 @@ def _write_metrics(metrics: dict[str, Any], output_json: str | Path | None) -> d
     return metrics
 
 
-def _load_native_ppo_opponents(
+class _RainbowQOpponent(torch.nn.Module):
+    """Expose a Tianshou Rainbow distribution model as action-value logits."""
+
+    def __init__(self, model: torch.nn.Module, *, num_atoms: int) -> None:
+        super().__init__()
+        self.model = model
+        support = torch.linspace(-1.0, 1.0, int(num_atoms), dtype=torch.float32)
+        self.register_buffer("support", support)
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        output = self.model(features)
+        distribution = output[0] if isinstance(output, tuple) else output
+        return torch.sum(distribution * self.support.view(1, 1, -1), dim=-1)
+
+
+def _is_rainbow_payload(payload: dict[str, Any]) -> bool:
+    algorithm = str(payload.get("algorithm", ""))
+    return algorithm in {"tianshou_rainbow_dqn", "tianshou_marl_rainbow_dqn"}
+
+
+def _load_rainbow_opponent(payload: dict[str, Any], device: torch.device) -> torch.nn.Module:
+    from scripts.run_tianshou_rainbow_native_control import (  # noqa: PLC0415
+        _RainbowDistributionNet,
+        _rainbow_state_dicts_by_seat_from_payload,
+    )
+
+    if int(payload.get("num_actions", -1)) != N_ACTIONS:
+        raise ValueError("Rainbow opponent action count does not match native full-deck contract")
+    if int(payload.get("num_features", -1)) != N_FEATURES:
+        raise ValueError("Rainbow opponent feature count does not match native full-deck contract")
+    hidden_dim = int(payload.get("hidden_dim", 128))
+    num_atoms = int(payload.get("num_atoms", 51))
+    model = _RainbowDistributionNet(
+        hidden_dim=hidden_dim,
+        num_atoms=num_atoms,
+        device=device,
+    ).to(device)
+    state_dicts = _rainbow_state_dicts_by_seat_from_payload(payload)
+    model.load_state_dict(state_dicts.get(0, state_dicts[sorted(state_dicts)[0]]))
+    model.eval()
+    opponent = _RainbowQOpponent(model, num_atoms=num_atoms).to(device)
+    opponent.eval()
+    for parameter in opponent.parameters():
+        parameter.requires_grad_(False)
+    return opponent
+
+
+def _summarize_opponent_kinds(kinds: list[str]) -> str | None:
+    if not kinds:
+        return None
+    unique = sorted(set(kinds))
+    return unique[0] if len(unique) == 1 else "mixed"
+
+
+def _load_compiled_rollout_opponents(
     checkpoints: list[str | Path] | None,
     device: torch.device,
-) -> list[torch.nn.Module]:
+) -> tuple[list[torch.nn.Module], list[str]]:
     opponents: list[torch.nn.Module] = []
+    kinds: list[str] = []
     for checkpoint in checkpoints or []:
+        payload = torch.load(str(checkpoint), map_location=device, weights_only=False)
+        if _is_rainbow_payload(payload):
+            opponents.append(_load_rainbow_opponent(payload, device))
+            kinds.append("tianshou-rainbow")
+            continue
         _payload, policy, feature_mode = _load_policy_network(
             str(checkpoint),
             device,
@@ -58,7 +118,8 @@ def _load_native_ppo_opponents(
         for parameter in policy.parameters():
             parameter.requires_grad_(False)
         opponents.append(policy)
-    return opponents
+        kinds.append("native-ppo")
+    return opponents, kinds
 
 
 def _train_on_batch(
@@ -141,7 +202,10 @@ def run_learner(
     resolved_device = torch.device(device_info["resolved_device"])
     policy_net = _PolicyMLP(int(hidden_dim), input_dim=N_FEATURES).to(resolved_device)
     value_net = _ValueMLP(int(hidden_dim), input_dim=N_FEATURES).to(resolved_device)
-    opponent_policies = _load_native_ppo_opponents(opponent_checkpoints, resolved_device)
+    opponent_policies, opponent_kinds = _load_compiled_rollout_opponents(
+        opponent_checkpoints,
+        resolved_device,
+    )
     optimizer = torch.optim.Adam(
         list(policy_net.parameters()) + list(value_net.parameters()),
         lr=float(lr),
@@ -205,7 +269,8 @@ def run_learner(
         "lr": float(lr),
         "gamma": float(gamma),
         "population_training": bool(opponent_policies),
-        "opponent_kind": "native-ppo" if opponent_policies else None,
+        "opponent_kind": _summarize_opponent_kinds(opponent_kinds),
+        "opponent_kinds": list(opponent_kinds),
         "opponent_population_size": int(len(opponent_policies)),
         "opponent_checkpoints": [str(path) for path in (opponent_checkpoints or [])],
         "collector_backend": "compiled-fast-state",
@@ -257,6 +322,7 @@ def run_learner(
                     "fsp_average_policy": False,
                     "train_environment": "poker_ai:full_deck_hu_nlhe",
                     "opponent_population_size": int(len(opponent_policies)),
+                    "opponent_kinds": list(opponent_kinds),
                 },
                 "metrics": metrics,
                 "trained_environment_native": True,
