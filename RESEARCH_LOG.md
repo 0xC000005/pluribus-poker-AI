@@ -18523,3 +18523,14 @@
 - Summary: Added `scripts/analyze_small_nlhe_mmd_policy_fit.py` and a tiny OpenSpiel-skipping test. The h128 neural fit to the 200-step exact MMD policy passed decisively: target exact MMD NashConv `0.084198`, fitted neural policy NashConv `0.084179`, mean target KL `1.423e-6`, max action-probability error `0.000243`, over 48 information states. This rules out small-game neural representation capacity as the immediate bottleneck and focuses the next native work on matching the sequence-form/regularized update dynamics, not increasing model size or adding anti-collapse patches.
 - Metrics file: autoresearch-session/small_nlhe_mmd_truth_gate/mmd_policy_fit_200steps_h128_seed20260602.json
 - Key metrics: `{"policy_fit_probe_passed": true, "target_mmd_nashconv": 0.08419827983160522, "fit_policy_nashconv": 0.08417868510498469, "mean_target_kl_to_fit": 1.4234420859793318e-06}`
+
+## 20260602T063940Z-methodology-review-for-sequence-form-mmd-bridge-for - passed
+
+- Timestamp: 2026-06-02T06:39:40Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T063727Z-sequence-form-mmd-bridge-for-native-neural-self
+- Hypothesis: Methodology review for Sequence-form MMD bridge for native neural self-play should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T063727Z-sequence-form-mmd-bridge-for-native-neural-self passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T063940Z-methodology-review-for-sequence-form-mmd-bridge-for/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T063727Z-sequence-form-mmd-bridge-for-native-neural-self", "passed": true}`
