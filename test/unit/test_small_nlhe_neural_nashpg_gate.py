@@ -167,6 +167,73 @@ def test_small_nlhe_neural_nashpg_gate_rejects_full_self_play_gae():
     assert "full-self-play GAE is unsupported" in result.stderr
 
 
+def test_player_perspective_bootstrap_flips_opponent_values():
+    repo = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo / "scripts"))
+    from scripts.run_small_nlhe_neural_nashpg_gate import (
+        _player_perspective_bootstrap_targets_and_advantages,
+    )
+
+    values = torch.tensor([[0.2], [0.4], [-0.1]])
+    rewards = torch.tensor([[0.0], [0.0], [1.0]])
+    terminal_returns = torch.tensor([[1.0], [-1.0], [1.0]])
+    valid = torch.ones_like(values)
+    player_id = torch.tensor([[0.0], [1.0], [0.0]])
+
+    targets, advantages = _player_perspective_bootstrap_targets_and_advantages(
+        values=values,
+        rewards=rewards,
+        terminal_returns=terminal_returns,
+        valid=valid,
+        player_id=player_id,
+        gamma=1.0,
+        gae_lambda=1.0,
+    )
+
+    assert torch.allclose(targets.squeeze(-1), torch.tensor([1.0, -1.0, 1.0]))
+    assert torch.allclose(advantages.squeeze(-1), torch.tensor([0.8, -1.4, 1.1]))
+
+
+def test_small_nlhe_neural_nashpg_gate_supports_full_self_play_player_gae(tmp_path):
+    pytest.importorskip("pyspiel")
+    out = tmp_path / "neural_nashpg_gate_full_self_play_player_gae.json"
+    repo = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_small_nlhe_neural_nashpg_gate.py",
+            "--steps",
+            "1",
+            "--eval-every",
+            "1",
+            "--batch-size",
+            "8",
+            "--seeds",
+            "1",
+            "--layers",
+            "8",
+            "--collector-mode",
+            "full-self-play",
+            "--advantage-target",
+            "player-gae",
+            "--output-json",
+            str(out),
+        ],
+        check=False,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(out.read_text())
+
+    assert data["config"]["collector_mode"] == "full-self-play"
+    assert data["config"]["advantage_target"] == "player-gae"
+    assert data["arms"]["neural_nashpg"]["runs"][0]["loss_last"]["advantage_target"] == "player-gae"
+
+
 def test_neural_reference_pg_solver_seed_controls_torch_initialization():
     repo = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo / "scripts"))

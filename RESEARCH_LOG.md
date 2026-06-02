@@ -18731,3 +18731,18 @@
   - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py test/unit/test_small_nlhe_mmd_update_fidelity_bridge.py test/unit/test_small_nlhe.py` -> `12 passed`.
   - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
 - Decision: keep `full-self-play` collector mode as a correctness diagnostic, but do not scale the current sampled terminal/GAE PG objective. The next mechanism must change the update target itself, most likely toward player-perspective/counterfactual bootstrapping or a maintained R-NaD/NashPG-style objective, not another collector-mode or entropy run.
+
+## 20260602T083020Z-small-nlhe-player-perspective-gae - failed
+
+- Timestamp: 2026-06-02T08:30:20Z
+- Type: experiment
+- Gate: small_nlhe_player_perspective_gae_truth_gate
+- Hypothesis: If the full-self-play PG failure was caused by bootstrapping through opponent turns under the wrong value perspective, then a player-perspective GAE target that sign-flips opponent-player values and advantages in the zero-sum game should beat the terminal-return full-self-play control and the R-NaD exact-NashConv baseline.
+- Failure class: small_game_pg_control
+- Summary: Added `advantage_target=player-gae` to the small-NLHE neural PG gate. The helper computes bootstrapped targets in the acting player's value perspective: when the next valid decision belongs to the opponent, both the next value and next advantage are multiplied by `-1`; terminal/final returns remain the fallback when no next valid decision exists. Focused tests cover the sign flip exactly and a `full-self-play + player-gae` CLI smoke. The exact 3-seed gate improved slightly over full-self-play terminal returns on mean best NashConv (`0.701859` vs `0.723963`) and seed 1 reached `0.237520`, but the run still failed the R-NaD comparator (`0.664478`) and had poor last-iterate stability (`mean_last_nashconv=1.170998`). This isolates a real value-perspective bug but does not solve the small-game policy-improvement objective.
+- Metrics file: autoresearch-session/small_nlhe_neural_nashpg/neural_pg_player_gae_entropy005_full_self_play_1200_seed1_3_vs_rnad_baseline.json
+- Key metrics: `{"mean_start_nashconv": 1.719228, "player_gae_mean_best_nashconv": 0.701859, "player_gae_mean_last_nashconv": 1.170998, "terminal_full_self_play_mean_best_nashconv": 0.723963, "baseline_rnad_mean_last_nashconv": 0.664478, "candidate_truth_gate_passed": false, "uses_slumbot_training_data": false, "promotion": false}`
+- Verification:
+  - `uv run --no-project --with open-spiel pytest -q test/unit/test_small_nlhe_neural_nashpg_gate.py test/unit/test_small_nlhe_mmd_update_fidelity_bridge.py test/unit/test_small_nlhe.py` -> `14 passed`.
+  - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
+- Decision: keep `player-gae` as a correctness repair and diagnostic, but do not scale it to native HUNL. The remaining gap is not just player-perspective bootstrapping; the learner still lacks a stable counterfactual/sequence-form or regularized equilibrium objective. Next action should be synthesis or a maintained R-NaD/NashPG-style objective reproduction, not another entropy/model-size/collector sweep.

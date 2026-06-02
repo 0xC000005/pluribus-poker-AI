@@ -59,8 +59,8 @@ class NeuralReferencePGSolver:
         max_decision_weight: float = 10.0,
         collector_mode: str = "seat-aware",
     ) -> None:
-        if str(advantage_target) not in {"terminal", "gae"}:
-            raise ValueError("advantage_target must be one of: terminal, gae")
+        if str(advantage_target) not in {"terminal", "gae", "player-gae"}:
+            raise ValueError("advantage_target must be one of: terminal, gae, player-gae")
         if str(decision_weight_mode) not in {"uniform", "inverse-own-reach"}:
             raise ValueError("decision_weight_mode must be one of: uniform, inverse-own-reach")
         if not (0.0 <= float(gamma) <= 1.0):
@@ -128,10 +128,15 @@ class NeuralReferencePGSolver:
         denom = weighted_valid.sum().clamp_min(1.0)
         logp_action = (traj.action_oh * log_pi).sum(-1)
 
-        returns = traj.rewards[-1]
         player = traj.player_id.long().clamp(min=0)
+        final_returns = traj.rewards[-1]
         actor_return = torch.gather(
-            returns.unsqueeze(0).expand(traj.rewards.shape[0], -1, self.num_players),
+            final_returns.unsqueeze(0).expand(traj.rewards.shape[0], -1, self.num_players),
+            2,
+            player.unsqueeze(-1),
+        ).squeeze(-1)
+        actor_reward = torch.gather(
+            traj.rewards,
             2,
             player.unsqueeze(-1),
         ).squeeze(-1)
@@ -139,11 +144,21 @@ class NeuralReferencePGSolver:
         if self.advantage_target == "terminal":
             value_target = actor_return
             advantage = value_target - value_flat.detach()
-        else:
+        elif self.advantage_target == "gae":
             value_target, advantage = _linked_bootstrap_targets_and_advantages(
                 values=value_flat.detach(),
                 terminal_returns=actor_return,
                 valid=valid,
+                gamma=self.gamma,
+                gae_lambda=self.gae_lambda,
+            )
+        else:
+            value_target, advantage = _player_perspective_bootstrap_targets_and_advantages(
+                values=value_flat.detach(),
+                rewards=actor_reward,
+                terminal_returns=actor_return,
+                valid=valid,
+                player_id=traj.player_id,
                 gamma=self.gamma,
                 gae_lambda=self.gae_lambda,
             )
@@ -234,6 +249,55 @@ def _linked_bootstrap_targets_and_advantages(
                 delta = float(gamma) * values[next_i, batch_i] - values[time_i, batch_i]
                 advantages[time_i, batch_i] = (
                     delta + float(gamma) * float(gae_lambda) * next_advantage
+                )
+                targets[time_i, batch_i] = advantages[time_i, batch_i] + values[time_i, batch_i]
+            else:
+                advantages[time_i, batch_i] = (
+                    terminal_returns[time_i, batch_i] - values[time_i, batch_i]
+                )
+                targets[time_i, batch_i] = terminal_returns[time_i, batch_i]
+            next_advantage = advantages[time_i, batch_i]
+            next_i = time_i
+    return targets.detach(), advantages.detach()
+
+
+def _player_perspective_bootstrap_targets_and_advantages(
+    *,
+    values: torch.Tensor,
+    rewards: torch.Tensor,
+    terminal_returns: torch.Tensor,
+    valid: torch.Tensor,
+    player_id: torch.Tensor,
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute bootstrapped targets with zero-sum sign flips across player turns."""
+    if (
+        values.shape != rewards.shape
+        or values.shape != terminal_returns.shape
+        or values.shape != valid.shape
+        or values.shape != player_id.shape
+    ):
+        raise ValueError("values, rewards, terminal_returns, valid, and player_id must match")
+    targets = torch.zeros_like(terminal_returns)
+    advantages = torch.zeros_like(terminal_returns)
+    valid_bool = valid > 0
+    for batch_i in range(values.shape[1]):
+        next_i = -1
+        next_advantage = torch.zeros((), dtype=values.dtype, device=values.device)
+        for time_i in range(values.shape[0] - 1, -1, -1):
+            if not bool(valid_bool[time_i, batch_i]):
+                continue
+            if next_i >= 0:
+                same_player = bool(player_id[next_i, batch_i] == player_id[time_i, batch_i])
+                sign = 1.0 if same_player else -1.0
+                delta = (
+                    rewards[time_i, batch_i]
+                    + float(gamma) * sign * values[next_i, batch_i]
+                    - values[time_i, batch_i]
+                )
+                advantages[time_i, batch_i] = (
+                    delta + float(gamma) * float(gae_lambda) * sign * next_advantage
                 )
                 targets[time_i, batch_i] = advantages[time_i, batch_i] + values[time_i, batch_i]
             else:
@@ -380,7 +444,7 @@ def main(argv=None) -> int:
     parser.add_argument("--entropy-weight", type=float, default=0.02)
     parser.add_argument("--value-weight", type=float, default=0.5)
     parser.add_argument("--reference-update-every", type=int, default=200)
-    parser.add_argument("--advantage-target", choices=("terminal", "gae"), default="terminal")
+    parser.add_argument("--advantage-target", choices=("terminal", "gae", "player-gae"), default="terminal")
     parser.add_argument("--gamma", type=float, default=1.0)
     parser.add_argument("--gae-lambda", type=float, default=0.95)
     parser.add_argument(
