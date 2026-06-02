@@ -17769,3 +17769,26 @@
   - autoresearch-session/poker_reviews/20260602T030024Z-native-nashpg-and-exploratory-response-oracle-scaling-cycle-synthesis/synthesis.md
   - autoresearch-session/poker_reviews/20260602T030024Z-native-nashpg-and-exploratory-response-oracle-scaling-cycle-synthesis/decision.json
 - Decision: proceed with exactly one next test: replicate or strengthen exploratory joint-experience response-oracle training on an independent or larger exploratory dataset, then require positive lower95 versus Rainbow plus nonzero empirical-game support before any promotion queue. If replication fails, pivot to online exploratory response collection instead of adding more offline updates on the same replay.
+## 20260602T031115Z-exploratory-response-oracle-replication - passed
+
+- Timestamp: 2026-06-02T03:11:15Z
+- Type: exploratory_joint_experience_response_oracle_replication
+- Gate: exploratory_response_oracle_independent_larger_dataset_empirical_game_gate
+- Hypothesis: The prior 20% legal-exploration response-oracle result should replicate on a larger independent local dataset and keep positive Rainbow H2H lower bound plus nonzero empirical-game support.
+- Failure class: strategy_quality
+- Summary: Replicated the exploratory joint-experience response-oracle gate using a fresh 65,536-hand local compiled dataset under the gen3/Rainbow population. Collection and training ran on CUDA with zero Python-showdown fallback. The new oracle beat Rainbow and NFSP with positive lower bounds and kept empirical-game support, so the mechanism replicated. It lost direct H2H to gen3, so this is live population-improvement evidence, not promotion or Slumbot evidence.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/joint_response_gen3_rainbow_eps020_65536_seed20260696.json
+  - autoresearch-session/native_neural_nashpg/joint_response_rainbow_oracle_eps020_65536_h256_u4000_seed20260697.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_65536_empirical_game_oracle_gen3_rainbow_nfsp_seed20260700.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_65536_vs_rainbow_h2h_5000_fast_seed20260698.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_65536_vs_gen3_h2h_5000_fast_seed20260699.json
+  - autoresearch-session/native_neural_nashpg/joint_response_oracle_eps020_65536_vs_nfsp_h2h_5000_fast_seed20260700.json
+- Key metrics: `{"dataset_hands": 65536, "dataset_transitions": 294805, "exploration_epsilon": 0.2, "exploratory_action_fraction": 0.20048845847254965, "dataset_transitions_per_second": 140921.63768268988, "oracle_updates": 4000, "oracle_updates_per_second": 253.70866914850606, "oracle_vs_rainbow_mean": 0.02115, "oracle_vs_rainbow_lower95": 0.008752984634590627, "oracle_vs_gen3_mean": -0.0098008, "oracle_vs_gen3_lower95": -0.018065082798434863, "oracle_vs_nfsp_mean": 0.0675214, "oracle_vs_nfsp_lower95": 0.054888933764071196, "empirical_meta_strategy": [0.07706254044270033, 0.630682478954886, 0.0, 0.2922549806024136], "promotion": false}`
+- Verification:
+  - `uv run --with tianshou python scripts/build_compiled_joint_experience_dataset.py --policy native-ppo:<gen3> --policy tianshou-rainbow:<rainbow> --meta-strategy 0.25,0.75 --n-hands 65536 --batch-size 256 --max-steps-per-hand 64 --exploration-epsilon 0.20 --seed 20260696 --device auto ...` -> passed on CUDA with zero fallback.
+  - `uv run --with tianshou python scripts/train_joint_experience_response_oracle.py --dataset-npz <replication_dataset> --updates 4000 --batch-size 1024 --hidden-dim 256 --seed 20260697 --device auto ...` -> passed on CUDA.
+  - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --eval-state-backend fast-state-canonical-deal ...` -> passed for Rainbow and NFSP lower-bound gates; gen3 H2H was negative.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ...` -> solved a complete four-policy matrix with nonzero oracle support.
+- Decision: keep exploratory local response learning as the live mechanism. The next principled step is to make it iterative: train a second response against the empirical-game-supported population including gen3, Rainbow, and the replicated oracle, with local exploration and the same H2H/empirical support gates. Do not promote to Slumbot while direct gen3 H2H is negative.
