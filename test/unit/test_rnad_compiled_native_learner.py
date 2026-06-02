@@ -138,6 +138,46 @@ def test_rnad_compiled_native_learner_can_continue_from_prior_checkpoint(tmp_pat
         assert torch.equal(tensor, parent_payload["rnad_net_state_dict"][key])
 
 
+def test_rnad_compiled_native_learner_accepts_population_opponent(tmp_path):
+    from scripts.run_rnad_compiled_native_learner import run_learner
+
+    opponent = tmp_path / "rnad_opponent.pt"
+    child = tmp_path / "rnad_population_child.pt"
+
+    run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260607,
+        device="cpu",
+        checkpoint_out=opponent,
+    )
+    metrics = run_learner(
+        train_iterations=1,
+        n_games=4,
+        collector_batch_size=4,
+        max_steps_per_game=32,
+        hidden_dim=16,
+        seed=20260608,
+        device="cpu",
+        checkpoint_out=child,
+        opponent_checkpoints=[opponent],
+        opponent_kinds=["native-ppo"],
+    )
+
+    assert child.exists()
+    assert metrics["passed"] is True
+    assert metrics["train_opponent_mode"] == "population"
+    assert metrics["population_opponent_size"] == 1
+    assert metrics["population_opponent_kinds"] == ["native-ppo"]
+    assert metrics["opponent_controlled_steps"] > 0
+    assert metrics["learner_controlled_steps"] > 0
+    assert metrics["n_samples"] == metrics["learner_controlled_steps"] + metrics["opponent_controlled_steps"]
+    assert metrics["illegal_records"] == 0
+
+
 def test_rnad_compiled_native_checkpoint_h2h_self_smoke(tmp_path):
     from poker_ai.research.mixed_policy_h2h import evaluate_mixed_policy_head_to_head
     from scripts.run_rnad_compiled_native_learner import run_learner

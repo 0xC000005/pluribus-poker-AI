@@ -17612,3 +17612,24 @@
   - `uv run --with tianshou python scripts/eval_mixed_policy_h2h.py --candidate autoresearch-session/native_rnad/export_source_gen2_learner_500x512_seed20260653.pt --candidate-kind native-ppo --baseline autoresearch-session/native_rollout_substrate/fast_state_population_rainbow_h256_131k_upc16_dummy8_seed20260757.pt --baseline-kind tianshou-rainbow --n-games 2000 --device auto --seed 20260656 --eval-state-backend fast-state-canonical-deal --output-json autoresearch-session/native_rnad/export_source_gen2_learner_vs_rainbow_h2h_2000_seed20260656.json` -> passed and wrote metrics.
   - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_rnad/export_source_gen2_empirical_game_learner_gen1_nfsp_rainbow_seed20260656.json` -> solved complete four-policy matrix with pure Rainbow support.
 - Decision: do not continue parent-only native R-NaD from learner-export checkpoints unchanged. The next R-NaD-family test must introduce empirical-game/meta-policy pressure or a closer neural translation of the exact MMD/NashPG update before another same-budget continuation.
+## 20260602T021034Z-opt-in-r-nad-population-trajectory-collection-against - failed
+
+- Timestamp: 2026-06-02T02:13:57Z
+- Type: native_rnad_population_response
+- Gate: native_rnad_empirical_population_response_gate
+- Hypothesis: Opt-in R-NaD population trajectory collection against the current local empirical-game controls should give the learner policy population pressure that parent-only continuation lacks, improving H2H versus Rainbow without losing NFSP support.
+- Failure class: strategy_quality
+- Summary: Added opt-in population-opponent trajectory collection for native R-NaD and validated it on CUDA with Rainbow/NFSP/gen1 local opponents: 1.020M samples, 9.66k samples/sec, zero illegal records, and both learner/opponent-controlled steps. The resulting learner still failed strategy gates: slightly worse than gen2, positive versus NFSP, negative versus Rainbow, and the empirical game again solved to pure Rainbow support. The mechanism is useful infrastructure, but this population-response recipe is not promotable.
+- Metrics file: autoresearch-session/native_rnad/pop_response_empirical_game_pop_gen2_nfsp_rainbow_seed20260660.json
+- Training file: autoresearch-session/native_rnad/pop_response_500x512_seed20260657.json
+- H2H files:
+  - autoresearch-session/native_rnad/pop_response_learner_vs_gen2_learner_h2h_2000_seed20260658.json
+  - autoresearch-session/native_rnad/pop_response_learner_vs_nfsp_h2h_5000_seed20260659.json
+  - autoresearch-session/native_rnad/pop_response_learner_vs_rainbow_h2h_2000_seed20260660.json
+- Key metrics: `{"n_samples": 1020123, "train_seconds": 105.57458665499871, "samples_per_second": 9662.581046455838, "train_opponent_mode": "population", "population_opponent_size": 3, "learner_controlled_steps": 504536, "opponent_controlled_steps": 515587, "illegal_records": 0, "compiled_needs_python_showdown": 0, "pop_vs_gen2_mean": -0.0038019999999999994, "pop_vs_gen2_lower95": -0.01055275665641621, "pop_vs_nfsp_mean": 0.0487672, "pop_vs_nfsp_lower95": 0.03610486123662173, "pop_vs_rainbow_mean": -0.0175865, "pop_vs_rainbow_lower95": -0.028518860013503643, "pop_vs_rainbow_upper95": -0.006654139986496362, "empirical_meta_strategy": [0.0, 0.0, 0.0, 1.0], "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_rnad_compiled_native_learner.py` -> `5 passed`.
+  - `python -m py_compile poker_ai/research/native_rnad.py scripts/run_rnad_compiled_native_learner.py` -> passed.
+  - `uv run --with tianshou python scripts/run_rnad_compiled_native_learner.py --checkpoint-in autoresearch-session/native_rnad/export_source_gen2_learner_500x512_seed20260653.pt --train-iterations 500 --n-games 512 --collector-batch-size 128 --max-steps-per-game 64 --hidden-dim 128 --device auto --seed 20260657 --opponent-checkpoint <rainbow> --opponent-kind tianshou-rainbow --opponent-checkpoint <nfsp> --opponent-kind native-nfsp --opponent-checkpoint <gen1> --opponent-kind native-ppo ...` -> passed and wrote CUDA population metrics.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_rnad/pop_response_empirical_game_pop_gen2_nfsp_rainbow_seed20260660.json` -> solved complete four-policy matrix with pure Rainbow support.
+- Decision: keep population-opponent R-NaD collection as tested infrastructure, but do not repeat this direct response recipe unchanged. Synthesis is due after this fifth post-synthesis experiment; the next cycle must first update the causal model and choose one next test.

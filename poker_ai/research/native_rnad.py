@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import torch
@@ -47,6 +47,26 @@ def _sample_actions(policy: np.ndarray, rng) -> np.ndarray:
     return (draws < cdf).argmax(axis=1).astype(np.int16, copy=False)
 
 
+def _adapter_policy_batch(
+    adapter: Any,
+    features: np.ndarray,
+    legal: np.ndarray,
+    *,
+    device: torch.device,
+) -> np.ndarray:
+    rows: list[np.ndarray] = []
+    for row_i in range(int(features.shape[0])):
+        rows.append(
+            np.asarray(
+                adapter.probs(features[row_i], legal[row_i], device),
+                dtype=np.float32,
+            )
+        )
+    if not rows:
+        return np.zeros((0, int(legal.shape[1])), dtype=np.float32)
+    return np.stack(rows, axis=0).astype(np.float32, copy=False)
+
+
 @dataclass
 class CompiledNativeRNaDCollector:
     """R-NaD collector for local full-deck heads-up no-limit trajectories."""
@@ -59,6 +79,8 @@ class CompiledNativeRNaDCollector:
     n_actions: int = N_ACTIONS
     n_players: int = 2
     obs_dim: int = N_FEATURES
+    opponent_policies: list[Any] | None = None
+    opponent_device: torch.device | str | None = None
     last_metrics: dict[str, Any] = field(default_factory=dict)
 
     def collect(self, policy_fn, batch_size: int, trajectory_max: int, rng) -> Trajectory:
@@ -71,6 +93,10 @@ class CompiledNativeRNaDCollector:
             raise ValueError("trajectory_max must be positive")
         batch_size_for_inference = max(1, int(self.collector_batch_size))
         seed = int(self.seed) + int(rng.randint(0, 2**30 - 1))
+        opponents = list(self.opponent_policies or [])
+        use_population = len(opponents) > 0
+        opponent_device = torch.device(self.opponent_device or self.device)
+        learner_seats = np.arange(n_games, dtype=np.int32) % int(self.n_players)
         states = [
             _new_seeded_fast_state(seed, game_i, int(self.initial_chips))
             for game_i in range(n_games)
@@ -79,6 +105,10 @@ class CompiledNativeRNaDCollector:
         steps_per_game = np.zeros(n_games, dtype=np.int32)
         records: list[tuple[int, int, int, np.ndarray, np.ndarray, int, np.ndarray]] = []
         forward_calls = 0
+        learner_forward_calls = 0
+        opponent_forward_calls = 0
+        learner_controlled_steps = 0
+        opponent_controlled_steps = 0
         needs_python_showdown = 0
         started = time.perf_counter()
 
@@ -97,26 +127,51 @@ class CompiledNativeRNaDCollector:
             action_array = np.full(n_games, -1, dtype=np.int16)
             for start in range(0, len(live_indices), batch_size_for_inference):
                 group = live_indices[start : start + batch_size_for_inference]
-                features = all_features[group].astype(np.float32, copy=False)
-                legal = all_masks[group].astype(np.float32, copy=False)
-                policy = _normalize_legal_policy(policy_fn(features, legal), legal)
-                actions = _sample_actions(policy, rng)
-                forward_calls += 1
-                for row_i, game_i in enumerate(group):
-                    action_idx = int(actions[row_i])
-                    action_array[int(game_i)] = action_idx
-                    records.append(
-                        (
-                            int(game_i),
-                            int(steps_per_game[int(game_i)]),
-                            int(current_players[int(game_i)]),
-                            features[row_i].astype(np.float32, copy=False),
-                            legal[row_i].astype(np.float32, copy=False),
-                            action_idx,
-                            policy[row_i].astype(np.float32, copy=False),
+                grouped_indices: dict[int, list[int]] = {}
+                for game_i in group:
+                    player_i = int(current_players[int(game_i)])
+                    if use_population and player_i != int(learner_seats[int(game_i)]):
+                        key = int(game_i) % len(opponents)
+                    else:
+                        key = -1
+                    grouped_indices.setdefault(key, []).append(int(game_i))
+
+                for key, sub_group in grouped_indices.items():
+                    features = all_features[sub_group].astype(np.float32, copy=False)
+                    legal = all_masks[sub_group].astype(np.float32, copy=False)
+                    if key == -1:
+                        raw_policy = policy_fn(features, legal)
+                        learner_forward_calls += 1
+                    else:
+                        raw_policy = _adapter_policy_batch(
+                            opponents[int(key)],
+                            features,
+                            legal,
+                            device=opponent_device,
                         )
-                    )
-                    steps_per_game[int(game_i)] += 1
+                        opponent_forward_calls += 1
+                    policy = _normalize_legal_policy(raw_policy, legal)
+                    actions = _sample_actions(policy, rng)
+                    forward_calls += 1
+                    for row_i, game_i in enumerate(sub_group):
+                        action_idx = int(actions[row_i])
+                        action_array[int(game_i)] = action_idx
+                        if key == -1:
+                            learner_controlled_steps += 1
+                        else:
+                            opponent_controlled_steps += 1
+                        records.append(
+                            (
+                                int(game_i),
+                                int(steps_per_game[int(game_i)]),
+                                int(current_players[int(game_i)]),
+                                features[row_i].astype(np.float32, copy=False),
+                                legal[row_i].astype(np.float32, copy=False),
+                                action_idx,
+                                policy[row_i].astype(np.float32, copy=False),
+                            )
+                        )
+                        steps_per_game[int(game_i)] += 1
             result = compiled_apply_actions(compiled, action_array)
             needs_python_showdown += int(result["needs_python_showdown"])
 
@@ -143,7 +198,13 @@ class CompiledNativeRNaDCollector:
             "seconds": float(seconds),
             "steps_per_second": float(len(records) / max(seconds, 1e-12)),
             "policy_forward_calls": int(forward_calls),
+            "learner_policy_forward_calls": int(learner_forward_calls),
+            "opponent_policy_forward_calls": int(opponent_forward_calls),
             "mean_decisions_per_forward": float(len(records) / max(forward_calls, 1)),
+            "learner_controlled_steps": int(learner_controlled_steps),
+            "opponent_controlled_steps": int(opponent_controlled_steps),
+            "population_opponent_size": int(len(opponents)),
+            "train_opponent_mode": "population" if use_population else "self_play",
             "truncated_games": int(truncated_games),
             "needs_python_showdown": int(needs_python_showdown),
             "illegal_records": int(illegal_records),
@@ -446,6 +507,8 @@ def run_compiled_native_rnad_learner(
     checkpoint_out: str | Path | None = None,
     learner_checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
+    opponent_checkpoints: Sequence[str | Path] | None = None,
+    opponent_kinds: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Train and optionally export a native-policy-compatible R-NaD checkpoint."""
     requested_device = str(device).strip().lower()
@@ -462,11 +525,28 @@ def run_compiled_native_rnad_learner(
 
     np.random.seed(int(seed))
     torch.manual_seed(int(seed))
+    opponent_paths = [str(path) for path in (opponent_checkpoints or [])]
+    opponent_kind_values = [str(kind) for kind in (opponent_kinds or [])]
+    if opponent_paths and not opponent_kind_values:
+        opponent_kind_values = ["native-ppo"] * len(opponent_paths)
+    if len(opponent_paths) != len(opponent_kind_values):
+        raise ValueError("opponent_checkpoints and opponent_kinds must have the same length")
+    opponent_policies: list[Any] = []
+    if opponent_paths:
+        from poker_ai.research.mixed_policy_h2h import load_policy_adapter  # noqa: PLC0415
+
+        opponent_device = torch.device(resolved_device)
+        opponent_policies = [
+            load_policy_adapter(path, kind=kind, device=opponent_device)
+            for path, kind in zip(opponent_paths, opponent_kind_values)
+        ]
     collector = CompiledNativeRNaDCollector(
         collector_batch_size=int(collector_batch_size),
         initial_chips=int(initial_chips),
         seed=int(seed),
         device="cpu",
+        opponent_policies=opponent_policies,
+        opponent_device=torch.device(resolved_device),
     )
     config = RNaDConfig(
         trajectory_max=int(max_steps_per_game),
@@ -527,6 +607,18 @@ def run_compiled_native_rnad_learner(
     total_samples = int(sum(int(m.get("steps", 0)) for m in collector_metrics))
     compiled_showdown = int(sum(int(m.get("needs_python_showdown", 0)) for m in collector_metrics))
     illegal_records = int(sum(int(m.get("illegal_records", 0)) for m in collector_metrics))
+    learner_controlled_steps = int(
+        sum(int(m.get("learner_controlled_steps", 0)) for m in collector_metrics)
+    )
+    opponent_controlled_steps = int(
+        sum(int(m.get("opponent_controlled_steps", 0)) for m in collector_metrics)
+    )
+    learner_forward_calls = int(
+        sum(int(m.get("learner_policy_forward_calls", 0)) for m in collector_metrics)
+    )
+    opponent_forward_calls = int(
+        sum(int(m.get("opponent_policy_forward_calls", 0)) for m in collector_metrics)
+    )
     finite_loss = bool(losses and np.all(np.isfinite(losses)))
     metrics: dict[str, Any] = {
         "algorithm": "rnad_compiled_native",
@@ -562,6 +654,14 @@ def run_compiled_native_rnad_learner(
         "n_trajectories": int(n_games) * int(train_iterations),
         "train_seconds": float(seconds),
         "samples_per_second": float(total_samples / max(seconds, 1e-12)),
+        "train_opponent_mode": "population" if opponent_policies else "self_play",
+        "population_opponent_size": int(len(opponent_policies)),
+        "population_opponent_checkpoints": opponent_paths,
+        "population_opponent_kinds": opponent_kind_values,
+        "learner_controlled_steps": learner_controlled_steps,
+        "opponent_controlled_steps": opponent_controlled_steps,
+        "learner_policy_forward_calls": learner_forward_calls,
+        "opponent_policy_forward_calls": opponent_forward_calls,
         "trained_environment_native": True,
         "native_action_projection": False,
         "rlcard_candidate": False,

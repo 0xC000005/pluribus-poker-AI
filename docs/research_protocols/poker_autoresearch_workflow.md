@@ -425,6 +425,15 @@ pure Rainbow support. Parent-only native R-NaD continuation is therefore retired
 unchanged; future R-NaD-family work must add empirical-game/meta-policy pressure
 or a closer neural translation of the exact MMD/NashPG update before another
 same-budget continuation.
+The first opt-in population-opponent collector did add that pressure
+mechanically: saved Rainbow, NFSP, and gen1 policies controlled the non-learner
+seat while R-NaD recorded the actual behavior policy. It trained cleanly on CUDA
+(`1.020M` samples, `9662.58` samples/sec, zero illegal records, nonzero
+opponent-controlled steps), but the exported learner was slightly worse than
+gen2, remained positive versus NFSP, still lost to Rainbow (`mean=-0.017587`,
+upper95 `-0.006654`), and the empirical game again solved to pure Rainbow
+support. Keep population-opponent collection as infrastructure and evidence;
+do not repeat the same direct response recipe unchanged.
 
 Algorithmic solver-update changes are allowed only as opt-in diagnostics until
 they beat the fixed baseline gate. Use `scripts/eval_solver_update_gate.py` to

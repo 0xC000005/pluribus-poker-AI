@@ -7,7 +7,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +41,8 @@ def run_learner(
     checkpoint_out: str | Path | None = None,
     learner_checkpoint_out: str | Path | None = None,
     parent_checkpoint_out: str | Path | None = None,
+    opponent_checkpoints: Sequence[str | Path] | None = None,
+    opponent_kinds: Sequence[str] | None = None,
     output_json: str | Path | None = None,
 ) -> dict[str, Any]:
     metrics = run_compiled_native_rnad_learner(
@@ -58,6 +60,8 @@ def run_learner(
         checkpoint_out=checkpoint_out,
         learner_checkpoint_out=learner_checkpoint_out,
         parent_checkpoint_out=parent_checkpoint_out,
+        opponent_checkpoints=opponent_checkpoints,
+        opponent_kinds=opponent_kinds,
     )
     return _write_metrics(metrics, Path(output_json) if output_json is not None else None)
 
@@ -78,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--checkpoint-out", type=Path)
     parser.add_argument("--learner-checkpoint-out", type=Path)
     parser.add_argument("--parent-checkpoint-out", type=Path)
+    parser.add_argument("--opponent-checkpoint", type=Path, action="append", default=[])
+    parser.add_argument("--opponent-kind", action="append", default=[])
     parser.add_argument("--output-json", type=Path)
     args = parser.parse_args(argv)
     metrics = run_learner(
@@ -95,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_out=args.checkpoint_out,
         learner_checkpoint_out=args.learner_checkpoint_out,
         parent_checkpoint_out=args.parent_checkpoint_out,
+        opponent_checkpoints=args.opponent_checkpoint,
+        opponent_kinds=args.opponent_kind,
         output_json=args.output_json,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))
