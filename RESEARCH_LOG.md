@@ -18446,3 +18446,14 @@
 - Summary: The iteration-2 local lead loaded through `play_slumbot.py --model-kind tianshou-rainbow --no-solver`, but the held-out Slumbot API refused the first `new_hand` connection, so this produced zero Slumbot hands and no Slumbot strength evidence. The controlled local substitute passed: 2,000 duplicate-swapped native 9-action fast-state games versus the previous 20k support, mean=+0.031932, lower95=+0.015432, upper95=+0.048433, CUDA evaluation at 263.86 games/sec, uses_slumbot_training_data=false. This keeps iteration 2 as the local lead and does not change the next research branch: avoid another same-recipe response retry and use a reviewed expansion-quality selector or principled population-learning mechanism.
 - Metrics file: autoresearch-session/native_neural_nashpg/global_psro_iter2_vs_prev_support_local_substitute_h2h_2000_seed20260873.json
 - Key metrics: `{"slumbot_hands": 0, "slumbot_available": false, "local_substitute_passed": true, "mean_candidate_payoff": 0.031932375, "lower95_candidate_payoff": 0.015431997638283061}`
+
+## 20260602T061940Z-methodology-review-for-expansion-quality-selector-for-native - passed
+
+- Timestamp: 2026-06-02T06:19:41Z
+- Type: methodology_review
+- Gate: methodology-review-20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning
+- Hypothesis: Methodology review for Expansion-quality selector for native PSRO population learning should verify the claim and include related work before the next research action.
+- Failure class: none
+- Summary: Gate methodology-review-20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning passed.
+- Metrics file: autoresearch-session/poker_runs/20260602T061940Z-methodology-review-for-expansion-quality-selector-for-native/metrics.json
+- Key metrics: `{"decision": "proceed", "gate": "methodology-review-20260602T061701Z-expansion-quality-selector-for-native-psro-population-learning", "passed": true}`
