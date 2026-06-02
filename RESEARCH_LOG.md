@@ -18850,3 +18850,29 @@
   - Action distribution command above -> passed.
   - Population-vs-fresh H2H command above -> passed, candidate was neutral/slightly negative.
 - Decision: frozen-incumbent opponent pressure alone is not enough at this budget. Do not run Slumbot. Continue within the same tabula-rasa PPO-inner NashPG direction by scaling the mechanism or adding a more principled empirical-game/population objective; require positive parent/control H2H lower bounds and empirical-game support before promotion.
+
+## 20260602T095000Z-native-ppo-inner-nashpg-64x2048-local-incumbent - passed
+
+- Timestamp: 2026-06-02T09:50:00Z
+- Type: experiment
+- Gate: native_ppo_inner_nashpg_scaled_local_league
+- Hypothesis: The native 8x2048 PPO-inner NashPG failures may reflect too little local self-play/update compute rather than a broken mechanism, because the small-game pass used 1200 policy updates. Scaling the same fixed PPO-inner mechanism from 8 to 64 native iterations should improve generation strength without introducing new knobs or Slumbot data.
+- Failure class: none
+- Summary: Trained a fresh 64x2048 native PPO-inner NashPG candidate with the same PPO/GAE/reference settings used in the 8x runs. Training stayed CUDA-backed and fast (`450756` samples, `22309.901` samples/sec, zero illegal probability, zero Python showdown fallback). The candidate passed local strength gates: 5k H2H versus the previous Rainbow incumbent had mean payoff `+0.016959`, lower95 `+0.006436`; 2k H2H versus the 8x PPO-inner generation had mean `+0.039567`, lower95 `+0.020312`; 3k H2H versus saved native NFSP had mean `+0.044395`, lower95 `+0.027322`. Action distribution stayed legal and broad (`9` distinct actions, top-action fraction `0.292553`, mean entropy `1.535650`). A complete 4-policy empirical game over the 64x candidate, 8x candidate, previous Rainbow incumbent, and NFSP solved to pure support on the 64x candidate.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_seed20260687.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_vs_incumbent_h2h_5k_seed20260690.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_vs_8x2048_h2h_2k_seed20260689.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_vs_nfsp_h2h_3k_seed20260691.json
+  - autoresearch-session/native_neural_nashpg/incumbent_vs_nfsp_h2h_3k_seed20260692.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_8x2048_vs_nfsp_h2h_3k_seed20260693.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_action_distribution_seed20260687.json
+  - autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_empirical_game_4policy_complete_seed20260690_93.json
+- Key metrics: `{"train_samples": 450756, "samples_per_second": 22309.901, "h2h_vs_rainbow_5k_mean": 0.016959, "h2h_vs_rainbow_5k_lower95": 0.006436, "h2h_vs_8x_2k_mean": 0.039567, "h2h_vs_8x_2k_lower95": 0.020312, "h2h_vs_nfsp_3k_mean": 0.044395, "h2h_vs_nfsp_3k_lower95": 0.027322, "empirical_game_support": [1.0, 0.0, 0.0, 0.0], "action_gate_passed": true, "promotion": false, "uses_slumbot_training_data": false}`
+- Verification:
+  - Scaled native training command above -> passed and wrote checkpoint/metrics.
+  - 5k incumbent H2H command above -> passed with positive lower95.
+  - 2k 64x-vs-8x H2H command above -> passed with positive lower95.
+  - 3k NFSP H2H command above -> passed with positive lower95.
+  - Complete 4-policy empirical-game command above -> solved with row/column support `[1.0, 0.0, 0.0, 0.0]`.
+- Decision: promote `autoresearch-session/native_neural_nashpg/native_ppo_inner_nashpg_64x2048_seed20260687.pt` to the current local incumbent for native 9-action self-play gates. This is not Slumbot/RLCard/SOTA evidence. The next cycle should test continuation or population robustness from this incumbent and keep external evaluation blocked until those gates stay positive.

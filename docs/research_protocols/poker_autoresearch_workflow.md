@@ -452,6 +452,16 @@ the fresh PPO-inner run (`mean=-0.003662`, lower95 `-0.010685`). This is not
 population strength. Slumbot remains blocked; the next native step should scale
 the same PPO-inner mechanism or add a more principled empirical-game/population
 objective and then re-test parent/control H2H plus empirical-game support.
+Scaling the fixed PPO-inner mechanism from 8 to 64 native iterations was the
+first successful native transfer gate: the 64x2048 candidate beat the previous
+Rainbow incumbent at 5k H2H (`mean=+0.016959`, lower95 `+0.006436`), beat the
+8x PPO-inner generation at 2k (`mean=+0.039567`, lower95 `+0.020312`), beat the
+saved native NFSP control at 3k (`mean=+0.044395`, lower95 `+0.027322`), passed
+action-distribution sanity, and solved a complete 4-policy empirical game to
+pure candidate support. This advances the local incumbent, but still does not
+authorize Slumbot or RLCard claims; the next cycle must test generation-to-
+generation continuation/population robustness and only then consider external
+held-out evaluation gates.
 The post-MMD native translation synthesis therefore sets the next single test:
 build a neural MMD/NashPG-style exact small-NLHE truth gate with NashConv and
 compare it against the existing small-game R-NaD/PPO baselines before scaling
