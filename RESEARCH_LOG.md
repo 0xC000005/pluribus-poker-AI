@@ -17661,3 +17661,32 @@
   - `python -m py_compile scripts/run_small_nlhe_neural_nashpg_gate.py` -> passed.
   - `uv run --with open-spiel python scripts/run_small_nlhe_neural_nashpg_gate.py --steps 1200 --eval-every 400 --batch-size 256 --seeds 1,2,3 --layers 128 128 --lr 0.005 --reference-kl-weight 0.05 --entropy-weight 0.02 --value-weight 0.5 --reference-update-every 200 --baseline-json autoresearch-session/small_nlhe_baseline_hardening/post_compiled_response_synthesis_stronger_seed1_3.json --baseline-arm rnad --output-json autoresearch-session/small_nlhe_neural_nashpg/neural_nashpg_1200_seed1_3_vs_rnad_baseline.json` -> passed and wrote exact NashConv metrics.
 - Decision: proceed to native translation of this neural reference-regularized update family. Do not claim SOTA or Slumbot readiness; exact small-game pass only authorizes a native 9-action implementation with parent/population H2H and empirical-game gates.
+## 20260602T024236Z-native-neural-nashpg-translation-and-population-gates - failed
+
+- Timestamp: 2026-06-02T02:42:36Z
+- Type: native_neural_nashpg_translation
+- Gate: native_neural_nashpg_parent_population_empirical_game_gate
+- Hypothesis: Translating the passed neural NashPG/MMD-style small-game update into compiled native 9-action self-play, then training population generations against local learned controls, should produce generation-over-generation improvement and earn empirical-game support before any Slumbot evaluation.
+- Failure class: strategy_quality
+- Summary: Added a native compiled neural NashPG/MMD-style learner that trains fresh stochastic policy/value networks from local full-deck self-play with terminal-return policy gradient, learned value baseline, entropy, and reference-policy KL. The learner is mechanically valid and CUDA-backed. A fresh 32x4096 run beat NFSP but lost Rainbow. A population child improved over the fresh parent and narrowed the Rainbow gap. Gen3 confirmed real generation-over-generation improvement in a 10k parent H2H gate, but still lost to Rainbow in a 10k confidence gate; empirical-game support remains pure Rainbow. This is meaningful native self-play progress but not promotion.
+- Metrics files:
+  - autoresearch-session/native_neural_nashpg/native_nashpg_fresh_h256_32x4096_seed20260666.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_pop_child_h256_32x4096_seed20260669.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gen3_pop_h256_64x4096_seed20260673.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_empirical_game_gen3_child_nfsp_rainbow_confidence_seed20260678.json
+- H2H files:
+  - autoresearch-session/native_neural_nashpg/native_nashpg_fresh_vs_nfsp_h2h_2000_seed20260667.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_fresh_vs_rainbow_h2h_2000_seed20260668.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_pop_child_vs_parent_h2h_2000_seed20260670.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_pop_child_vs_nfsp_h2h_2000_seed20260671.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_pop_child_vs_rainbow_h2h_2000_seed20260672.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gen3_vs_child_h2h_10000_seed20260678.json
+  - autoresearch-session/native_neural_nashpg/native_nashpg_gen3_vs_rainbow_h2h_10000_seed20260677.json
+- Key metrics: `{"fresh_samples": 472334, "fresh_samples_per_second": 52641.11382474738, "fresh_vs_nfsp_mean": 0.0260645, "fresh_vs_nfsp_lower95": 0.0062279, "fresh_vs_rainbow_mean": -0.0331, "fresh_vs_rainbow_lower95": -0.0466249, "child_samples": 269810, "child_vs_parent_mean": 0.028471, "child_vs_parent_lower95": 0.0160788, "child_vs_rainbow_mean": -0.005122, "child_vs_rainbow_lower95": -0.0110469, "gen3_samples": 584296, "gen3_vs_child_10k_mean": 0.0035669, "gen3_vs_child_10k_lower95": 0.00119984, "gen3_vs_rainbow_10k_mean": -0.0025843, "gen3_vs_rainbow_10k_upper95": -0.00112337, "empirical_meta_strategy": [0.0, 0.0, 0.0, 1.0], "promotion": false}`
+- Verification:
+  - `uv run pytest -q test/unit/test_native_neural_nashpg_compiled_learner.py` -> `3 passed`.
+  - `python -m py_compile scripts/run_native_neural_nashpg_compiled_learner.py` -> passed.
+  - `python scripts/run_native_neural_nashpg_compiled_learner.py --train-iterations 32 --games-per-iteration 4096 --collector-batch-size 256 --max-steps-per-game 64 --hidden-dim 256 --device auto --seed 20260666 ...` -> passed on CUDA with zero illegal actions and zero Python-showdown fallback.
+  - `uv run --with tianshou python scripts/run_native_neural_nashpg_compiled_learner.py --checkpoint-in <child> --reference-policy-checkpoint <child> --opponent-checkpoint <child> --opponent-checkpoint <fresh> --opponent-checkpoint <nfsp> --opponent-checkpoint <rainbow> --train-iterations 64 --games-per-iteration 4096 ...` -> passed on CUDA with zero illegal actions and zero Python-showdown fallback.
+  - `uv run --with nashpy python scripts/analyze_poker_empirical_game.py --solve-meta-strategy ... --output-json autoresearch-session/native_neural_nashpg/native_nashpg_empirical_game_gen3_child_nfsp_rainbow_confidence_seed20260678.json` -> solved complete four-policy matrix with pure Rainbow support.
+- Decision: keep the native NashPG/MMD learner as the new lead infrastructure because it produced verified parent improvement and nearly reached Rainbow, but do not promote it or run Slumbot. The immediate next test should change the update quality rather than repeat identical generations: either add a bootstrapped/GAE critic target to reduce terminal-return credit-assignment noise, or train a larger same-method generation only if paired with the same parent/Rainbow confidence gates and empirical-game support.
