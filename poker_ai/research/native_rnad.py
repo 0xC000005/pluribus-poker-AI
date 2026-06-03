@@ -651,6 +651,7 @@ def run_compiled_native_rnad_learner(
     entropy_reset_repeats: Sequence[int] | None = None,
     cix_eta: float = 0.0,
     substrate: str = "cpu",
+    clip_gradient: float = 10_000.0,
 ) -> dict[str, Any]:
     """Train and optionally export a native-policy-compatible R-NaD checkpoint.
 
@@ -736,6 +737,7 @@ def run_compiled_native_rnad_learner(
         entropy_schedule_size=_sched_sizes,
         entropy_schedule_repeats=_sched_repeats,
         cix_eta=float(cix_eta),
+        clip_gradient=float(clip_gradient),
         seed=int(seed),
     )
     solver = RNaDSolver(config, collector, device=resolved_device)
