@@ -647,6 +647,9 @@ def run_compiled_native_rnad_learner(
     opponent_checkpoints: Sequence[str | Path] | None = None,
     opponent_kinds: Sequence[str] | None = None,
     opponent_meta_strategy: Sequence[float] | None = None,
+    entropy_reset_sizes: Sequence[int] | None = None,
+    entropy_reset_repeats: Sequence[int] | None = None,
+    cix_eta: float = 0.0,
 ) -> dict[str, Any]:
     """Train and optionally export a native-policy-compatible R-NaD checkpoint."""
     requested_device = str(device).strip().lower()
@@ -693,14 +696,24 @@ def run_compiled_native_rnad_learner(
         opponent_meta_strategy=opponent_probs.tolist() if opponent_policies else None,
         opponent_device=torch.device(resolved_device),
     )
+    if entropy_reset_sizes:
+        _sched_sizes = tuple(int(x) for x in entropy_reset_sizes)
+        _sched_repeats = (
+            tuple(int(x) for x in entropy_reset_repeats)
+            if entropy_reset_repeats
+            else tuple(1 for _ in _sched_sizes)
+        )
+    else:
+        _sched_sizes, _sched_repeats = (max(1, int(train_iterations)),), (1,)
     config = RNaDConfig(
         trajectory_max=int(max_steps_per_game),
         batch_size=int(n_games),
         policy_network_layers=(int(hidden_dim), int(hidden_dim)),
         learning_rate=float(lr),
         target_network_avg=float(target_network_avg),
-        entropy_schedule_size=(max(1, int(train_iterations)),),
-        entropy_schedule_repeats=(1,),
+        entropy_schedule_size=_sched_sizes,
+        entropy_schedule_repeats=_sched_repeats,
+        cix_eta=float(cix_eta),
         seed=int(seed),
     )
     solver = RNaDSolver(config, collector, device=resolved_device)

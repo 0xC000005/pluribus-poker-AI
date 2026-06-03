@@ -112,13 +112,18 @@ def v_trace(
     lambda_: float,
     c: float,
     rho: float,
+    cix_eta: float = 0.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Custom V-trace for mixed-player trajectories. Mirrors v_trace (rnad.py:397)."""
+    """Custom V-trace for mixed-player trajectories. Mirrors v_trace (rnad.py:397).
+
+    cix_eta caps NeuRD's inverse-behavior importance weight 1/mu(a) -> 1/(mu(a)+cix_eta)
+    (Capped Implicit Exploration, Morrill et al. 2206.02036). cix_eta=0 -> exact NeuRD.
+    """
     gamma = 1.0
     hp = has_played(valid, player_id, player)  # [T, B]
 
     pr = policy_ratio(merged_policy, acting_policy, actions_oh, valid)   # [T, B]
-    inv_mu = policy_ratio(torch.ones_like(merged_policy), acting_policy, actions_oh, valid)  # [T, B]
+    inv_mu = policy_ratio(torch.ones_like(merged_policy), acting_policy + cix_eta * actions_oh, actions_oh, valid)  # [T, B]  CIX: 1/(mu+cix_eta) on chosen action (cix_eta=0 -> exact 1/mu)
 
     # eta_reg_entropy: [T, B]   (rnad.py:423-425)
     eta_reg_entropy = (-eta
@@ -341,6 +346,7 @@ def compute_rnad_loss(
     c_vtrace: float,
     nerd_clip: float,
     nerd_beta: float,
+    cix_eta: float = 0.0,
 ) -> torch.Tensor:
     """Total R-NaD loss = loss_v + loss_nerd. Mirrors RNaDSolver.loss (rnad.py:792).
 
@@ -361,7 +367,7 @@ def compute_rnad_loss(
         v_target_, hp, policy_target_ = v_trace(
             v_target, valid, player_id, acting_policy, pi, log_policy_reg,
             player_others(player_id, valid, player), action_oh, reward_p, player,
-            eta=eta, lambda_=1.0, c=c_vtrace, rho=float("inf"),
+            eta=eta, lambda_=1.0, c=c_vtrace, rho=float("inf"), cix_eta=cix_eta,
         )
         v_target_list.append(v_target_)
         has_played_list.append(hp)

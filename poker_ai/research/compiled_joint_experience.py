@@ -47,6 +47,34 @@ class _RainbowQPolicy(torch.nn.Module):
         return torch.sum(distribution * self.support.view(1, 1, -1), dim=-1)
 
 
+class _RouterActionScorePolicy(torch.nn.Module):
+    """Route each observation to one member policy and return its action scores."""
+
+    def __init__(self, router: torch.nn.Module, members: Sequence[CompiledJointPolicy]) -> None:
+        super().__init__()
+        if not members:
+            raise ValueError("compiled policy-router requires at least one member policy")
+        self.router = router
+        self.members = torch.nn.ModuleList([member.module for member in members])
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        router_scores = self.router(features)
+        if router_scores.ndim != 2 or router_scores.shape[1] != len(self.members):
+            raise ValueError("policy-router must return shape (batch, n_members)")
+        selected = torch.argmax(router_scores, dim=1)
+        routed_scores = features.new_empty((features.shape[0], N_ACTIONS))
+        for member_i, member in enumerate(self.members):
+            rows = selected == int(member_i)
+            if not bool(torch.any(rows)):
+                continue
+            output = member(features[rows])
+            scores = output[0] if isinstance(output, tuple) else output
+            if scores.ndim != 2 or scores.shape[1] != N_ACTIONS:
+                raise ValueError("policy-router member must return shape (batch, N_ACTIONS)")
+            routed_scores[rows] = scores
+        return routed_scores
+
+
 def _as_device(device: str | torch.device) -> tuple[torch.device, dict[str, Any]]:
     if isinstance(device, torch.device):
         return device, {
@@ -353,5 +381,27 @@ def load_compiled_joint_policy(
             checkpoint_path=str(checkpoint),
             algorithm=str(payload.get("algorithm", "native_nfsp")),
             module=avg_net.to(resolved_device),
+        )
+    if normalized_kind in {"policy-router", "policy_router"}:
+        from poker_ai.research.policy_router import load_policy_router_checkpoint  # noqa: PLC0415
+
+        payload, router = load_policy_router_checkpoint(checkpoint, device=resolved_device)
+        member_kinds = [str(value) for value in payload.get("member_policy_kinds", [])]
+        member_checkpoints = [str(value) for value in payload.get("member_checkpoints", [])]
+        if len(member_kinds) != len(member_checkpoints) or not member_kinds:
+            raise ValueError("policy-router checkpoint has invalid member policy metadata")
+        normalized_member_kinds = {str(kind_i).strip().lower().replace("_", "-") for kind_i in member_kinds}
+        if "policy-router" in normalized_member_kinds:
+            raise ValueError("policy-router members may not themselves be policy-router checkpoints")
+        members = [
+            load_compiled_joint_policy(member_checkpoint, kind=member_kind, device=resolved_device)
+            for member_kind, member_checkpoint in zip(member_kinds, member_checkpoints, strict=True)
+        ]
+        module = _RouterActionScorePolicy(router, members).to(resolved_device)
+        return CompiledJointPolicy(
+            kind="policy-router",
+            checkpoint_path=str(checkpoint),
+            algorithm=str(payload.get("algorithm", "policy_population_router")),
+            module=module,
         )
     raise ValueError(f"unsupported compiled joint policy kind: {kind}")

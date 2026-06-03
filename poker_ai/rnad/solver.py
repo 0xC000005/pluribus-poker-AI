@@ -36,6 +36,7 @@ class RNaDConfig:
     nerd_beta: float = 2.0
     nerd_clip: float = 10_000.0
     c_vtrace: float = 1.0
+    cix_eta: float = 0.0  # NeuRD-CIX cap on importance weight 1/(mu+cix_eta); 0 = exact NeuRD
     seed: int = 42
 
 
@@ -109,6 +110,7 @@ class RNaDSolver:
             alpha=alpha, num_players=self.num_players,
             eta=self.config.eta_reward_transform, c_vtrace=self.config.c_vtrace,
             nerd_clip=self.config.nerd_clip, nerd_beta=self.config.nerd_beta,
+            cix_eta=self.config.cix_eta,
         )
 
     @torch.no_grad()

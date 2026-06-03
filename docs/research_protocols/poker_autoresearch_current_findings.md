@@ -2,6 +2,46 @@
 
 Date: 2026-05-13
 
+## Status — read RESEARCH_LOG.md first
+
+**Authoritative progress log: `RESEARCH_LOG.md`.** That file is the single
+chronological source of truth for every cycle, gate, and metric. This document is
+a periodic *standing-conclusions summary*, reconciled by hand, so older sections
+below may lag the log. Last reconciled: **2026-06-02**.
+
+Current state (2026-06-02, from the RESEARCH_LOG tail and `poker_state.json`):
+
+- **Phase:** tabula-rasa game-theoretic neural self-play on full-deck HU NLHE;
+  governance READY, no active cycle, no active research knobs.
+- **Governance incumbent (local, plug-in RL):**
+  `autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt`
+  (re-anchored 2026-06-02T18:05 after PPO-inner-NashPG gen2 failed a repeatability
+  audit). Local-only evidence — **not** Slumbot or SOTA strength.
+- **Standing blocker ("tie-but-lose" trap):** a local PSRO empirical-game
+  population and a seed-robust state-conditioned policy router were built, but
+  every standalone response learner trained against them (Gen-3 Rainbow,
+  "stronger" NeuRD/NashPG) **ties the router yet loses to the incumbent + K-best2**
+  (e.g. NeuRD `vs_incumbent_upper95 -0.0118`, `vs_kbest2_upper95 -0.0010`;
+  RESEARCH_LOG `20260602T180015Z` / `180945Z`). The router is a decision-time
+  *selector*, not a stronger network.
+- **Diagnosis:** the promotion ruler — duplicate-swapped head-to-head lower95 — is
+  non-transitive, so the loop can churn without reducing exploitability. The
+  project's own reframe (continuation target, 2026-05-29, citing arXiv:2502.08938)
+  already names exact **exploitability / NashConv** as the correct ruler. Latest
+  valid exact small-game result: R-NaD **0.639 ± 0.021** NashConv vs PPO+FIFO
+  **2.2547 ± 0.648**.
+- **Held-out Slumbot (diagnostic only, all negative / noisy):** fixed-population
+  no-solver 300 hands −133 ± 449 chips/hand; meta8 no-solver 300 hands −445 ± 518.
+- **Next direction (live):** see `poker_next_continuation_target.md` — harden the
+  exact small-game baseline by comparing learner *families* (R-NaD/NashPG with
+  annealed regularization vs literature-faithful K-best PPO vs MMD) under matched
+  compute, multi-seed, **gated by exploitability**, before scaling the winner to
+  full HU NLHE. Slumbot stays strictly held out.
+
+The dated sections below (origin Date 2026-05-13) predate this and cover the older
+CFR-resolving / learned-CFV-leaf era; treat them as history, with the RESEARCH_LOG
+as current.
+
 ## Current Objective Pivot
 
 The active objective is now publication-grade game-theoretic RL / learned
@@ -480,6 +520,14 @@ gate needs a stronger BR method, exact small-subgame response, or public-state
 action-value evaluator with a passing positive control.
 
 ## Incumbent
+
+> **Note (2026-06-02):** the entry below is the legacy *Slumbot-facing blueprint*
+> incumbent and remains valid for that track only. The current **local self-play
+> governance incumbent** is
+> `autoresearch-session/native_rollout_substrate/fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt`
+> (tracked in `poker_state.json` `incumbent_checkpoint`; see the Status banner at
+> the top). All three incumbent fields in `poker_state.json` were reconciled to
+> this checkpoint on 2026-06-02.
 
 - Checkpoint: `models/slumbot_2p_iter1000.pt`
 - Iteration: 1000
@@ -1376,6 +1424,13 @@ After updating those scenarios and running under `NUMBA_ENABLE_CUDASIM=1`, the
 script passes all 10 checks and is now part of Tier 0.
 
 ## Next Workflow Moves
+
+> **Superseded (2026-06-02).** The numbered list below references the *deprecated*
+> `scripts/poker_autoresearch.py` engine and the older CFR-resolving / CFV-leaf
+> era. For current next moves see the Status banner at the top of this file and
+> `poker_next_continuation_target.md`; the authoritative progress record is
+> `RESEARCH_LOG.md`. The items below are retained only as historical governance
+> context.
 
 1. Use Slumbot only for sparse live checks until the local incumbent-comparison
    path and promotion blockers are stable.

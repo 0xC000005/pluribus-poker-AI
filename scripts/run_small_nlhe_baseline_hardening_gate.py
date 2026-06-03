@@ -138,17 +138,31 @@ def _fingerprint(game, policy_lib, exploitability):
     }
 
 
+def _rnad_schedule(args) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    if args.reset_sizes:
+        sizes = tuple(int(x) for x in args.reset_sizes.split(","))
+        if args.reset_repeats:
+            repeats = tuple(int(x) for x in args.reset_repeats.split(","))
+        else:
+            repeats = tuple(1 for _ in sizes)
+    else:
+        sizes, repeats = (int(args.reset_every),), (1,)
+    return sizes, repeats
+
+
 def _run_rnad_seed(args, seed: int, game, by, policy_lib, exploitability) -> dict:
     from poker_ai.rnad import LeducTreeCollector, RNaDConfig, RNaDSolver
 
     collector = LeducTreeCollector(game, device="cpu")
+    sched_sizes, sched_repeats = _rnad_schedule(args)
     cfg = RNaDConfig(
         batch_size=args.batch_size,
         trajectory_max=max(8, game.max_game_length() + 1),
         policy_network_layers=tuple(args.layers),
         learning_rate=args.rnad_lr,
-        entropy_schedule_size=(args.reset_every,),
-        entropy_schedule_repeats=(1,),
+        entropy_schedule_size=sched_sizes,
+        entropy_schedule_repeats=sched_repeats,
+        cix_eta=args.cix_eta,
         seed=seed,
     )
     solver = RNaDSolver(cfg, collector, device="cpu")
@@ -260,9 +274,15 @@ def main(argv=None) -> int:
     parser.add_argument("--seeds", default="1,2,3")
     parser.add_argument("--layers", type=int, nargs="+", default=[128, 128])
     parser.add_argument("--rnad-lr", type=float, default=0.005)
+    parser.add_argument("--cix-eta", type=float, default=0.0,
+                        help="NeuRD-CIX cap on importance weight 1/(mu+cix_eta); 0 = exact NeuRD.")
     parser.add_argument("--rnad-policy-source", choices=("target", "learner"), default="target")
     parser.add_argument("--ppo-lr", type=float, default=0.005)
     parser.add_argument("--reset-every", type=int, default=1000)
+    parser.add_argument("--reset-sizes", default=None,
+                        help="Comma-separated increasing R-NaD entropy phase sizes (overrides --reset-every).")
+    parser.add_argument("--reset-repeats", default=None,
+                        help="Comma-separated repeats parallel to --reset-sizes (last must be 1; default all 1s).")
     parser.add_argument("--snapshot-every", type=int, default=200)
     parser.add_argument("--pool-size", type=int, default=3)
     parser.add_argument("--output-json")

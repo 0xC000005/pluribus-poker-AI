@@ -29,16 +29,29 @@ def main(argv=None):
     ap.add_argument("--eta", type=float, default=0.2)
     ap.add_argument("--batch-size", type=int, default=256)
     ap.add_argument("--entropy-schedule-size", type=int, default=20000)
+    ap.add_argument("--entropy-schedule-sizes", default=None,
+                    help="Comma-separated increasing phase sizes (overrides --entropy-schedule-size).")
+    ap.add_argument("--entropy-schedule-repeats", default=None,
+                    help="Comma-separated repeats parallel to --entropy-schedule-sizes (last must be 1).")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--output-json")
     args = ap.parse_args(argv)
 
+    if args.entropy_schedule_sizes:
+        sched_sizes = tuple(int(x) for x in args.entropy_schedule_sizes.split(","))
+        if args.entropy_schedule_repeats:
+            sched_repeats = tuple(int(x) for x in args.entropy_schedule_repeats.split(","))
+        else:
+            sched_repeats = tuple(1 for _ in sched_sizes)
+    else:
+        sched_sizes = (int(args.entropy_schedule_size),)
+        sched_repeats = (1,)
     cfg = rnad.RNaDConfig(
         game_name=args.game,
         batch_size=int(args.batch_size),
         eta_reward_transform=float(args.eta),
-        entropy_schedule_size=(int(args.entropy_schedule_size),),
-        entropy_schedule_repeats=(1,),
+        entropy_schedule_size=sched_sizes,
+        entropy_schedule_repeats=sched_repeats,
         seed=int(args.seed),
     )
     solver = rnad.RNaDSolver(cfg)
@@ -57,6 +70,8 @@ def main(argv=None):
     best = min(nc for _, nc in hist)
     last = hist[-1][1]
     out = {"game": args.game, "steps": int(args.steps), "eta": args.eta,
+           "entropy_schedule_sizes": list(sched_sizes),
+           "entropy_schedule_repeats": list(sched_repeats),
            "nashconv_init": float(nc0), "nashconv_last": float(last), "nashconv_best": float(best),
            "history": hist, "seconds": round(time.time() - t0, 1)}
     print(f"\n{args.game}: init {nc0:.4f} -> last {last:.4f} (best {best:.4f}) in {out['seconds']}s")

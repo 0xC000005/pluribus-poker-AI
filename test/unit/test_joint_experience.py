@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import torch
 
@@ -190,6 +192,106 @@ def test_load_compiled_joint_policy_supports_native_nfsp_checkpoint(tmp_path):
     assert policy.kind == "native-nfsp"
     assert policy.algorithm == "native_nfsp_dqn"
     assert scores.shape == (3, N_ACTIONS)
+
+
+def test_load_compiled_joint_policy_supports_policy_router_checkpoint(tmp_path):
+    from poker_ai.research.compiled_joint_experience import (
+        collect_compiled_joint_experience,
+        load_compiled_joint_policy,
+    )
+    from poker_ai.research.native_nfsp import _MLP
+    from poker_ai.research.policy_router import PolicyRouterNet
+
+    def write_member(name: str, best_action: int) -> Path:
+        checkpoint = tmp_path / f"{name}.pt"
+        q_net = _MLP(hidden_dim=16)
+        avg_net = _MLP(hidden_dim=16)
+        for parameter in q_net.parameters():
+            parameter.data.zero_()
+        for parameter in avg_net.parameters():
+            parameter.data.zero_()
+        avg_net.net[-1].bias.data[int(best_action)] = 10.0
+        torch.save(
+            {
+                "algorithm": "native_nfsp_dqn",
+                "environment": "poker_ai:full_deck_hu_nlhe",
+                "num_actions": N_ACTIONS,
+                "num_features": N_FEATURES,
+                "hidden_dim": 16,
+                "q_net_state_dict": q_net.state_dict(),
+                "avg_net_state_dict": avg_net.state_dict(),
+                "config": {"hidden_dim": 16},
+            },
+            checkpoint,
+        )
+        return checkpoint
+
+    first = write_member("first", 0)
+    second = write_member("second", N_ACTIONS - 1)
+    router = PolicyRouterNet(hidden_dim=8, n_policies=2)
+    for parameter in router.parameters():
+        parameter.data.zero_()
+    router.net[-1].bias.data[:] = torch.tensor([0.0, 1.0])
+    checkpoint = tmp_path / "router.pt"
+    torch.save(
+        {
+            "algorithm": "policy_population_router",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_features": N_FEATURES,
+            "num_policies": 2,
+            "hidden_dim": 8,
+            "member_policy_kinds": ["native-nfsp", "native-nfsp"],
+            "member_checkpoints": [str(first), str(second)],
+            "router_state_dict": router.state_dict(),
+        },
+        checkpoint,
+    )
+
+    policy = load_compiled_joint_policy(checkpoint, kind="policy-router", device="cpu")
+    scores = policy.module(torch.zeros(3, N_FEATURES, dtype=torch.float32))
+    dataset = collect_compiled_joint_experience(
+        [policy],
+        meta_strategy=[1.0],
+        n_hands=4,
+        batch_size=4,
+        seed=20261020,
+        initial_chips=100,
+        max_steps_per_hand=8,
+        device=torch.device("cpu"),
+    )
+
+    assert policy.kind == "policy-router"
+    assert policy.algorithm == "policy_population_router"
+    assert scores.shape == (3, N_ACTIONS)
+    assert torch.all(scores[:, N_ACTIONS - 1] > scores[:, 0])
+    assert dataset["n_transitions"] > 0
+    assert dataset["policy_kinds"] == ["policy-router"]
+
+
+def test_load_compiled_joint_policy_rejects_recursive_policy_router_member(tmp_path):
+    from poker_ai.research.compiled_joint_experience import load_compiled_joint_policy
+    from poker_ai.research.policy_router import PolicyRouterNet
+
+    router = PolicyRouterNet(hidden_dim=8, n_policies=1)
+    checkpoint = tmp_path / "router.pt"
+    torch.save(
+        {
+            "algorithm": "policy_population_router",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_features": N_FEATURES,
+            "num_policies": 1,
+            "hidden_dim": 8,
+            "member_policy_kinds": ["policy-router"],
+            "member_checkpoints": [str(checkpoint)],
+            "router_state_dict": router.state_dict(),
+        },
+        checkpoint,
+    )
+
+    import pytest
+
+    with pytest.raises(ValueError, match="may not themselves be policy-router"):
+        load_compiled_joint_policy(checkpoint, kind="policy-router", device="cpu")
 
 
 def test_save_joint_experience_npz_writes_arrays_and_manifest(tmp_path):

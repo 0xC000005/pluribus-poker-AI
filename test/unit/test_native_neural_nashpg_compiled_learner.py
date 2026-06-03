@@ -89,6 +89,54 @@ def test_native_neural_nashpg_compiled_learner_writes_native_checkpoint(tmp_path
     assert np.all(probs[legal_mask == 0] == 0.0)
 
 
+def test_compiled_rollout_opponent_loader_supports_policy_router(tmp_path):
+    from poker_ai.games.full_deck.state import N_ACTIONS, N_FEATURES
+    from poker_ai.research.native_nfsp import _MLP
+    from poker_ai.research.policy_router import PolicyRouterNet
+    from scripts.run_local_vtrace_compiled_native_learner import (
+        _load_compiled_rollout_opponents,
+    )
+
+    member = tmp_path / "member.pt"
+    q_net = _MLP(hidden_dim=16)
+    avg_net = _MLP(hidden_dim=16)
+    torch.save(
+        {
+            "algorithm": "native_nfsp_dqn",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_actions": N_ACTIONS,
+            "num_features": N_FEATURES,
+            "hidden_dim": 16,
+            "q_net_state_dict": q_net.state_dict(),
+            "avg_net_state_dict": avg_net.state_dict(),
+            "config": {"hidden_dim": 16},
+        },
+        member,
+    )
+    router = PolicyRouterNet(hidden_dim=8, n_policies=1)
+    checkpoint = tmp_path / "router.pt"
+    torch.save(
+        {
+            "algorithm": "policy_population_router",
+            "environment": "poker_ai:full_deck_hu_nlhe",
+            "num_features": N_FEATURES,
+            "num_policies": 1,
+            "hidden_dim": 8,
+            "member_policy_kinds": ["native-nfsp"],
+            "member_checkpoints": [str(member)],
+            "router_state_dict": router.state_dict(),
+        },
+        checkpoint,
+    )
+
+    opponents, kinds = _load_compiled_rollout_opponents([checkpoint], torch.device("cpu"))
+    scores = opponents[0](torch.zeros(2, N_FEATURES, dtype=torch.float32))
+
+    assert kinds == ["policy-router"]
+    assert len(opponents) == 1
+    assert scores.shape == (2, N_ACTIONS)
+
+
 def test_native_neural_nashpg_compiled_learner_supports_parent_reference(tmp_path):
     from scripts.run_native_neural_nashpg_compiled_learner import run_learner
 

@@ -20000,3 +20000,164 @@
 - Summary: Independent policy-router seed replicated the first router result: trained from fresh local compiled joint experience only, beat incumbent/K-best2/previous with positive 20k lower95, tied scaled response within 20k CI, beat all six off-support archive policies with positive lower95, and solved the augmented empirical game to pure router support. This makes the local population-router mechanism seed-robust across two seeds, but it is still not Slumbot/SOTA evidence; next step is training the next generation against router/archive pressure.
 - Metrics file: autoresearch-session/policy_router/boundary4_router_seed2_augmented_empirical_game_seed20261011.json
 - Key metrics: `{"gate": null, "passed": true}`
+## 20260602T175054Z-failure-synthesis-for-gen3-response-to-seed-robust - failed
+
+- Timestamp: 2026-06-02T17:50:54Z
+- Type: synthesis
+- Gate: failure-synthesis-20260602T175047Z-gen3-response-to-seed-robust-policy-router-failed
+- Hypothesis: Failure synthesis for Gen3 response to seed-robust policy-router failed core support-boundary H2H should identify the causal model and one next falsifier before further expansion.
+- Failure class: eval_invalid
+- Summary: Gate failure-synthesis-20260602T175047Z-gen3-response-to-seed-robust-policy-router-failed failed.
+- Metrics file: autoresearch-session/poker_runs/20260602T175054Z-failure-synthesis-for-gen3-response-to-seed-robust/metrics.json
+- Key metrics: `{"decision": "pending", "gate": "failure-synthesis-20260602T175047Z-gen3-response-to-seed-robust-policy-router-failed", "passed": false}`
+
+## 20260602T180015Z-gen3-router-response-failure-synthesis - passed
+
+- Timestamp: 2026-06-02T18:00:15Z
+- Type: synthesis
+- Gate: gen3-router-response-failure-synthesis
+- Hypothesis: The Gen 3 response-to-router result should decide whether to keep
+  scaling router-pressure Rainbow response learning or pivot within the
+  tabula-rasa self-play philosophy.
+- Failure class: population_weak_policy_support
+- Summary: Gen 3 Rainbow response training against both independent router seeds
+  was mechanically valid on CUDA, but failed the core support-boundary H2H gate:
+  it tied router seeds, beat the older previous response, and clearly lost to
+  incumbent and K-best2. A tiny NeuRD/NashPG router-opponent smoke also ran
+  cleanly but was weaker than incumbent/K-best2, so the immediate blocker is
+  learner dynamics/update target, not rollout plumbing. Retire more same-style
+  Rainbow response-chain scaling; next run should be a matched stronger
+  stochastic-policy NeuRD/R-NaD/NashPG-style gate, then pivot to update-target
+  redesign if that fails.
+- Metrics file: autoresearch-session/poker_reviews/20260602T175047Z-gen3-response-to-seed-robust-policy-router-failed-synthesis/decision.json
+- Key metrics: `{"gen3_vs_router_seed1_lower95": -0.020899, "gen3_vs_router_seed2_lower95": -0.010613, "gen3_vs_incumbent_upper95": -0.016232, "gen3_vs_kbest2_upper95": -0.001261, "gen3_vs_previous_lower95": 0.116242, "neurd_smoke_vs_incumbent_upper95": -0.022317, "neurd_smoke_vs_kbest2_upper95": -0.022231, "uses_slumbot_training_data": false, "promotion": false}`
+
+## 20260602T180945Z-stronger-neurd-router-response-gate - failed
+
+- Timestamp: 2026-06-02T18:09:45Z
+- Type: experiment
+- Gate: stronger-neurd-router-response-h2h
+- Hypothesis: A matched stronger stochastic-policy NeuRD/NashPG-style learner
+  trained against both router seeds should repair the direct-policy weakness
+  seen in Gen 3 Rainbow response learning.
+- Failure class: learner_objective
+- Summary: The stronger NeuRD/NashPG learner trained cleanly from local native
+  self-play/population rollouts on CUDA, but failed the H2H promotion ladder:
+  it tied router seed2 statistically, beat the older previous response, and
+  clearly lost to incumbent and K-best2. This keeps the router as a useful
+  local decision-time population selector, but does not produce a stronger
+  standalone neural policy. Next work should not scale the same update blindly;
+  it should review/update the learning target, likely toward off-policy
+  actor-critic/Q-expected or all-action local counterfactual feedback.
+- Metrics file: autoresearch-session/policy_router/neurd_response_vs_router2_h256_16x4096_seed20261070.json
+- Key metrics: `{"samples": 120671, "samples_per_second": 17271.285, "vs_router_seed2_lower95": -0.003811, "vs_incumbent_upper95": -0.011783, "vs_kbest2_upper95": -0.000952, "vs_scaled_lower95": -0.013487, "vs_previous_lower95": 0.130553, "uses_slumbot_training_data": false, "uses_solver_labels": false, "promotion": false}`
+## 20260602T190047Z-canonical-annealed-r-nad-on-leduc-drives-exact - failed
+
+- Timestamp: 2026-06-02T19:23:11Z
+- Type: experiment
+- Gate: rnad-leduc-annealed-exploitability-confirm
+- Hypothesis: Canonical annealed R-NaD on Leduc drives exact NashConv below the fixed-regularization MMD floor toward the CFR+ regime, confirming the tie-but-lose failures stem from the non-transitive H2H ruler plus unannealed/undertrained regularization rather than the R-NaD mechanism (Stage-1a of the exploitability-gated bake-off; reference resets every 2000 steps, 20000 steps, multi-seed).
+- Failure class: learner_objective
+- Summary: Stage-1(a) diagnostic: canonical neural R-NaD (vendored OpenSpiel, eta=0.2, reference reset every 2000 steps, 20000 steps, 3 seeds) on Leduc converged seed-robustly from init ~5.3 to best NashConv 1.341 +/- 0.042 (last 1.611 +/- 0.074), beating the undertrained torch R-NaD baseline (2.19 at 2000 steps) but plateauing far above the stated sub-0.48 bar. RECALIBRATION: that bar was mis-specified -- the 0.48 (MMD) and 0.0023/0.0169 (CFR+) references in small_game_probe.json are EXACT TABULAR algorithms (cfr.CFRPlusSolver / mmd_dilated.MMDDilatedEnt), not a fair bar for a neural sampling learner. The mechanism converges; absolute neural NashConv must be judged against matched-compute NEURAL baselines in the Stage-1(b) bake-off (cf. project neural R-NaD 0.639 on small-NLHE). Hypothesis-as-stated falsified; next is the neural bake-off (R-NaD/NashPG-annealed vs K-best PPO vs MMD by exact NashConv), with a longer/canonical-increasing-schedule R-NaD run as a separate budget question. Diagnostic only; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260602T190047Z-canonical-annealed-r-nad-on-leduc-drives-exact/metrics.json
+- Key metrics: `{"gate": "rnad-leduc-annealed-exploitability-confirm", "passed": false}`
+
+## 20260602T193843Z-r-nad-budget-schedule-sensitivity-on-leduc-with - passed
+
+- Timestamp: 2026-06-02T20:12:26Z
+- Type: experiment
+- Gate: rnad-leduc-schedule-budget-sensitivity
+- Hypothesis: R-NaD budget/schedule sensitivity on Leduc: with a faithful increasing-size entropy schedule (1000,2000,4000,8000,16000) and a larger step budget, neural R-NaD exact NashConv should fall materially below the seed-robust 1.34 best plateau seen at flat-2000 reset / 20000 steps if that plateau was budget/schedule-limited; if it plateaus near 1.3 again it indicates a real neural floor at eta=0.2 (informs the Stage-1b bake-off R-NaD config).
+- Failure class: learner_objective
+- Summary: R-NaD budget/schedule sensitivity (Leduc, 3 seeds): replacing the flat entropy-reset-every-2000 schedule with a faithful INCREASING-size schedule (1000,2000,4000,8000,16000) at FIXED eta=0.2 and 40000 steps broke the seed-robust ~1.34 best plateau to NashConv 0.940 +/- 0.076 (per-seed 0.894/1.047/0.880), still descending at 40k in every seed. Confirms the plateau was schedule/budget-limited, not a neural representation floor nor a hard eta-floor; matches the DeepNash recipe (fixed regularization + increasing learn-steps per iteration). CORRECTION to the prior plan wording: the lever is the increasing-window schedule at FIXED regularization, NOT annealing eta->0 (NashPG: decaying alpha lets gradient noise dominate). Next: Stage-1b neural bake-off on small-NLHE (R-NaD fixed-eta increasing-schedule vs K-best PPO vs MMD) by exact NashConv, with an ESCHER-style learned value baseline as the variance-reduction upgrade. Diagnostic only; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260602T193843Z-r-nad-budget-schedule-sensitivity-on-leduc-with/metrics.json
+- Key metrics: `{"gate": "rnad-leduc-schedule-budget-sensitivity", "passed": true}`
+
+## 20260602T201724Z-stage-1b-neural-learner-family-bake-off-on - passed
+
+- Timestamp: 2026-06-02T21:01:14Z
+- Type: experiment
+- Gate: small-nlhe-neural-bakeoff-exact-nashconv
+- Hypothesis: Stage-1b neural learner-family bake-off on small-NLHE by exact NashConv (matched compute steps=16000, eval 2000, batch 256, 3 seeds): R-NaD (fixed eta=0.2, increasing entropy schedule 1000/2000/4000/8000) vs PPO-FIFO vs PPO-Kbest vs NashPG, with tabular MMD and CFR+ as reference anchors. Select the lowest mean last-iterate NashConv neural family to carry toward full HUNL; neural-vs-neural only, tabular refs are anchors not the pass bar.
+- Failure class: learner_objective
+- Summary: Stage-1b neural learner-family bake-off (small-NLHE, exact NashConv, matched 16k steps, 3 seeds). RANKING by mean last-iterate NashConv (lower better): R-NaD fixed-eta+increasing-schedule 0.0617+/-0.0079 (per-seed 0.066/0.069/0.051) WON decisively; PPO-FIFO 1.134+/-0.311; NashPG 1.155+/-0.812 (best-iterate 0.194+/-0.067 but high last-iterate variance); PPO-Kbest 1.866+/-0.695. Tabular anchors: MMD-alpha0.05 0.458, CFR+ 0.0005. R-NaD-neural beat tabular fixed-alpha MMD and approached the CFR+ floor; the increasing-schedule correction took small-NLHE R-NaD from the old GO/NO-GO 0.639 to 0.062. K-best PPO underperformed FIFO at this scale/budget (contra AlphaHoldem ablation). DECISION: R-NaD (fixed eta + increasing entropy schedule) is the learner family to carry toward full HUNL; NashPG is a high-variance second whose best-iterate is competitive (variance-reduction e.g. ESCHER-style baseline is the lever if revisited). Diagnostic only; neural-vs-neural; tabular refs are anchors; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260602T201724Z-stage-1b-neural-learner-family-bake-off-on/metrics.json
+- Key metrics: `{"gate": "small-nlhe-neural-bakeoff-exact-nashconv", "passed": true}`
+
+## 20260602T220810Z-native-confounder-a-b-re-run-native-full - failed
+
+- Timestamp: 2026-06-02T22:19:47Z
+- Type: experiment
+- Gate: native-rnad-increasing-schedule-confounder
+- Hypothesis: Native confounder A/B: re-run native full-deck 9-action R-NaD with the corrected fixed-eta + INCREASING-size entropy schedule (30/60/120/240 NaD-iteration windows) vs a matched FLAT single-window control (the prior degenerate config), 2 seeds each (h256, 20k chips, 480 iterations), then duplicate-swapped league H2H vs the fast-state shared-MARL incumbent. Tests whether prior native R-NaD population-gate failures (which all used the flat single-window schedule) were a schedule artifact or the R-NaD estimator floor under sampled native HUNL.
+- Failure class: rnad_objective_population_estimator
+- Summary: Native R-NaD schedule confounder (full-deck 9-action, h256, 20k chips, 480 iters, seeds 990/991). The corrected fixed-eta + increasing entropy schedule (30/60/120/240) did NOT rescue native R-NaD: increasing vs flat is a behaviorally IDENTICAL policy (direct duplicate-swapped H2H 0.000; checkpoint weights differ only max 0.00244/param), both TIE native NFSP (increasing mean -0.0118 lower95 -0.0370; flat mean -0.0102 lower95 -0.0352), and neither shows the dramatic gain seen on the OpenSpiel toy (0.639->0.062). This LEANS toward the project's prior estimator-floor diagnosis (R-NaD/MMD objective under sampled native HUNL), not a schedule artifact. NOT conclusive: the decisive incumbent gate is BLOCKED (tianshou not installed; incumbent is tianshou_marl_rainbow_dqn), and 480 iters gives the increasing schedule only ~4 reference resets (possibly too short). Decision options: (a) pivot off R-NaD to the named lower-variance successor (reference-regularized exact-CFPG / ESCHER variance reduction) per the project's own next-branch instruction; or (b) spend more to make it conclusive (longer native increasing-schedule run + install tianshou to gate vs incumbent). Diagnostic only; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260602T220810Z-native-confounder-a-b-re-run-native-full/metrics.json
+- Key metrics: `{"gate": "native-rnad-increasing-schedule-confounder", "passed": false}`
+
+## 20260602T222310Z-both-in-parallel-round-1-r-nad-confirmation - mixed
+
+- Timestamp: 2026-06-02T22:37:54Z
+- Type: experiment
+- Gate: native-rnad-confirm-and-cfpg-successor-scope
+- Hypothesis: Both-in-parallel round: (1) R-NaD confirmation - longer native increasing-schedule R-NaD (1500 iters, schedule 50/100/200/400/800, 2 seeds) gated vs the incumbent (tianshou installed) + native NFSP, to make the schedule-vs-estimator confounder conclusive; (2) CFPG successor scoping - small-NLHE reference-regularized exact-CFPG at matched 16k-step budget vs R-NaD's 0.062 NashConv, to assess the lower-variance successor before a native port (no native CFPG learner exists yet, only a target builder).
+- Failure class: rnad_objective_population_estimator
+- Summary: Both-in-parallel round. R-NaD CONFIRMATION (longer native increasing-schedule, 1500 iters, 800-iter refinement window, 2 seeds, vs incumbent now loadable via installed tianshou): the corrected schedule + budget recovers ~0.08-0.10 of native edge - R-NaD goes from historically badly-losing (vs NFSP -0.098, vs Rainbow -0.11..-0.14) to COMPETITIVE: ties native NFSP (~0.000 both seeds) and within ~0.02-0.03 of the incumbent (seed990 -0.0294 lower95 -0.0569 upper95 -0.0019 mild loss; seed991 -0.0171 lower95 -0.0441 tie). This REVISES the prior estimator-floor verdict: native R-NaD failure was LARGELY a schedule/budget artifact, NOT a hard floor; the 480-iter confounder was too short. R-NaD still does not CLEAR the promotion bar (no positive lower95 vs incumbent). CFPG SUCCESSOR SCOPING: small-NLHE reference-regularized exact-CFPG at matched 16k budget reached NashConv mean_last 0.0657 / mean_best 0.0520, ~= R-NaD's toy 0.062 (comparable, not clearly better); CFPG's sampling-variance advantage is untested natively (no native CFPG learner exists, only build_native_all_action_counterfactual_targets target builder). Net: R-NaD is revived as a competitive net-only candidate that lands just short of the incumbent; the open question is the increment to clear the bar (more budget vs variance reduction). Diagnostic only; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260602T222310Z-both-in-parallel-round-1-r-nad-confirmation/metrics.json
+- Key metrics: `{"gate": "native-rnad-confirm-and-cfpg-successor-scope", "passed": null}`
+
+## 20260602T230120Z-learner-increment-native-ppo-inner-vs-neurd-a - mixed
+
+- Timestamp: 2026-06-02T23:40:42Z
+- Type: experiment
+- Gate: native-ppo-inner-vs-neurd-actor-update
+- Hypothesis: Learner increment - native PPO-inner vs NeuRD A/B on full-deck HUNL. Same native NashPG learner (R-NaD reward-transform + reference roll-forward, reference-update-every=200 long windows per the schedule finding, advantage-target gae, h256, 20k chips, 1500 iters), changing ONLY the actor update: PPO clipped softmax-PG (low variance) vs NeuRD (high variance), 3 seeds each. Tests whether the lower-variance inner update closes the residual ~0.02-0.03 H2H gap to the incumbent where NeuRD R-NaD landed short. Judged by duplicate-swapped H2H vs incumbent (aim positive lower95, a clear non-marginal win) + native NFSP; small-NLHE exact NashConv as transitive cross-check. NOT adopting the broken BR-LB metric (failed positive control: shover ranked less exploitable than incumbent).
+- Failure class: learner_objective
+- Summary: Native PPO-inner vs NeuRD actor-update A/B (full-deck, h256, 20k chips, 1500 iters, ref-update-every 200, GAE, 3 seeds each; one-variable: actor-update-mode ppo vs neurd). RESULT: the lower-variance PPO-clip update BEATS the NeuRD control on both controls (vs incumbent arm-mean +0.0072 vs +0.0017; vs NFSP +0.0225 vs +0.0079) and CLEANLY beats native NFSP with positive lower95 on ALL 3 seeds (per-seed lower95 +0.0077/+0.0084/+0.0044) - the first clean native control win (prior NeuRD R-NaD only tied NFSP ~0.000). It pulls the incumbent comparison from NeuRD-R-NaD-long's -0.017..-0.029 to +0.0072 (parity/slight lead), but does NOT clear the incumbent bar: per-seed lower95 -0.0006/-0.0137/-0.0066 straddle 0. Variance-reduction hypothesis (brainstorm Lens 1/2: NeuRD's importance-correction variance under sampled native HUNL is the residual-gap cause) SUPPORTED. Small-game exact NashConv for PPO-inner is 1.238 (worse than R-NaD 0.062) as expected (small games favor NeuRD per NashPG; native sampled scale is where PPO's variance edge shows, so the toy is non-predictive). Next: tighten CI (more seeds/games) + one further principled increment (trinal-clip value/advantage clip, elevated entropy, or more budget) to convert incumbent parity into positive-lower95 clearance, then falsification ladder. Diagnostic only; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260602T230120Z-learner-increment-native-ppo-inner-vs-neurd-a/metrics.json
+- Key metrics: `{"gate": "native-ppo-inner-vs-neurd-actor-update", "passed": null}`
+
+## 20260603T002628Z-trustworthy-evidence-a1-diverse-opponent-gauntlet-for-the - failed
+
+- Timestamp: 2026-06-03T00:30:42Z
+- Type: experiment
+- Gate: ppo-inner-diverse-opponent-gauntlet
+- Hypothesis: Trustworthy-evidence A1: diverse-opponent gauntlet for the PPO-inner candidate (3 seeds, cycle 230120Z) vs 6 frozen diverse opponents - incumbent (Rainbow), native NFSP, K-best Rainbow archive, R-NaD-long (NeuRD gen), policy-router (in-distribution selector), worst-gap PSRO Rainbow member - requiring positive lower95 vs EACH (duplicate-swapped, 1500 hands). NeuRD arm (1 seed) for comparison. Clean sweep => trustworthy-robust strength, not a non-transitive single-opponent artifact; any negative => non-transitivity exposed, triggers building a real exploitability metric (LBR). Diagnostic; no Slumbot.
+- Failure class: population_weak_policy_support
+- Summary: Diverse-opponent gauntlet for the PPO-inner candidate (3 seeds) vs 6 frozen opponents. RESULT (high-value falsification): PPO-inner is NON-TRANSITIVE - cleanly beats NFSP (lower95 +0.004..+0.008), K-best Rainbow (+0.005..+0.023), and the prior R-NaD-long gen (+0.006..+0.007); TIES the incumbent (-0.014..-0.001); but LOSES to the policy-router (-0.028..-0.015) and the worst-gap PSRO member (-0.016..-0.010). The single-opponent +0.007 incumbent parity was a non-transitive artifact, NOT robust progress - the candidate is in the documented tie-but-lose cycle. The gauntlet did its job: it caught non-transitivity that single-opponent H2H hid, and would have prevented shipping a non-transitive 'incumbent-clearing' candidate. VERDICT: H2H (single OR multi-opponent) is an untrustworthy selection ruler here; with BR-LB (cheap exploitability) also broken, the principled next step is to BUILD a trustworthy exploitability metric (LBR / depth-limited search best-response) before further learner selection - no amount of H2H-tuning escapes the cycle. NeuRD arm worse across the board (re-confirms PPO-inner>NeuRD). Diagnostic; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260603T002628Z-trustworthy-evidence-a1-diverse-opponent-gauntlet-for-the/metrics.json
+- Key metrics: `{"gate": "ppo-inner-diverse-opponent-gauntlet", "passed": null}`
+
+## 20260603T005908Z-metric-framework-steps-1-2-diagnostic-pre-activation - passed
+
+- Timestamp: 2026-06-03T01:01:00Z
+- Type: experiment
+- Gate: metric-exact-nashconv-primary-gate-and-calibration
+- Hypothesis: Metric framework Steps 1-2 (diagnostic, pre-activation): establish the PRIMARY exact-NashConv method gate + its positive-control calibration battery. Step 2 BAR-1: exact NashConv must rank trivially-broken positive controls (uniform-random, fold-chump, all-in shover) as MOST exploitable on Kuhn/Leduc/small-NLHE (the test the learned BR-LB inverted), with CFR+ near-Nash as the low anchor. Step 1: log exact last-iterate NashConv of the deployed operators per-environment. Gate activation (poker_goal.json) deferred to a completed methodology bundle.
+- Failure class: evaluation_protocol_change
+- Summary: Metric framework Steps 1-2 (diagnostic, pre-activation). STEP 2 calibration PASSED on all three games: exact NashConv ranks broken positive controls (random/fold-chump/shover, NashConv 0.67-4.75) FAR above near-Nash (CFR+ 0.0024/0.027/0.0037) on Kuhn/Leduc/small-NLHE - the exact positive-control test the learned BR-LB INVERTED, passed uninvertably. The PRIMARY metric (exact NashConv of the deployed operator) is validated as the trusted, sound promotion gate. STEP 1 method-soundness table (exact last-iterate NashConv, from existing cycles): small-NLHE CFR+ 0.0005 | R-NaD 0.062 | MMD 0.458 | NashPG/PPO-inner 1.238; Leduc CFR+ 0.002 | R-NaD-increasing 0.94 (descending) | MMD 0.48. CONCLUSION: by the trusted gate, R-NaD is the method-SOUND contender; PPO-inner is NOT method-sound (1.238, in the exploitable band) - so its native H2H edge is not certified Nash-progress (consistent with its gauntlet non-transitivity). Gate ACTIVATION (poker_goal.json) deferred to the methodology bundle; learned BR-LB demoted to diagnostic. Optional completeness: R-NaD on Kuhn + PPO-inner on Kuhn/Leduc. Diagnostic; uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260603T005908Z-metric-framework-steps-1-2-diagnostic-pre-activation/metrics.json
+- Key metrics: `{"gate": "metric-exact-nashconv-primary-gate-and-calibration", "passed": null}`
+
+## 20260603T012947Z-neurd-cix-build-axis-1-soundness-added-cix - passed
+
+- Timestamp: 2026-06-03T02:21:52Z
+- Type: experiment
+- Gate: neurd-cix-axis1-soundness
+- Hypothesis: NeuRD-CIX build + AXIS-1 soundness. Added cix_eta to RNaDSolver (functional.py: importance weight 1/mu -> 1/(mu+cix_eta); parity-confirmed bit-identical at cix=0, 7/7 torch parity). CORRECTION to the brainstorm edit-site: CIX applied to impl-1 RNaDSolver (the sound 0.062 spine, also the native R-NaD), NOT impl-3 own-reach (which scores ~1.2). STEP 1: does cix_eta=0.1 keep R-NaD method-sound on small-NLHE (exact NashConv ~0.06-0.07 near the cix=0 anchor 0.062, NOT drifting to the PPO-unsound ~1.2 band)? Sound -> proceed to AXIS-2 native gauntlet; drift -> lower cix.
+- Failure class: learner_objective
+- Summary: NeuRD-CIX AXIS-1 soundness: PASS. Added cix_eta to RNaDSolver (functional.py 1/mu -> 1/(mu+cix_eta)); R-NaD torch parity 7/7 at cix=0 (bit-identical). At cix_eta=0.1 on small-NLHE the R-NaD arm exact NashConv = 0.0940 +/- 0.0012 (3 seeds) - METHOD-SOUND: a small expected CIX bias up from the cix=0 anchor 0.062, but firmly in the sound band (below tabular MMD 0.458, far from the PPO-unsound ~1.2 band). CIX preserves regret-equivalence at this cap. CORRECTION to the brainstorm: CIX applied to impl-1 RNaDSolver (the sound 0.062 spine + native R-NaD), not impl-3 own-reach. NO tuning: single principled cix=0.1 default. NEXT: AXIS-2 native gauntlet at the SAME cix=0.1 (thread cix_eta into native_rnad.py, train native R-NaD-CIX full-deck, H2H vs incumbent+NFSP+router+worstgap) - does the variance reduction win the gauntlet plain R-NaD lost? Diagnostic; promotion needs methodology bundle + 3-impl parity. uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260603T012947Z-neurd-cix-build-axis-1-soundness-added-cix/cix0p1_smallnlhe_soundness.json
+- Key metrics: `{"gate": "small_nlhe_baseline_hardening", "passed": null}`
+
+## 20260603T023816Z-neurd-cix-axis-2-native-gauntlet-same-cix - failed
+
+- Timestamp: 2026-06-03T02:51:42Z
+- Type: experiment
+- Gate: neurd-cix-axis2-native-gauntlet
+- Hypothesis: NeuRD-CIX AXIS-2 native gauntlet (same cix=0.1, no tuning). Train native full-deck R-NaD with cix_eta=0.1 (increasing schedule 50/100/200/400/800, h256, 20k chips, 1500 iters, seeds 990/991) and run the SAME diverse frozen gauntlet (incumbent, NFSP, K-best, router, worst-gap PSRO) vs the cix=0 R-NaD-long anchor. Does the CIX variance reduction WIN the gauntlet plain R-NaD lost? Clean sweep / beats cix=0 anchor on the panel -> first both-axes learner (sound 0.094 + native-strong). No movement vs cix=0 -> variance-of-importance-correction was not the binding native lever; falsify cheaply, redirect to NashPG-done-right then encoder.
+- Failure class: learner_objective
+- Summary: NeuRD-CIX AXIS-2 native gauntlet: FALSIFIED (high-value, cheap). Native R-NaD-CIX (cix=0.1, sound at small-NLHE 0.094) is behaviorally IDENTICAL to the cix=0 anchor across all 5 frozen opponents (incumbent/NFSP/K-best/router/worst-gap): per-opponent delta_mean -0.001..-0.006 (within noise), both win 0/5 clean. Capping NeuRD's 1/mu importance correction did NOT move the native axis -> the variance-of-importance-correction is NOT the binding native lever (the brainstorm's predicted refute-toward-NeuRD-weak outcome; the dominant native variance is the V-trace bootstrap/shallow-vs-deep split or representation). PATTERN: three inner-update variants are now native-weak - plain R-NaD (ties incumbent, loses gauntlet), PPO-inner (non-transitive), R-NaD-CIX (flat) - which is strong evidence for the Lens-4 reframe: the binding native-strength lever is REPRESENTATION/opponent-schedule, not the inner update. CIX-first was the cheapest test of the session's own causal hypothesis and it falsified it cleanly. NEXT per the agreed fallback ladder: NashPG-done-right (Lens 2 structural) or the AlphaHoldem-style encoder + K-best league (Lens 4). No tuning (single principled cix=0.1). uses_slumbot_training_data=false.
+- Metrics file: autoresearch-session/poker_runs/20260603T023816Z-neurd-cix-axis-2-native-gauntlet-same-cix/metrics.json
+- Key metrics: `{"gate": "neurd-cix-axis2-native-gauntlet", "passed": null}`
+

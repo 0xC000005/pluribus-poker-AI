@@ -3214,3 +3214,159 @@ baseline by comparing R-NaD against a literature-faithful PPO control
 check) and/or an MMD/FoReL-style regularized policy-gradient control under the
 same exact NashConv, matched-compute, multi-seed protocol. Only after this gate
 identifies a learner family worth scaling should full-HUNL GPU work resume.
+
+2026-06-02 housekeeping + direction reset (exploitability-gated learner-family
+bake-off; user-approved). Housekeeping: RESEARCH_LOG.md reaffirmed as the single
+chronological source of truth; poker_autoresearch_current_findings.md de-staled
+with a Status banner; and the three incumbent fields in poker_state.json
+reconciled to the re-anchored local incumbent
+`fast_state_shared_marl_continue_from_incumbent_h256_65k_dummy8_seed20260763.pt`
+(blessed `incumbent_checkpoint` via the tested set-incumbent mutator; vestigial
+`current_incumbent_checkpoint` corrected via session.py I/O; 699-entry history
+preserved; backup poker_state.json.bak-20260602-housekeeping).
+
+Standing diagnosis (RESEARCH_LOG 20260602T1710..1809): the local PSRO empirical
+game and the seed-robust state-conditioned policy router are decision-time
+SELECTORS over a frozen archive; every standalone response learner trained
+against them (Gen-3 Rainbow, "stronger" NeuRD/NashPG) ties the router yet loses
+to incumbent + K-best2. This is the signature of churning on a non-transitive
+head-to-head ruler against a self-generated archive (Balduzzi 2018;
+arXiv:2206.12301; APSRO arXiv:2207.06541), compounded by a learner whose
+regularization is FIXED (run_native_neural_nashpg_compiled_learner.py:
+reference_kl_weight=0.05, entropy_weight=0.02, no anneal), which converges to a
+regularized-but-still-exploitable point (DeepNash arXiv:2206.15378; NashPG
+arXiv:2510.18183). The cached probe corroborates: MMD at fixed alpha converged
+(regularized_gap -> 0) yet stayed exploitable (Leduc best last-iterate 0.4799 at
+alpha=0.01), and the torch R-NaD run was merely undertrained (4.75 -> 2.19 at
+2000 steps, still falling), whereas CFR+ reaches avg 0.0023 / current 0.0169.
+
+Chosen plan (sharpened version of the 2026-05-31 reset, NOT a new direction):
+
+  Stage 1 - small-game exploitability hardening (diagnostic-first; no Slumbot; no
+  protected-surface gate change yet):
+    (a) Confirm canonical ANNEALED R-NaD drives exact NashConv on Leduc well below
+        the fixed-regularization MMD floor (0.4799) toward the CFR+ regime, at
+        adequate budget, multi-seed (>=3). The faithful annealing config is a
+        MODERATE entropy_schedule_size so the reference net resets several times
+        within the budget (sizes=[s],repeats=[1] => reset every s steps forever);
+        s = budget/10 (~10 anneal rounds). The default size=20000 is the trap (no
+        reset in a short run -> behaves like fixed-alpha MMD). In flight: cycle
+        20260602T190047Z-canonical-annealed-r-nad-on-leduc-drives-exact, steps
+        20000, s=2000, eta=0.2, seeds 1/2/3.
+    (b) Then a matched-compute, multi-seed bake-off on small-NLHE by EXACT
+        NashConv: R-NaD/NashPG-annealed vs a literature-faithful K-best/historical
+        -league PPO control vs an MMD control. ONE principled default per method;
+        NO hyperparameter sweep. Select the single learner family with the lowest
+        last-iterate NashConv at matched compute.
+
+  Stage 2 - scale the winner to full HU NLHE (net-only at inference), switching the
+  in-house metric to approximate exploitability via a learned best response
+  (Timbers et al. IJCAI'22, arXiv:2004.09677) where exact NashConv is infeasible;
+  stage sizes and gate each before scaling. Slumbot remains strictly held-out
+  confirmation only.
+
+Governance: promoting exact exploitability/NashConv from DIAGNOSTIC to the
+promotion GATE is a protected eval-surface change and requires a completed
+methodology-review bundle + objective-drift audit BEFORE it gates anything. The
+Stage-1(a) confirm runs as a diagnostic and supplies that bundle's evidence; if
+it confirms, draft the bundle next (per the approved "both, in sequence" plan).
+
+None of the candidate algorithms is novel (MMD, R-NaD/NashPG, NeuRD, ESCHER,
+Exploitability Descent, AlphaHoldem trinal-clip/K-best are all published). The
+defensible publication-grade contribution is the controlled, single-PC,
+exploitability-gated comparison of net-only tabula-rasa learner families with one
+principled default each - not a new equilibrium algorithm, and not a
+tuned-to-Slumbot number.
+
+2026-06-02 Stage-1 RESULTS + schedule correction (cycles 20260602T190047Z,
+193843Z, 201724Z). Stage-1a (Leduc): neural R-NaD with a FLAT entropy-reset-every-2000
+schedule plateaued at NashConv best 1.341 +/- 0.042 (the stated sub-0.48 bar was an
+invalid tabular-vs-neural comparison; CFR+/MMD references are exact tabular). Stage-1a
+follow-up (Leduc, 3 seeds): a faithful INCREASING-size schedule (1000,2000,4000,8000,16000)
+at FIXED eta=0.2 broke the plateau to 0.940 +/- 0.076, still descending at 40k steps.
+Stage-1b BAKE-OFF (small-NLHE, exact NashConv, matched 16k steps, 3 seeds):
+R-NaD fixed-eta+increasing-schedule WON decisively at 0.0617 +/- 0.0079, vs PPO-FIFO
+1.134 +/- 0.311, NashPG 1.155 +/- 0.812 (best-iterate 0.194; high last-iterate variance),
+PPO-Kbest 1.866 +/- 0.695; tabular anchors MMD-a0.05 0.458 and CFR+ 0.0005. R-NaD-neural
+beat tabular fixed-alpha MMD and approached the CFR+ floor; the schedule correction took
+small-NLHE R-NaD from the old GO/NO-GO 0.639 to 0.062.
+
+CORRECTION to the plan entry above: the R-NaD lever is FIXED regularization (eta) + an
+INCREASING-size entropy schedule (longer refinement windows per reference reset), NOT
+annealing eta->0. NashPG shows decaying alpha lets stochastic-gradient noise dominate the
+diminishing regularization signal; the increasing-window schedule at fixed eta is the
+DeepNash recipe and is what actually lowered NashConv here. Disregard the earlier
+"annealed regularization / decay to ~0" wording.
+
+DECISION: R-NaD (fixed eta + increasing entropy schedule) is the selected net-only
+tabula-rasa learner family. NashPG is a high-variance second (best-iterate competitive);
+if revisited, add an ESCHER-style learned history-value baseline for variance reduction.
+K-best PPO underperformed FIFO at this scale/budget (contra AlphaHoldem's ablation) - note
+for the full-HUNL opponent-schedule choice, do not assume K-best transfers.
+
+NEXT (Stage 2): scale the selected R-NaD recipe toward full HU NLHE on the cuda/ substrate,
+staging sizes (e.g. river/turn -> full) and gating each size; switch the in-house metric to
+approximate exploitability via a learned best response (Timbers et al., IJCAI'22,
+arXiv:2004.09677) where exact NashConv becomes infeasible. Architecture (set/sequence
+encoder, transformer) is a Stage-2 SAMPLE-EFFICIENCY lever only, not an exploitability-floor
+fix (a 2048-hidden net was ~100x worse than a 64-dim net on Leduc). Slumbot remains strictly
+held-out confirmation only; promoting exploitability/NashConv from diagnostic to the
+promotion GATE needs the drafted methodology bundle
+(20260602T190837Z-exploitability-nashconv-promotion-gate) to clear objective-drift audit
+first.
+
+2026-06-03 RESUME POINT — trusted metric framework adopted; both-axes problem defined;
+inner-update lever exhausted (CIX falsified). This supersedes the 2026-06-02 "Stage 2 = scale
+R-NaD" plan above (that plan was wrong: native R-NaD already existed and failed; see below).
+
+WHAT IS NOW ESTABLISHED:
+- The objective-drift audit on bundle 20260602T190837Z PASSED (passed=true, protected_hits=[]).
+- TWO-AXIS EVALUATION (the trusted ruler; replaces non-transitive H2H):
+  * AXIS 1 (method soundness) = exact last-iterate NashConv on small games (Kuhn/Leduc/
+    small-NLHE). VALIDATED: positive-control battery (random/fold-chump/shover) ranks
+    most-exploitable >> near-Nash on all three games (cycle 20260603T005908Z); uninvertable.
+    This is the only signal allowed to GREEN-LIGHT promotion. Anchors: CFR+ ~0.0005, R-NaD ~0.062.
+  * AXIS 2 (native strength) = positive-lower95 sweep of a diverse FROZEN gauntlet on full-deck
+    HUNL (incumbent + NFSP + K-best + policy-router + worst-gap PSRO). Non-transitive H2H vs a
+    single opponent is NOT trustworthy (proven: a candidate at +0.007 vs incumbent lost router
+    + worst-gap). A clean sweep is required; any loss = exploitable/non-transitive.
+  * The learned-Q BR-LB (run_exploitability_lb*.py) is RETIRED from gating (it inverts: shover
+    ranked less exploitable than incumbent). LBR (one-ply, exact solver/equity leaf, asymmetric:
+    POSITIVE blocks, near-zero defers) is the SECONDARY native-exploitability screen - DESIGNED
+    but PARKED until a full-deck candidate passes AXIS 1 and needs pre-Slumbot vetting.
+  * Held-out Slumbot stays final-confirmation-only.
+
+THE OPEN PROBLEM (crisp + measurable): find a SINGLE net-only tabula-rasa learner that passes
+BOTH axes. Neither current candidate does: R-NaD/NeuRD is method-SOUND (0.062) but native-WEAK;
+PPO-inner is native-competitive but method-UNSOUND (1.238) and non-transitive.
+
+INNER-UPDATE LEVER EXHAUSTED (this session, cheap falsifications):
+- The native R-NaD "failures" were largely a SCHEDULE confound: a flat single-window entropy
+  schedule. The corrected fixed-eta + INCREASING-window schedule made native R-NaD competitive
+  (ties incumbent) but still loses the gauntlet (cycle 20260602T220810Z/222310Z).
+- NeuRD-CIX (cap importance weight 1/mu -> 1/(mu+cix_eta)) was implemented on impl-1 RNaDSolver
+  (functional.py; RNaDConfig.cix_eta, default 0 = bit-identical, R-NaD torch parity 7/7).
+  cix=0.1 stayed AXIS-1 SOUND (0.094) but was AXIS-2 FALSIFIED: behaviorally identical to cix=0
+  across all 5 gauntlet opponents (delta within noise, 0/5 wins; cycle 20260603T023816Z). So the
+  variance-of-importance-correction is NOT the binding native lever.
+- PATTERN: three inner-update variants are now native-weak (plain R-NaD, PPO-inner non-transitive,
+  R-NaD-CIX flat) => strong evidence the binding AXIS-2 lever is REPRESENTATION / OPPONENT-SCHEDULE,
+  NOT the inner update (brainstorm Lens 4).
+
+NEXT DIRECTION (decision deferred to user; do NOT auto-launch a multi-day build):
+- Leading hypothesis (evidence-backed): AXIS-2 strength needs a stronger REPRESENTATION (card/
+  action set-or-sequence encoder, AlphaHoldem-style) and/or a K-best historical OPPONENT SCHEDULE,
+  keeping the method-sound R-NaD inner update as the anchor and gating on AXIS-1 soundness first.
+  This is a protected-surface build (encoder threaded through training/eval), days not minutes.
+- Cheaper alternative (one more inner-update attempt, governance-awkward = multi-change):
+  NashPG-done-right (fixed-large reg alpha=0.2 + per-outer-round inner convergence + GAE advantage)
+  - targets the inner-loop/bootstrap the CIX falsification implicated; risks a 4th inner-update miss.
+- Parked governance items: complete the methodology bundle to ACTIVATE exact-NashConv as the
+  official promotion gate; build the LBR secondary screen when a full-deck candidate is ready.
+
+STATE NOTES: cix_eta lives in poker_ai/rnad/solver.py (RNaDConfig, default 0.0) + functional.py
+v_trace/compute_rnad_loss + native_rnad.run_compiled_native_rnad_learner + the small-NLHE baseline
+gate (--cix-eta); default 0 makes it inert/parity-safe. Many uncommitted edits this session
+(functional.py, solver.py, native_rnad.py, gate scripts, docs, the metric bundle); CONTINUOUS_ACTIVE
+is present so commits are blocked until it is cleared. tianshou 2.0.1 was installed (no torch/numba
+downgrade) to load Rainbow checkpoints for native H2H.

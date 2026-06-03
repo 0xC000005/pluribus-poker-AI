@@ -140,6 +140,22 @@ def _load_compiled_rollout_opponents(
     kinds: list[str] = []
     for checkpoint in checkpoints or []:
         payload = torch.load(str(checkpoint), map_location=device, weights_only=False)
+        if str(payload.get("algorithm", "")) == "policy_population_router":
+            from poker_ai.research.compiled_joint_experience import (  # noqa: PLC0415
+                load_compiled_joint_policy,
+            )
+
+            compiled_policy = load_compiled_joint_policy(
+                checkpoint,
+                kind="policy-router",
+                device=device,
+            )
+            compiled_policy.module.eval()
+            for parameter in compiled_policy.module.parameters():
+                parameter.requires_grad_(False)
+            opponents.append(compiled_policy.module)
+            kinds.append("policy-router")
+            continue
         if _is_rainbow_payload(payload):
             opponents.append(_load_rainbow_opponent(payload, device))
             kinds.append("tianshou-rainbow")
