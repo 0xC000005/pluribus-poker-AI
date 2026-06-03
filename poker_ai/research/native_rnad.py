@@ -650,8 +650,13 @@ def run_compiled_native_rnad_learner(
     entropy_reset_sizes: Sequence[int] | None = None,
     entropy_reset_repeats: Sequence[int] | None = None,
     cix_eta: float = 0.0,
+    substrate: str = "cpu",
 ) -> dict[str, Any]:
-    """Train and optionally export a native-policy-compatible R-NaD checkpoint."""
+    """Train and optionally export a native-policy-compatible R-NaD checkpoint.
+
+    substrate: "cpu" (default, numba CompiledNativeRNaDCollector) or "cuda"
+    (GPU CUDANativeRNaDCollector over the cuda/ game kernels — same algorithm, scales batch size).
+    """
     requested_device = str(device).strip().lower()
     if requested_device == "auto":
         resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -687,15 +692,32 @@ def run_compiled_native_rnad_learner(
             load_policy_adapter(path, kind=kind, device=opponent_device)
             for path, kind in zip(opponent_paths, opponent_kind_values)
         ]
-    collector = CompiledNativeRNaDCollector(
-        collector_batch_size=int(collector_batch_size),
-        initial_chips=int(initial_chips),
-        seed=int(seed),
-        device="cpu",
-        opponent_policies=opponent_policies,
-        opponent_meta_strategy=opponent_probs.tolist() if opponent_policies else None,
-        opponent_device=torch.device(resolved_device),
-    )
+    substrate_value = str(substrate).strip().lower()
+    if substrate_value not in {"cpu", "cuda"}:
+        raise ValueError("substrate must be one of: cpu, cuda")
+    if substrate_value == "cuda":
+        if resolved_device != "cuda":
+            raise ValueError("substrate='cuda' requires a CUDA device (device=auto/cuda)")
+        from poker_ai.rnad.cuda_collector import CUDANativeRNaDCollector  # noqa: PLC0415
+
+        collector = CUDANativeRNaDCollector(
+            seed=int(seed),
+            initial_chips=int(initial_chips),
+            device=resolved_device,
+            opponent_policies=opponent_policies,
+            opponent_meta_strategy=opponent_probs.tolist() if opponent_policies else None,
+            opponent_device=torch.device(resolved_device),
+        )
+    else:
+        collector = CompiledNativeRNaDCollector(
+            collector_batch_size=int(collector_batch_size),
+            initial_chips=int(initial_chips),
+            seed=int(seed),
+            device="cpu",
+            opponent_policies=opponent_policies,
+            opponent_meta_strategy=opponent_probs.tolist() if opponent_policies else None,
+            opponent_device=torch.device(resolved_device),
+        )
     if entropy_reset_sizes:
         _sched_sizes = tuple(int(x) for x in entropy_reset_sizes)
         _sched_repeats = (

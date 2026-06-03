@@ -3370,3 +3370,29 @@ gate (--cix-eta); default 0 makes it inert/parity-safe. Many uncommitted edits t
 (functional.py, solver.py, native_rnad.py, gate scripts, docs, the metric bundle); CONTINUOUS_ACTIVE
 is present so commits are blocked until it is cleared. tianshou 2.0.1 was installed (no torch/numba
 downgrade) to load Rainbow checkpoints for native H2H.
+
+2026-06-03 UPDATE — anchor characterization done; fork resolved to SCALE R-NaD; GPU enabler built.
+The "decide after anchor results" fork (above) is RESOLVED. R-NaD anchor characterization
+(RESEARCH_LOG 20260603T133428Z): the anchor is BUDGET-LIMITED, not floored, on both axes —
+small-game NashConv kept descending (Leduc 0.94@40k -> 0.39@120k, still descending; Kuhn solved),
+and native gauntlet gaps ALL close monotonically with budget (incumbent -0.052/-0.042/-0.026,
+router -0.051/-0.043/-0.034, worstgap -0.081/-0.069/-0.044 at 1500/3000/6000 iter; at 6000 it
+already BEATS nfsp +0.033 and kbest +0.026). So native weakness was substantially UNDERTRAINING,
+not (yet) a representation ceiling — this partially un-confounds the "inner-update exhausted"
+conclusion for R-NaD. DECISION: scale R-NaD compute before any AlphaHoldem-encoder (LEAD A) build;
+reserve LEAD A for if/when R-NaD plateaus while still failing AXIS-2.
+
+ENABLER BUILT (RESEARCH_LOG 20260603T160000Z): CUDANativeRNaDCollector (poker_ai/rnad/cuda_collector.py)
+runs R-NaD self-play on the cuda/ GPU kernels — ~1.1M steps/s @B=4096 (2.5M @B=32768) vs the CPU
+single-core ceiling ~137K. Opt-in via run_compiled_native_rnad_learner(substrate="cuda"); CPU is
+default; 6 CUDA-guarded parity tests pass; no methodology bundle required (substrate port of a
+diagnostic learner); DDR at docs/research_protocols/gpu_rnad_collector_design_decision.md.
+
+NEXT (resume here): run LARGE-budget R-NaD on substrate="cuda" (big batch + ~24k-50k+ iter, the
+DeepNash increasing-window schedule, cix=0) and re-run the AXIS-2 frozen gauntlet (eval_mixed_policy_h2h,
+candidate-kind native-ppo) to test whether the still-closing native gaps cross zero — i.e. whether a
+method-SOUND learner can clear AXIS-2 by compute alone. If gaps cross 0 / clean sweep -> first
+both-axes learner (then falsification ladder + Slumbot confirmation). If they plateau still-negative
+-> the representation lever (LEAD A: AlphaHoldem encoder + K-best, positioned vs NashPG arXiv 2510.18183)
+is the next build. Working tree has uncommitted GPU-collector work (cuda_collector.py, the parity test,
+the native_rnad substrate kwarg, the DDR, RESEARCH_LOG, this file) pending a commit.
