@@ -425,11 +425,60 @@ class AdapterTarget(TargetPolicy):
         return np.asarray(p, dtype=np.float64)
 
 
+class RNaDNetTarget(TargetPolicy):
+    """Loads a FULL RNaDNetwork (mlp OR cnn encoder) from a native-rnad checkpoint and
+    queries pi = legal_policy(logit, legal) — R-NaD's actual deployed masked-softmax policy.
+    Required for native-rnad-cnn checkpoints that the flat _PolicyMLP loader cannot handle;
+    also valid for mlp checkpoints (pi == masked_softmax, verified to match the gauntlet)."""
+
+    def __init__(self, ckpt_path: str, device: torch.device):
+        from poker_ai.rnad.network import RNaDNetwork
+
+        ck = torch.load(ckpt_path, map_location=device, weights_only=False)
+        meta = ck.get("encoder_meta") or {"encoder": "mlp"}
+        obs_dim = int(meta.get("obs_dim", ck.get("num_features", 126)))
+        n_actions = int(ck.get("num_actions", N_ACTIONS))
+        hd = int(ck.get("hidden_dim", 256))
+        layers = tuple(meta.get("policy_network_layers", (hd, hd)))
+        enc = None
+        if str(meta.get("encoder")) == "cnn":
+            from poker_ai.rnad.encoder import CardActionEncoder
+
+            enc = CardActionEncoder(
+                obs_dim=obs_dim, out_dim=int(meta["encoder_out_dim"]),
+                conv_channels=tuple(meta["encoder_conv_channels"]),
+                noncard_hidden=tuple(meta["encoder_noncard_hidden"]),
+            )
+        net = RNaDNetwork(obs_dim, n_actions, layers, encoder=enc).to(device)
+        net.load_state_dict(ck["rnad_net_state_dict"])
+        net.eval()
+        self.net = net
+        self.device = device
+        self.name = f"rnad:{Path(ckpt_path).name}"
+
+    @torch.no_grad()
+    def _pi_batch(self, feats: np.ndarray, legals: np.ndarray) -> np.ndarray:
+        obs = torch.from_numpy(feats.astype(np.float32)).to(self.device)
+        leg = torch.from_numpy(legals.astype(np.float32)).to(self.device)
+        pi, _, _, _ = self.net(obs, leg)
+        return pi.detach().cpu().numpy().astype(np.float64)
+
+    def action_probs(self, state) -> np.ndarray:
+        return self._pi_batch(
+            state.to_feature_vector()[None, :], state.get_legal_mask()[None, :]
+        )[0]
+
+    def action_probs_batch(self, states: list) -> np.ndarray:
+        feats = np.stack([s.to_feature_vector() for s in states], axis=0)
+        legals = np.stack([s.get_legal_mask() for s in states], axis=0)
+        return self._pi_batch(feats, legals)
+
+
 def build_target(spec: str, device: torch.device) -> TargetPolicy:
     """Resolve a target spec into a TargetPolicy.
 
     Specs: shover | always_fold | calling_station | uniform | tight
-           native:<ckpt> | rainbow:<ckpt> | router:<ckpt> | nfsp:<ckpt>
+           native:<ckpt> | rnad:<ckpt> | rainbow:<ckpt> | router:<ckpt> | nfsp:<ckpt>
     """
     if spec in {"shover", "always_fold", "calling_station", "uniform"}:
         return ScriptedTarget(spec)
@@ -439,6 +488,8 @@ def build_target(spec: str, device: torch.device) -> TargetPolicy:
         kind, path = spec.split(":", 1)
         if kind == "native":
             return NativePolicyTarget(path, device)
+        if kind == "rnad":
+            return RNaDNetTarget(path, device)
         if kind == "rainbow":
             return RainbowQTarget(path, device)
         if kind == "router":

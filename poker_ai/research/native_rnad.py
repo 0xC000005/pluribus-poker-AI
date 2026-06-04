@@ -463,6 +463,9 @@ def _save_native_rnad_checkpoint(
     metrics: dict[str, Any],
     export_source: str = "target",
 ) -> None:
+    import torch.nn as nn  # noqa: PLC0415
+    from poker_ai.rnad.encoder import CardActionEncoder  # noqa: PLC0415
+
     source = str(export_source)
     if source == "target":
         export_net = solver.net_target
@@ -470,10 +473,32 @@ def _save_native_rnad_checkpoint(
         export_net = solver.net
     else:
         raise ValueError("export_source must be one of: target, learner")
-    policy_state, value_state = _export_two_layer_rnad_to_native_policy(
-        export_net,
-        hidden_dim=int(hidden_dim),
-    )
+
+    is_cnn = isinstance(getattr(export_net, "torso", None), CardActionEncoder)
+    if is_cnn:
+        # CNN net cannot be flattened to a _PolicyMLP; save the full RNaDNetwork + the
+        # arch metadata needed to reconstruct it (the LBR/gauntlet loaders rebuild it and
+        # query pi = legal_policy, R-NaD's actual masked-softmax policy).
+        policy_state, value_state = None, None
+        native_kind = "native-rnad-cnn"
+        feature_mode = "flat"
+        enc = export_net.torso
+        encoder_meta = {
+            "encoder": "cnn",
+            "encoder_out_dim": int(enc.out_dim),
+            "encoder_conv_channels": [m.out_channels for m in enc.card_conv if isinstance(m, nn.Conv2d)],
+            "encoder_noncard_hidden": [m.out_features for m in enc.noncard_mlp if isinstance(m, nn.Linear)],
+            "policy_network_layers": list(export_net.hidden_layers),
+            "obs_dim": int(export_net.obs_dim),
+        }
+    else:
+        policy_state, value_state = _export_two_layer_rnad_to_native_policy(
+            export_net, hidden_dim=int(hidden_dim),
+        )
+        native_kind = "native-ppo"
+        feature_mode = "flat"
+        encoder_meta = {"encoder": "mlp"}
+
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -487,9 +512,10 @@ def _save_native_rnad_checkpoint(
             "value_net_state_dict": value_state,
             "rnad_net_state_dict": export_net.state_dict(),
             "rnad_policy_export": source,
-            "native_policy_kind": "native-ppo",
+            "native_policy_kind": native_kind,
+            "encoder_meta": encoder_meta,
             "config": {
-                "feature_mode": "flat",
+                "feature_mode": feature_mode,
                 "hidden_dim": int(hidden_dim),
                 "initial_chips": int(initial_chips),
                 "max_steps_per_hand": int(max_steps_per_game),
@@ -497,6 +523,7 @@ def _save_native_rnad_checkpoint(
                 "fsp_average_policy": False,
                 "train_environment": "poker_ai:full_deck_hu_nlhe",
                 "rnad_policy_export": source,
+                **encoder_meta,
             },
             "metrics": metrics,
             "trained_environment_native": True,
@@ -652,6 +679,7 @@ def run_compiled_native_rnad_learner(
     cix_eta: float = 0.0,
     substrate: str = "cpu",
     clip_gradient: float = 10_000.0,
+    encoder: str = "mlp",
 ) -> dict[str, Any]:
     """Train and optionally export a native-policy-compatible R-NaD checkpoint.
 
@@ -738,6 +766,7 @@ def run_compiled_native_rnad_learner(
         entropy_schedule_repeats=_sched_repeats,
         cix_eta=float(cix_eta),
         clip_gradient=float(clip_gradient),
+        encoder=str(encoder),
         seed=int(seed),
     )
     solver = RNaDSolver(config, collector, device=resolved_device)

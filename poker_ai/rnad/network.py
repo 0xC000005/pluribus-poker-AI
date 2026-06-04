@@ -13,19 +13,26 @@ from poker_ai.rnad.functional import legal_policy, legal_log_policy
 
 
 class RNaDNetwork(nn.Module):
-    def __init__(self, obs_dim: int, n_actions: int, hidden_layers=(256, 256)):
+    def __init__(self, obs_dim: int, n_actions: int, hidden_layers=(256, 256), encoder=None):
+        """encoder: optional nn.Module mapping obs[...,obs_dim] -> embedding[...,encoder.out_dim],
+        replacing the flat-MLP torso (e.g. CardActionEncoder, M2a). encoder=None keeps the
+        original flat-MLP torso bit-for-bit (all existing checkpoints/consumers unchanged)."""
         super().__init__()
         self.obs_dim = int(obs_dim)
         self.n_actions = int(n_actions)
         self.hidden_layers = tuple(int(h) for h in hidden_layers)
 
-        torso = []
-        prev = obs_dim
-        for h in self.hidden_layers:
-            torso.append(nn.Linear(prev, h))
-            torso.append(nn.ReLU())  # haiku MLP(activate_final=True)
-            prev = h
-        self.torso = nn.Sequential(*torso)
+        if encoder is not None:
+            self.torso = encoder
+            prev = int(encoder.out_dim)
+        else:
+            torso = []
+            prev = obs_dim
+            for h in self.hidden_layers:
+                torso.append(nn.Linear(prev, h))
+                torso.append(nn.ReLU())  # haiku MLP(activate_final=True)
+                prev = h
+            self.torso = nn.Sequential(*torso)
         self.policy_head = nn.Linear(prev, n_actions)  # hk.nets.MLP([num_distinct_actions])
         self.value_head = nn.Linear(prev, 1)           # hk.nets.MLP([1])
 

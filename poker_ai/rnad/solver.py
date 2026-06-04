@@ -37,6 +37,10 @@ class RNaDConfig:
     nerd_clip: float = 10_000.0
     c_vtrace: float = 1.0
     cix_eta: float = 0.0  # NeuRD-CIX cap on importance weight 1/(mu+cix_eta); 0 = exact NeuRD
+    encoder: str = "mlp"  # "mlp" (flat torso) or "cnn" (AlphaHoldem-style card/action encoder, M2a)
+    encoder_out_dim: int = 256
+    encoder_conv_channels: Sequence[int] = (32, 64)
+    encoder_noncard_hidden: Sequence[int] = (128,)
     seed: int = 42
 
 
@@ -52,7 +56,18 @@ class RNaDSolver:
         torch.manual_seed(config.seed)
         self._rng = np.random.RandomState(config.seed)
 
-        self.net = RNaDNetwork(self.obs_dim, self.n_actions, config.policy_network_layers).to(self.device)
+        encoder = None
+        if str(getattr(config, "encoder", "mlp")) == "cnn":
+            from poker_ai.rnad.encoder import CardActionEncoder  # noqa: PLC0415
+            encoder = CardActionEncoder(
+                obs_dim=self.obs_dim,
+                out_dim=int(config.encoder_out_dim),
+                conv_channels=tuple(config.encoder_conv_channels),
+                noncard_hidden=tuple(config.encoder_noncard_hidden),
+            )
+        self.net = RNaDNetwork(
+            self.obs_dim, self.n_actions, config.policy_network_layers, encoder=encoder,
+        ).to(self.device)
         # 4 copies init from the SAME params (rnad.py:774-778).
         self.net_target = copy.deepcopy(self.net).to(self.device)
         self.net_prev = copy.deepcopy(self.net).to(self.device)
