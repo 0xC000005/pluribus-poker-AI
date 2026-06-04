@@ -1,7 +1,8 @@
 # Net-only self-play hits an exploitability ceiling on single-GPU HU NLHE — and the case for search-in-learning
 
-**Status:** consolidated finding, 2026-06-04. Authoritative; supersedes scattered RESEARCH_LOG entries
-20260603T133428Z → 20260604T023839Z. Single machine (RTX 3070 Ti, 8 GB), tabula-rasa, Slumbot held-out.
+**Status:** consolidated finding, 2026-06-04 (updated with §5b ReBeL de-risk Stage 0/1 results).
+Authoritative; supersedes scattered RESEARCH_LOG entries 20260603T133428Z → 20260604T023839Z. Single
+machine (RTX 3070 Ti, 8 GB), tabula-rasa, Slumbot held-out.
 
 ## Headline
 
@@ -103,6 +104,50 @@ training):** the constant-oracle round-trip on Leduc. **Full-deck data-gen is fe
 3070 Ti (CPU-only leaf hooks) — the GPU leaf-hook port is the headline **SOTA-efficiency** engineering, gated
 behind the small-game proof.
 
+## 5b. De-risk results — Stage 0 PASS, Stage 1 findings (2026-06-04)
+
+Built small-game-first on the **trusted** Leduc tree (all game logic derived from OpenSpiel; new
+code in `poker_ai/rebel/{leduc,leaf_eval,loop}.py`). The plan deliberately did **not** build on
+`fast_cfr.solve_cfr` (HU-NLHE-specific, CPU-leaf-only) — it used the same exact belief-weighted-Q
+recursion as the trusted small-game gates, so the value layer is verifiable against OpenSpiel
+NashConv.
+
+**Stage 0 — constant-oracle round-trip: PASS** (`scripts/run_rebel_leduc_roundtrip.py`,
+`test/unit/test_rebel_leduc_roundtrip.py`, 4 tests green). Resolves both correctness must-fixes:
+- *Must-fix #1 (CFV convention).* The leaf evaluator produces, and the trunk consumes, the **pinned
+  normalized convention** (`leaf_eval.py` docstring): `v_i(c) = E[u_i | i holds c, opponent range]`,
+  the opponent-range expectation normalized by opponent reach. The numerical round-trip reconstructs
+  the exact round-1 q-values to **8.9e-16**; the un-normalized (counterfactual) convention consumed
+  as normalized breaks it (error **2.24**) — a real negative control.
+- *Must-fix #2 (averaging).* CFR+ with **uniform/own-reach** averaging (linear kept only as a probe)
+  converges; linear CFR+ hits NashConv **0.0017** — proving tree + values + regrets are exact.
+
+**Stage 1 — depth-limited solving findings** (`scripts/run_rebel_leduc_stage1.py`,
+`autoresearch-session/rebel/leduc_stage1_findings.json`). Four measurements that **reshape the
+scale-up design**:
+1. **Exact-oracle control = full CFR+ / co-evolving CFR-D → NashConv 8.2e-4.** This is the
+   depth-limited control ceiling; must-fix #3's "oracle-leaf-control gap" is the gap to *this*.
+2. **Isolated subgame re-solving is unreliable** — both strategy and value. A frozen, isolated
+   round-2 strategy is off-path exploitable (assembled NashConv **0.21** vs 8e-4). Its per-hand
+   *values* match truth only at the most-reached entries and diverge as reach drops (≈**0.09** at
+   >10% reach, ≈**0.77** at ~4%), **stable across 3k/12k/40k iters** → the thin-reach values are
+   *under-determined* (equilibrium multiplicity), not slow convergence.
+3. **Per-iteration re-solve biases the trunk.** Using a re-solved-equilibrium leaf each trunk
+   iteration lets the opponent re-adapt inside the leaf value → biased regrets; the trunk fails to
+   recover the equilibrium round-1 strategy (round-1 L1 **0.15**).
+4. **Therefore (design constraint for Stage 2):** the value net must be a **fixed PBS-value
+   function during each solve** (co-evolving CFR-D, *not* isolated equilibration); value **targets**
+   must be the self-consistent CFVs read off the trunk solve (not isolated re-solves), averaged over
+   the visited PBS distribution; **play must continually re-solve** for the actually-reached range.
+   This is exactly the ReBeL/DeepStack design — now empirically motivated on our own substrate.
+
+**Refined gating.** Stage 2 (Leduc, the next build): train a PBS value net on trunk-solve CFV
+targets, plug it in as a fixed leaf in a CFR-D depth-limited solve, and require the learned-leaf
+NashConv to stay within a small gap of the **8.2e-4** oracle control. Then small-NLHE →
+flop-truncated HUNL before any multi-week scale-up. The under-determination of thin-reach leaf
+values (#2) is a noted scale-up risk to watch (mitigated by averaging + net smoothing), not a
+blocker — Leduc still solves to 8e-4 via proper CFR-D.
+
 ## 6. Reproducibility
 
 - LBR gate + positive controls: `scripts/run_lbr.py`, `test/unit/test_lbr_positive_controls.py`,
@@ -112,3 +157,7 @@ behind the small-game proof.
 - GPU R-NaD collector + CNN encoder: `poker_ai/rnad/{cuda_collector,encoder}.py`.
 - Full timeline: RESEARCH_LOG.md entries 20260603T133428Z (anchor) → 20260604T023839Z (decision).
 - Designs: workflows wp5fyfhw1 (review), wxe90uihq (ReBeL scoping).
+- ReBeL de-risk (§5b): `poker_ai/rebel/{leduc,leaf_eval,loop}.py`,
+  `scripts/run_rebel_leduc_roundtrip.py` + `test/unit/test_rebel_leduc_roundtrip.py` (Stage 0),
+  `scripts/run_rebel_leduc_stage1.py` (Stage 1); artifacts
+  `autoresearch-session/rebel/{leduc_roundtrip_stage0,leduc_stage1_findings}.json`.

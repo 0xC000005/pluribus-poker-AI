@@ -2,6 +2,33 @@
 
 Date: 2026-05-13
 
+## 2026-06-04 ReBeL de-risk: Stage 0 PASS, Stage 1 findings -> Stage 2 is next
+
+CURRENT authoritative target (supersedes the branches below as the mainline; see
+`docs/research_protocols/net_only_ceiling_and_rebel_decision.md` §5b for the consolidated record).
+The net-only R-NaD ceiling is defensibly real across six axes; the decision is to pursue
+ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the trusted Leduc tree
+(`poker_ai/rebel/{leduc,leaf_eval,loop}.py`):
+
+- **Stage 0 (constant-oracle round-trip) = PASS** (`scripts/run_rebel_leduc_roundtrip.py`,
+  `test/unit/test_rebel_leduc_roundtrip.py`). Pinned the NORMALIZED CFV convention (round-trip q
+  error 8.9e-16; wrong convention breaks at 2.24) and uniform/own-reach CFR+ averaging (linear CFR+
+  NashConv 0.0017). Both correctness must-fixes resolved.
+- **Stage 1 (depth-limited solving) findings** (`scripts/run_rebel_leduc_stage1.py`,
+  `autoresearch-session/rebel/leduc_stage1_findings.json`): exact-oracle CONTROL = full CFR+/CFR-D
+  -> NashConv 8.2e-4 (this is the oracle-leaf-control ceiling for the PASS metric, not "beat
+  R-NaD"). Isolated subgame re-solving is the WRONG primitive: its frozen strategy is off-path
+  exploitable (assembled NashConv 0.21), its thin-reach values are under-determined (err ~0.09 at
+  >10% reach, ~0.77 at ~4%, stable across 3k/12k/40k iters), and per-iteration re-solve biases the
+  trunk (round-1 L1 0.15). DESIGN CONSTRAINT: value net FIXED per solve (CFR-D), targets = the
+  self-consistent CFVs read off the trunk solve averaged over the visited PBS distribution, and
+  continual re-solving at play.
+- **NEXT = Stage 2 (Leduc, the next build):** train a PBS value net on trunk-solve CFV targets,
+  plug it in as a fixed CFR-D leaf, and require learned-leaf NashConv within a small gap of the
+  8.2e-4 control. Then small-NLHE -> flop-truncated HUNL before any multi-week full-deck scale-up
+  (full-deck data-gen is feasibility-marginal on the 3070 Ti -> explicit compute go/no-go first).
+  Slumbot stays held-out throughout.
+
 ## 2026-05-26 Simplification Reset
 
 The active continuation target is reset to **local self-play first**. The
