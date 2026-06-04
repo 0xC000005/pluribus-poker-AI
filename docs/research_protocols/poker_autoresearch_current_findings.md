@@ -7,7 +7,13 @@ Date: 2026-05-13
 **Authoritative progress log: `RESEARCH_LOG.md`.** That file is the single
 chronological source of truth for every cycle, gate, and metric. This document is
 a periodic *standing-conclusions summary*, reconciled by hand, so older sections
-below may lag the log. Last reconciled: **2026-06-02**.
+below may lag the log. Last reconciled: **2026-06-04**.
+
+> **2026-06-04 standing conclusion (authoritative):** net-only R-NaD self-play is at a
+> defensible exploitability ceiling (~12–15K mbb/g LBR across six levers; Slumbot ~4K, Nash ~0),
+> and the chosen line is **ReBeL-style search-in-learning** (net-centric, small-game-first).
+> Full write-up: **`docs/research_protocols/net_only_ceiling_and_rebel_decision.md`**. The earlier
+> "two-axis / scale-R-NaD / LEAD-A encoder" framing below is superseded by that document.
 
 Current state (2026-06-02, from the RESEARCH_LOG tail and `poker_state.json`):
 

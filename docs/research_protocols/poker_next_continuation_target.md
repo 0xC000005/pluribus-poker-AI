@@ -3396,3 +3396,23 @@ both-axes learner (then falsification ladder + Slumbot confirmation). If they pl
 -> the representation lever (LEAD A: AlphaHoldem encoder + K-best, positioned vs NashPG arXiv 2510.18183)
 is the next build. Working tree has uncommitted GPU-collector work (cuda_collector.py, the parity test,
 the native_rnad substrate kwarg, the DDR, RESEARCH_LOG, this file) pending a commit.
+
+2026-06-04 RESUME POINT — net-only ceiling consolidated; ReBeL search-in-learning is the line.
+THE LEAD-A / both-axes / "scale R-NaD" framing above is SUPERSEDED. Consolidated finding:
+docs/research_protocols/net_only_ceiling_and_rebel_decision.md (authoritative). Summary: a trusted LBR
+exploitability gate (scripts/run_lbr.py, positive-controls pass N=500; decode = masked-softmax, verified
+0.0 vs the gauntlet adapter) shows net-only R-NaD is FLAT at ~12-15K mbb/g across SIX levers (budget,
+batch, grad-clip, reset-density, CNN representation, last-iterate-vs-time-average readout); eta-annealing
+pre-falsified. Slumbot ~4K, ReBeL ~881, Nash ~0 -> net-only is ~3x too exploitable and capped on this
+hardware. R-NaD is the least-exploitable LOCAL agent (incumbent ~28K > router ~16K > R-NaD ~12K) but NOT
+near-Nash. DECISION (user, goal = tabula-rasa self-play SOTA-EFFICIENCY model): pursue ReBeL-style SEARCH
+INTEGRATED INTO LEARNING (net-centric mainline; Modicum/play-time-bolt-on OUT of scope). Repo already has
+~80% (fast_cfr learned-leaf hooks + per-infostate CFVs + belief=PBS; _HandCFVProbeNet ~= PBS value net;
+CFV-target prototypes; exact Leduc NashConv + leaf oracle). ReBeL plan: sound-with-fixes, SMALL-GAME-FIRST
+(Leduc kill-switch -> small-NLHE -> flop-truncated HUNL). The SOTA-EFFICIENCY contribution = fit near-Nash
+HUNL onto ONE consumer GPU (the GPU leaf-hook port, gated behind the small-game proof).
+NEXT (resume here): the user chose CONSOLIDATE-FIRST; the consolidation doc + this update are it. Then the
+ReBeL de-risk FIRST STEP (~0.5 day, no training): constant-oracle round-trip on Leduc -- solve one subgame
+exactly (run_qfr_leduc_gate oracle CFVs) -> feed back through a cut_node_fn constant leaf -> assert parent
+exact NashConv ~0 (isolates the CFV-normalization + uniform-averaging must-fixes). Then Stage 1 oracle-leaf
+Leduc loop -> Stage 2 learned-leaf bootstrap (gate: Leduc NashConv <= ~0.02, below R-NaD 0.06-0.4).
