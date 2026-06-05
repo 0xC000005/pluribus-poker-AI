@@ -68,3 +68,17 @@ def test_exploitability_infra_and_single_value_trunk_wall():
     exploit = g.nash_conv(g.assemble(sigma1, cont))
     assert exploit > 0.15                           # single-value trunk is far from Nash (the wall)
     assert exploit > 10 * nash_floor
+
+
+def test_subgame_equilibrium_solver_smoke():
+    """solve_subgame_equilibrium (below-cut re-solve, reusable on >=3-level games) returns valid
+    strategies at a cut public state."""
+    g = _leduc()
+    key = sorted({n[1] for n in g.cut_nodes})[0]
+    H = g.n_priv(key, 0)
+    import numpy as np
+    eq = g.solve_subgame_equilibrium(key, np.ones(H) / H, np.ones(g.n_priv(key, 1)) / g.n_priv(key, 1),
+                                     iters=40)
+    assert len(eq) > 0
+    for pr in eq.values():
+        assert abs(pr.sum() - 1.0) < 1e-9 and (pr >= -1e-12).all()

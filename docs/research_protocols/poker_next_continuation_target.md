@@ -3696,3 +3696,23 @@ the belief vectors) -> sigma1 near-Nash on Leduc (sound-by-construction, BOTH pl
 sigma1 exploitability drops from 0.367 toward the Nash floor. Biggest uncertainty (from the brief):
 whether the belief-tree CFR walk is a clean extension of _trunk_cfv or needs range-vectors-as-node-state.
 THEN Phase 2: multi-cut Goofspiel(5) bootstrapping (exact NashConv computable, 4 cuts).
+
+2026-06-06 update — PHASE 1 DECISIVE RESULT: LEDUC (2-level) IS ILL-POSED for depth-limited soundness;
+Phase 1+2 MERGE onto a >=3-level game. Before building a full PBS-CFR trunk, ran the decisive cheap test
+(RESEARCH_LOG 20260606T050000Z): built the generic per-belief subgame solver
+(DepthLimitedGame.solve_subgame_equilibrium + per_belief_equilibrium_leaf_fn) and ran trunk_solve with
+the STRONGEST possible leaf -- the per-belief EQUILIBRIUM value V_i(beta), what a perfect PBS net learns.
+RESULT on Leduc: Nash floor 0.0046; single-value fixed leaf sigma1 0.4435; per-belief EQUILIBRIUM leaf
+sigma1 0.2628 -- the perfect leaf HELPS (0.44->0.26) but does NOT clear the wall (still ~57x Nash). This
+INDEPENDENTLY CONFIRMS the in-repo diagnosis (fixed exact per-range Nash leaf -> 0.239): two leaf types,
+same ~0.25 residual. CONCLUSION: on a 2-level game, a depth-limited trunk with ANY value-function leaf is
+fundamentally biased; only co-evolving full CFR-D (no depth-limit benefit) is sound. The value-net
+soundness benefit -- like bootstrapping -- needs a >=3-LEVEL game (a NON-terminal cut above a subtree
+with its own depth for co-evolution). So PBS-CFR-on-Leduc (Phase 1) is ILL-POSED; soundness + bootstrapping
+both move to GOOFSPIEL(5) (2124 infosets, exact NashConv, 4 cuts). 6 tests in test_rebel_iig_solve.py.
+NEXT (Build 4, redirected) = the >=3-LEVEL GOOFSPIEL build: DepthLimitedGame nested-cut support +
+goofspiel public_key/is_cut + the depth-limited self-play with the net leaf at a non-terminal cut ->
+assembled NashConv vs the exact oracle, where soundness AND bootstrapping are both genuinely testable.
+Then #30 efficiency/scaling. (The generic substrate -- solver, PBS abstraction, leaf oracle, self-play
+loop, subgame solver, exploitability infra -- is all built + tested; Goofspiel needs nested cuts + the
+2 game-specific hooks.)

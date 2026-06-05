@@ -403,6 +403,106 @@ class DepthLimitedGame:
             pol[iid] = pr
         return pol
 
+    def _below_iids_for_key(self, key):
+        iids = set()
+
+        def disc(node):
+            t = node[0]
+            if t == "term":
+                return
+            if t == "chance":
+                for _p, ch in node[1]:
+                    disc(ch)
+            elif t == "cut":
+                disc(node[4])
+            else:
+                iids.add(node[2])
+                for _a, ch in node[3]:
+                    disc(ch)
+
+        for n in self.cut_nodes:
+            if n[1] == key:
+                disc(n[4])
+        return list(iids)
+
+    def solve_subgame_equilibrium(self, key, range0, range1, iters=400, averaging="linear"):
+        """CFR+ equilibrium of the below-cut subgame at public state ``key``, seeded with the entry
+        per-private ranges. Returns {iid: avg strategy} over the below-cut infosets."""
+        nodes = [n for n in self.cut_nodes if n[1] == key]
+        iids = self._below_iids_for_key(key)
+        regret = {i: np.zeros(len(self.iset_actions[i])) for i in iids}
+        stratsum = {i: np.zeros(len(self.iset_actions[i])) for i in iids}
+
+        for t in range(iters):
+            upd = t % 2
+            sig = {}
+            for i in iids:
+                pos = np.maximum(regret[i], 0.0); s = pos.sum()
+                sig[i] = pos / s if s > 1e-15 else np.ones_like(pos) / len(pos)
+            cfvnum = {i: np.zeros(len(self.iset_actions[i])) for i in iids}
+            ownreach = {i: 0.0 for i in iids}
+
+            def walk(node, r0, r1, rc):
+                ty = node[0]
+                if ty == "term":
+                    return node[1]
+                if ty == "chance":
+                    ev = np.zeros(2)
+                    for p, ch in node[1]:
+                        ev += p * walk(ch, r0, r1, rc * p)
+                    return ev
+                if ty == "cut":
+                    return walk(node[4], r0, r1, rc)
+                _, pl, iid, kids = node
+                s = sig[iid]; ownreach[iid] = r0 if pl == 0 else r1
+                cf = (r1 * rc) if pl == 0 else (r0 * rc); row = cfvnum[iid]; ev = np.zeros(2)
+                for i, (_a, ch) in enumerate(kids):
+                    cv = walk(ch, r0 * s[i], r1, rc) if pl == 0 else walk(ch, r0, r1 * s[i], rc)
+                    ev += s[i] * cv; row[i] += cf * cv[pl]
+                return ev
+
+            for _t, _k, i0, i1, sub in nodes:
+                walk(sub, range0[i0], range1[i1], 1.0)
+            w = float(t + 1) if averaging == "linear" else 1.0
+            for i in iids:
+                if self.iset_player[i] != upd:
+                    continue
+                s = sig[i]; v = float(np.dot(s, cfvnum[i]))
+                regret[i] = np.maximum(regret[i] + (cfvnum[i] - v), 0.0)
+                stratsum[i] += w * ownreach[i] * s
+
+        avg = {}
+        for i in iids:
+            ss = stratsum[i].sum()
+            avg[i] = stratsum[i] / ss if ss > 1e-15 else np.ones(len(stratsum[i])) / len(stratsum[i])
+        return avg
+
+    def per_belief_equilibrium_leaf_fn(self, iters=400):
+        """The STRONGEST depth-limited leaf: at each query, re-solve the below-cut subgame to
+        equilibrium AT the queried belief and return the normalized per-private values -- the value a
+        perfect PBS net would learn (V_i(beta)). If the trunk is still biased with THIS leaf, the depth
+        limit is fundamentally unsound on this (shallow) game."""
+        by_key = {}
+        for n in self.cut_nodes:
+            by_key.setdefault(n[1], []).append(n)
+
+        def fn(key, range0, range1):
+            eq = self.solve_subgame_equilibrium(key, range0, range1, iters=iters)
+            pol = self.uniform_policy()
+            for i, pr in eq.items():
+                pol[i] = pr
+            n0, n1 = self.n_priv(key, 0), self.n_priv(key, 1)
+            v0n = np.zeros(n0); v0d = np.zeros(n0); v1n = np.zeros(n1); v1d = np.zeros(n1)
+            for _t, _k, i0, i1, sub in by_key[key]:
+                cont = self.subtree_ev(sub, pol)
+                v0n[i0] += range1[i1] * cont[0]; v0d[i0] += range1[i1]
+                v1n[i1] += range0[i0] * cont[1]; v1d[i1] += range0[i0]
+            v0 = np.divide(v0n, v0d, out=np.zeros(n0), where=v0d > 1e-15)
+            v1 = np.divide(v1n, v1d, out=np.zeros(n1), where=v1d > 1e-15)
+            return v0, v1
+
+        return fn
+
     def roundtrip_error(self, pol, normalize=True):
         """Max |full-game q - depth-limited q| over above-cut infosets (the convention round-trip)."""
         qf = self.full_values(pol)
