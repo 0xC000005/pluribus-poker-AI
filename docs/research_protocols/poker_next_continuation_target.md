@@ -42,11 +42,19 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
   iteration is biased (Stage-1 #3); blueprint/QRE/isolated leaves all fail (QRE sigma1 still 0.15).
   Leduc (2 rounds) validated the PLUMBING but is too shallow to show the net's benefit or resolve
   the trunk bias.
-- **NEXT options (pick one):** (a) reimplement the trunk with faithful ReBeL/CFR-D semantics
-  (leaf value = value of the CO-EVOLVING average, not equilibrium-per-range) and re-test on Leduc;
-  or (b) move to a DEEPER small game (>=3 betting rounds) where the net amortizes expensive subtrees
-  and the trunk-bias question is the real one. Then small-NLHE -> flop-truncated HUNL before any
-  multi-week full-deck scale-up (compute go/no-go first). Slumbot stays held-out.
+- **GATE DIAGNOSIS done (2026-06-04, literature-grounded)** -- the trunk-sigma1 bias is the KNOWN
+  single-value-leaf unsoundness (Brown & Sandholm 2018, arXiv:1805.08195): a single leaf value is
+  unsound in imperfect-info games (assumes one fixed opponent continuation). Ruled out solver
+  accuracy (isolated Nash re-solve err 0.014 at well-reached; QRE badly off at 1.50) and confirmed
+  the bias is structural (accurate exact leaf still gives sigma1 0.24 exploitable). FIX =
+  MULTI-VALUED STATES (opponent chooses among several continuation strategies at the depth limit) or
+  ReBeL PBS-CFR; both known + modest-hardware-feasible (4-core CPU/16GB per Brown-Sandholm). Our
+  gadget already does opponent-choice for the round-2 re-solve; the TRUNK needs the same.
+  `autoresearch-session/rebel/leduc_gate_diagnosis.json`.
+- **NEXT = implement the multi-valued-states (or PBS-CFR) TRUNK** = the faithful gate (well-defined
+  now, not a guess); confirm one clean low-exploitability ReBeL agent on Leduc. THEN the efficiency
+  main line on a real-belief game (small-NLHE -> flop-truncated HUNL), measuring data-gen throughput
+  + exploitability, compute go/no-go before full-deck. Slumbot stays held-out throughout.
 
 ## 2026-05-26 Simplification Reset
 

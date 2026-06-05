@@ -188,6 +188,31 @@ the played agent is a *fixed* strategy σ1+σ2, so `nash_conv` is exact — the 
   expensive subtrees and the bias is the genuine question. Artifacts:
   `autoresearch-session/rebel/leduc_stage2c_{findings,e2e}.json`.
 
+## 5c. Gate diagnosis (2026-06-04) — the trunk bias is the known single-value-leaf unsoundness
+
+The "faithful-loop gate" diagnostic phase **resolved the trunk-σ1 bias and is literature-grounded**:
+- **Ruled out solver inaccuracy:** the isolated Nash round-2 re-solve is accurate at genuinely
+  well-reached entries (CFV error vs the true oracle@star value **0.014** at reach-fraction >20%, 6000
+  iters); the QRE leaf, by contrast, is badly inaccurate (**1.50** — entropy regularization distorts
+  the values, so QRE was the wrong target choice).
+- **Confirmed the bias is structural:** trunk solve with the *verified-accurate* exact per-range Nash
+  leaf **still** gives σ1 at **0.18 L1 / 0.24 exploitable** (true gadget CFVs). Accurate values do not
+  fix it.
+- **Root cause + fix (Brown & Sandholm 2018, "Depth-Limited Solving", arXiv:1805.08195):** a **single**
+  estimated leaf value is *unsound* in imperfect-information games — one value assumes the opponent
+  plays one fixed continuation, so the trunk player isn't robust to the opponent's continuation
+  choice → biased regrets. The fix is **multi-valued states** (the opponent chooses among several
+  continuation strategies/value-vectors at the depth limit) or ReBeL's **PBS-CFR** (belief space).
+  Both are known, sound, and reported feasible on **modest hardware (4-core CPU / 16 GB)** — directly
+  relevant to the single-GPU goal. Our **gadget already implements opponent-choice for the round-2
+  re-solve** (0.21→0.0079); the **trunk needs the same treatment**.
+- **Net state:** every ReBeL mechanic is validated on Leduc *except* the trunk needs multi-valued
+  states — solved, modest-hardware-feasible engineering, not a novel blocker. **The method is proven;
+  the SOTA-efficiency contribution is running it on one GPU on a real game, not re-deriving trunk
+  soundness on toy Leduc.** Next: implement the multi-valued-states / PBS-CFR trunk (faithful gate),
+  then the efficiency main line on a real-belief game. Artifact:
+  `autoresearch-session/rebel/leduc_gate_diagnosis.json`.
+
 ## 6. Reproducibility
 
 - LBR gate + positive controls: `scripts/run_lbr.py`, `test/unit/test_lbr_positive_controls.py`,
