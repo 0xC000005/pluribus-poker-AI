@@ -3599,3 +3599,33 @@ under-determination risk). OPTION 3 (truncate river betting) = optional weak/con
 headline. Guardrail: do NOT HP-sweep the existing loop to cosmetically match iter-0. If Option 1 cannot
 beat the Option-S floor at matched compute, the honest publication is the supervised single-GPU efficiency
 result with self-play reported as a characterized negative -- still a sharp contribution.
+
+2026-06-05 RESUME POINT — OWNER REFRAME to a GENERAL IIG method; the per-street poker road (Option
+S/1) is SUPERSEDED/PARKED. See RESEARCH_LOG 20260605T210000Z (authoritative). NEW GOAL: a GENERAL,
+simple, tabula-rasa self-play method for 2-player zero-sum imperfect-info games -- "the same
+computation solves ANY IIG" -- that is single-GPU-efficient (RTX 3070 Ti, 8GB); HUNL-vs-Slumbot is ONE
+INSTANCE, not the hand-engineered target. The contribution is single-GPU EFFICIENCY of a PROVEN general
+method (ReBeL/PoG/SoG), not a new algorithm. The generality/compute tradeoff is minimized with
+GENERALITY-PRESERVING levers ONLY: GPU-batched subgame solves; TurboReBeL-style fix-strategy
+multi-iteration data harvest (~450x, OpenReview 2025); DCFR/PCFR+; small nets; scale-the-game-not-the-
+algorithm. Single-GPU general precedent exists (LAMIR single-A100, arXiv:2510.05048). The Step-3
+negative result is DISSOLVED -- it was an artifact of pinning the depth limit at the TERMINAL river;
+the general method uses a NON-terminal cut that bootstraps.
+BUILD 1+2 DONE (foundation): poker_ai/rebel/iig.py -- a game-agnostic PublicTree (enumerated entirely
+from OpenSpiel: terminal/chance/decision; private deals + the public cut are both 'chance') + CFR+ +
+exact NashConv. The SAME code across games (scripts/run_rebel_iig_suite.py): Kuhn 0.00034, Leduc 0.00461
+(BIT-IDENTICAL parity vs the trusted LeducTree, |diff|=0.0 -- the correctness gate), Liar's Dice 3-sided
+0.00021, Liar's Dice 6-sided (the ReBeL benchmark, non-poker) 0.00439. 4 tests green
+(test/unit/test_rebel_iig_general.py). It does NOT touch the golden-tested leduc.py/loop.py (it
+parity-validates against them). The specialized self_play.py structured-coverage sampler +
+scripts/run_rebel_supervised_gate.py are PARKED (uncommitted).
+NEXT (resume here): BUILD 3 = generic depth-limited PBS net self-play on the PublicTree -- a public-state
+abstraction (public_state_key / is_depth_limit on the generic tree; OpenSpiel gives information_state
+but not public state, so this is the real new piece -- see Factored-Observation Games / Kovarik et al.
+arXiv:1906.11110), ONE PBS value net over generic [public-state | range0 | range1], the safe-resolving
+gadget, and the self-play loop solving the trunk with the net leaf at a NON-terminal cut -> harvest
+self-consistent CFV targets -> retrain. Validate on Leduc (public-card cut) vs the leaf-oracle control,
+then small games. Decouple loop.py/pbs_value_net.py/leaf_eval.py from Leduc (drop NCARDS/LeducTree) with
+the iig parity gate as protection. THEN Build 3b: single-GPU efficiency levers + HUNL scaling go/no-go
+(tasks #29, #30). Honest ceiling: small games provably near-Nash = GO; depth-limited HUNL LBR-competitive
+= conditional GO; provably-near-Nash full HUNL on one 8GB GPU = NO-GO.
