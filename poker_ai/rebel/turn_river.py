@@ -157,7 +157,7 @@ def subgame_value_pass(solver, avg, hero_range, villain_range):
 
 
 def turn_leaf_river_cfv(turn_board, pot, hero_stack, villain_stack, hero_first_river,
-                        turn_hands, hero_reach, villain_reach, river_iters=150):
+                        turn_hands, hero_reach, villain_reach, river_iters=150, backend="cpu"):
     """Exact river-continuation per-hand counterfactual values at a turn leaf, averaged over the 44
     runouts. ``turn_hands`` = the turn solver's hand list (each a (c1,c2) tuple); hero_reach/
     villain_reach are indexed to match. For each river card r not on the turn board: restrict the
@@ -187,7 +187,8 @@ def turn_leaf_river_cfv(turn_board, pot, hero_stack, villain_stack, hero_first_r
                 continue
             hr_r[ri] = hero_reach[ti]; vr_r[ri] = villain_reach[ti]; back[ri] = ti
         hcfv, vcfv, _ = river_subgame_cfv(board5, pot, hero_stack, villain_stack,
-                                          hero_first_river, hr_r, vr_r, iters=river_iters)
+                                          hero_first_river, hr_r, vr_r, iters=river_iters,
+                                          backend=backend)
         for ri, ti in back.items():
             cut_h[ti] += hcfv[ri]; cut_v[ti] += vcfv[ri]
     cut_h /= 44.0; cut_v /= 44.0
@@ -237,7 +238,7 @@ def make_exact_river_showdown_fn(turn_solver, river_iters=150):
 
 
 def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
-                      hero_range, villain_range, iters=200):
+                      hero_range, villain_range, iters=200, backend="cpu"):
     """Solve a river subgame range-vs-range and return the AVERAGE-strategy per-hand counterfactual
     values (hero_cfv, villain_cfv), each shape (n_river_hands,), in chips, opponent-reach-weighted
     (the same convention as solve_cfr's terminal hvals/vvals -- so they drop straight into a turn
@@ -256,8 +257,8 @@ def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
     rs = StreetSolver(board5, pot, hero_stack, villain_stack, hero_first)
     hr = np.asarray(hero_range, dtype=np.float32)
     vr = np.asarray(villain_range, dtype=np.float32)
-    rs.solve(n_iterations=iters, hero_range=hr, villain_range=vr, backend="cpu")
-    avg = _average_strategy_array(rs._strategy_sum)
+    rs.solve(n_iterations=iters, hero_range=hr, villain_range=vr, backend=backend)
+    avg = _average_strategy_array(np.asarray(rs._strategy_sum))
     hcfv, vcfv = subgame_value_pass(rs, avg, hr.astype(np.float64), vr.astype(np.float64))
     return hcfv, vcfv, rs.hands
 
