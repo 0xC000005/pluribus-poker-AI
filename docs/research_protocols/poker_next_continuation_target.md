@@ -3569,3 +3569,33 @@ This is where the trunk multi-valued-states soundness question becomes live (Led
 THEN Step 4: scale (flop-truncated HUNL / deeper truncation) + an explicit compute go/no-go before any
 multi-week run. Tasks #26 (Step 3), #27 (Step 4) track this. Uncommitted at this point: only
 `scripts/run_rebel_net_gate.py` + this doc + RESEARCH_LOG (the C-completion commit).
+
+2026-06-05 RESUME POINT — Step 3 (turn+river SELF-PLAY loop) DONE; result NEGATIVE-BUT-INFORMATIVE;
+contribution REPRICED to single-GPU EFFICIENCY; build paused on a user decision. See RESEARCH_LOG
+20260605T180000Z (authoritative). Built `poker_ai/rebel/self_play.py` (on-policy + exploration PBS
+sampling, EXACT-river targets, reservoir, abort-on-drift) + `scripts/run_rebel_self_play.py` + tests
+(27/27 rebel green; `run_rebel_net_gate.py` refactored to import the shared helpers). 8-iter run on the
+C-gate spot: ITER 0 (broad random coverage) is BEST at 0.072 pot (~= single-shot 0.076); on-policy iters
+DRIFT UP to plateau 0.084; net MAE rises 3.8%->7.4%; exact-leaf control floor 0.041. DECOMP of 0.072 =
+0.041 perfect-leaf residual (24 trunk iters + BR over-reads low-reach) + 0.031 net-approx (reproducible)
++ 0.012 drift. ROOT CAUSE: river is the LAST street -> exact targets -> NO bootstrapping; self-play only
+shifts the PBS distribution broad->peaked, which HURTS. Same shallowness as Leduc Stage-2c.
+LITERATURE-CORROBORATED (textbook, not a failure): DeepStack uses NO river net + trains flop-from-turn-net
+(bootstrap BETWEEN streets) on STRUCTURED pseudo-random ranges; ReBeL bootstraps only at NON-terminal
+leaves + eps=0.25 exploration (uniform-random "fails to learn"); Supremus per-round-except-final, win is
+NET QUALITY. REPRICE: "self-play is the win" FALSIFIED; surviving defensible contribution = a SOUND
+near-Nash HUNL resolver on ONE 8GB consumer GPU with a VERIFIED exploitability residual decomposition --
+matches the standing thesis (efficiency of a proven method, not re-deriving the method). TWO SEPARATED
+LEVERS: (a) close 0.072->0.041 = SUPERVISED net quality (broader/structured coverage + bigger net +
+continual resolving), NOT self-play; (b) make self-play MATTER = bootstrapping DEPTH.
+NEXT (resume here): the user chose RECORD + PAUSE; this entry + the log are it. The recommended build
+sequence when resumed is OPTION S then OPTION 1: (S) push the river net toward the 0.041 floor the
+DeepStack way (structured pseudo-random coverage + bigger net + continual resolving) -- locks in the
+single-GPU efficiency deliverable AND sets the matched-compute baseline; then (1) FLOP trunk + a
+bootstrapped net TURN leaf (turn-net targets harvested by solving the turn subgame with the net river
+leaf) -- the ONLY honest, matched-compute A/B for whether self-play bootstrapping beats supervised
+amortization, gated behind a compute go/no-go (flop PBS dim >100 vs ~6 verified on Leduc; thin-reach
+under-determination risk). OPTION 3 (truncate river betting) = optional weak/confounded de-risk, not the
+headline. Guardrail: do NOT HP-sweep the existing loop to cosmetically match iter-0. If Option 1 cannot
+beat the Option-S floor at matched compute, the honest publication is the supervised single-GPU efficiency
+result with self-play reported as a characterized negative -- still a sharp contribution.
