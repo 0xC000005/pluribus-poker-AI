@@ -3716,3 +3716,19 @@ assembled NashConv vs the exact oracle, where soundness AND bootstrapping are bo
 Then #30 efficiency/scaling. (The generic substrate -- solver, PBS abstraction, leaf oracle, self-play
 loop, subgame solver, exploitability infra -- is all built + tested; Goofspiel needs nested cuts + the
 2 game-specific hooks.)
+
+2026-06-06 update — GOOFSPIEL FOUNDATION DONE (the >=3-level testbed is now in the generic substrate).
+Goofspiel is natively SIMULTANEOUS -> use OpenSpiel load_game_as_turn_based -> SEQUENTIAL; points_order=
+random gives prize-reveal chance cuts (num_cards C -> C-1 cuts). No public observer -> added a custom
+public_key_fn (iig_pbs.goofspiel_public_key: parse Point card sequence + Win sequence + Points;
+private = P{p} hand/action lines) + goofspiel_is_cut + load_goofspiel. VERIFIED on Goofspiel(4)
+turn-based: the SAME generic CFR+ reaches NashConv 0.00278 (exact Nash on a >=3-level non-poker game),
+n_iset ~3608; PBS cut structure = 12 public states, belief dim 4/player. 2 tests
+(test/unit/test_rebel_iig_goofspiel.py). RESEARCH_LOG 20260606T070000Z. This de-risks the build:
+the >=3-level testbed is representable, solvable, multi-level-cut.
+NEXT (the hard CORE of Build 4) = NESTED-CUT depth-limited self-play: extend DepthLimitedGame._build
+with depth_level so is_cut fires at EACH round boundary (not just the first); oracle/leaf recursion
+across cut levels (the leaf at cut-d is a net query over cut-(d+1) values, themselves net/exact ->
+genuine bootstrapping); then depth-limited self-play with the net leaf at NON-terminal cuts -> assembled
+NashConv vs the exact oracle. On Goofspiel (>=3 levels) BOTH trunk soundness AND bootstrapping are
+genuinely testable (unlike 2-level Leduc, which Phase 1 proved ill-posed). Then #30 efficiency/scaling.

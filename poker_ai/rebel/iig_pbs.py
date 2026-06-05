@@ -53,6 +53,36 @@ def first_decision_is_cut(state):
     return (not state.is_terminal()) and (not state.is_chance_node())
 
 
+# --- Goofspiel: a >=3-level imperfect-info testbed (simultaneous -> sequential via turn-based wrapper) -
+def load_goofspiel(num_cards=4, points_order="random", imp_info=True):
+    """Goofspiel as a SEQUENTIAL game (turn-based wrapper of the natively-simultaneous game) -- a
+    >=3-level imperfect-info testbed with public prize-reveal chance cuts and exact NashConv."""
+    return pyspiel.load_game_as_turn_based(
+        "goofspiel", {"imp_info": imp_info, "num_cards": num_cards, "points_order": points_order})
+
+
+def _goofspiel_public_lines(state):
+    return [l for l in state.information_state_string(0).split("\n")
+            if l.startswith(("Point card sequence", "Win sequence", "Points"))]
+
+
+def goofspiel_public_key(state):
+    """Goofspiel public state = revealed prize cards + win/loss history + points. OpenSpiel exposes no
+    public observer for Goofspiel, so derive it from the PUBLIC lines of the info-state (the private
+    'P{p} hand'/'action sequence' lines are excluded -> both players agree on this key)."""
+    return "|".join(_goofspiel_public_lines(state))
+
+
+def goofspiel_is_cut(state):
+    """Depth-limit cut at a prize-reveal chance node after >=1 prize has been revealed (a non-root round
+    boundary). Nested multi-level cuts (one per round) are a later extension."""
+    if not state.is_chance_node():
+        return False
+    pcs = [l for l in _goofspiel_public_lines(state) if l.startswith("Point card sequence")]
+    seq = pcs[0].split(":", 1)[1].strip() if pcs else ""
+    return len(seq) >= 1
+
+
 class PBSStructure:
     """Generic public-state structure: enumerate the depth-limit cuts of an OpenSpiel game and read the
     public belief state (per-player per-private reach) under a policy."""
