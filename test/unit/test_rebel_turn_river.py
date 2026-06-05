@@ -7,7 +7,7 @@ import numpy as np
 
 from poker_ai.rebel.turn_river import (
     parse_card, card_str, default_spot, build_turn_solver, showdown_cut_indices,
-    _average_strategy_array, subgame_value_pass,
+    _average_strategy_array, subgame_value_pass, turn_leaf_river_cfv,
 )
 
 
@@ -60,3 +60,21 @@ def test_subgame_value_pass_convention_identity():
     lhs = float(np.dot(hr, hcfv) + np.dot(vr, vcfv))
     rhs = POT * float(hr @ rs.valid @ vr)
     assert abs(lhs - rhs) < 1e-2
+
+
+def test_turn_leaf_river_cfv_convention_identity():
+    # Runout-averaging + turn<->river hand-index mapping must preserve the convention identity:
+    #   sum(hr*ch) + sum(vr*cv) == P_cut * (hr @ valid_turn @ vr)
+    # Use an all-in cut (stacks 0 -> river subgames are single showdown nodes) so it runs fast.
+    import numpy as np
+    import solver as S
+    turn_board = [50, 45, 20, 3]  # Ah Kd 7c 2s
+    POT = 600
+    ts = S.StreetSolver(turn_board, POT, 0, 0, True)  # all-in cut: 0 stacks
+    n = ts.n
+    hr = np.ones(n) / n
+    vr = np.ones(n) / n
+    ch, cv = turn_leaf_river_cfv(turn_board, POT, 0, 0, True, ts.hands, hr, vr, river_iters=1)
+    lhs = float(np.dot(hr, ch) + np.dot(vr, cv))
+    rhs = POT * float(hr @ ts.valid @ vr)
+    assert abs(lhs - rhs) < 2.0
