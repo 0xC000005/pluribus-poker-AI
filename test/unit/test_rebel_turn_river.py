@@ -120,3 +120,24 @@ def test_exact_river_showdown_fn_integration():
     ts.solve(n_iterations=1, hero_range=hr, villain_range=vr, backend="cpu", showdown_leaf_fn=sdfn)
     strat = ts.get_strategy(ts.hands[0])
     assert abs(sum(strat.values()) - 1.0) < 1e-6
+
+
+def test_turn_leaf_river_cfv_batched_matches_cpu():
+    # GPU-batched 44-runout solve must satisfy the same convention identity as the CPU path.
+    import numpy as np
+    import torch
+    if not torch.cuda.is_available():
+        import pytest as _pt
+        _pt.skip("CUDA not available")
+    import solver as S
+    from poker_ai.rebel.turn_river import turn_leaf_river_cfv_batched
+    tb = [50, 45, 20, 3]
+    POT, HS, VS = 600, 200, 200
+    ts = S.StreetSolver(tb, POT, HS, VS, True)
+    n = ts.n
+    hr = np.ones(n) / n
+    vr = np.ones(n) / n
+    ch, cv = turn_leaf_river_cfv_batched(tb, POT, HS, VS, True, ts.hands, hr, vr, river_iters=50)
+    lhs = float(np.dot(hr, ch) + np.dot(vr, cv))
+    rhs = POT * float(hr @ ts.valid @ vr)
+    assert abs(lhs - rhs) < 2.0

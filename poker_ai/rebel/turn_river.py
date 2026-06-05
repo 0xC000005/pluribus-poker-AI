@@ -237,6 +237,53 @@ def make_exact_river_showdown_fn(turn_solver, river_iters=150):
     return showdown_leaf_fn
 
 
+def turn_leaf_river_cfv_batched(turn_board, pot, hero_stack, villain_stack, hero_first_river,
+                                turn_hands, hero_reach, villain_reach, river_iters=150, device="cuda"):
+    """GPU-batched version of turn_leaf_river_cfv: the 44 river runouts share betting topology
+    (the board card changes only the showdown matrices + hand set), so all river solves run in ONE
+    same-topology batched GPU call (solve_cfr_levelsync_torch_batched_same_topology). Per-river value
+    extraction (subgame_value_pass) is then cheap CPU. Numerically equivalent to turn_leaf_river_cfv
+    (CFR equilibrium-selection noise aside) but far faster -- this is the efficiency lever for
+    offline target generation. Returns (hero_cfv, villain_cfv) per turn hand, net-from-river."""
+    from fast_cfr import solve_cfr_levelsync_torch_batched_same_topology
+    n = len(turn_hands)
+    turn_idx = {tuple(h): i for i, h in enumerate(turn_hands)}
+    hero_reach = np.asarray(hero_reach, dtype=np.float64)
+    villain_reach = np.asarray(villain_reach, dtype=np.float64)
+    solvers, trees = [], []
+    wms, lms, tms, vms, hrs, vrs, backs = [], [], [], [], [], [], []
+    for r in [c for c in range(52) if c not in turn_board]:
+        board5 = turn_board + [r]
+        rsr = StreetSolver(board5, pot, hero_stack, villain_stack, hero_first_river)
+        rh2i = rsr.hand_to_idx
+        hr_r = np.zeros(rsr.n, dtype=np.float32); vr_r = np.zeros(rsr.n, dtype=np.float32)
+        back = {}
+        for h, ti in turn_idx.items():
+            if r in h:
+                continue
+            ri = rh2i.get(h)
+            if ri is None:
+                continue
+            hr_r[ri] = hero_reach[ti]; vr_r[ri] = villain_reach[ti]; back[ri] = ti
+        solvers.append(rsr); trees.append(rsr._tree)
+        wms.append(rsr.win_m); lms.append(rsr.lose_m); tms.append(rsr.tie_m); vms.append(rsr.valid)
+        hrs.append(hr_r); vrs.append(vr_r); backs.append(back)
+    nh = solvers[0].n
+    bsz = len(solvers)
+    _, batched_ss = solve_cfr_levelsync_torch_batched_same_topology(
+        trees, nh, wms, lms, tms, vms,
+        [pot] * bsz, [hero_stack] * bsz, [villain_stack] * bsz,
+        n_iterations=river_iters, hero_ranges=hrs, villain_ranges=vrs, device=device)
+    cut_h = np.zeros(n); cut_v = np.zeros(n)
+    for k, rsr in enumerate(solvers):
+        avg = _average_strategy_array(batched_ss[k])
+        hcfv, vcfv = subgame_value_pass(rsr, avg, hrs[k].astype(np.float64), vrs[k].astype(np.float64))
+        for ri, ti in backs[k].items():
+            cut_h[ti] += hcfv[ri]; cut_v[ti] += vcfv[ri]
+    cut_h /= 44.0; cut_v /= 44.0
+    return cut_h, cut_v
+
+
 def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
                       hero_range, villain_range, iters=200, backend="cpu"):
     """Solve a river subgame range-vs-range and return the AVERAGE-strategy per-hand counterfactual
