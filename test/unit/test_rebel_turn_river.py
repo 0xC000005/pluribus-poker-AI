@@ -171,3 +171,24 @@ def test_street_nashconv_small_spot():
     uni_nc = street_nashconv(rs, uni, hr.astype(np.float64), vr.astype(np.float64))
     assert eq_nc < 0.05 * POT          # equilibrium near-unexploitable on a small tree
     assert uni_nc > eq_nc + 0.02 * POT  # degenerate clearly more exploitable
+
+
+def test_two_street_nashconv_identity_and_ordering():
+    # 2-street (turn+river) exploitability: (1) agent value satisfies the pot-awarded convention
+    # identity hero_ev+vill_ev == pot*P_valid; (2) a degenerate uniform turn agent is exploitable
+    # (NashConv > 0). Short-stack spot -> small turn tree + trivial rivers (fast).
+    import numpy as np
+    from poker_ai.rebel.turn_river import (TurnSpot, build_turn_solver, two_street_nashconv, parse_card)
+    spot = TurnSpot(board=[parse_card(c) for c in ("Ah", "Kd", "7c", "2s")],
+                    pot=1000, hero_stack=100, villain_stack=100, hero_first=True)
+    ts = build_turn_solver(spot)
+    n = ts.n; nn = ts._tree["n_nodes"]; na = ts._tree["n_actions"]
+    hr = np.ones(n) / n; vr = np.ones(n) / n
+    uni = np.zeros((nn, na, n))
+    for i in range(nn):
+        for a in ts._tree["decision_actions"][i]:
+            uni[i, a, :] = 1.0 / len(ts._tree["decision_actions"][i])
+    r = two_street_nashconv(ts, uni, hr, vr, river_iters=20)
+    pv = float(hr @ ts.valid @ vr)
+    assert abs((r["hero_ev"] + r["vill_ev"]) - 1000 * pv) < 5.0   # convention identity
+    assert r["nashconv"] > 0.02 * 1000                            # degenerate agent is exploitable

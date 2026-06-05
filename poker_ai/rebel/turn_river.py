@@ -98,13 +98,19 @@ def _average_strategy_array(strategy_sum):
     return avg
 
 
-def subgame_value_pass(solver, avg, hero_range, villain_range):
+def subgame_value_pass(solver, avg, hero_range, villain_range, showdown_override=None):
     """Exact per-hand counterfactual values (hero_cfv, villain_cfv) at the ROOT of a solved
     StreetSolver, under a FIXED strategy ``avg`` (shape (n_nodes, n_actions, n)) and the given
     ranges. Mirrors solve_cfr's forward(reach)/terminal/backward(value) passes with the verified
     terminal coefficients (fast_cfr.py L376-391): value = net chips from subgame start with the
     pre-existing pot awarded -> per valid pair hero_val(a,b)+villain_val(b,a)=pot_start. Returns
-    opponent-reach-weighted counterfactual values in chips (the cut_node_fn convention)."""
+    opponent-reach-weighted counterfactual values in chips (the cut_node_fn convention).
+
+    ``showdown_override``: optional dict {showdown_term_idx: (hv_vec, vv_vec)} -- use these
+    (already counterfactual, per hand) at the given showdown terminals instead of the showdown
+    coefficients. Used to inject a river-continuation value at the turn's river-deal leaves
+    (the values must be computed at this same strategy's reaches)."""
+    ov = showdown_override or {}
     t = solver._tree
     nn = t["n_nodes"]; n = solver.n
     player = t["player"]; children = t["children"]; dacts = t["decision_actions"]
@@ -142,7 +148,9 @@ def subgame_value_pass(solver, avg, hero_range, villain_range):
         hi = HS - sh[i]; vi = VS - sv[i]
         vfull = vr0 * vstrat[i]               # villain range * villain strat reach to terminal
         hfull = hr0 * hstrat[i]               # hero range * hero strat reach
-        if i in show:
+        if i in ov:
+            hv, vv = ov[i]
+        elif i in show:
             hv = (ps + vi) * (vfull @ winT) + (-hi) * (vfull @ loseT) + ((ps + vi - hi) / 2) * (vfull @ tieT)
             vv = (ps + hi) * (hfull @ lose) + (-vi) * (hfull @ win) + ((ps + hi - vi) / 2) * (hfull @ tie)
         elif i in hfold:
@@ -237,10 +245,11 @@ def make_exact_river_showdown_fn(turn_solver, river_iters=150):
     return showdown_leaf_fn
 
 
-def _street_terminal_values(solver, hr, vr):
+def _street_terminal_values(solver, hr, vr, showdown_override=None):
     """Per-node terminal counterfactual values (hv, vv) given forward reaches hr/vr at every node,
     using the verified terminal coefficients. hv[i]=hero value (villain-reach-weighted), vv[i]=
-    villain value (hero-reach-weighted). Only terminal rows are meaningful."""
+    villain value (hero-reach-weighted). Only terminal rows are meaningful. ``showdown_override``:
+    optional dict {term_idx:(hv_vec,vv_vec)} to inject river-continuation values at river-deal leaves."""
     t = solver._tree; nn = t["n_nodes"]; n = solver.n
     player = t["player"]; sh = t["stacks_h"]; sv = t["stacks_v"]
     win = solver.win_m; lose = solver.lose_m; tie = solver.tie_m; valid = solver.valid
@@ -259,16 +268,18 @@ def _street_terminal_values(solver, hr, vr):
             hv[i] = (-hi) * (vr[i] @ validT); vv[i] = (ps + hi) * (hr[i] @ valid)
         elif i in vf:
             hv[i] = (ps + vi) * (vr[i] @ validT); vv[i] = (-vi) * (hr[i] @ valid)
+    for ti, (ho, vo) in (showdown_override or {}).items():
+        hv[ti] = ho; vv[ti] = vo
     return hv, vv
 
 
-def street_br_value(solver, avg, br_player, hero_range, villain_range):
+def street_br_value(solver, avg, br_player, hero_range, villain_range, showdown_override=None):
     """Best-response counterfactual value (per br_player hand) when ``br_player`` (0=hero,1=villain)
     best-responds and the OTHER player plays ``avg`` (strategy array (n_nodes,n_actions,n)). Returns
     the per-hand BR counterfactual value at the root. Method: forward-propagate ONLY the fixed
     player's reach; the BR player's value is then a backward pass that MAXes over the BR player's
     actions and SUMs over the fixed player's actions (the fixed player's strategy is already in its
-    reach). Avoids the opponent-strategy index mismatch."""
+    reach). Avoids the opponent-strategy index mismatch. ``showdown_override``: inject river leaves."""
     t = solver._tree; nn = t["n_nodes"]; n = solver.n
     player = t["player"]; children = t["children"]; dacts = t["decision_actions"]
     fixed = 1 - br_player
@@ -283,7 +294,7 @@ def street_br_value(solver, avg, br_player, hero_range, villain_range):
                 hr[c] = hr[i] * (avg[i, a] if fixed == 0 else 1.0); vr[c] = vr[i]
             else:
                 vr[c] = vr[i] * (avg[i, a] if fixed == 1 else 1.0); hr[c] = hr[i]
-    hv, vv = _street_terminal_values(solver, hr, vr)
+    hv, vv = _street_terminal_values(solver, hr, vr, showdown_override)
     val = hv if br_player == 0 else vv
     out = {}
 
@@ -307,6 +318,91 @@ def street_nashconv(solver, avg, hero_range, villain_range):
     br_h = float(hr @ street_br_value(solver, avg, 0, hr, vr))
     br_v = float(vr @ street_br_value(solver, avg, 1, hr, vr))
     return (br_h - hero_ev) + (br_v - vill_ev)
+
+
+def cut_river_values(turn_board, pot, hs, vs, hero_first, turn_hands, hr_reach, vr_reach,
+                     river_iters=300, backend="cpu"):
+    """At a turn leaf (board4, pot, stacks, entry reaches), re-solve the 44 river runouts and return
+    per-turn-hand, net-from-river:
+      A_h, A_v : the AGENT's continuation value (it plays the river equilibrium it re-solved),
+      B_h, B_v : the per-player river BEST-RESPONSE value (hero/villain best-responds to the agent's
+                 re-solved river strategy at the entry ranges).
+    All averaged over the 44 runouts. A is what the agent earns; B is what an opponent can earn by
+    best-responding to the agent's (frozen) river play -- the basis of the 2-street exploitability."""
+    n = len(turn_hands)
+    turn_idx = {tuple(h): i for i, h in enumerate(turn_hands)}
+    hr_reach = np.asarray(hr_reach, np.float64); vr_reach = np.asarray(vr_reach, np.float64)
+    A_h = np.zeros(n); A_v = np.zeros(n); B_h = np.zeros(n); B_v = np.zeros(n)
+    for r in [c for c in range(52) if c not in turn_board]:
+        board5 = turn_board + [r]
+        rsr = StreetSolver(board5, pot, hs, vs, hero_first)
+        rh2i = rsr.hand_to_idx
+        hr_r = np.zeros(rsr.n); vr_r = np.zeros(rsr.n); back = {}
+        for h, ti in turn_idx.items():
+            if r in h:
+                continue
+            ri = rh2i.get(h)
+            if ri is None:
+                continue
+            hr_r[ri] = hr_reach[ti]; vr_r[ri] = vr_reach[ti]; back[ri] = ti
+        rsr.solve(n_iterations=river_iters, hero_range=hr_r.astype(np.float32),
+                  villain_range=vr_r.astype(np.float32), backend=backend)
+        avg = _average_strategy_array(np.asarray(rsr._strategy_sum))
+        ah, av = subgame_value_pass(rsr, avg, hr_r, vr_r)
+        bh = street_br_value(rsr, avg, 0, hr_r, vr_r)
+        bv = street_br_value(rsr, avg, 1, hr_r, vr_r)
+        for ri, ti in back.items():
+            A_h[ti] += ah[ri]; A_v[ti] += av[ri]; B_h[ti] += bh[ri]; B_v[ti] += bv[ri]
+    return A_h / 44.0, A_v / 44.0, B_h / 44.0, B_v / 44.0
+
+
+def two_street_nashconv(turn_solver, turn_avg, hero_range, villain_range, river_iters=300, backend="cpu"):
+    """Exploitability (NashConv) of the 2-street agent = (turn strategy ``turn_avg``) + (river played
+    by re-solving at the turn-induced ranges, frozen). Forward turn_avg to get the agent's ranges at
+    each river-deal (showdown) leaf; per leaf compute the agent river value (A) and the per-player
+    river BR value (B) via cut_river_values, apply the net-from-turn offset, and inject as showdown
+    overrides into the turn value pass (agent) and the turn BR passes (hero/villain). Returns
+    (nashconv, hero_exploit, villain_exploit). Use on SMALL/short-stack spots (BR is reliable there)."""
+    t = turn_solver._tree; nn = t["n_nodes"]; n = turn_solver.n
+    player = t["player"]; children = t["children"]; dacts = t["decision_actions"]
+    sh = t["stacks_h"]; sv = t["stacks_v"]; potN = t["pot"]
+    HS0 = turn_solver.hero_stack_start; VS0 = turn_solver.villain_stack_start
+    board = list(turn_solver.board); hero_first = turn_solver.hero_first
+    valid = turn_solver.valid; validT = valid.T
+    show = list(t["showdown_idx"].tolist())
+    hr = np.asarray(hero_range, np.float64); vr = np.asarray(villain_range, np.float64)
+
+    # forward turn_avg -> reaches (range*strat) at every node
+    HR = np.zeros((nn, n)); VR = np.zeros((nn, n)); HR[0] = hr; VR[0] = vr
+    for i in range(nn):
+        if player[i] == -1:
+            continue
+        for a in dacts[i]:
+            c = children[i, a]
+            if player[i] == 0:
+                HR[c] = HR[i] * turn_avg[i, a]; VR[c] = VR[i]
+            else:
+                HR[c] = HR[i]; VR[c] = VR[i] * turn_avg[i, a]
+
+    agent_ov, brh_ov, brv_ov = {}, {}, {}
+    for ci in show:
+        P_cut = int(potN[ci]); hs = int(sh[ci]); vs = int(sv[ci])
+        hi_cut = HS0 - hs; vi_cut = VS0 - vs
+        A_h, A_v, B_h, B_v = cut_river_values(board, P_cut, hs, vs, hero_first, turn_solver.hands,
+                                              HR[ci], VR[ci], river_iters=river_iters, backend=backend)
+        hoff = hi_cut * (VR[ci] @ validT)     # net-from-river -> net-from-turn
+        voff = vi_cut * (HR[ci] @ valid)
+        agent_ov[ci] = (A_h - hoff, A_v - voff)
+        brh_ov[ci] = (B_h - hoff, B_v - voff)
+        brv_ov[ci] = (B_h - hoff, B_v - voff)
+
+    hcfv, vcfv = subgame_value_pass(turn_solver, turn_avg, hr, vr, showdown_override=agent_ov)
+    hero_ev = float(hr @ hcfv); vill_ev = float(vr @ vcfv)
+    br_h = float(hr @ street_br_value(turn_solver, turn_avg, 0, hr, vr, showdown_override=brh_ov))
+    br_v = float(vr @ street_br_value(turn_solver, turn_avg, 1, hr, vr, showdown_override=brv_ov))
+    hero_exploit = br_h - hero_ev; vill_exploit = br_v - vill_ev
+    return {"nashconv": hero_exploit + vill_exploit, "hero_exploit": hero_exploit,
+            "vill_exploit": vill_exploit, "hero_ev": hero_ev, "vill_ev": vill_ev}
 
 
 def turn_leaf_river_cfv_batched(turn_board, pot, hero_stack, villain_stack, hero_first_river,
