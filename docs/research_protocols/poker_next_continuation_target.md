@@ -85,10 +85,33 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
     (own range factored out -> counterfactual value). VERIFIED via the identity exactly across 3
     spots (e.g. 371.429==371.429); regression test in test_rebel_turn_river. `river_subgame_cfv`
     now uses it.
-  - **THEN:** 44-runout averaging (river card-removal + turn<->river hand-index mapping), the
-    offset-corrected cut_node_fn, a 2-street BR exploitability metric, multi-valued states. Run the
-    gate on a SMALL/short-stack turn spot (exact oracle is per-iteration-infeasible at 80bb).
-    Slumbot stays held-out throughout.
+  - **EXACT-RIVER LEAF MACHINERY COMPLETE + VERIFIED + INTEGRATED (2026-06-05):** all layers built
+    and numerically verified in `turn_river.py`: `subgame_value_pass` (extractor, identity exact) ->
+    `turn_leaf_river_cfv` (44-runout averaging + turn<->river hand mapping, identity 550.53==550.53) ->
+    convention offset (net-from-river -> net-from-turn-start, matches turn equity to ~1e-5 at all-in)
+    -> `make_exact_river_showdown_fn` (drives solve_cfr via showdown_leaf_fn -- NOT cut_node_fn, which
+    needs decision nodes; smoke runs the turn solve end-to-end). 7 turn_river unit tests green.
+    Commits b478240 -> d5ecf49.
+  - **PLAN A->B->C (goal-driven, 2026-06-05):**
+    - **A DONE -- GPU-fast target gen:** `turn_leaf_river_cfv_batched` runs all 44 runouts in ONE
+      same-topology batched GPU call (the board only changes matrices/hands). VERIFIED exact-match to
+      the CPU path (identity 3670.21==3670.21, EV diff 0.156), **3.1x** (36.8s->11.8s). backend param
+      threaded; per-solve GPU is only ~1.1x so batching was the win. Commits ff3e68e, bc2f03d.
+      (Further win available: cache the 44 river matrices/trees across PBSs at a fixed cut state.)
+    - **B (part 1 DONE) -- single-street best-response:** `street_br_value`/`street_nashconv`
+      (turn_river.py). Forward fixed-player reach; backward MAX at BR nodes / SUM at fixed nodes.
+      VERIFIED: agent-plays-avg BR == subgame_value_pass exactly (0.0) on 15/75-node trees; small-tree
+      equilibrium NashConv <0.05*pot, degenerate clearly higher (8 tests green; commit d58f700).
+      CAVEAT: on DEEP trees the BR exploits poorly-averaged low-reach infosets (NashConv grows with
+      tree size, flat across iters) -> measure on SMALL/short-stack spots (also the gate's domain).
+    - **B (part 2 NEXT) -- 2-street composition:** turn BR with river-BR leaf values (per cut: river
+      BR vs the agent's river strategy, averaged over runouts + the net-from-turn offset). The
+      exact-river-leaf agent's 2-street NashConv should be HIGH (single-value bias, like Leduc 0.21);
+      the gadget-safe agent low. Build on small/short-stack spots.
+    - **C -- value-net targets + train + measure:** generate PBS targets offline with the batched
+      exact-river leaf over sampled turn-leaf PBSs, train the PBS net, use it as the live
+      showdown_leaf_fn, measure exploitability (via B) + throughput vs the exact leaf; single-value
+      vs multi-valued/gadget is the correctness check (already proven on Leduc). Slumbot held-out.
 
 ## 2026-05-26 Simplification Reset
 
