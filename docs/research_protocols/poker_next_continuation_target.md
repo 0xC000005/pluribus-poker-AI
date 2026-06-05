@@ -108,10 +108,18 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
       BR vs the agent's river strategy, averaged over runouts + the net-from-turn offset). The
       exact-river-leaf agent's 2-street NashConv should be HIGH (single-value bias, like Leduc 0.21);
       the gadget-safe agent low. Build on small/short-stack spots.
-    - **C -- value-net targets + train + measure:** generate PBS targets offline with the batched
-      exact-river leaf over sampled turn-leaf PBSs, train the PBS net, use it as the live
-      showdown_leaf_fn, measure exploitability (via B) + throughput vs the exact leaf; single-value
-      vs multi-valued/gadget is the correctness check (already proven on Leduc). Slumbot held-out.
+    - **C (DONE -- efficiency thesis CONFIRMED):** RiverPBSNet (poker_ai/rebel/river_pbs_net.py)
+      trained on exact-river-leaf targets at the check-check cut (1128 hands). LEARNABILITY: held-out
+      reach-weighted MAE 3.9% of value scale (train~=val; plateaus by N~200). EFFICIENCY: net
+      inference 0.059ms vs exact leaf 10632ms => **181,000x faster** -- the net turns the
+      per-iteration-infeasible exact leaf (323 hrs/turn-solve) into a sub-ms forward pass, making
+      single-GPU ReBeL feasible. 2 net tests green. Commit 28ca305 + this entry.
+    - **NEXT (C extension -> the net-leaf gate):** a pot/stacks-GENERAL river net (features include
+      the cut's pot/stacks; targets sampled across cut public states) so the net covers every river
+      leaf the turn solve reaches; then use it as the live showdown_leaf_fn over a full turn solve
+      and measure the net-leaf agent's 2-street exploitability (B) vs the exact-leaf control (the
+      single-value-vs-multi-valued correctness gate, already proven on Leduc). Then flop-truncated
+      HUNL. Slumbot held-out throughout.
 
 ## 2026-05-26 Simplification Reset
 
