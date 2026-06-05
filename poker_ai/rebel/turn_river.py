@@ -98,6 +98,64 @@ def _average_strategy_array(strategy_sum):
     return avg
 
 
+def subgame_value_pass(solver, avg, hero_range, villain_range):
+    """Exact per-hand counterfactual values (hero_cfv, villain_cfv) at the ROOT of a solved
+    StreetSolver, under a FIXED strategy ``avg`` (shape (n_nodes, n_actions, n)) and the given
+    ranges. Mirrors solve_cfr's forward(reach)/terminal/backward(value) passes with the verified
+    terminal coefficients (fast_cfr.py L376-391): value = net chips from subgame start with the
+    pre-existing pot awarded -> per valid pair hero_val(a,b)+villain_val(b,a)=pot_start. Returns
+    opponent-reach-weighted counterfactual values in chips (the cut_node_fn convention)."""
+    t = solver._tree
+    nn = t["n_nodes"]; n = solver.n
+    player = t["player"]; children = t["children"]; dacts = t["decision_actions"]
+    sh = t["stacks_h"]; sv = t["stacks_v"]
+    win = solver.win_m; lose = solver.lose_m; tie = solver.tie_m; valid = solver.valid
+    winT, loseT, tieT, validT = win.T, lose.T, tie.T, valid.T
+    ps = solver.pot_start; HS = solver.hero_stack_start; VS = solver.villain_stack_start
+    show = set(t["showdown_idx"].tolist())
+    hfold = set(t["hero_fold_idx"].tolist())
+    vfold = set(t["villain_fold_idx"].tolist())
+
+    # Forward STRATEGY reach (start at ones -> own-range factored OUT, so the result is the
+    # counterfactual value, not the contribution). hstrat carries only hero's avg strategy; vstrat
+    # only villain's. The counterfactual value is then a reach-weighted sum over TERMINALS -- NOT a
+    # backward aggregation (which weights opponent values by the opponent's per-hand strategy, an
+    # index mismatch that is fine for CFR regrets but wrong for the absolute counterfactual value).
+    hstrat = np.zeros((nn, n)); vstrat = np.zeros((nn, n))
+    hstrat[0] = 1.0; vstrat[0] = 1.0
+    for i in range(nn):
+        if player[i] == -1:
+            continue
+        for a in dacts[i]:
+            c = children[i, a]
+            if player[i] == 0:
+                hstrat[c] = hstrat[i] * avg[i, a]; vstrat[c] = vstrat[i]
+            else:
+                hstrat[c] = hstrat[i]; vstrat[c] = vstrat[i] * avg[i, a]
+
+    hr0 = np.asarray(hero_range, dtype=np.float64)
+    vr0 = np.asarray(villain_range, dtype=np.float64)
+    hcfv = np.zeros(n); vcfv = np.zeros(n)
+    for i in range(nn):                       # terminal value, reach-weighted into root counterfactual
+        if player[i] != -1:
+            continue
+        hi = HS - sh[i]; vi = VS - sv[i]
+        vfull = vr0 * vstrat[i]               # villain range * villain strat reach to terminal
+        hfull = hr0 * hstrat[i]               # hero range * hero strat reach
+        if i in show:
+            hv = (ps + vi) * (vfull @ winT) + (-hi) * (vfull @ loseT) + ((ps + vi - hi) / 2) * (vfull @ tieT)
+            vv = (ps + hi) * (hfull @ lose) + (-vi) * (hfull @ win) + ((ps + hi - vi) / 2) * (hfull @ tie)
+        elif i in hfold:
+            hv = (-hi) * (vfull @ validT); vv = (ps + hi) * (hfull @ valid)
+        elif i in vfold:
+            hv = (ps + vi) * (vfull @ validT); vv = (-vi) * (hfull @ valid)
+        else:
+            continue
+        hcfv += hstrat[i] * hv                 # hero counterfactual value (hero range factored out)
+        vcfv += vstrat[i] * vv
+    return hcfv, vcfv
+
+
 def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
                       hero_range, villain_range, iters=200):
     """Solve a river subgame range-vs-range and return the AVERAGE-strategy per-hand counterfactual
@@ -105,33 +163,21 @@ def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
     (the same convention as solve_cfr's terminal hvals/vvals -- so they drop straight into a turn
     cut_node_fn). Also returns the river hand list for index mapping.
 
-    Extraction reuses solve_cfr's exact terminal eval: solve to convergence, then re-run for ONE
-    iteration with initial_regret_sum = the average strategy (regret-matching reproduces it) and
-    trace the root, reading hvals[0]/vvals[0] under the average strategy.
-
-    *** WIP / UNVERIFIED -- DO NOT USE FOR TARGETS/CONTROL YET. ***
-    Verification identity (must hold for ANY strategy, since every terminal satisfies
-    hero_val(a,b)+villain_val(b,a) = pot_start; coeffs at fast_cfr.py L376-391):
+    Extraction: solve to convergence, then a VERIFIED forward-reach value pass (subgame_value_pass)
+    under the average strategy. Verified via the convention identity (holds for any strategy, since
+    every terminal satisfies hero_val(a,b)+villain_val(b,a)=pot_start; coeffs at fast_cfr.py L376-391):
         sum(hero_range*hero_cfv) + sum(villain_range*villain_cfv) == pot * (hero_range @ valid @ villain_range)
-    This currently FAILS (e.g. measured 806 vs expected 3663 for 1-iter uniform; ratio varies with
-    strategy) -> the trace/hvals[0] extraction is not returning the full root counterfactual value as
-    assumed. NEXT: instrument on a TINY river tree and compare hvals[0] to a brute-force per-hand
-    value; likely a reach/strategy-weighting or root-node subtlety in the trace path. Once fixed,
-    the turn cut_node_fn must also apply the convention offset (subtract hi_cut/vi_cut at the cut, in
-    counterfactual form) to convert river-net-from-river into turn-net-from-turn-start."""
+    (matches exactly across spots; see test_rebel_turn_river).
+
+    NOTE for the turn cut_node_fn (next step): these are net-from-river -- they award the cut pot,
+    which already includes turn investments -- so to drop into the turn solve they must be converted
+    to net-from-turn-start by subtracting hi_cut/vi_cut in counterfactual (opponent-reach-weighted)
+    form; that offset differs per cut node so it does NOT cancel in regrets."""
     rs = StreetSolver(board5, pot, hero_stack, villain_stack, hero_first)
     hr = np.asarray(hero_range, dtype=np.float32)
     vr = np.asarray(villain_range, dtype=np.float32)
     rs.solve(n_iterations=iters, hero_range=hr, villain_range=vr, backend="cpu")
     avg = _average_strategy_array(rs._strategy_sum)
-
-    captured = {}
-
-    def trace(*, hero_values, villain_values, **_):
-        captured["h"] = np.array(hero_values[0], dtype=np.float64)
-        captured["v"] = np.array(villain_values[0], dtype=np.float64)
-
-    rs.solve(n_iterations=1, hero_range=hr, villain_range=vr, backend="cpu",
-             initial_regret_sum=avg, trace_node_indices=[0], trace_node_fn=trace)
-    return captured["h"], captured["v"], rs.hands
+    hcfv, vcfv = subgame_value_pass(rs, avg, hr.astype(np.float64), vr.astype(np.float64))
+    return hcfv, vcfv, rs.hands
 

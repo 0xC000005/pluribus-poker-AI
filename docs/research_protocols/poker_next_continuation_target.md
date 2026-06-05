@@ -78,10 +78,13 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
     to net-from-turn-start by subtracting hi_cut/vi_cut (hero/villain turn investment at the cut), in
     counterfactual (opponent-reach-weighted) form. This offset differs per cut node so it does NOT
     cancel in regrets -> required for correctness.
-  - **BLOCKER (extractor bug):** the extractor currently FAILS the identity (806 vs 3663 for 1-iter
-    uniform; ratio varies with strategy) -> trace/hvals[0] is not the full root counterfactual value
-    as assumed. Marked WIP/UNVERIFIED in code. NEXT: instrument on a TINY river tree, compare
-    hvals[0] to a brute-force per-hand value, fix the extraction.
+  - **EXTRACTOR BUG FIXED + VERIFIED (2026-06-05):** the trace/hvals[0] approach was wrong (the
+    opponent-node backward aggregation weights hero values by the villain's per-hand strategy -- an
+    index mismatch that is fine for CFR regrets but wrong for the absolute counterfactual value).
+    Replaced with `subgame_value_pass` (turn_river.py): a forward-reach-weighted sum over terminals
+    (own range factored out -> counterfactual value). VERIFIED via the identity exactly across 3
+    spots (e.g. 371.429==371.429); regression test in test_rebel_turn_river. `river_subgame_cfv`
+    now uses it.
   - **THEN:** 44-runout averaging (river card-removal + turn<->river hand-index mapping), the
     offset-corrected cut_node_fn, a 2-street BR exploitability metric, multi-valued states. Run the
     gate on a SMALL/short-stack turn spot (exact oracle is per-iteration-infeasible at 80bb).

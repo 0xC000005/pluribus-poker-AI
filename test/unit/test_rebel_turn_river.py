@@ -3,8 +3,11 @@ import pytest
 
 pytest.importorskip("torch")
 
+import numpy as np
+
 from poker_ai.rebel.turn_river import (
     parse_card, card_str, default_spot, build_turn_solver, showdown_cut_indices,
+    _average_strategy_array, subgame_value_pass,
 )
 
 
@@ -32,3 +35,28 @@ def test_turn_tree_and_cut_nodes():
     # every cut node is a showdown terminal; fold terminals are excluded
     for i in cuts:
         assert getattr(nodes[i], "terminal_type", None) == "showdown"
+
+
+def test_subgame_value_pass_convention_identity():
+    # The per-hand counterfactual value pass must satisfy, for ANY strategy:
+    #   sum(hr*hcfv) + sum(vr*vcfv) == pot * (hr @ valid @ vr)
+    # (every terminal has hero_val(a,b)+villain_val(b,a)=pot_start). Verifies the extractor.
+    import solver as S
+    spot = default_spot()
+    river = [c for c in range(52) if c not in spot.board][0]
+    board5 = spot.board + [river]
+    full = S.StreetSolver(board5, 400, 400, 400, True)
+    avail = [c for c in range(52) if c not in board5]
+    disjoint = [(avail[2 * k], avail[2 * k + 1]) for k in range(14)]
+    active = sorted(full.hand_to_idx[tuple(sorted(h))] for h in disjoint)
+    POT, HS, VS = 400, 400, 400
+    rs = S.StreetSolver(board5, POT, HS, VS, True, active_indices=active)
+    n = rs.n
+    hr = np.ones(n, np.float32) / n
+    vr = np.ones(n, np.float32) / n
+    rs.solve(n_iterations=300, hero_range=hr, villain_range=vr, backend="cpu")
+    avg = _average_strategy_array(rs._strategy_sum)
+    hcfv, vcfv = subgame_value_pass(rs, avg, hr.astype(np.float64), vr.astype(np.float64))
+    lhs = float(np.dot(hr, hcfv) + np.dot(vr, vcfv))
+    rhs = POT * float(hr @ rs.valid @ vr)
+    assert abs(lhs - rhs) < 1e-2
