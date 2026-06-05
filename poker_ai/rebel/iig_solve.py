@@ -19,6 +19,8 @@ public/private indexing + leaf-value convention end-to-end before any net. Slumb
 from __future__ import annotations
 
 import numpy as np
+from open_spiel.python import policy as policy_lib
+from open_spiel.python.algorithms import exploitability
 
 from poker_ai.rebel.iig_pbs import make_public_key_fn
 
@@ -34,6 +36,7 @@ class DepthLimitedGame:
         self.iset_player: list[int] = []
         self.iset_actions: list[list[int]] = []
         self.iset_above_cut: list[bool] = []
+        self.iset_key: list[str] = []    # iid -> OpenSpiel information_state_string
         self.priv_index: dict = {}      # (public_key, player) -> {priv_key: idx}
         self.cut_nodes: list = []        # cut node tuples (for per-key oracle evaluation)
         self.root = self._build(game.new_initial_state(), above_cut=True)
@@ -44,6 +47,7 @@ class DepthLimitedGame:
             self.iset_player.append(player)
             self.iset_actions.append(list(acts))
             self.iset_above_cut.append(above)
+            self.iset_key.append(key)
         return self.infosets[key]
 
     def _priv_idx(self, key, player, priv_key):
@@ -376,6 +380,28 @@ class DepthLimitedGame:
             s = ss.sum()
             out.append(ss / s if s > 1e-15 else np.ones_like(ss) / len(ss))
         return out
+
+    # ---- exploitability of an assembled full strategy (via OpenSpiel NashConv) ----
+    def to_tabular(self, pol):
+        tp = policy_lib.TabularPolicy(self.game)
+        for iid, key in enumerate(self.iset_key):
+            if key in tp.state_lookup:
+                row = tp.action_probability_array[tp.state_lookup[key]]
+                row[:] = 0.0
+                for i, a in enumerate(self.iset_actions[iid]):
+                    row[a] = pol[iid][i]
+        return tp
+
+    def nash_conv(self, pol):
+        return float(exploitability.nash_conv(self.game, self.to_tabular(pol)))
+
+    def assemble(self, sigma1, cont_pol):
+        """Full policy = trunk strategy ``sigma1`` (dict {iid: arr} over above-cut infosets) spliced
+        onto the below-cut continuation ``cont_pol`` (full list)."""
+        pol = list(cont_pol)
+        for iid, pr in sigma1.items():
+            pol[iid] = pr
+        return pol
 
     def roundtrip_error(self, pol, normalize=True):
         """Max |full-game q - depth-limited q| over above-cut infosets (the convention round-trip)."""

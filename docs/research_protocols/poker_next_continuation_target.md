@@ -3679,3 +3679,20 @@ for single-value-leaf unsoundness). NOT YET BUILT (gated on this fork): the gene
 (play-time) + end-to-end NashConv-assembled exploitability (on 2-level Leduc both hit the documented
 trunk wall regardless). Then single-GPU efficiency levers + HUNL scaling go/no-go (tasks #29 done core,
 #30).
+
+2026-06-06 update — BUILD 4 chosen = Option D (soundness then bootstrapping). PHASE 0 DONE: added the
+exploitability infra to DepthLimitedGame (to_tabular / nash_conv / assemble via OpenSpiel) and CONFIRMED
+the single-value-leaf TRUNK WALL on the game-agnostic substrate -- trunk_solve(exact blueprint leaf) ->
+assembled sigma1 exploitability 0.367 vs the full-CFR Nash floor 0.0046 (~80x), the generic reproduction
+of the Leduc Stage-2c/diagnosis. FAST GATE: a NAIVE symmetric multi-valued leaf (per-(priv0,priv1) min
+over K continuations) made it WORSE (0.367->0.724) -- per-pair min over-powers the opponent; the correct
+mechanism is a CONSISTENT regret-matched opponent continuation choice per its own private state (asymmetric
+Brown-Sandholm), awkward for a symmetric self-play trunk. DECISION (per the Build-4 brief): skip multi-valued
+-> PBS-CFR. Removed the buggy naive method; kept the exploitability infra (5 tests in
+test/unit/test_rebel_iig_solve.py). RESEARCH_LOG 20260606T030000Z.
+NEXT = PHASE 1: PBS-CFR trunk (new poker_ai/rebel/iig_pbs_cfr.py: CFR over public-belief-state nodes
+carrying (pub_key, r0n, r1n); the value net / leaf_fn interface is unchanged; iig_pbs.cut_reaches gives
+the belief vectors) -> sigma1 near-Nash on Leduc (sound-by-construction, BOTH players). Gate: assembled
+sigma1 exploitability drops from 0.367 toward the Nash floor. Biggest uncertainty (from the brief):
+whether the belief-tree CFR walk is a clean extension of _trunk_cfv or needs range-vectors-as-node-state.
+THEN Phase 2: multi-cut Goofspiel(5) bootstrapping (exact NashConv computable, 4 cuts).

@@ -54,3 +54,17 @@ def test_trunk_solve_smoke():
     assert set(avg.keys()) == set(above)
     for i, pr in avg.items():
         assert abs(pr.sum() - 1.0) < 1e-9 and (pr >= -1e-12).all()
+
+
+def test_exploitability_infra_and_single_value_trunk_wall():
+    """The OpenSpiel NashConv infra works (full-CFR near-eq is ~Nash), and the SINGLE-VALUE depth-limited
+    trunk is provably exploitable (the documented trunk wall, reproduced on the generic substrate -- the
+    motivation for Build 4 soundness)."""
+    g = _leduc()
+    cont = g.cfr_plus(300)
+    nash_floor = g.nash_conv(cont)
+    assert nash_floor < 0.05                       # infra sanity: full CFR+ ~ Nash
+    sigma1 = g.trunk_solve(g.blueprint_leaf_fn(cont), iters=200)
+    exploit = g.nash_conv(g.assemble(sigma1, cont))
+    assert exploit > 0.15                           # single-value trunk is far from Nash (the wall)
+    assert exploit > 10 * nash_floor
