@@ -3629,3 +3629,17 @@ then small games. Decouple loop.py/pbs_value_net.py/leaf_eval.py from Leduc (dro
 the iig parity gate as protection. THEN Build 3b: single-GPU efficiency levers + HUNL scaling go/no-go
 (tasks #29, #30). Honest ceiling: small games provably near-Nash = GO; depth-limited HUNL LBR-competitive
 = conditional GO; provably-near-Nash full HUNL on one 8GB GPU = NO-GO.
+
+2026-06-05 update — BUILD 3a DONE (the keystone, the genuinely-new piece): the generic public-state /
+PBS abstraction. poker_ai/rebel/iig_pbs.py (PBSStructure): public state via OpenSpiel's public observer
+(card-INDEPENDENT at Leduc's board-deal cut, confirmed -> groups identically to leduc's round-1-betting
+keys; per-game public_key_fn fallback for games without an observer, e.g. Liar's Dice); the ONE
+game-specific hook is is_cut_fn (Leduc = board-deal chance node); each player's private state =
+information_state_string(player) at the cut (OpenSpiel gives it even at the chance node). BIT-IDENTICAL
+parity vs LeducTree.cut_reaches (5 public states; player-0/1 reach multisets max|diff|=0.00e+00). Belief
+dims across games (the scaling driver): leduc 5pub/6priv, kuhn 1/3, liars_dice 3-sided 1/3, 6-sided 1/6.
+2 tests green (test/unit/test_rebel_iig_pbs.py); report scripts/run_rebel_pbs_report.py. RESEARCH_LOG
+20260605T233000Z. NEXT = BUILD 3b: the generic depth-limited net LEAF CONSUMPTION on this PBS structure
+-> a values round-trip vs the exact control on Leduc (the Stage-0 convention check, generalized), then
+the safe-resolving gadget + the self-play loop at a NON-terminal cut (dissolves Step-3 no-bootstrapping).
+Then efficiency levers + HUNL scaling go/no-go.
