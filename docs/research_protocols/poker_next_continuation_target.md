@@ -3643,3 +3643,17 @@ dims across games (the scaling driver): leduc 5pub/6priv, kuhn 1/3, liars_dice 3
 -> a values round-trip vs the exact control on Leduc (the Stage-0 convention check, generalized), then
 the safe-resolving gadget + the self-play loop at a NON-terminal cut (dissolves Step-3 no-bootstrapping).
 Then efficiency levers + HUNL scaling go/no-go.
+
+2026-06-06 update — BUILD 3b-i DONE: the generic depth-limited solving substrate + the convention
+round-trip. poker_ai/rebel/iig_solve.py (DepthLimitedGame): enumerates the game into terminal/chance/
+decision/CUT (CUT carries public key + per-player private index + the continuation subtree);
+full_values (ground truth), oracle_leaf_v (exact normalized-PBS leaf = generic ExactLeafOracle),
+trunk_q_with_leaf (depth-limited consumption), trunk_solve (generic loop.trunk_solve twin; net/oracle
+plug in via leaf_fn), blueprint_leaf_fn. CONVENTION ROUND-TRIP gate (game-agnostic Stage-0, on Leduc:
+36 trunk infosets / 150 cut instances / 6 private): normalized leaf reproduces exact full-game above-cut
+values to 4.4e-16 (matches trusted Stage-0 8.9e-16); un-normalized control breaks at 2.5-3.7 (matches
+2.24). trunk_solve smoke green. 4 tests (test/unit/test_rebel_iig_solve.py); 10/10 generic-method tests
+pass together. RESEARCH_LOG 20260606T000000Z. NEXT = BUILD 3b-ii: the safe-resolving GADGET on the
+generic tree + the SELF-PLAY LOOP (trunk_solve with the net leaf at a NON-terminal cut -> harvest
+self-consistent CFV targets via oracle_leaf_v -> train a generic PBS net -> iterate), validated on Leduc
+vs the leaf-oracle control, then a second small game. Then efficiency levers + HUNL scaling go/no-go.
