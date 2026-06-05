@@ -163,6 +163,63 @@ def _trunk_cfv(tree, sig_round1, leaf_v):
     return cfvnum, ownreach
 
 
+def trunk_solve(tree, leaf_fn, trunk_iters=400, averaging="linear"):
+    """Depth-limited CFR+ on the round-1 trunk with a FIXED leaf value FUNCTION (the correct ReBeL
+    usage: the leaf function does not change within the solve; it is queried at the current iterate's
+    ranges). ``leaf_fn(cut_key, range0, range1) -> (v0[NCARDS], v1[NCARDS])`` in the pinned
+    normalized convention. Returns the round-1 average strategy as {iid: prob_array}. Both the exact
+    leaf oracle and a learned value net plug in through ``leaf_fn`` -- this is the Stage-2 substrate.
+    """
+    r1_iids = [i for i in range(tree.n_iset) if tree.iset_round[i] == 1]
+    regret = {i: np.zeros(len(tree.iset_actions[i])) for i in r1_iids}
+    stratsum = {i: np.zeros(len(tree.iset_actions[i])) for i in r1_iids}
+    keys = sorted(tree.cut_keys())
+
+    for t in range(trunk_iters):
+        upd = t % 2
+        sig = {i: _rm_plus(regret[i]) for i in r1_iids}
+        reaches = tree.cut_reaches(_listify(tree, sig))
+        leaf_v = {k: leaf_fn(k, reaches[k][0], reaches[k][1]) for k in keys}
+        cfvnum, ownreach = _trunk_cfv(tree, sig, leaf_v)
+        w = float(t + 1) if averaging == "linear" else 1.0
+        for i in r1_iids:
+            if tree.iset_player[i] != upd:
+                continue
+            s = sig[i]
+            v = float(np.dot(s, cfvnum[i]))
+            regret[i] = np.maximum(regret[i] + (cfvnum[i] - v), 0.0)
+            stratsum[i] += w * ownreach[i] * s
+    return _avg_dict(stratsum)
+
+
+def exact_leaf_fn(tree, round2_iters=2000, round2_averaging="linear"):
+    """Build an exact ``leaf_fn`` for ``trunk_solve``: solves the round-2 subgame for the queried
+    ranges and returns the normalized per-card CFVs. This is the per-solve fixed-function exact leaf
+    (the control the learned net is compared against in Stage 2)."""
+    oracle = ExactLeafOracle(tree, normalize=True)
+
+    def fn(key, range0, range1):
+        r2 = solve_round2_equilibrium(tree, key, range0, range1, round2_iters, round2_averaging)
+        pol = _listify(tree, {}, round2={key: r2})
+        return oracle.evaluate(key, range0, range1, pol)
+
+    return fn
+
+
+def blueprint_leaf_fn(tree, ref_strategy):
+    """Build a CONSISTENT exact ``leaf_fn`` for ``trunk_solve``: the leaf value is the CFV of
+    continuing with a single fixed near-equilibrium round-2 strategy ``ref_strategy`` (a full policy
+    list). Unlike ``exact_leaf_fn`` (isolated per-range re-solve, under-determined across ranges),
+    this is a smooth, consistent value function -- cheap (no per-range solve) and the matching exact
+    control for a net trained on the same blueprint-continuation targets."""
+    oracle = ExactLeafOracle(tree, normalize=True)
+
+    def fn(key, range0, range1):
+        return oracle.evaluate(key, range0, range1, ref_strategy)
+
+    return fn
+
+
 def depth_limited_solve_isolated_oracle(tree, trunk_iters=200, round2_iters=300, averaging="uniform",
                                         round2_averaging="linear", eval_every=0, verbose=False):
     """PITFALL DEMO (do not use for production solving). Depth-limited CFR+ on the round-1 trunk

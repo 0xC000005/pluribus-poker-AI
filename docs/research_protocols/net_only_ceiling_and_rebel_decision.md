@@ -148,6 +148,26 @@ flop-truncated HUNL before any multi-week scale-up. The under-determination of t
 values (#2) is a noted scale-up risk to watch (mitigated by averaging + net smoothing), not a
 blocker — Leduc still solves to 8e-4 via proper CFR-D.
 
+**Stage 2 results (2026-06-04) — two findings, no clean pass yet (a research juncture).** Built a
+Leduc PBS value net (`poker_ai/rebel/pbs_value_net.py`; tiny MLP, reach-weighted MSE) used as a
+fixed leaf in `loop.trunk_solve`. Metrics: A = held-out reach-weighted CFV MAE; B = round-1 strategy
+L1 between the net-leaf trunk and the matching exact-leaf trunk.
+- **(1) Learnability depends on target consistency** (Stage-1 #2, confirmed end-to-end): isolated
+  per-range round-2 re-solve targets are under-determined across ranges → the net **underfits**
+  (train MAE 0.16 ≈ val 0.16). A **consistent** blueprint-continuation target (CFV of continuing
+  with one fixed near-equilibrium round-2 strategy) is **learned well** (train 0.048, val 0.055).
+- **(2) Consistency↔quality tradeoff:** the per-range-resolve value is a *good* leaf (its exact
+  trunk is 0.087 round-1 L1 from full CFR-D) but unlearnable-as-is; the blueprint value is learnable
+  but a *crude* leaf (exact trunk 0.264 from full CFR-D — round-2 can't adapt to the trunk ranges).
+- **Metric caveat:** round-1 strategy L1 is confounded (Leduc equilibria are non-unique/mixed;
+  near-indifferent infosets inflate L1 — even exact leaves are 0.087–0.264 from full CFR-D, and a
+  0.055 value MAE amplified to 0.45 strategy L1). A conclusive verdict needs an **exploitability**
+  metric, which needs **safe re-solving** (the DeepStack/CFR-D gadget; finding #4).
+- **Next (Stage 2c):** a **regularized (QRE/entropy) per-range round-2 solve** → unique (consistent)
+  *and* near-optimal (good) targets, resolving the tradeoff; plus the safe-resolving gadget so the
+  agent's exploitability (not strategy L1) is the metric. Artifacts:
+  `autoresearch-session/rebel/leduc_stage2{,b_blueprint}.json`, `leduc_pbs_value_net.pt`.
+
 ## 6. Reproducibility
 
 - LBR gate + positive controls: `scripts/run_lbr.py`, `test/unit/test_lbr_positive_controls.py`,
@@ -157,7 +177,8 @@ blocker — Leduc still solves to 8e-4 via proper CFR-D.
 - GPU R-NaD collector + CNN encoder: `poker_ai/rnad/{cuda_collector,encoder}.py`.
 - Full timeline: RESEARCH_LOG.md entries 20260603T133428Z (anchor) → 20260604T023839Z (decision).
 - Designs: workflows wp5fyfhw1 (review), wxe90uihq (ReBeL scoping).
-- ReBeL de-risk (§5b): `poker_ai/rebel/{leduc,leaf_eval,loop}.py`,
+- ReBeL de-risk (§5b): `poker_ai/rebel/{leduc,leaf_eval,loop,pbs_value_net}.py`,
   `scripts/run_rebel_leduc_roundtrip.py` + `test/unit/test_rebel_leduc_roundtrip.py` (Stage 0),
-  `scripts/run_rebel_leduc_stage1.py` (Stage 1); artifacts
-  `autoresearch-session/rebel/{leduc_roundtrip_stage0,leduc_stage1_findings}.json`.
+  `scripts/run_rebel_leduc_stage1.py` (Stage 1),
+  `scripts/run_rebel_leduc_stage2.py` + `test/unit/test_rebel_stage2_plumbing.py` (Stage 2);
+  artifacts `autoresearch-session/rebel/{leduc_roundtrip_stage0,leduc_stage1_findings,leduc_stage2,leduc_stage2b_blueprint}.json`.

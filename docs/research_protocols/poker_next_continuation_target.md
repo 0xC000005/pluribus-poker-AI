@@ -23,11 +23,20 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
   trunk (round-1 L1 0.15). DESIGN CONSTRAINT: value net FIXED per solve (CFR-D), targets = the
   self-consistent CFVs read off the trunk solve averaged over the visited PBS distribution, and
   continual re-solving at play.
-- **NEXT = Stage 2 (Leduc, the next build):** train a PBS value net on trunk-solve CFV targets,
-  plug it in as a fixed CFR-D leaf, and require learned-leaf NashConv within a small gap of the
-  8.2e-4 control. Then small-NLHE -> flop-truncated HUNL before any multi-week full-deck scale-up
-  (full-deck data-gen is feasibility-marginal on the 3070 Ti -> explicit compute go/no-go first).
-  Slumbot stays held-out throughout.
+- **Stage 2 (PBS value net) done -- two findings, no clean pass yet**
+  (`poker_ai/rebel/pbs_value_net.py`, `scripts/run_rebel_leduc_stage2.py`,
+  `autoresearch-session/rebel/leduc_stage2{,b_blueprint}.json`). (1) Net learnability depends on
+  TARGET CONSISTENCY (Stage-1 #2 end-to-end): isolated per-range re-solve targets -> underfit (val
+  MAE 0.16); consistent blueprint-continuation targets -> learned (val MAE 0.055). (2)
+  CONSISTENCY<->QUALITY tradeoff: per-range value is a good leaf (exact trunk 0.087 L1 from full
+  CFR-D) but unlearnable-as-is; blueprint value is learnable but a crude leaf (exact trunk 0.264).
+  Round-1 strategy L1 is a confounded metric (equilibrium multiplicity + near-indifference) -> a
+  conclusive verdict needs an EXPLOITABILITY metric (-> safe-resolving gadget).
+- **NEXT = Stage 2c (Leduc):** regularized (QRE/entropy) per-range round-2 solve -> unique +
+  near-optimal targets (resolves the tradeoff); implement the safe-resolving (DeepStack/CFR-D)
+  gadget so the metric is the played agent's exploitability, not strategy L1. Then small-NLHE ->
+  flop-truncated HUNL before any multi-week full-deck scale-up (full-deck data-gen is
+  feasibility-marginal on the 3070 Ti -> explicit compute go/no-go first). Slumbot stays held-out.
 
 ## 2026-05-26 Simplification Reset
 
