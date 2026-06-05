@@ -67,10 +67,25 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
   at 80bb, run the multi-valued-states-vs-exact-control gate on a SMALL turn spot (short stacks ~10-20bb
   -> tiny turn tree, few cuts, cheap river solves -> feasible exact control). Keep the 80bb spot for
   the efficiency/throughput demonstration where the net is needed.
-- **NEXT:** step-0 remainder = the exact-river CFV primitive (per-hand counterfactual via per-runout
-  river solves + a value-pass extraction; mind river card-removal averaging + turn<->river hand-index
-  mapping -- the bug-prone parts) and a 2-street best-response exploitability metric; then step 1
-  (multi-valued states) on the small spot. Slumbot stays held-out throughout.
+- **STEP 1 (#24) IN PROGRESS** -- per-hand river-CFV extractor designed (`river_subgame_cfv` in
+  turn_river.py): reuse solve_cfr's terminal eval via avg-strategy-as-initial-regret + trace-root.
+  - **SOLVER VALUE CONVENTION discovered** (fast_cfr.py L376-391): value = net chips from subgame
+    start with the pre-existing pot awarded to the winner -> per valid pair
+    `hero_val(a,b)+villain_val(b,a) = pot_start`. So the verification identity for the extractor is
+    `sum(hr*hcfv)+sum(vr*vcfv) == pot * (hr @ valid @ vr)` (NOT naive zero-sum).
+  - **CUT-NODE CONVENTION OFFSET** required: the river subgame value is net-from-river (awards the
+    cut pot, which includes turn investments); to drop into the turn cut_node_fn it must be converted
+    to net-from-turn-start by subtracting hi_cut/vi_cut (hero/villain turn investment at the cut), in
+    counterfactual (opponent-reach-weighted) form. This offset differs per cut node so it does NOT
+    cancel in regrets -> required for correctness.
+  - **BLOCKER (extractor bug):** the extractor currently FAILS the identity (806 vs 3663 for 1-iter
+    uniform; ratio varies with strategy) -> trace/hvals[0] is not the full root counterfactual value
+    as assumed. Marked WIP/UNVERIFIED in code. NEXT: instrument on a TINY river tree, compare
+    hvals[0] to a brute-force per-hand value, fix the extraction.
+  - **THEN:** 44-runout averaging (river card-removal + turn<->river hand-index mapping), the
+    offset-corrected cut_node_fn, a 2-street BR exploitability metric, multi-valued states. Run the
+    gate on a SMALL/short-stack turn spot (exact oracle is per-iteration-infeasible at 80bb).
+    Slumbot stays held-out throughout.
 
 ## 2026-05-26 Simplification Reset
 

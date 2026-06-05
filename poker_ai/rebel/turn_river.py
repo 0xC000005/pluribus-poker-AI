@@ -86,3 +86,52 @@ def cut_node_pots(solver: StreetSolver, cut_indices):
         nd = nodes[i]
         out[i] = {"pot": nd.pot, "stacks": nd.stacks}
     return out
+
+
+def _average_strategy_array(strategy_sum):
+    """Normalize a (n_nodes, n_actions, n) strategy-sum into per-(node,hand) average strategy.
+    Unreached (all-zero) rows are left zero -> regret-matching turns them into uniform-over-legal,
+    which is harmless because those nodes carry ~zero reach."""
+    s = np.asarray(strategy_sum, dtype=np.float32)
+    denom = s.sum(axis=1, keepdims=True)              # (n_nodes, 1, n)
+    avg = np.divide(s, denom, out=np.zeros_like(s), where=denom > 1e-12)
+    return avg
+
+
+def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
+                      hero_range, villain_range, iters=200):
+    """Solve a river subgame range-vs-range and return the AVERAGE-strategy per-hand counterfactual
+    values (hero_cfv, villain_cfv), each shape (n_river_hands,), in chips, opponent-reach-weighted
+    (the same convention as solve_cfr's terminal hvals/vvals -- so they drop straight into a turn
+    cut_node_fn). Also returns the river hand list for index mapping.
+
+    Extraction reuses solve_cfr's exact terminal eval: solve to convergence, then re-run for ONE
+    iteration with initial_regret_sum = the average strategy (regret-matching reproduces it) and
+    trace the root, reading hvals[0]/vvals[0] under the average strategy.
+
+    *** WIP / UNVERIFIED -- DO NOT USE FOR TARGETS/CONTROL YET. ***
+    Verification identity (must hold for ANY strategy, since every terminal satisfies
+    hero_val(a,b)+villain_val(b,a) = pot_start; coeffs at fast_cfr.py L376-391):
+        sum(hero_range*hero_cfv) + sum(villain_range*villain_cfv) == pot * (hero_range @ valid @ villain_range)
+    This currently FAILS (e.g. measured 806 vs expected 3663 for 1-iter uniform; ratio varies with
+    strategy) -> the trace/hvals[0] extraction is not returning the full root counterfactual value as
+    assumed. NEXT: instrument on a TINY river tree and compare hvals[0] to a brute-force per-hand
+    value; likely a reach/strategy-weighting or root-node subtlety in the trace path. Once fixed,
+    the turn cut_node_fn must also apply the convention offset (subtract hi_cut/vi_cut at the cut, in
+    counterfactual form) to convert river-net-from-river into turn-net-from-turn-start."""
+    rs = StreetSolver(board5, pot, hero_stack, villain_stack, hero_first)
+    hr = np.asarray(hero_range, dtype=np.float32)
+    vr = np.asarray(villain_range, dtype=np.float32)
+    rs.solve(n_iterations=iters, hero_range=hr, villain_range=vr, backend="cpu")
+    avg = _average_strategy_array(rs._strategy_sum)
+
+    captured = {}
+
+    def trace(*, hero_values, villain_values, **_):
+        captured["h"] = np.array(hero_values[0], dtype=np.float64)
+        captured["v"] = np.array(villain_values[0], dtype=np.float64)
+
+    rs.solve(n_iterations=1, hero_range=hr, villain_range=vr, backend="cpu",
+             initial_regret_sum=avg, trace_node_indices=[0], trace_node_fn=trace)
+    return captured["h"], captured["v"], rs.hands
+
