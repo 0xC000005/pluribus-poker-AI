@@ -3657,3 +3657,25 @@ pass together. RESEARCH_LOG 20260606T000000Z. NEXT = BUILD 3b-ii: the safe-resol
 generic tree + the SELF-PLAY LOOP (trunk_solve with the net leaf at a NON-terminal cut -> harvest
 self-consistent CFV targets via oracle_leaf_v -> train a generic PBS net -> iterate), validated on Leduc
 vs the leaf-oracle control, then a second small game. Then efficiency levers + HUNL scaling go/no-go.
+
+2026-06-06 update — BUILD 3b-ii DONE: the game-agnostic depth-limited PBS-net SELF-PLAY LOOP.
+poker_ai/rebel/iig_selfplay.py (ONE PBSNet, ONE solver, ONE loop, generic interface): each iter
+trunk_solve(net leaf) -> harvest EXACT leaf targets [broad random-range coverage + on-policy
+belief-consistent ranges] under a fixed near-eq continuation (added DepthLimitedGame.cfr_plus +
+precompute_cont) -> train -> iterate; control = trunk_solve(exact blueprint leaf). RESULT on Leduc
+(8 iters): net reach-weighted MAE 8.4% -> 3.4% (LEARNS, matches/beats Stage-2b 5.5%); net-leaf sigma1
+L1 vs exact-leaf control 0.394 -> 0.211 (tracks it; residual ~0.21 = the confounded-L1 floor on Leduc's
+mixed equilibria, NOT net error). 1 test (test/unit/test_rebel_iig_selfplay.py); 11/11 generic-method
+tests green; driver scripts/run_rebel_selfplay.py. RESEARCH_LOG 20260606T013000Z.
+=> The general method's TRAINING LOOP is built + validated end-to-end on the game-agnostic substrate
+(Build 1+2 solver -> 3a public-state/PBS -> 3b-i leaf+round-trip -> 3b-ii self-play loop).
+RECONFIRMS THE SHALLOWNESS BOUND: Leduc (like turn+river) is 2-LEVEL (one cut) -> leaf is the final
+round -> EXACT targets, NO bootstrapping (Step-3 finding); this loop is leaf-amortization + coverage.
+NEXT = THE DEPTH FORK (Build 4 decision, USER): to show self-play BOOTSTRAPPING (beat supervised
+coverage / clear the single-value-leaf trunk wall) needs EITHER (a) a >=3-LEVEL game -- a non-terminal
+cut whose continuation is itself net-evaluated (e.g. a 3-round small game / flop-truncated HUNL with a
+turn-net leaf), OR (b) MULTI-VALUED STATES in the generic trunk (Brown-Sandholm 2018, the documented fix
+for single-value-leaf unsoundness). NOT YET BUILT (gated on this fork): the generic safe-resolving gadget
+(play-time) + end-to-end NashConv-assembled exploitability (on 2-level Leduc both hit the documented
+trunk wall regardless). Then single-GPU efficiency levers + HUNL scaling go/no-go (tasks #29 done core,
+#30).

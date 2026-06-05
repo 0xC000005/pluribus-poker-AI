@@ -317,6 +317,66 @@ class DepthLimitedGame:
 
         return fn
 
+    def cfr_plus(self, iters, averaging="linear"):
+        """Full-game CFR+ over the whole tree (cuts treated as passthrough) -- a near-equilibrium full
+        policy (list over all infosets). Used to supply the fixed near-eq CONTINUATION strategy for
+        self-play leaf targets (the below-cut/final-round play). Alternating updates, own-reach
+        averaging."""
+        regret = [np.zeros(len(a)) for a in self.iset_actions]
+        stratsum = [np.zeros(len(a)) for a in self.iset_actions]
+
+        def sigma_of():
+            out = []
+            for r in regret:
+                pos = np.maximum(r, 0.0); s = pos.sum()
+                out.append(pos / s if s > 1e-15 else np.ones_like(r) / len(r))
+            return out
+
+        for t in range(iters):
+            upd = t % 2
+            sig = sigma_of()
+            cfvnum = [np.zeros(len(a)) for a in self.iset_actions]
+            ownreach = [0.0] * self.n_iset
+
+            def walk(node, r0, r1, rc):
+                ty = node[0]
+                if ty == "term":
+                    return node[1]
+                if ty == "chance":
+                    ev = np.zeros(2)
+                    for p, ch in node[1]:
+                        ev += p * walk(ch, r0, r1, rc * p)
+                    return ev
+                if ty == "cut":
+                    return walk(node[4], r0, r1, rc)
+                _, pl, iid, kids = node
+                s = sig[iid]
+                ownreach[iid] = r0 if pl == 0 else r1
+                cf = (r1 * rc) if pl == 0 else (r0 * rc)
+                row = cfvnum[iid]
+                ev = np.zeros(2)
+                for i, (_a, ch) in enumerate(kids):
+                    cv = walk(ch, r0 * s[i], r1, rc) if pl == 0 else walk(ch, r0, r1 * s[i], rc)
+                    ev += s[i] * cv
+                    row[i] += cf * cv[pl]
+                return ev
+
+            walk(self.root, 1.0, 1.0, 1.0)
+            w = float(t + 1) if averaging == "linear" else 1.0
+            for iid in range(self.n_iset):
+                if self.iset_player[iid] != upd:
+                    continue
+                s = sig[iid]
+                v = float(np.dot(s, cfvnum[iid]))
+                regret[iid] = np.maximum(regret[iid] + (cfvnum[iid] - v), 0.0)
+                stratsum[iid] += w * ownreach[iid] * s
+
+        out = []
+        for ss in stratsum:
+            s = ss.sum()
+            out.append(ss / s if s > 1e-15 else np.ones_like(ss) / len(ss))
+        return out
+
     def roundtrip_error(self, pol, normalize=True):
         """Max |full-game q - depth-limited q| over above-cut infosets (the convention round-trip)."""
         qf = self.full_values(pol)
