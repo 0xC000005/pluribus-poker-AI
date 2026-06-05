@@ -51,10 +51,26 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
   ReBeL PBS-CFR; both known + modest-hardware-feasible (4-core CPU/16GB per Brown-Sandholm). Our
   gadget already does opponent-choice for the round-2 re-solve; the TRUNK needs the same.
   `autoresearch-session/rebel/leduc_gate_diagnosis.json`.
-- **NEXT = implement the multi-valued-states (or PBS-CFR) TRUNK** = the faithful gate (well-defined
-  now, not a guess); confirm one clean low-exploitability ReBeL agent on Leduc. THEN the efficiency
-  main line on a real-belief game (small-NLHE -> flop-truncated HUNL), measuring data-gen throughput
-  + exploitability, compute go/no-go before full-deck. Slumbot stays held-out throughout.
+- **DECISION (2026-06-05): build the faithful (multi-valued-states / PBS-CFR) ReBeL loop DIRECTLY on
+  a real-belief game** (fold the gate into the efficiency main line; Leduc is too shallow to show the
+  net's benefit). First target = **turn subgame + neural river leaf** (DeepStack-style): turn betting
+  is the trunk, the river is the depth-limit leaf via `cut_node_fn`. Staged: 0 harness+exact-control,
+  1 multi-valued-states (correctness gate), 2 PBS value net + throughput, 3 self-play loop, 4 scale.
+- **STEP 0 STARTED** (`poker_ai/rebel/turn_river.py`, `scripts/run_rebel_turn_river.py`,
+  `test/unit/test_rebel_turn_river.py`, `autoresearch-session/rebel/turn_river_step0.json`): harness
+  built on the trusted `StreetSolver` + `solve_cfr` cut_node_fn. KEY FINDING (default 80bb spot,
+  board Ah Kd 7c 2s): turn = 1128 hands / 459 nodes / 153 river-cut nodes; one EXACT river leaf =
+  44 runouts x ~1.7s = 76s/cut; a full 100-iter turn solve with the exact oracle = ~323 HOURS ->
+  the exact oracle is INFEASIBLE per-iteration in the trunk -> the learned PBS value net is
+  LOAD-BEARING, not optional (the efficiency thesis, concrete on a real game).
+- **REFRAME for the correctness gate (step 1):** because the exact oracle is per-iteration-infeasible
+  at 80bb, run the multi-valued-states-vs-exact-control gate on a SMALL turn spot (short stacks ~10-20bb
+  -> tiny turn tree, few cuts, cheap river solves -> feasible exact control). Keep the 80bb spot for
+  the efficiency/throughput demonstration where the net is needed.
+- **NEXT:** step-0 remainder = the exact-river CFV primitive (per-hand counterfactual via per-runout
+  river solves + a value-pass extraction; mind river card-removal averaging + turn<->river hand-index
+  mapping -- the bug-prone parts) and a 2-street best-response exploitability metric; then step 1
+  (multi-valued states) on the small spot. Slumbot stays held-out throughout.
 
 ## 2026-05-26 Simplification Reset
 
