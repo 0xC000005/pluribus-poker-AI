@@ -237,6 +237,78 @@ def make_exact_river_showdown_fn(turn_solver, river_iters=150):
     return showdown_leaf_fn
 
 
+def _street_terminal_values(solver, hr, vr):
+    """Per-node terminal counterfactual values (hv, vv) given forward reaches hr/vr at every node,
+    using the verified terminal coefficients. hv[i]=hero value (villain-reach-weighted), vv[i]=
+    villain value (hero-reach-weighted). Only terminal rows are meaningful."""
+    t = solver._tree; nn = t["n_nodes"]; n = solver.n
+    player = t["player"]; sh = t["stacks_h"]; sv = t["stacks_v"]
+    win = solver.win_m; lose = solver.lose_m; tie = solver.tie_m; valid = solver.valid
+    winT, loseT, tieT, validT = win.T, lose.T, tie.T, valid.T
+    ps = solver.pot_start; HS = solver.hero_stack_start; VS = solver.villain_stack_start
+    show = set(t["showdown_idx"].tolist()); hf = set(t["hero_fold_idx"].tolist()); vf = set(t["villain_fold_idx"].tolist())
+    hv = np.zeros((nn, n)); vv = np.zeros((nn, n))
+    for i in range(nn):
+        if player[i] != -1:
+            continue
+        hi = HS - sh[i]; vi = VS - sv[i]
+        if i in show:
+            hv[i] = (ps + vi) * (vr[i] @ winT) + (-hi) * (vr[i] @ loseT) + ((ps + vi - hi) / 2) * (vr[i] @ tieT)
+            vv[i] = (ps + hi) * (hr[i] @ lose) + (-vi) * (hr[i] @ win) + ((ps + hi - vi) / 2) * (hr[i] @ tie)
+        elif i in hf:
+            hv[i] = (-hi) * (vr[i] @ validT); vv[i] = (ps + hi) * (hr[i] @ valid)
+        elif i in vf:
+            hv[i] = (ps + vi) * (vr[i] @ validT); vv[i] = (-vi) * (hr[i] @ valid)
+    return hv, vv
+
+
+def street_br_value(solver, avg, br_player, hero_range, villain_range):
+    """Best-response counterfactual value (per br_player hand) when ``br_player`` (0=hero,1=villain)
+    best-responds and the OTHER player plays ``avg`` (strategy array (n_nodes,n_actions,n)). Returns
+    the per-hand BR counterfactual value at the root. Method: forward-propagate ONLY the fixed
+    player's reach; the BR player's value is then a backward pass that MAXes over the BR player's
+    actions and SUMs over the fixed player's actions (the fixed player's strategy is already in its
+    reach). Avoids the opponent-strategy index mismatch."""
+    t = solver._tree; nn = t["n_nodes"]; n = solver.n
+    player = t["player"]; children = t["children"]; dacts = t["decision_actions"]
+    fixed = 1 - br_player
+    hr = np.zeros((nn, n)); vr = np.zeros((nn, n))
+    hr[0] = np.asarray(hero_range, np.float64); vr[0] = np.asarray(villain_range, np.float64)
+    for i in range(nn):                       # forward: fixed player's reach via avg; BR reach = carry (unused at terminals of its own)
+        if player[i] == -1:
+            continue
+        for a in dacts[i]:
+            c = children[i, a]
+            if player[i] == 0:
+                hr[c] = hr[i] * (avg[i, a] if fixed == 0 else 1.0); vr[c] = vr[i]
+            else:
+                vr[c] = vr[i] * (avg[i, a] if fixed == 1 else 1.0); hr[c] = hr[i]
+    hv, vv = _street_terminal_values(solver, hr, vr)
+    val = hv if br_player == 0 else vv
+    out = {}
+
+    def back(i):
+        if player[i] == -1:
+            return val[i]
+        acts = dacts[i]
+        child_vals = np.stack([back(children[i, a]) for a in acts], axis=0)  # (n_acts, n)
+        if player[i] == br_player:
+            return child_vals.max(axis=0)         # BR picks best action per own hand
+        return child_vals.sum(axis=0)             # fixed player's strategy already in reach -> sum
+    return back(0)
+
+
+def street_nashconv(solver, avg, hero_range, villain_range):
+    """Exploitability (NashConv) of strategy ``avg`` on a single street: sum of both players' BR
+    gains over their value under ``avg``. ~0 at equilibrium; large for a degenerate strategy."""
+    hr = np.asarray(hero_range, np.float64); vr = np.asarray(villain_range, np.float64)
+    hcfv, vcfv = subgame_value_pass(solver, avg, hr, vr)
+    hero_ev = float(hr @ hcfv); vill_ev = float(vr @ vcfv)
+    br_h = float(hr @ street_br_value(solver, avg, 0, hr, vr))
+    br_v = float(vr @ street_br_value(solver, avg, 1, hr, vr))
+    return (br_h - hero_ev) + (br_v - vill_ev)
+
+
 def turn_leaf_river_cfv_batched(turn_board, pot, hero_stack, villain_stack, hero_first_river,
                                 turn_hands, hero_reach, villain_reach, river_iters=150, device="cuda"):
     """GPU-batched version of turn_leaf_river_cfv: the 44 river runouts share betting topology

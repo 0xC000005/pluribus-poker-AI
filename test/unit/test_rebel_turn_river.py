@@ -141,3 +141,33 @@ def test_turn_leaf_river_cfv_batched_matches_cpu():
     lhs = float(np.dot(hr, ch) + np.dot(vr, cv))
     rhs = POT * float(hr @ ts.valid @ vr)
     assert abs(lhs - rhs) < 2.0
+
+
+def test_street_nashconv_small_spot():
+    # Single-street BR/exploitability: on a SMALL tree, a converged CFR+ equilibrium has low
+    # NashConv (well below pot), and a degenerate (uniform) strategy is clearly more exploitable.
+    # (On deep trees the BR exploits poorly-averaged low-reach infosets -> gate on small spots.)
+    import numpy as np
+    import solver as S
+    from poker_ai.rebel.turn_river import _average_strategy_array, street_nashconv, default_spot
+    spot = default_spot()
+    river = [c for c in range(52) if c not in spot.board][0]
+    board5 = spot.board + [river]
+    POT, ST = 400, 50  # tiny tree (~9 nodes)
+    rs = S.StreetSolver(board5, POT, ST, ST, True)
+    n = rs.n
+    hr = np.ones(n, np.float32) / n
+    vr = np.ones(n, np.float32) / n
+    rs.solve(n_iterations=3000, hero_range=hr, villain_range=vr, backend="cpu")
+    eq_nc = street_nashconv(rs, _average_strategy_array(np.asarray(rs._strategy_sum)),
+                            hr.astype(np.float64), vr.astype(np.float64))
+    # degenerate: uniform over legal actions everywhere
+    na = rs._tree["n_actions"]; nn = rs._tree["n_nodes"]
+    uni = np.zeros((nn, na, n))
+    for i in range(nn):
+        acts = rs._tree["decision_actions"][i]
+        for a in acts:
+            uni[i, a, :] = 1.0 / len(acts)
+    uni_nc = street_nashconv(rs, uni, hr.astype(np.float64), vr.astype(np.float64))
+    assert eq_nc < 0.05 * POT          # equilibrium near-unexploitable on a small tree
+    assert uni_nc > eq_nc + 0.02 * POT  # degenerate clearly more exploitable
