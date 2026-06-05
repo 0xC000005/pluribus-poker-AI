@@ -3535,3 +3535,37 @@ ReBeL de-risk FIRST STEP (~0.5 day, no training): constant-oracle round-trip on 
 exactly (run_qfr_leduc_gate oracle CFVs) -> feed back through a cut_node_fn constant leaf -> assert parent
 exact NashConv ~0 (isolates the CFV-normalization + uniform-averaging must-fixes). Then Stage 1 oracle-leaf
 Leduc loop -> Stage 2 learned-leaf bootstrap (gate: Leduc NashConv <= ~0.02, below R-NaD 0.06-0.4).
+
+2026-06-05 RESUME POINT — ReBeL moved off toy Leduc onto a REAL-BELIEF game (turn subgame + neural
+river leaf); steps A/B/C DONE incl. the live net-leaf exploitability gate. WHY THE MOVE: the Leduc
+de-risk validated every ReBeL mechanic (CFV normalization convention, uniform averaging, safe-resolving
+gadget, net learnability) but is TOO SHALLOW (2 rounds) to show a value net's compute benefit or to test
+trunk soundness; the diagnosis (RESEARCH_LOG 20260604T203000Z, Brown-Sandholm 2018 arXiv:1805.08195)
+is that a single-value leaf is unsound in imperfect-info games and the FIX (multi-valued states / PBS-CFR)
+is known + modest-hardware-feasible -> the contribution is running it on ONE GPU on a real game, not
+re-deriving soundness on Leduc. SUBSTRATE: `poker_ai/rebel/turn_river.py` + `river_pbs_net.py` +
+`scripts/run_rebel_net_gate.py`, built on the trusted StreetSolver + fast_cfr.solve_cfr (its showdown_leaf_fn
+hook is the turn->river depth limit). EVIDENCE (all verified, Slumbot held-out):
+ - STEP 0: exact-river leaf is per-iteration-INFEASIBLE in the turn trunk (~323 hr/turn-solve) -> a learned
+   value net is LOAD-BEARING. (RESEARCH_LOG 20260605T120000Z)
+ - A (GPU-fast targets): `turn_leaf_river_cfv_batched` runs all 44 river runouts in one same-topology
+   batched GPU call, exact-match to CPU (3670.21==3670.21), 3.1x.
+ - B (2-street exploitability): `street_br_value`/`two_street_nashconv` (forward fixed-player reach; backward
+   MAX at BR nodes / SUM at fixed; agent-avg BR == subgame_value_pass exactly). Degenerate-uniform agent
+   0.35 pot vs exact-leaf agent 0.023 pot. CAVEAT: BR over-reads poorly-averaged low-reach infosets on DEEP
+   trees -> measure on SMALL/short-stack spots (the gate's domain).
+ - C (river PBS net) + C-COMPLETION (live net-leaf gate, 20260605T143000Z): a cut-GENERAL `CtxRiverNet`
+   (ctx = pot/stacks scalars + both normalized ranges -> per-hand net-from-river CFVs), trained on
+   exact-river targets across ALL 7 cut public states, plugged in as the LIVE showdown_leaf_fn over a full
+   turn solve. Spot AhKd7c2s pot10bb stacks3bb: net val MAE 3.5% of scale; exact-leaf control 2-street
+   NashConv 0.041 pot (1587.7s) vs NET-leaf 0.076 pot (1.44s) = +0.034 pot exploitability at 1102x less
+   compute. Net inference vs exact leaf = 181,000x (microbench). => the learned leaf is a faithful, vastly
+   cheaper substitute END-TO-END in a real solve, not just in isolation. The single-value-leaf design point
+   is validated on the LEAF; the multi-valued-states question is a TRUNK/self-play concern (Step 3).
+NEXT (resume here): STEP 3 = the self-play ReBeL TRAINING LOOP on this turn+river substrate -- sample PBSs
+from trunk solves -> re-solve (gadget-safe) -> harvest SELF-CONSISTENT CFV targets off the trunk (not
+isolated re-solves) -> update the net -> iterate, watching 2-street exploitability (metric B) trend down.
+This is where the trunk multi-valued-states soundness question becomes live (Leduc Stage-2c/diagnosis).
+THEN Step 4: scale (flop-truncated HUNL / deeper truncation) + an explicit compute go/no-go before any
+multi-week run. Tasks #26 (Step 3), #27 (Step 4) track this. Uncommitted at this point: only
+`scripts/run_rebel_net_gate.py` + this doc + RESEARCH_LOG (the C-completion commit).
