@@ -168,6 +168,26 @@ L1 between the net-leaf trunk and the matching exact-leaf trunk.
   agent's exploitability (not strategy L1) is the metric. Artifacts:
   `autoresearch-session/rebel/leduc_stage2{,b_blueprint}.json`, `leduc_pbs_value_net.pt`.
 
+**Stage 2c results (2026-06-04) — the gadget works; the depth-limited trunk is the wall.** Built the
+DeepStack **safe-resolving gadget** (`loop.gadget_resolve`), the **QRE round-2 solve**
+(`loop.solve_round2_qre`), and an exact-exploitability evaluator (`scripts/run_rebel_leduc_stage2c.py`;
+the played agent is a *fixed* strategy σ1+σ2, so `nash_conv` is exact — the trustworthy metric).
+- **Gadget validated (positive):** with a near-equilibrium σ1 and exact blueprint CFVs, gadget
+  re-solving cuts exploitability **0.21 → 0.0079 (26.5×)**, within ~10× of the 8e-4 ceiling.
+- **Blocker isolated (fundamental):** the **depth-limited trunk does not recover a good σ1.** Failure
+  isolation — A perfect-σ1+exact-CFV **0.0098**; B trunk-σ1+exact-CFV **0.35**; C perfect-σ1+net-CFV
+  **0.084**; D end-to-end **0.59**. Querying a per-range value function each trunk iteration is
+  biased (the opponent re-optimizes inside a round-1 deviation; Stage-1 #3). Tested all leaves:
+  blueprint σ1 → 0.35, QRE σ1 (τ=0.05/0.1) → 0.15–0.16, isolated → under-determined; **none** reach
+  the perfect-σ1 0.0098. The faithful unbiased trunk is co-evolving CFR-D (= full CFR), which on a
+  **2-round** game buys nothing from a net.
+- **Verdict:** Leduc **validated the plumbing** (conventions, averaging, gadget, net learnability) but
+  is **too shallow** to show the net's benefit or resolve the trunk-bias. Next: (a) reimplement the
+  trunk with faithful ReBeL/CFR-D semantics (leaf value = value of the *co-evolving average*, not
+  equilibrium-per-range), or (b) move to a **deeper small game (≥3 rounds)** where the net amortizes
+  expensive subtrees and the bias is the genuine question. Artifacts:
+  `autoresearch-session/rebel/leduc_stage2c_{findings,e2e}.json`.
+
 ## 6. Reproducibility
 
 - LBR gate + positive controls: `scripts/run_lbr.py`, `test/unit/test_lbr_positive_controls.py`,
@@ -180,5 +200,6 @@ L1 between the net-leaf trunk and the matching exact-leaf trunk.
 - ReBeL de-risk (§5b): `poker_ai/rebel/{leduc,leaf_eval,loop,pbs_value_net}.py`,
   `scripts/run_rebel_leduc_roundtrip.py` + `test/unit/test_rebel_leduc_roundtrip.py` (Stage 0),
   `scripts/run_rebel_leduc_stage1.py` (Stage 1),
-  `scripts/run_rebel_leduc_stage2.py` + `test/unit/test_rebel_stage2_plumbing.py` (Stage 2);
-  artifacts `autoresearch-session/rebel/{leduc_roundtrip_stage0,leduc_stage1_findings,leduc_stage2,leduc_stage2b_blueprint}.json`.
+  `scripts/run_rebel_leduc_stage2.py` + `test/unit/test_rebel_stage2_plumbing.py` (Stage 2),
+  `loop.{gadget_resolve,solve_round2_qre,qre_leaf_fn}` + `scripts/run_rebel_leduc_stage2c.py` (Stage 2c);
+  artifacts `autoresearch-session/rebel/{leduc_roundtrip_stage0,leduc_stage1_findings,leduc_stage2,leduc_stage2b_blueprint,leduc_stage2c_findings,leduc_stage2c_e2e}.json`.

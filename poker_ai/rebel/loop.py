@@ -206,6 +206,168 @@ def exact_leaf_fn(tree, round2_iters=2000, round2_averaging="linear"):
     return fn
 
 
+def _round2_q(tree, key, range0, range1, pol):
+    """Belief-weighted action values q[iid][a] for the round-2 infosets at cut ``key``, seeded with
+    entry ranges (incl. deal chance). cf = opponent reach * chance; q = reach-weighted then
+    normalized (same convention as ``LeducTree.values``). Returns {iid: q_array}."""
+    instances = tree.cut_instances()[key]
+    iids = _round2_iids(tree, instances)
+    qnum = {i: np.zeros(len(tree.iset_actions[i])) for i in iids}
+    qden = {i: 0.0 for i in iids}
+
+    def rec(node, r0, r1, rc):
+        ty = node[0]
+        if ty == "term":
+            return node[1]
+        if ty == "board":
+            ev = np.zeros(2)
+            for _a, p, ch in node[4]:
+                ev += p * rec(ch, r0, r1, rc * p)
+            return ev
+        _, pl, iid, _rnd, _c0, _c1, _b, kids = node
+        s = pol[iid]
+        cf = (r1 * rc) if pl == 0 else (r0 * rc)
+        qden[iid] += cf
+        ev = np.zeros(2)
+        row = qnum[iid]
+        for i, (_a, ch) in enumerate(kids):
+            cv = rec(ch, r0 * s[i], r1, rc) if pl == 0 else rec(ch, r0, r1 * s[i], rc)
+            ev += s[i] * cv
+            row[i] += cf * cv[pl]
+        return ev
+
+    for c0, c1, bn in instances:
+        rec(bn, range0[c0], range1[c1], 1.0)
+    return {i: (qnum[i] / qden[i] if qden[i] > 1e-15 else np.zeros(len(qnum[i]))) for i in iids}
+
+
+def solve_round2_qre(tree, key, range0, range1, tau=0.1, eta=0.5, iters=400):
+    """Regularized OMD (MMD, uniform magnet) last-iterate solve of the round-2 subgame for the given
+    ranges -> the UNIQUE quantal-response equilibrium (QRE). Unlike a plain Nash re-solve, the QRE is
+    unique -> consistent CFVs across ranges (learnable targets) AND near-optimal for small tau (a
+    good trunk leaf). Returns {iid: strategy} over round-2 infosets (last iterate)."""
+    instances = tree.cut_instances()[key]
+    iids = _round2_iids(tree, instances)
+    pol = tree.uniform_policy()  # full list; we only update round-2 iids
+    ae = tau * eta
+    for _ in range(iters):
+        q = _round2_q(tree, key, range0, range1, pol)
+        for i in iids:
+            acts = tree.iset_actions[i]
+            n = len(acts)
+            rho = 1.0 / n
+            logu = (np.log(np.maximum(pol[i], 1e-12)) + ae * np.log(rho) + eta * q[i]) / (1.0 + ae)
+            m = logu.max()
+            e = np.exp(logu - m)
+            pol[i] = e / e.sum()
+    return {i: pol[i] for i in iids}
+
+
+def gadget_resolve(tree, key, resolver, range_resolver, range_opp, opp_cfv,
+                   iters=2000, averaging="linear"):
+    """DeepStack-style SAFE re-solving of the round-2 subgame for ``resolver`` (player 0 or 1),
+    constraining the opponent to its blueprint counterfactual values ``opp_cfv`` (per opponent card,
+    normalized convention -- e.g. the leaf values the trunk used). The opponent gets a per-hand
+    FOLLOW/TERMINATE gadget decision (terminate -> its blueprint CFV), so the resolver's strategy is
+    guaranteed not to let the opponent exceed those CFVs -> safe (not off-path exploitable).
+
+    Returns the resolver's average round-2 strategy {iid: prob_array}. ``range_resolver`` /
+    ``range_opp`` are per-card entry reaches (incl. deal chance) at the cut.
+    """
+    opp = 1 - resolver
+    instances = tree.cut_instances()[key]
+    r2_iids = _round2_iids(tree, instances)
+    res_iids = [i for i in r2_iids if tree.iset_player[i] == resolver]
+    opp_iids = [i for i in r2_iids if tree.iset_player[i] == opp]
+    regret = {i: np.zeros(len(tree.iset_actions[i])) for i in r2_iids}
+    stratsum = {i: np.zeros(len(tree.iset_actions[i])) for i in res_iids}
+    # opponent per-hand gadget regret over {follow, terminate}
+    g_reg = np.zeros((NCARDS, 2))
+
+    def g_follow():
+        out = np.zeros(NCARDS)
+        for c in range(NCARDS):
+            pos = np.maximum(g_reg[c], 0.0); s = pos.sum()
+            out[c] = (pos[0] / s) if s > 1e-15 else 0.5  # P(follow)
+        return out
+
+    for t in range(iters):
+        sig = {i: _rm_plus(regret[i]) for i in r2_iids}
+        gf = g_follow()
+        cfvnum = {i: np.zeros(len(tree.iset_actions[i])) for i in r2_iids}
+        # opponent root subgame value per hand (normalized): num/den
+        opp_num = np.zeros(NCARDS); opp_den = np.zeros(NCARDS)
+
+        def walk(node, r0, r1, rc):
+            ty = node[0]
+            if ty == "term":
+                return node[1]
+            if ty == "board":
+                ev = np.zeros(2)
+                for _a, p, ch in node[4]:
+                    ev += p * walk(ch, r0, r1, rc * p)
+                return ev
+            _, pl, iid, _rnd, _c0, _c1, _b, kids = node
+            s = sig[iid]
+            ev = np.zeros(2)
+            cf = (r1 * rc) if pl == 0 else (r0 * rc)
+            row = cfvnum[iid]
+            for i, (_a, ch) in enumerate(kids):
+                cv = walk(ch, r0 * s[i], r1, rc) if pl == 0 else walk(ch, r0, r1 * s[i], rc)
+                ev += s[i] * cv
+                row[i] += cf * cv[pl]
+            return ev
+
+        for c0, c1, bn in instances:
+            res_card, opp_card = (c0, c1) if resolver == 0 else (c1, c0)
+            rr = range_resolver[res_card]
+            ro = range_opp[opp_card] * gf[opp_card]
+            r0, r1 = (rr, ro) if resolver == 0 else (ro, rr)
+            ev = walk(bn, r0, r1, 1.0)
+            # opponent's conditional value of FOLLOWING with opp_card (weighted by resolver range)
+            opp_num[opp_card] += rr * ev[opp]
+            opp_den[opp_card] += rr
+
+        # regret updates (simultaneous CFR+)
+        w = float(t + 1) if averaging == "linear" else 1.0
+        for i in res_iids:
+            s = sig[i]; v = float(np.dot(s, cfvnum[i]))
+            regret[i] = np.maximum(regret[i] + (cfvnum[i] - v), 0.0)
+            stratsum[i] += w * s
+        for i in opp_iids:
+            s = sig[i]; v = float(np.dot(s, cfvnum[i]))
+            regret[i] = np.maximum(regret[i] + (cfvnum[i] - v), 0.0)
+        # opponent gadget regret: follow value = normalized subgame value; terminate = blueprint CFV
+        for c in range(NCARDS):
+            if opp_den[c] <= 1e-15:
+                continue
+            fval = opp_num[c] / opp_den[c]
+            tval = opp_cfv[c]
+            ev_g = gf[c] * fval + (1.0 - gf[c]) * tval
+            g_reg[c, 0] = max(g_reg[c, 0] + (fval - ev_g), 0.0)
+            g_reg[c, 1] = max(g_reg[c, 1] + (tval - ev_g), 0.0)
+
+    avg = {}
+    for i in res_iids:
+        ss = stratsum[i].sum()
+        avg[i] = stratsum[i] / ss if ss > 1e-15 else np.ones(len(stratsum[i])) / len(stratsum[i])
+    return avg
+
+
+def qre_leaf_fn(tree, tau=0.1, eta=0.5, iters=400):
+    """Exact ``leaf_fn`` whose value is the QRE continuation value for the queried ranges: unique
+    (consistent across ranges) AND near-optimal (small tau). Resolves the consistency<->quality
+    tradeoff that plain Nash re-solve (under-determined) and blueprint (fixed-strategy, crude) hit."""
+    oracle = ExactLeafOracle(tree, normalize=True)
+
+    def fn(key, range0, range1):
+        qre = solve_round2_qre(tree, key, range0, range1, tau=tau, eta=eta, iters=iters)
+        pol = _listify(tree, {}, round2={key: qre})
+        return oracle.evaluate(key, range0, range1, pol)
+
+    return fn
+
+
 def blueprint_leaf_fn(tree, ref_strategy):
     """Build a CONSISTENT exact ``leaf_fn`` for ``trunk_solve``: the leaf value is the CFV of
     continuing with a single fixed near-equilibrium round-2 strategy ``ref_strategy`` (a full policy

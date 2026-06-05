@@ -32,11 +32,21 @@ ReBeL-style search-in-LEARNING on a single GPU, small-game-first. Built on the t
   CFR-D) but unlearnable-as-is; blueprint value is learnable but a crude leaf (exact trunk 0.264).
   Round-1 strategy L1 is a confounded metric (equilibrium multiplicity + near-indifference) -> a
   conclusive verdict needs an EXPLOITABILITY metric (-> safe-resolving gadget).
-- **NEXT = Stage 2c (Leduc):** regularized (QRE/entropy) per-range round-2 solve -> unique +
-  near-optimal targets (resolves the tradeoff); implement the safe-resolving (DeepStack/CFR-D)
-  gadget so the metric is the played agent's exploitability, not strategy L1. Then small-NLHE ->
-  flop-truncated HUNL before any multi-week full-deck scale-up (full-deck data-gen is
-  feasibility-marginal on the 3070 Ti -> explicit compute go/no-go first). Slumbot stays held-out.
+- **Stage 2c done -- gadget WORKS, depth-limited trunk sigma1 is the wall**
+  (`loop.gadget_resolve`, `loop.solve_round2_qre`, `scripts/run_rebel_leduc_stage2c.py`,
+  `autoresearch-session/rebel/leduc_stage2c_{findings,e2e}.json`). Safe-resolving gadget cuts
+  exploitability 0.21 -> 0.0079 (26.5x) with a good sigma1 + exact CFVs (exact OpenSpiel NashConv;
+  the played agent is a fixed strategy so the metric is exact). BUT failure isolation
+  (A perfect-sigma1=0.0098; B trunk-sigma1=0.35; C net-CFV=0.084; D e2e=0.59) shows the
+  depth-limited TRUNK does not recover a good sigma1 -- querying a per-range value function each
+  iteration is biased (Stage-1 #3); blueprint/QRE/isolated leaves all fail (QRE sigma1 still 0.15).
+  Leduc (2 rounds) validated the PLUMBING but is too shallow to show the net's benefit or resolve
+  the trunk bias.
+- **NEXT options (pick one):** (a) reimplement the trunk with faithful ReBeL/CFR-D semantics
+  (leaf value = value of the CO-EVOLVING average, not equilibrium-per-range) and re-test on Leduc;
+  or (b) move to a DEEPER small game (>=3 betting rounds) where the net amortizes expensive subtrees
+  and the trunk-bias question is the real one. Then small-NLHE -> flop-truncated HUNL before any
+  multi-week full-deck scale-up (compute go/no-go first). Slumbot stays held-out.
 
 ## 2026-05-26 Simplification Reset
 
