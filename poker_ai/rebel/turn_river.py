@@ -194,6 +194,48 @@ def turn_leaf_river_cfv(turn_board, pot, hero_stack, villain_stack, hero_first_r
     return cut_h, cut_v
 
 
+def make_exact_river_showdown_fn(turn_solver, river_iters=150):
+    """Build a solve_cfr ``showdown_leaf_fn`` for the turn solve: every turn showdown terminal is a
+    river-deal point, and we replace its default (averaged-equity, no river betting) value with the
+    EXACT river continuation (river betting + showdown), averaged over runouts, in the turn solver's
+    net-from-turn-start convention. Per showdown terminal: turn_leaf_river_cfv at the terminal's
+    pot/stacks (net-from-river) then the convention offset (subtract hi_cut/vi_cut in counterfactual
+    form). VERIFIED: at an all-in terminal this reproduces the default averaged-equity value to ~1e-5.
+
+    WARNING: per the step-0 feasibility finding this is per-iteration-INFEASIBLE on large spots
+    (~76s per showdown terminal). Use only on tiny spots, or -- the intended use -- call
+    turn_leaf_river_cfv directly to generate value-net TARGETS offline (step 2), then use the fast
+    net as the showdown_leaf_fn."""
+    board = list(turn_solver.board)
+    hands = turn_solver.hands
+    valid = turn_solver.valid
+    validT = valid.T
+    HS0 = turn_solver.hero_stack_start
+    VS0 = turn_solver.villain_stack_start
+    hero_first = turn_solver.hero_first
+    t = turn_solver._tree
+    sh = t["stacks_h"]; sv = t["stacks_v"]; potN = t["pot"]
+
+    def showdown_leaf_fn(*, tree, showdown_indices, hero_reach, villain_reach, valid_m,
+                         default_hero_values, default_villain_values,
+                         pot_start, hero_stack_start, villain_stack_start):
+        n = len(hands)
+        out_h = np.zeros((len(showdown_indices), n), dtype=np.float32)
+        out_v = np.zeros((len(showdown_indices), n), dtype=np.float32)
+        for k, ci in enumerate(showdown_indices):
+            P_cut = int(potN[ci]); hs = int(sh[ci]); vs = int(sv[ci])
+            hi_cut = HS0 - hs; vi_cut = VS0 - vs
+            hr = np.asarray(hero_reach[k], dtype=np.float64)
+            vr = np.asarray(villain_reach[k], dtype=np.float64)
+            ch, cv = turn_leaf_river_cfv(board, P_cut, hs, vs, hero_first, hands, hr, vr,
+                                         river_iters=river_iters)
+            out_h[k] = ch - hi_cut * (vr @ validT)     # net-from-river -> net-from-turn-start
+            out_v[k] = cv - vi_cut * (hr @ valid)
+        return out_h, out_v
+
+    return showdown_leaf_fn
+
+
 def river_subgame_cfv(board5, pot, hero_stack, villain_stack, hero_first,
                       hero_range, villain_range, iters=200):
     """Solve a river subgame range-vs-range and return the AVERAGE-strategy per-hand counterfactual
