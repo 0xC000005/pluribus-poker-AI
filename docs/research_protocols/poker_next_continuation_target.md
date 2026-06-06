@@ -3732,3 +3732,20 @@ across cut levels (the leaf at cut-d is a net query over cut-(d+1) values, thems
 genuine bootstrapping); then depth-limited self-play with the net leaf at NON-terminal cuts -> assembled
 NashConv vs the exact oracle. On Goofspiel (>=3 levels) BOTH trunk soundness AND bootstrapping are
 genuinely testable (unlike 2-level Leduc, which Phase 1 proved ill-posed). Then #30 efficiency/scaling.
+
+2026-06-06 update — KILL-SWITCH PASSES (DECISIVE POSITIVE). Per the juncture decision (Option C: minimal
+kill-switch then pivot to scale), ran the cheapest decisive test on Goofspiel (>=3-level), reusing
+existing machinery (scripts/run_rebel_goofspiel_killswitch.py): the cut at the prize-2 reveal is
+NON-TERMINAL (continuation = rounds 2-4). CONVERGED (cont 800/trunk 500/subgame 150): Nash floor 0.0011;
+base uniform 1.4167; SINGLE-VALUE (fixed) leaf sigma1 0.0047 = 4.3x Nash (~300x below base); per-belief
+LIVE-RESOLVE leaf 0.2178 = 195x. => On a >=3-level game, a depth-limited trunk with a FIXED value-function
+leaf (what a net learns) is NEAR-NASH (4.3x) -- the depth-limited soundness mechanism WORKS in our code,
+in SHARP contrast to 2-level Leduc (same fixed leaf ~96x, ill-posed). The live re-solve being far worse
+(195x) re-confirms the ReBeL rule: use a FIXED net leaf, not a live re-solve. RESEARCH_LOG 20260606T093000Z.
+=> Every ReBeL/depth-limited mechanic is now validated on the generic substrate (poker + non-poker),
+INCLUDING depth-limited soundness at >=3 levels. The mechanism class is de-risked IN OUR CODE.
+NEXT = GREENLIT Option-B PIVOT: the single-CONSUMER-GPU EFFICIENCY FRONTIER + scaling study (the actual
+contribution -- learned abstraction + GPU-batched solving on a real-belief game; HUNL one instance,
+Slumbot held-out), with this kill-switch as the soundness rigor-appendix. (Task #30.) The full
+nested-cut Goofspiel(5) characterization is intentionally NOT pursued -- per the brief it would re-prove
+known ReBeL/PoG/LAMIR theory; the fixed-leaf kill-switch is sufficient soundness evidence.
