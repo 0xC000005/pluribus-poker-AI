@@ -3783,3 +3783,20 @@ scale lever that AVOIDS full-tree enumeration entirely (no abstraction, game-agn
 tabular MCCFR); (C) accept the unabstracted ceiling and frame the single-consumer-GPU contribution at the
 games it reaches (Leduc/Goofspiel-class) honestly. The mechanism + general pipeline are fully built +
 de-risked; this fork is purely about HOW to push the scale/efficiency frontier on 8GB.
+
+2026-06-06 update — LEVER B (naive MCCFR) ALSO FAILED its premise gate. Owner chose lever B; ran the
+premise gate with OpenSpiel's production external-sampling MCCFR (scripts/run_rebel_mccfr_gate.py).
+RESULT NEGATIVE: Goofspiel(4) full-tree cfr_plus NashConv 0.0015 (600 it) vs MCCFR 0.21 (4000 it) -- ~140x
+worse; Goofspiel(5) (236k) MCCFR 0.93 after 4000 it (base 1.42) -- barely moves. Naive external-sampling
+MCCFR is too variance-dominated for near-Nash in feasible wall-clock. RESEARCH_LOG 20260606T160000Z.
+=> BOTH cheap scale levers have now failed their cheap gates (abstraction = incoherent; naive MCCFR =
+too slow). STRATEGIC RECKONING (owner): the general METHOD is fully built + de-risked (a general, sound,
+single-consumer-GPU depth-limited self-play method, validated on poker + non-poker, soundness at >=3
+levels). SCALING it past ~few-k infosets is the hard part and the cheap wins are exhausted. Remaining
+paths, all substantial + uncertain: (B') DREAM / variance-reduced MCCFR (control-variate baselines,
+order-of-magnitude speedup but a real build); (D) DEEP CFR -- neural function approximation as IMPLICIT
+abstraction over sampled traversals (modern scalable CFR, eps-Nash, no lossy bucketing; repo has a
+full-deck Deep CFR to generalize); (C) ACCEPT the ceiling and write up the complete de-risked
+single-consumer-GPU contribution + the soundness/abstraction/sampling characterization at the
+Leduc/Goofspiel-class scale it reaches exactly (strong methods + reproducibility contribution; forfeits
+the HUNL/Slumbot scaling claim). NEXT = owner decision among B'/D/C.
