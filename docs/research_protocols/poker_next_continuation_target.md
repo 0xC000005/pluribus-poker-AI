@@ -3766,3 +3766,20 @@ depth-limited-soundness coupling is THE single biggest remaining risk (mechanism
 leaf, NOT yet under abstraction). Then scale the ladder (goofspiel -> limit-Hold'em-truncated -> HUNL)
 with the explicit compute go/no-go gates (GO if curve extends >=1 order of magnitude before the 8GB wall;
 NO-GO if VRAM caps below goofspiel-10 or tree-walk stays intractable even WITH abstraction).
+
+2026-06-06 update — ABSTRACTION-COHERENCE GATE: the load-bearing risk FIRED. Before building an abstract
+solver, ran the cheapest test of the abstraction x soundness coupling (poker_ai/rebel/iig_clustering.py:
+collect_features=info_state_tensor, cluster_infosets=KMeans per (player,action) group, strategy_incoherence
+=within-cluster equilibrium-strategy L1 from the cluster mean). On Goofspiel(4) (exact eq): FEATURE
+clustering (cheap, game-agnostic) incoherence 0.41 FLAT across 5x-45x; VALUE clustering (eq q-vector) 0.22
+->0.36. => the cheap game-agnostic feature (info-state tensor) is NOT a sound abstraction signal (merges
+strategically-divergent infosets ~0.41 L1 even at 5x -> would break depth-limited soundness); the right
+signal is VALUE-based but CIRCULAR on big games (must solve to get values) AND still lossy. So the "cheap
+learned abstraction" the scale brief assumed does NOT work as-is. 1 test (test_rebel_iig_clustering.py);
+probe scripts/run_rebel_abstraction_probe.py. RESEARCH_LOG 20260606T140000Z.
+NEXT = SCALE-LEVER FORK (owner decision): (A) VALUE-guided abstraction bootstrapped from a CHEAP coarse
+solve (LAMIR-style; mitigates circularity, still lossy); (B) MCCFR / external-sampling CFR -- the classic
+scale lever that AVOIDS full-tree enumeration entirely (no abstraction, game-agnostic; repo has legacy
+tabular MCCFR); (C) accept the unabstracted ceiling and frame the single-consumer-GPU contribution at the
+games it reaches (Leduc/Goofspiel-class) honestly. The mechanism + general pipeline are fully built +
+de-risked; this fork is purely about HOW to push the scale/efficiency frontier on 8GB.
