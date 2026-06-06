@@ -3749,3 +3749,20 @@ contribution -- learned abstraction + GPU-batched solving on a real-belief game;
 Slumbot held-out), with this kill-switch as the soundness rigor-appendix. (Task #30.) The full
 nested-cut Goofspiel(5) characterization is intentionally NOT pursued -- per the brief it would re-prove
 known ReBeL/PoG/LAMIR theory; the fixed-leaf kill-switch is sufficient soundness evidence.
+
+2026-06-06 update — SCALE-READINESS PROBE DONE (the cheapest go/no-go before the abstraction build).
+scripts/run_rebel_scale_probe.py walks the Goofspiel size ladder + measures net-leaf self-play
+exploitability. RESULTS: FIRST CURVE POINT goofspiel(4) (3608 infosets) net-leaf self-play exploitability
+0.0446 = 16x Nash floor 0.0028 (~32x below base 1.42); net MAE 5.2%; 18s on the CPU host. SIZE LADDER:
+goofspiel(4)=3608 but goofspiel(5)=236,450 infosets -- PAST the unabstracted Python-tree-walk ceiling
+(~few-k). GO/NO-GO: the de-risked method works END-TO-END on a >=3-level game on the GPU host, but the
+unabstracted substrate CAPS at ~few-k infosets; VRAM is NOT binding (net is tiny; CPU tree-walk is) ->
+a game-agnostic LEARNED ABSTRACTION is the MANDATORY next lever (GPU kernels are net-negative at this
+scale; abstraction makes 8GB viable, LAMIR-style). RESEARCH_LOG 20260606T120000Z.
+NEXT (the LOAD-BEARING build) = poker_ai/rebel/iig_clustering.py: a game-agnostic reach-weighted
+infoset-clustering hook at DepthLimitedGame._iset_id, gated on compressing an intractable game
+(goofspiel(5), 236k) to feasible (~5-10k) WITH BOUNDED NashConv degradation. The abstraction x
+depth-limited-soundness coupling is THE single biggest remaining risk (mechanism de-risked with a FULL
+leaf, NOT yet under abstraction). Then scale the ladder (goofspiel -> limit-Hold'em-truncated -> HUNL)
+with the explicit compute go/no-go gates (GO if curve extends >=1 order of magnitude before the 8GB wall;
+NO-GO if VRAM caps below goofspiel-10 or tree-walk stays intractable even WITH abstraction).
