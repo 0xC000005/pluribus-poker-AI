@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """Scale lever D (Deep CFR) -- premise gate via OpenSpiel's TESTED DeepCFRSolver (low reimplementation
-risk, like the MCCFR gate). Question: does neural-regret Deep CFR DEFEAT the variance that sank naive
-external-sampling MCCFR -- reaching near-Nash on small games where MCCFR was variance-dominated
-(Goofspiel-4: MCCFR 0.21 after 4000 it vs cfr_plus oracle 0.0015), and scaling on Goofspiel-5 (236k
-infosets, MCCFR 0.93)? If yes, Deep CFR (the field's proven scalable CFR, a non-lossy implicit
-abstraction) is the scale lever -> build the generic depth-limited-PBS integration next. Slumbot held-out.
+risk, like the MCCFR gate). Question: with a perfect simulator, external-sampling Deep CFR (the field's
+proven scalable CFR, a non-lossy implicit abstraction) is LOW-VARIANCE and sound -- does it reach
+near-Nash where naive external-sampling MCCFR was variance-dominated (Goofspiel-4: MCCFR 0.21 vs cfr_plus
+oracle 0.0015), and scale on Goofspiel-5 (236k infosets, MCCFR 0.93)? If yes -> build the generic
+depth-limited-PBS integration next. Slumbot held-out.
+
+v2 (valid-budget re-run, 2026-06-07): the v1 run FAILED but was SAMPLE-STARVED -- it left
+policy_network_train_steps / advantage_network_train_steps at the OpenSpiel DEFAULT of 1 (one gradient
+step per iter), so the nets were essentially untrained (Kuhn 0.611 where Deep CFR trivially -> ~0). This
+re-run sets the train-step knobs and other config to OpenSpiel's OWN canonical example values
+(open_spiel/python/examples/deep_cfr_{pytorch,tf2}.py: policy_train_steps 5000, adv_train_steps 500-750,
+batch 2048, mem 1e6, lr 1e-3, deeper nets) -- this is RESOURCING THE TEST TO VALIDITY (Kuhn->~0,
+Leduc->near-Nash are the precondition), NOT a benchmark-hacking sweep: one principled config from the
+reference impl, run once. Leduc is added as a stronger poker-class validity anchor.
 """
 from __future__ import annotations
 
@@ -47,11 +56,19 @@ torch.FloatTensor = _float_tensor_compat
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def deepcfr_nashconv(game, iters, traversals, layers=(64, 64), lr=1e-3, mem=1_000_000):
+def deepcfr_nashconv(game, iters, traversals, layers=(64, 64, 64, 64), lr=1e-3,
+                     mem=1_000_000, policy_steps=5000, adv_steps=500, batch=2048):
+    """Run OpenSpiel's tested DeepCFRSolver and return the average-policy NashConv.
+
+    The train-step knobs (policy_steps / adv_steps) are the v1 bug fix: their OpenSpiel default is 1, which
+    leaves the nets untrained. Values here track the reference examples (deep_cfr_{pytorch,tf2}.py).
+    """
     solver = deep_cfr.DeepCFRSolver(
         game, policy_network_layers=layers, advantage_network_layers=layers,
         num_iterations=iters, num_traversals=traversals, learning_rate=lr,
-        batch_size_advantage=2048, batch_size_strategy=2048, memory_capacity=mem, device=DEVICE)
+        batch_size_advantage=batch, batch_size_strategy=batch, memory_capacity=mem,
+        policy_network_train_steps=policy_steps, advantage_network_train_steps=adv_steps,
+        reinitialize_advantage_networks=True, device=DEVICE)
     solver.solve()
     tp = policy_lib.tabular_policy_from_callable(game, solver.action_probabilities)
     return float(exploitability.nash_conv(game, tp))
@@ -59,43 +76,67 @@ def deepcfr_nashconv(game, iters, traversals, layers=(64, 64), lr=1e-3, mem=1_00
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("--iters", type=int, default=150)
-    ap.add_argument("--traversals", type=int, default=1500)
-    ap.add_argument("--g5-iters", type=int, default=150)
-    ap.add_argument("--g5-traversals", type=int, default=1500)
+    # Defaults track OpenSpiel's canonical example configs; G5 is bounded for wall-clock on the consumer GPU.
+    ap.add_argument("--g4-iters", type=int, default=100)
+    ap.add_argument("--g4-traversals", type=int, default=1000)
+    ap.add_argument("--g5-iters", type=int, default=60)
+    ap.add_argument("--g5-traversals", type=int, default=800)
     ap.add_argument("--output-json")
     args = ap.parse_args(argv)
-    out = {"device": DEVICE}
-    print(f"Deep CFR gate (net training on device={DEVICE})")
+    out = {"device": DEVICE,
+           "config_provenance": "OpenSpiel examples/deep_cfr_{pytorch,tf2}.py: policy_steps=5000, "
+                                "adv_steps=500-750, batch=2048, mem=1e6, lr=1e-3; train-step knobs are the "
+                                "v1 fix (default was 1 -> untrained nets)."}
+    print(f"Deep CFR gate v2 (valid budget; net training on device={DEVICE})")
 
-    # sanity: Kuhn (Deep CFR is sample-hungry; needs adequate budget)
+    # VALIDITY anchor 1 -- Kuhn (12 infosets; canonical pytorch example config). Must -> ~0.
     t0 = time.time()
-    nck = deepcfr_nashconv(pyspiel.load_game("kuhn_poker"), 100, 1000, layers=(32, 32))
-    out["kuhn"] = {"deepcfr_nashconv": nck, "s": round(time.time() - t0, 1)}
-    print(f"sanity kuhn: DeepCFR NashConv={nck:.4f} (target <0.1; CFR+ ~0)")
+    nck = deepcfr_nashconv(pyspiel.load_game("kuhn_poker"), 100, 1000,
+                           layers=(64,), policy_steps=5000, adv_steps=750)
+    out["kuhn"] = {"deepcfr_nashconv": nck, "target": 0.1, "s": round(time.time() - t0, 1)}
+    print(f"VALIDITY kuhn: DeepCFR NashConv={nck:.4f} (target <0.1; CFR+ ~0)  {out['kuhn']['s']}s")
 
-    # gate: Goofspiel(4) vs the exact cfr_plus oracle + the naive-MCCFR variance floor
+    # VALIDITY anchor 2 -- Leduc (poker: chance + 2 betting rounds; canonical tf2 example config).
+    t0 = time.time()
+    ncl = deepcfr_nashconv(pyspiel.load_game("leduc_poker"), 100, 1000,
+                           layers=(64, 64, 64, 64), policy_steps=5000, adv_steps=500)
+    out["leduc"] = {"deepcfr_nashconv": ncl, "target": 0.5, "cfr_plus_ref": 0.0046,
+                    "s": round(time.time() - t0, 1)}
+    print(f"VALIDITY leduc: DeepCFR NashConv={ncl:.4f} (target <0.5; CFR+ 0.0046)  {out['leduc']['s']}s")
+
+    # PREMISE -- Goofspiel(4) vs the exact cfr_plus oracle + the naive-MCCFR variance floor (0.21)
     g4 = load_goofspiel(4)
     nc_oracle = DepthLimitedGame(g4, goofspiel_is_cut, public_key_fn=goofspiel_public_key).nash_conv(
         DepthLimitedGame(g4, goofspiel_is_cut, public_key_fn=goofspiel_public_key).cfr_plus(600))
     t0 = time.time()
-    nc4 = deepcfr_nashconv(g4, args.iters, args.traversals)
+    nc4 = deepcfr_nashconv(g4, args.g4_iters, args.g4_traversals,
+                           layers=(64, 64, 64, 64), policy_steps=5000, adv_steps=500)
     out["goofspiel4"] = {"deepcfr_nashconv": nc4, "cfr_plus_oracle": nc_oracle,
-                         "naive_mccfr_ref": 0.21, "s": round(time.time() - t0, 1)}
-    print(f"GATE goofspiel(4): DeepCFR NashConv={nc4:.4f}  (cfr_plus oracle {nc_oracle:.4f}; "
-          f"naive MCCFR 0.21)  {out['goofspiel4']['s']}s")
+                         "naive_mccfr_ref": 0.21, "target": 0.105, "s": round(time.time() - t0, 1)}
+    print(f"PREMISE goofspiel(4): DeepCFR NashConv={nc4:.4f}  (cfr_plus oracle {nc_oracle:.4f}; "
+          f"naive MCCFR 0.21; target <0.105)  {out['goofspiel4']['s']}s")
 
-    # scaling: Goofspiel(5) = 236k infosets (enumerator-intractable; naive MCCFR stuck at 0.93)
+    # SCALING -- Goofspiel(5) = 236k infosets (enumerator-intractable; naive MCCFR stuck at 0.93)
     g5 = load_goofspiel(5)
     t0 = time.time()
-    nc5 = deepcfr_nashconv(g5, args.g5_iters, args.g5_traversals)
+    nc5 = deepcfr_nashconv(g5, args.g5_iters, args.g5_traversals,
+                           layers=(64, 64, 64, 64), policy_steps=5000, adv_steps=500)
     out["goofspiel5"] = {"deepcfr_nashconv": nc5, "naive_mccfr_ref": 0.93, "base_uniform": 1.4167,
-                         "s": round(time.time() - t0, 1)}
-    print(f"SCALING goofspiel(5) (236k): DeepCFR NashConv={nc5:.4f}  (naive MCCFR 0.93; uniform 1.42)  "
-          f"{out['goofspiel5']['s']}s")
+                         "target": 0.465, "s": round(time.time() - t0, 1)}
+    print(f"SCALING goofspiel(5) (236k): DeepCFR NashConv={nc5:.4f}  (naive MCCFR 0.93; uniform 1.42; "
+          f"target <0.465)  {out['goofspiel5']['s']}s")
 
-    out["gate_pass"] = bool(nck < 0.15 and nc4 < 0.5 * 0.21 and nc5 < 0.5 * 0.93)
-    print(f"  DEEP-CFR GATE PASS (defeats MCCFR variance on G4 + scales on G5): {out['gate_pass']}")
+    validity_ok = bool(nck < 0.1 and ncl < 0.5)
+    premise_ok = bool(nc4 < 0.105 and nc5 < 0.465)
+    out["validity_ok"] = validity_ok
+    out["premise_ok"] = premise_ok
+    out["gate_pass"] = bool(validity_ok and premise_ok)
+    print(f"  VALIDITY (kuhn->~0 + leduc near-Nash, test is well-resourced): {validity_ok}")
+    print(f"  PREMISE  (G4 beats MCCFR floor 0.21 + G5 beats MCCFR 0.93, both 2x): {premise_ok}")
+    print(f"  DEEP-CFR GATE PASS: {out['gate_pass']}")
+    if not validity_ok:
+        print("  WARNING: validity anchors did not converge -> the premise numbers are NOT a valid test "
+              "(still under-resourced or a solver issue), do not read G4/G5 as a method verdict.")
     if args.output_json:
         pathlib.Path(args.output_json).parent.mkdir(parents=True, exist_ok=True)
         pathlib.Path(args.output_json).write_text(json.dumps(out, indent=2))
