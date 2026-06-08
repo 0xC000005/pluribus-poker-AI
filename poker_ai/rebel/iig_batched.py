@@ -122,3 +122,201 @@ def solve_all_keys(dlg, ranges_by_key, iters, device="cuda", averaging="linear")
     for iid in iids:
         out[by_iid_key[iid]][iid] = avg[loc[iid]][:alen[loc[iid]]].copy()
     return out
+
+
+# ----------------------------------------------------------------------------------------------------
+# Level-grouped flat-SoA kernel (the G2 throughput target): compile the shared topology ONCE into
+# level-ordered tensor arrays, then run CFR+ as forward (reach) + backward (value) passes that are
+# O(n_levels) batched gather/scatter ops -- NO per-iteration Python tree recursion. Parity-gated against
+# solve_all_keys above (the proven reference). float64.
+# ----------------------------------------------------------------------------------------------------
+
+class _Compiled:
+    pass
+
+
+def _compile_topology(dlg, ranges_by_key, device):
+    keys = list(ranges_by_key)
+    nodes, node_key = [], []
+    for key in keys:
+        for nd in dlg.cut_nodes:
+            if nd[1] == key:
+                nodes.append(nd); node_key.append(key)
+    iids, loc, alen = _build_global(dlg, keys)
+    B = len(nodes)
+    r0_entry = np.array([float(ranges_by_key[node_key[b]][0][nodes[b][2]]) for b in range(B)])
+    r1_entry = np.array([float(ranges_by_key[node_key[b]][1][nodes[b][3]]) for b in range(B)])
+
+    recs = []  # per topology node
+
+    def comp(nodes_b, level, parent, slot):
+        nid = len(recs)
+        rec = {"level": level, "parent": parent, "slot": slot, "children": []}
+        recs.append(rec)
+        t = nodes_b[0][0]
+        if t == "term":
+            rec["type"] = "term"
+            rec["payoff"] = np.stack([nd[1] for nd in nodes_b]).astype(np.float64)  # [B,2]
+        elif t == "chance":
+            nb = len(nodes_b[0][1])
+            rec["type"] = "chance"; rec["nbranch"] = nb
+            rec["probs"] = np.array([[float(nd[1][ci][0]) for ci in range(nb)] for nd in nodes_b])  # [B,nb]
+            rec["children"] = [comp([nd[1][ci][1] for nd in nodes_b], level + 1, nid, ci) for ci in range(nb)]
+        else:
+            pl = nodes_b[0][1]; nact = len(nodes_b[0][3])
+            rec["type"] = "dec"; rec["player"] = pl; rec["nact"] = nact
+            rec["iid"] = np.array([loc[nd[2]] for nd in nodes_b])  # [B]
+            rec["children"] = [comp([nd[3][k][1] for nd in nodes_b], level + 1, nid, k) for k in range(nact)]
+        return nid
+
+    comp([nd[4] for nd in nodes], 0, -1, -1)
+
+    c = _Compiled()
+    c.keys = keys; c.iids = iids; c.loc = loc; c.alen = alen; c.B = B
+    c.n_iids = len(iids); c.maxA = max(alen) if alen else 1
+    c.device = device; c.n_nodes = len(recs); c.recs = recs
+    c.player = torch.tensor([dlg.iset_player[i] for i in iids], device=device)
+    c.mask = torch.zeros(c.n_iids, c.maxA, dtype=_DT, device=device)
+    for k, L in enumerate(alen):
+        c.mask[k, :L] = 1.0
+    c.r0_entry = torch.tensor(r0_entry, dtype=_DT, device=device)
+    c.r1_entry = torch.tensor(r1_entry, dtype=_DT, device=device)
+    c.dlg = dlg
+
+    maxlevel = max(r["level"] for r in recs)
+    # term payoffs: [n_nodes, B, 2] (only term rows used)
+    c.payoff = torch.zeros(c.n_nodes, B, 2, dtype=_DT, device=device)
+    for nid, r in enumerate(recs):
+        if r["type"] == "term":
+            c.payoff[nid] = torch.tensor(r["payoff"], dtype=_DT, device=device)
+
+    # FORWARD groups: children at level L, grouped by parent kind (dec player 0/1, chance).
+    # each group carries tensors to compute child reach from parent reach.
+    c.fwd = []  # list of (level, kind, child_idx, parent_idx, [piid B] or [prob B], slot)
+    for L in range(1, maxlevel + 1):
+        for kind, pred in (("d0", lambda pr: pr["type"] == "dec" and pr["player"] == 0),
+                           ("d1", lambda pr: pr["type"] == "dec" and pr["player"] == 1),
+                           ("ch", lambda pr: pr["type"] == "chance")):
+            child_idx, parent_idx, piid, prob, slot = [], [], [], [], []
+            for nid, r in enumerate(recs):
+                if r["level"] != L or r["parent"] < 0:
+                    continue
+                pr = recs[r["parent"]]
+                if not pred(pr):
+                    continue
+                child_idx.append(nid); parent_idx.append(r["parent"]); slot.append(r["slot"])
+                if kind in ("d0", "d1"):
+                    piid.append(pr["iid"])           # [B]
+                else:
+                    prob.append(pr["probs"][:, r["slot"]])  # [B]
+            if not child_idx:
+                continue
+            g = {"kind": kind,
+                 "child": torch.tensor(child_idx, device=device),
+                 "parent": torch.tensor(parent_idx, device=device),
+                 "slot": torch.tensor(slot, device=device)}
+            if kind in ("d0", "d1"):
+                g["piid"] = torch.tensor(np.array(piid), device=device)        # [G,B]
+            else:
+                g["prob"] = torch.tensor(np.array(prob), dtype=_DT, device=device)  # [G,B]
+            c.fwd.append(g)
+
+    # BACKWARD groups: non-term nodes by level (desc), grouped by (type, player, nact/nbranch).
+    c.bwd = []
+    for L in range(maxlevel, -1, -1):
+        # decision nodes grouped by (player, nact)
+        shapes = {}
+        for nid, r in enumerate(recs):
+            if r["level"] != L:
+                continue
+            if r["type"] == "dec":
+                shapes.setdefault(("dec", r["player"], r["nact"]), []).append(nid)
+            elif r["type"] == "chance":
+                shapes.setdefault(("chance", r["nbranch"]), []).append(nid)
+        for shape, nids in shapes.items():
+            children = np.array([recs[n]["children"] for n in nids])  # [G, nact|nbranch]
+            g = {"node": torch.tensor(nids, device=device),
+                 "children": torch.tensor(children, device=device)}
+            if shape[0] == "dec":
+                g["kind"] = "dec"; g["player"] = shape[1]; g["nact"] = shape[2]
+                g["iid"] = torch.tensor(np.array([recs[n]["iid"] for n in nids]), device=device)  # [G,B]
+            else:
+                g["kind"] = "chance"; g["nbranch"] = shape[1]
+                g["prob"] = torch.tensor(np.array([recs[n]["probs"] for n in nids]),
+                                         dtype=_DT, device=device)  # [G,B,nbranch]
+            c.bwd.append(g)
+    return c
+
+
+def solve_all_keys_soa(dlg, ranges_by_key, iters, device="cuda", averaging="linear", compiled=None):
+    """Level-grouped flat-SoA cross-key batched CFR+ (no per-iteration Python recursion). Returns the same
+    {key: {iid: avg}} as solve_all_keys. Pass ``compiled`` to reuse a compiled topology across solves."""
+    c = compiled or _compile_topology(dlg, ranges_by_key, device)
+    B, n, maxA = c.B, c.n_iids, c.maxA
+    regret = torch.zeros(n, maxA, dtype=_DT, device=device)
+    stratsum = torch.zeros(n, maxA, dtype=_DT, device=device)
+    ones = torch.ones(B, dtype=_DT, device=device)
+
+    for t in range(iters):
+        upd = t % 2
+        sig = _regret_match(regret, c.mask)
+
+        # ---- forward reach pass ----
+        r0 = torch.zeros(c.n_nodes, B, dtype=_DT, device=device)
+        r1 = torch.zeros(c.n_nodes, B, dtype=_DT, device=device)
+        rc = torch.zeros(c.n_nodes, B, dtype=_DT, device=device)
+        r0[0] = c.r0_entry; r1[0] = c.r1_entry; rc[0] = ones
+        for g in c.fwd:
+            p = g["parent"]
+            if g["kind"] == "ch":
+                r0[g["child"]] = r0[p]; r1[g["child"]] = r1[p]; rc[g["child"]] = rc[p] * g["prob"]
+            else:
+                sg = sig[g["piid"], g["slot"].unsqueeze(1)]  # [G,B]
+                if g["kind"] == "d0":
+                    r0[g["child"]] = r0[p] * sg; r1[g["child"]] = r1[p]; rc[g["child"]] = rc[p]
+                else:
+                    r1[g["child"]] = r1[p] * sg; r0[g["child"]] = r0[p]; rc[g["child"]] = rc[p]
+
+        # ---- backward value pass ----
+        ev = c.payoff.clone()                       # term rows already set; others overwritten below
+        cfvnum = torch.zeros(n, maxA, dtype=_DT, device=device)
+        ownreach = torch.zeros(n, dtype=_DT, device=device)
+        for g in c.bwd:
+            ch = g["children"]                       # [G, K]
+            ev_ch = ev[ch]                           # [G, K, B, 2]
+            if g["kind"] == "chance":
+                pr = g["prob"].permute(0, 2, 1).unsqueeze(-1)   # [G, K, B, 1]
+                ev[g["node"]] = (pr * ev_ch).sum(1)             # [G, B, 2]
+            else:
+                pl = g["player"]; nact = g["nact"]
+                node_iid = g["iid"]                              # [G,B]
+                sg = sig[node_iid]                               # [G,B,maxA]
+                sg = sg[:, :, :nact].permute(0, 2, 1)            # [G, K, B]
+                ev[g["node"]] = (sg.unsqueeze(-1) * ev_ch).sum(1)   # [G,B,2]
+                own = r0[g["node"]] if pl == 0 else r1[g["node"]]   # [G,B]
+                opp = r1[g["node"]] if pl == 0 else r0[g["node"]]   # [G,B]
+                cf = opp * rc[g["node"]]                          # [G,B]
+                cfv = cf.unsqueeze(1) * ev_ch[..., pl]           # [G,K,B]
+                cfv = cfv.permute(0, 2, 1)                        # [G,B,K]
+                pad = torch.zeros(cfv.shape[0], B, maxA, dtype=_DT, device=device)
+                pad[:, :, :nact] = cfv
+                cfvnum.index_add_(0, node_iid.reshape(-1), pad.reshape(-1, maxA))
+                ownreach[node_iid.reshape(-1)] = own.reshape(-1)
+
+        w = float(t + 1) if averaging == "linear" else 1.0
+        is_upd = (c.player == upd).to(_DT).unsqueeze(1)
+        v = (sig * cfvnum).sum(-1, keepdim=True)
+        regret = (regret + is_upd * c.mask * (cfvnum - v)).clamp_min(0.0)
+        stratsum = stratsum + w * is_upd * ownreach.unsqueeze(1) * sig
+
+    ss = stratsum.sum(-1, keepdim=True)
+    avg = torch.where(ss > 1e-12, stratsum / ss, c.mask / c.mask.sum(-1, keepdim=True).clamp_min(1.0))
+    avg = avg.cpu().numpy()
+    out = {key: {} for key in c.keys}
+    by_iid_key = {}
+    for key in c.keys:
+        for iid in dlg._below_iids_for_key(key):
+            by_iid_key[iid] = key
+    for iid in c.iids:
+        out[by_iid_key[iid]][iid] = avg[c.loc[iid]][:c.alen[c.loc[iid]]].copy()
+    return out
