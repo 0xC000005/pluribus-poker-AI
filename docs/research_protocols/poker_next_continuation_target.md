@@ -2,7 +2,42 @@
 
 Date: 2026-05-13
 
-## 2026-06-07 CURRENT MAINLINE -- batched-subgame GPU solver: premise validated (4 gates), the PORT is next
+## 2026-06-08 CURRENT MAINLINE -- batched-subgame port G1-G4 DONE; G5 (docs) closing; scale demonstrated on G5
+
+Supersedes everything below as the resume point. The batched-subgame GPU solver port (goal:
+docs/research_protocols/poker_batched_subgame_port_goal.md) is built and the scale lever is demonstrated.
+Authoritative numbers: RESEARCH_LOG.md 2026-06-07/08 (GATE 0/0b/0c/0d + "PORT Increment 1", G3, G4).
+Module: poker_ai/rebel/iig_batched.py (solve_all_keys, solve_all_keys_soa, trunk_solve_batched).
+Tests: test/unit/test_rebel_iig_batched.py (green). Drivers: scripts/run_rebel_batched_subgame_microbench.py,
+run_rebel_port_g4_scale.py.
+
+DONE:
+- G1 flat-SoA cross-key batched CFR+ kernel -- exact CPU parity vs numpy solve_subgame_equilibrium on
+  Leduc/Goofspiel-4/Liar's-Dice. float64 mandatory.
+- G2 throughput -- 54.7x vs serial numpy on Goofspiel-4 (grows with #keys).
+- G3 self-play integration -- trunk_solve_batched reproduces the equilibrium exactly + 32.5x end-to-end.
+- G4 SCALE HEADLINE -- Goofspiel-5 (236,450 infosets) solved depth-limited on the 8GB GPU (dense
+  per-iteration CPU walk intractable). SoA solve 12ms/iter @0.41GB. Best scale lever on G5 (assembled
+  NashConv 0.38-0.49 vs MCCFR 0.93 / Deep CFR 1.05 / uniform 1.55). CAVEAT: assembled NashConv freezes a
+  single continuation -> off-path UPPER BOUND (non-monotonic in iters), NOT the true continual-resolving
+  exploitability; soundness shown at >=3 levels by the Build-4 kill-switch.
+
+NEXT (open work, in priority order):
+1. CONTINUAL-RESOLVING EXPLOITABILITY EVALUATOR -- the clean G5 (and beyond) exploitability number needs a
+   best-response-vs-resolving-agent walk (re-solve at each reached belief during BR), not the frozen-
+   continuation assembled NashConv. This is the honest metric the scale claim ultimately rests on.
+2. PUSH THE SCALE LADDER past 236k (bigger Goofspiel / larger games), gating on the proper exploitability;
+   characterize where the 8GB GPU caps (the 1e3 -> 1e6-1e7 contribution curve).
+3. (optional) PBS value-NET leaf instead of per-belief re-solve at the cut, trained on batched-solver
+   targets (DeepStack/ReBeL-style), to remove the per-iteration re-solve cost and reach deeper games.
+4. mixed-precision (fp16/bf16 matmul + float64 accumulator) for further throughput; CUDA-deterministic
+   index_add if exact GPU parity is wanted.
+
+SCOPE (honest, unchanged): contribution = the ~1e3 -> ~1e6-1e7 (realistically 1e5-1e6) infosets SOUND +
+GENERAL crossing on ONE consumer GPU + the batched-subgame mechanism (novelty OPEN; cite TurboReBeL/LAMIR/
+AlphaHoldem/Modicum/VRPO). Full HUNL near-Nash on 8GB is a STRETCH, not the bar. Slumbot HELD-OUT.
+
+## 2026-06-07 (superseded by the above) -- batched-subgame GPU solver: premise validated (4 gates), the PORT is next
 
 This supersedes everything below as the resume point. Authoritative detail + numbers: the latest
 `RESEARCH_LOG.md` entries (2026-06-07: Deep-CFR gate v1/v2, SD-CFR disambiguation, scale-breakthrough

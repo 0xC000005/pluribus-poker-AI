@@ -7,6 +7,14 @@ chance/variable-depth/imperfect-info structure (float64), and it integrates into
 the equilibrium. The throughput win is still LATENT because 0b/0c/0d batched only within one key's cut
 nodes (small B) and 0c/0d kept the per-iteration Python tree walk. The port realizes the win.
 
+## STATUS (2026-06-08): G1 ✅ G2 ✅ G3 ✅ G4 ✅ (scale headline) · G5 closing
+
+G1 flat-SoA kernel exact parity (Leduc/G4/Liar's-Dice); G2 54.7× throughput on G4; G3 trunk integration
+exact + 32.5× end-to-end; G4 Goofspiel-5 (236k infosets) solved depth-limited on the 8GB GPU (best scale
+lever: 0.38–0.49 vs MCCFR 0.93 / Deep CFR 1.05; assembled-NashConv caveat — off-path upper bound, true
+continual-resolving exploitability is the top open item). See poker_next_continuation_target.md (2026-06-08)
+for the open-work list. Module: poker_ai/rebel/iig_batched.py; tests: test/unit/test_rebel_iig_batched.py.
+
 ## Objective
 
 A generic, GPU-resident, **cross-key** batched depth-limited PBS subgame solver in
