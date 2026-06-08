@@ -260,9 +260,28 @@ def set_entries(c, ranges_by_key):
     c.r1_entry = torch.tensor(r1, dtype=_DT, device=c.device)
 
 
-def solve_all_keys_soa(dlg, ranges_by_key, iters, device="cuda", averaging="linear", compiled=None):
+def _ev_pass(c, sig):
+    """Value-only backward pass: continuation EV at every node under strategy ``sig`` ([n_iids,maxA]).
+    Returns ev[root] = [B,2], the subgame value per cut node (the leaf continuation value)."""
+    ev = c.payoff.clone()
+    for g in c.bwd:
+        ev_ch = ev[g["children"]]                              # [G,K,B,2]
+        if g["kind"] == "chance":
+            pr = g["prob"].permute(0, 2, 1).unsqueeze(-1)      # [G,K,B,1]
+            ev[g["node"]] = (pr * ev_ch).sum(1)
+        else:
+            nact = g["nact"]
+            sg = sig[g["iid"]][:, :, :nact].permute(0, 2, 1)   # [G,K,B]
+            ev[g["node"]] = (sg.unsqueeze(-1) * ev_ch).sum(1)
+    return ev[0]                                               # [B,2]
+
+
+def solve_all_keys_soa(dlg, ranges_by_key, iters, device="cuda", averaging="linear", compiled=None,
+                       return_cont=False):
     """Level-grouped flat-SoA cross-key batched CFR+ (no per-iteration Python recursion). Returns the same
-    {key: {iid: avg}} as solve_all_keys. Pass ``compiled`` to reuse a compiled topology across solves."""
+    {key: {iid: avg}} as solve_all_keys. Pass ``compiled`` to reuse a compiled topology across solves.
+    ``return_cont=True`` also returns cont[B,2] = the subgame continuation EV per cut node under the
+    average strategy (the leaf value source -- avoids a numpy subtree walk)."""
     c = compiled or _compile_topology(dlg, ranges_by_key, device)
     if compiled is not None and ranges_by_key is not None:
         set_entries(c, ranges_by_key)
@@ -324,8 +343,9 @@ def solve_all_keys_soa(dlg, ranges_by_key, iters, device="cuda", averaging="line
         stratsum = stratsum + w * is_upd * ownreach.unsqueeze(1) * sig
 
     ss = stratsum.sum(-1, keepdim=True)
-    avg = torch.where(ss > 1e-12, stratsum / ss, c.mask / c.mask.sum(-1, keepdim=True).clamp_min(1.0))
-    avg = avg.cpu().numpy()
+    avg_t = torch.where(ss > 1e-12, stratsum / ss, c.mask / c.mask.sum(-1, keepdim=True).clamp_min(1.0))
+    cont = _ev_pass(c, avg_t).cpu().numpy() if return_cont else None
+    avg = avg_t.cpu().numpy()
     out = {key: {} for key in c.keys}
     by_iid_key = {}
     for key in c.keys:
@@ -333,24 +353,27 @@ def solve_all_keys_soa(dlg, ranges_by_key, iters, device="cuda", averaging="line
             by_iid_key[iid] = key
     for iid in c.iids:
         out[by_iid_key[iid]][iid] = avg[c.loc[iid]][:c.alen[c.loc[iid]]].copy()
-    return out
+    return (out, cont) if return_cont else out
 
 
-def _leaf_values_from_eq(dlg, by_key, key, eq_key, range0, range1):
-    """Normalized PBS leaf values from a subgame equilibrium (same convention as
-    DepthLimitedGame.per_belief_equilibrium_leaf_fn)."""
-    pol = dlg.uniform_policy()
-    for i, pr in eq_key.items():
-        pol[i] = pr
-    n0, n1 = dlg.n_priv(key, 0), dlg.n_priv(key, 1)
-    v0n = np.zeros(n0); v0d = np.zeros(n0); v1n = np.zeros(n1); v1d = np.zeros(n1)
-    for _t, _k, i0, i1, sub in by_key[key]:
-        cont = dlg.subtree_ev(sub, pol)
-        v0n[i0] += range1[i1] * cont[0]; v0d[i0] += range1[i1]
-        v1n[i1] += range0[i0] * cont[1]; v1d[i1] += range0[i0]
-    v0 = np.divide(v0n, v0d, out=np.zeros(n0), where=v0d > 1e-15)
-    v1 = np.divide(v1n, v1d, out=np.zeros(n1), where=v1d > 1e-15)
-    return v0, v1
+def _leaf_values_from_cont(dlg, c, cont, reaches, keys):
+    """Normalized PBS leaf values from the per-cut-node continuation EV ``cont`` [B,2] (the SoA solver's
+    root ev under the average strategy). Same convention as per_belief_equilibrium_leaf_fn but O(B) (no
+    numpy subtree walk)."""
+    acc = {k: (np.zeros(dlg.n_priv(k, 0)), np.zeros(dlg.n_priv(k, 0)),
+               np.zeros(dlg.n_priv(k, 1)), np.zeros(dlg.n_priv(k, 1))) for k in keys}
+    for b in range(c.B):
+        k = c.node_key[b]; i0 = int(c.node_i0[b]); i1 = int(c.node_i1[b])
+        r0, r1 = reaches[k]
+        v0n, v0d, v1n, v1d = acc[k]
+        v0n[i0] += r1[i1] * cont[b, 0]; v0d[i0] += r1[i1]
+        v1n[i1] += r0[i0] * cont[b, 1]; v1d[i1] += r0[i0]
+    leaf = {}
+    for k in keys:
+        v0n, v0d, v1n, v1d = acc[k]
+        leaf[k] = (np.divide(v0n, v0d, out=np.zeros_like(v0n), where=v0d > 1e-15),
+                   np.divide(v1n, v1d, out=np.zeros_like(v1n), where=v1d > 1e-15))
+    return leaf
 
 
 def trunk_solve_batched(dlg, subgame_iters=200, iters=400, device="cuda", averaging="linear"):
@@ -362,9 +385,6 @@ def trunk_solve_batched(dlg, subgame_iters=200, iters=400, device="cuda", averag
     regret = {i: np.zeros(len(dlg.iset_actions[i])) for i in above}
     stratsum = {i: np.zeros(len(dlg.iset_actions[i])) for i in above}
     keys = sorted({n[1] for n in dlg.cut_nodes})
-    by_key = {}
-    for n in dlg.cut_nodes:
-        by_key.setdefault(n[1], []).append(n)
 
     compiled = None
     for t in range(iters):
@@ -377,8 +397,9 @@ def trunk_solve_batched(dlg, subgame_iters=200, iters=400, device="cuda", averag
         ranges = {k: (reaches[k][0], reaches[k][1]) for k in keys}
         if compiled is None:
             compiled = _compile_topology(dlg, ranges, device)
-        eq = solve_all_keys_soa(dlg, ranges, subgame_iters, device=device, compiled=compiled)
-        leaf_v = {k: _leaf_values_from_eq(dlg, by_key, k, eq[k], reaches[k][0], reaches[k][1]) for k in keys}
+        _eq, cont = solve_all_keys_soa(dlg, ranges, subgame_iters, device=device, compiled=compiled,
+                                       return_cont=True)
+        leaf_v = _leaf_values_from_cont(dlg, compiled, cont, reaches, keys)
         cfvnum, ownreach = dlg._trunk_cfv(sig, leaf_v)
         w = float(t + 1) if averaging == "linear" else 1.0
         for i in above:
