@@ -2,6 +2,43 @@
 
 Date: 2026-05-13
 
+## 2026-06-07 CURRENT MAINLINE -- batched-subgame GPU solver: premise validated (4 gates), the PORT is next
+
+This supersedes everything below as the resume point. Authoritative detail + numbers: the latest
+`RESEARCH_LOG.md` entries (2026-06-07: Deep-CFR gate v1/v2, SD-CFR disambiguation, scale-breakthrough
+ideation, GATE 0/0b/0c/0d). The general 2p0s-IIG method (generic depth-limited PBS solving + value-net
+leaves + self-play, `poker_ai/rebel/{iig,iig_pbs,iig_solve,iig_selfplay}.py`) is fully built + sound at
+>=3 levels. The ONE obstacle is SCALE; THREE cheap scale levers FAILED (abstraction incoherent; naive
+MCCFR variance-bound; Deep CFR throughput/coverage-bound -- SD-CFR ruled out as the salvage). A 30-agent
+ideation (`autoresearch-session/rebel/scale_breakthrough_ideation.json`) named the winning, novel, sound
+lever: **batch a POPULATION of same-topology depth-limited PBS subgames into one GPU GEMM** (the two
+axes -- reduce-count via depth-limiting + speed-up via batching -- multiply at the depth-limited subgame).
+
+PREMISE VALIDATED across 4 no-/low-build gates (all PASS):
+- **0A** topology multiplicity (`run_rebel_gate0_batched_probe.py`): all cut subgames share ONE topology
+  (Leduc/G4) -> fully batchable; the "buckets of size 1" kill-risk did NOT fire.
+- **0b** throughput (`run_rebel_batched_subgame_microbench.py`): batching tiny subgames -> ~1294x vs
+  CPU-serial / ~3180x vs GPU-serial (92k subgames/s at B=16384); kernel correct (parity 1e-6).
+- **0c** real structure (`run_rebel_batched_generic_subgame.py`): batched torch CFR+ EXACTLY matches numpy
+  `solve_subgame_equilibrium` on REAL subgames with chance + variable depth + imperfect-info repeated
+  infosets (Leduc 0.0, G4 8e-11). **FLOAT64 regret accumulation REQUIRED** (float32 drifts 0.75 L1).
+- **0d** integration (`run_rebel_batched_selfplay_integration.py`): wired in as the re-solve leaf in
+  `dlg.trunk_solve`, preserves the equilibrium end-to-end on G4 (sigma1 L1 1.8e-12, NashConv |diff| 3e-13).
+
+NEXT BUILD (multi-week port; the throughput win materializes here, not in 0b/0c/0d which are CPU/tiny-B):
+1. generic `DepthLimitedGame` -> flat-SoA level-edge-group compiler for GPU-RESIDENT batched execution;
+2. **CROSS-KEY batching** -- all public states share one topology, so batch ALL keys' subgames per launch
+   (0b/0c/0d only batched within one key's cut nodes = small B);
+3. float64 (or fp16 matmul + float64 accumulator) regret accumulation;
+4. integrate into the self-play loop; walk the Goofspiel-4 -> Goofspiel-5 -> larger scaling ladder,
+   gating EACH step on exact NashConv staying near the dense baseline (need exact-exploitability tooling
+   past ~1e5 infosets).
+SCOPE (honest): contribution = the ~1e3 -> ~1e6-1e7 infosets SOUND + GENERAL crossing on ONE consumer GPU
++ the batched-subgame mechanism (novelty OPEN; cite TurboReBeL/LAMIR/AlphaHoldem/Modicum/VRPO). Full HUNL
+near-Nash on 8GB is a STRETCH, not the bar. Slumbot stays held-out throughout.
+
+---
+
 ## 2026-06-04 ReBeL de-risk: Stage 0 PASS, Stage 1 findings -> Stage 2 is next
 
 CURRENT authoritative target (supersedes the branches below as the mainline; see
