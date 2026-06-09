@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import time
 
 import numpy as np
 
@@ -41,24 +42,59 @@ def measure_onpolicy(dlg, net, pub_index, P, keys, compiled, subgame_iters, trun
     return nc, sig1, cont_pol
 
 
-def perbelief_targets(dlg, pub_index, P, keys, compiled, n_samples, subgame_iters, device, rng):
+def _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device):
+    """The inner re-solve at one sampled belief -> {key: (v0*, v1*)}. The ONLY behavioral difference
+    between the two timing arms; both call the SAME GPU SoA kernel solve_all_keys_soa (float64), differing
+    only in batching granularity. FUSED = one level-grouped GEMM over the whole population of cut subgames;
+    SEQUENTIAL = the SAME kernel per-key (the fair within-tree-GPU-CFR baseline -- NOT solve_all_keys, the
+    Python reference walk, which would strawman the speedup with interpreter overhead)."""
+    if inner_mode == "fused":
+        _eq, cont = solve_all_keys_soa(dlg, ranges, subgame_iters, device=device, compiled=comp_all,
+                                       return_cont=True)
+        return _leaf_values_from_cont(dlg, comp_all, cont, ranges, keys)
+    assert solve_all_keys_soa.__name__ == "solve_all_keys_soa"  # guard: sequential is the SoA kernel per-key
+    leaf = {}
+    for k in keys:
+        _eqk, contk = solve_all_keys_soa(dlg, {k: ranges[k]}, subgame_iters, device=device,
+                                         compiled=comp_key[k], return_cont=True)
+        leaf[k] = _leaf_values_from_cont(dlg, comp_key[k], contk, {k: ranges[k]}, [k])[k]
+    return leaf
+
+
+def perbelief_targets(dlg, pub_index, P, keys, n_samples, subgame_iters, device, rng,
+                      inner_mode, comp_all, comp_key, torch):
     """Training rows whose targets are V*(belief): for each sampled belief, RE-SOLVE all subgames to eq via
-    the batched solver and read the normalized equilibrium continuation value (cont under the avg strategy)."""
+    the batched solver (fused or sequential, see _resolve_one_belief) and read the normalized equilibrium
+    continuation value. Times ONLY the inner re-solve (+ leaf reconstruction) -- the quantity the mechanism
+    reduces; the _row / X-Y-W host assembly is OUTSIDE the timed region (identical work in both arms).
+    Returns (X, Y, W, inner_gpu_ms, inner_wall_ms) where the times are summed over this round's resolves."""
     X, Y, W = [], [], []
+    inner_gpu_ms = 0.0
+    inner_wall_ms = 0.0
     for _ in range(n_samples):
         ranges = {}
         for k in keys:
             a0 = float(rng.choice([0.3, 1.0, 3.0])); a1 = float(rng.choice([0.3, 1.0, 3.0]))
             ranges[k] = (rng.dirichlet(np.full(dlg.n_priv(k, 0), a0)),
                          rng.dirichlet(np.full(dlg.n_priv(k, 1), a1)))
-        _eq, cont = solve_all_keys_soa(dlg, ranges, subgame_iters, device=device, compiled=compiled,
-                                       return_cont=True)
-        leaf = _leaf_values_from_cont(dlg, compiled, cont, ranges, keys)   # {key: (v0*, v1*)} at this belief
+        if device == "cuda":
+            torch.cuda.synchronize()
+            ev0 = torch.cuda.Event(enable_timing=True); ev1 = torch.cuda.Event(enable_timing=True)
+            t0 = time.perf_counter(); ev0.record()
+            leaf = _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device)
+            ev1.record(); torch.cuda.synchronize(); t1 = time.perf_counter()
+            inner_gpu_ms += ev0.elapsed_time(ev1); inner_wall_ms += (t1 - t0) * 1e3
+        else:
+            t0 = time.perf_counter()
+            leaf = _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device)
+            dt = (time.perf_counter() - t0) * 1e3
+            inner_gpu_ms += dt; inner_wall_ms += dt
         for k in keys:
             v0, v1 = leaf[k]
             x, y, w = _row(dlg, pub_index, P, k, ranges[k][0], ranges[k][1], v0, v1)
             X.append(x); Y.append(y); W.append(w)
-    return np.array(X, np.float32), np.array(Y, np.float32), np.array(W, np.float32)
+    return (np.array(X, np.float32), np.array(Y, np.float32), np.array(W, np.float32),
+            inner_gpu_ms, inner_wall_ms)
 
 
 def main(argv=None):
@@ -78,10 +114,16 @@ def main(argv=None):
                     help="seeds numpy + torch (+cuda) -- net INIT is otherwise unseeded, the dominant "
                          "source of absolute-exploitability run-to-run variance at G5 (the within-run "
                          "decreasing-with-compute TREND is robust; absolute values need seeded multi-runs)")
+    ap.add_argument("--inner-mode", choices=("fused", "sequential"), default="fused",
+                    help="inner re-solve batching: fused = one GEMM over all cut subgames (the mechanism); "
+                         "sequential = same SoA kernel per-key (fair within-tree-GPU-CFR baseline)")
+    ap.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
+                    help="cpu forces exact-parity mode (no atomics) for the determinism gate; "
+                         "cuda for the timing comparison")
     ap.add_argument("--output-json")
     args = ap.parse_args(argv)
     import torch
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = ("cuda" if torch.cuda.is_available() else "cpu") if args.device == "auto" else args.device
     torch.manual_seed(args.seed)
     if device == "cuda":
         torch.cuda.manual_seed_all(args.seed)
@@ -91,32 +133,47 @@ def main(argv=None):
     P = max(max(dlg.n_priv(k, 0), dlg.n_priv(k, 1)) for k in keys)
     rng = np.random.default_rng(args.seed)
     init = {k: (np.ones(dlg.n_priv(k, 0)) / dlg.n_priv(k, 0), np.ones(dlg.n_priv(k, 1)) / dlg.n_priv(k, 1)) for k in keys}
-    compiled = _compile_topology(dlg, init, device)
-    print(f"B0 per-belief V* targets: Goofspiel-{args.num_cards} (n_iset={dlg.n_iset}, device={device})", flush=True)
+    # compile ONCE before the loop (one-time infra, excluded from the inner-resolve timer): comp_all for the
+    # fused arm (+ the always-fused metrology), comp_key for the sequential arm.
+    comp_all = _compile_topology(dlg, init, device)
+    comp_key = {k: _compile_topology(dlg, {k: init[k]}, device) for k in keys} if args.inner_mode == "sequential" else None
+    print(f"B0 per-belief V* targets: Goofspiel-{args.num_cards} (n_iset={dlg.n_iset}, device={device}, "
+          f"inner_mode={args.inner_mode})", flush=True)
 
     net = PBSNet(len(pub_index), P, args.hidden)
     X = Y = W = None
     history = []
     sig1 = cont_pol = None  # final measured trunk + continuation, reused for the gadget
+    t_loop0 = time.perf_counter()
     for it in range(args.n_target_rounds):
-        xi, yi, wi = perbelief_targets(dlg, pub_index, P, keys, compiled, args.samples_per_round,
-                                       args.subgame_iters, device, rng)
+        xi, yi, wi, ig, iw = perbelief_targets(dlg, pub_index, P, keys, args.samples_per_round,
+                                               args.subgame_iters, device, rng,
+                                               args.inner_mode, comp_all, comp_key, torch)
         X, Y, W = (xi, yi, wi) if X is None else (np.concatenate([X, xi]), np.concatenate([Y, yi]), np.concatenate([W, wi]))
         if X.shape[0] > args.buffer_cap:
             idx = rng.choice(X.shape[0], args.buffer_cap, replace=False); X, Y, W = X[idx], Y[idx], W[idx]
+        t_tr0 = time.perf_counter()
         m = _train(net, X, Y, W, args.train_epochs, seed=0)
+        train_wall_ms = (time.perf_counter() - t_tr0) * 1e3
         rec = {"round": it, "val_mae_frac": m["mae_frac"], "n": int(X.shape[0]),
-               "n_beliefs_cumulative": (it + 1) * args.samples_per_round}  # target-compute axis (# resolved beliefs)
+               "n_beliefs_cumulative": (it + 1) * args.samples_per_round,  # target-compute axis (# resolved beliefs)
+               "inner_resolve_gpu_ms": round(ig, 3), "inner_resolve_wall_ms": round(iw, 3),
+               "train_wall_ms": round(train_wall_ms, 1), "measure_wall_ms": 0.0}
         is_final = (it == args.n_target_rounds - 1)
-        if is_final or (it + 1) % args.measure_every == 0:   # exact on-policy curve point
-            nc, sig1, cont_pol = measure_onpolicy(dlg, net, pub_index, P, keys, compiled,
+        if is_final or (it + 1) % args.measure_every == 0:   # exact on-policy curve point (ALWAYS fused = comp_all)
+            t_me0 = time.perf_counter()
+            nc, sig1, cont_pol = measure_onpolicy(dlg, net, pub_index, P, keys, comp_all,
                                                   args.subgame_iters, args.trunk_iters, device)
+            rec["measure_wall_ms"] = round((time.perf_counter() - t_me0) * 1e3, 1)
             rec["exploit_onpolicy"] = round(nc, 5)
             print(f"  round {it}: V*-net val MAE {m['mae_frac']:.1%}  on-policy exploit {nc:.4f}  "
-                  f"(beliefs {rec['n_beliefs_cumulative']}, targets {X.shape[0]})", flush=True)
+                  f"(beliefs {rec['n_beliefs_cumulative']}, inner {iw:.0f}ms/{ig:.0f}ms gpu, train "
+                  f"{train_wall_ms:.0f}ms)", flush=True)
         else:
-            print(f"  round {it}: V*-net val MAE {m['mae_frac']:.1%}  (targets {X.shape[0]})", flush=True)
+            print(f"  round {it}: V*-net val MAE {m['mae_frac']:.1%}  (inner {iw:.0f}ms wall / {ig:.0f}ms gpu, "
+                  f"train {train_wall_ms:.0f}ms)", flush=True)
         history.append(rec)
+    total_wall_s = time.perf_counter() - t_loop0
 
     # final round always measured -> sig1/cont_pol set; gadget safe continuation on top, exact nash_conv
     nc_onpolicy = history[-1]["exploit_onpolicy"]
@@ -125,11 +182,23 @@ def main(argv=None):
     nash_floor = dlg.nash_conv(dlg.cfr_plus(600)) if args.num_cards <= 4 else None
 
     curve = [(h["n_beliefs_cumulative"], h["exploit_onpolicy"]) for h in history if "exploit_onpolicy" in h]
+    inner_gpu_total = sum(h["inner_resolve_gpu_ms"] for h in history)
+    inner_wall_total = sum(h["inner_resolve_wall_ms"] for h in history)
+    train_wall_total = sum(h["train_wall_ms"] for h in history)
     out = {"game": f"goofspiel{args.num_cards}", "n_iset": dlg.n_iset, "target_type": "per_belief_resolved_Vstar",
+           "inner_mode": args.inner_mode, "device": device, "seed": args.seed,
            "final_val_mae": history[-1]["val_mae_frac"], "nashconv_on_policy": round(nc_onpolicy, 5),
            "nashconv_gadget": round(nc_gadget, 5), "nash_floor": (round(nash_floor, 5) if nash_floor else None),
            "curve_beliefs_vs_exploit": curve,
            "curve_decreasing": bool(len(curve) >= 2 and curve[-1][1] < curve[0][1] - 1e-3),
+           # timing: inner-resolve (the accelerated term) vs train (unaccelerated, identical across arms) vs total loop wall
+           "inner_resolve_gpu_ms_total": round(inner_gpu_total, 1),
+           "inner_resolve_wall_s_total": round(inner_wall_total / 1e3, 3),
+           "train_wall_s_total": round(train_wall_total / 1e3, 3),
+           "total_wall_s": round(total_wall_s, 3),
+           "inner_resolve_wall_s_per_round": [round(h["inner_resolve_wall_ms"] / 1e3, 4) for h in history],
+           "train_wall_s_per_round": [round(h["train_wall_ms"] / 1e3, 4) for h in history],
+           "measure_wall_s_per_round": [round(h["measure_wall_ms"] / 1e3, 4) for h in history],
            "history": history}
     print(f"\n  B0 curve (Goofspiel-{args.num_cards}, V*-targets) on-policy exploit vs # resolved beliefs:")
     for nb, ex in curve:

@@ -8,7 +8,8 @@ import pytest
 from poker_ai.rebel.iig_solve import DepthLimitedGame
 from poker_ai.rebel.iig_pbs import (leduc_is_cut, first_decision_is_cut, load_goofspiel,
                                      goofspiel_is_cut, goofspiel_public_key)
-from poker_ai.rebel.iig_batched import solve_all_keys, solve_all_keys_soa, trunk_solve_batched
+from poker_ai.rebel.iig_batched import (solve_all_keys, solve_all_keys_soa, trunk_solve_batched,
+                                         _compile_topology, _leaf_values_from_cont)
 
 ITERS = 60
 
@@ -42,6 +43,39 @@ def test_cross_key_batched_matches_numpy(name, game, cut, pkf):
             max_l1_soa = max(max_l1_soa, float(np.abs(r - np.asarray(got_soa[k][iid])).sum()))
     assert max_l1 < 1e-4, f"{name}: cross-key walk vs numpy max L1 {max_l1:.2e}"
     assert max_l1_soa < 1e-4, f"{name}: cross-key SoA kernel vs numpy max L1 {max_l1_soa:.2e}"
+
+
+def test_fused_vs_sequential_soa_parity():
+    """The end-to-end win's load-bearing premise: solving the WHOLE population of cut subgames in ONE
+    fused level-grouped SoA call (FUSED arm) is the SAME algorithm as solving each subgame-tree one at a
+    time with the SAME SoA kernel (SEQUENTIAL arm = the fair within-tree-GPU-CFR baseline). They must
+    differ ONLY in batching/launch granularity, NOT in the answer -- so a timing win buys NO quality loss
+    and both arms reach the same exploitability band. CPU (no index_add_ atomics) => exact equality."""
+    dlg = DepthLimitedGame(load_goofspiel(4), goofspiel_is_cut, public_key_fn=goofspiel_public_key)
+    keys = sorted({n[1] for n in dlg.cut_nodes})
+    rng = np.random.default_rng(11)
+    ranges = {k: (rng.dirichlet(np.full(dlg.n_priv(k, 0), 0.6)),
+                  rng.dirichlet(np.full(dlg.n_priv(k, 1), 0.6))) for k in keys}
+    iters = 200
+
+    comp_all = _compile_topology(dlg, ranges, "cpu")
+    comp_key = {k: _compile_topology(dlg, {k: ranges[k]}, "cpu") for k in keys}
+
+    eq_f, cont_f = solve_all_keys_soa(dlg, ranges, iters, device="cpu", compiled=comp_all, return_cont=True)
+    leaf_f = _leaf_values_from_cont(dlg, comp_all, cont_f, ranges, keys)
+
+    max_strat = max_leaf = 0.0
+    for k in keys:
+        eqk, contk = solve_all_keys_soa(dlg, {k: ranges[k]}, iters, device="cpu",
+                                        compiled=comp_key[k], return_cont=True)
+        for iid in eq_f[k]:
+            max_strat = max(max_strat, float(np.max(np.abs(eq_f[k][iid] - eqk[k][iid]))))
+        leaf_k = _leaf_values_from_cont(dlg, comp_key[k], contk, {k: ranges[k]}, [k])[k]
+        for j in (0, 1):
+            max_leaf = max(max_leaf, float(np.max(np.abs(leaf_f[k][j] - leaf_k[j]))))
+
+    assert max_strat < 1e-9, f"fused vs sequential SoA strategy diff {max_strat:.2e} (must be exact on CPU)"
+    assert max_leaf < 1e-9, f"fused vs sequential SoA leaf-value diff {max_leaf:.2e} (must be exact on CPU)"
 
 
 def test_trunk_solve_batched_matches_serial_resolve():
