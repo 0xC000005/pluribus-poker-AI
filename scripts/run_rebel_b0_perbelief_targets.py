@@ -120,6 +120,10 @@ def main(argv=None):
     ap.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
                     help="cpu forces exact-parity mode (no atomics) for the determinism gate; "
                          "cuda for the timing comparison")
+    ap.add_argument("--skip-gadget", action="store_true",
+                    help="skip the final safe-resolving gadget pass (pure-Python, ~40min at G5). "
+                         "Protocol-clean for the e2e TIMING runs: the gadget is outside total_wall_s and "
+                         "unused by the e2e analysis; band-characterization runs should keep it")
     ap.add_argument("--output-json")
     args = ap.parse_args(argv)
     import torch
@@ -177,8 +181,11 @@ def main(argv=None):
 
     # final round always measured -> sig1/cont_pol set; gadget safe continuation on top, exact nash_conv
     nc_onpolicy = history[-1]["exploit_onpolicy"]
-    full_gadget = safe_continuation(dlg, sig1, cont_pol, iters=args.gadget_iters)
-    nc_gadget = dlg.nash_conv(full_gadget)
+    if args.skip_gadget:
+        nc_gadget = None
+    else:
+        full_gadget = safe_continuation(dlg, sig1, cont_pol, iters=args.gadget_iters)
+        nc_gadget = dlg.nash_conv(full_gadget)
     nash_floor = dlg.nash_conv(dlg.cfr_plus(600)) if args.num_cards <= 4 else None
 
     curve = [(h["n_beliefs_cumulative"], h["exploit_onpolicy"]) for h in history if "exploit_onpolicy" in h]
@@ -188,7 +195,8 @@ def main(argv=None):
     out = {"game": f"goofspiel{args.num_cards}", "n_iset": dlg.n_iset, "target_type": "per_belief_resolved_Vstar",
            "inner_mode": args.inner_mode, "device": device, "seed": args.seed,
            "final_val_mae": history[-1]["val_mae_frac"], "nashconv_on_policy": round(nc_onpolicy, 5),
-           "nashconv_gadget": round(nc_gadget, 5), "nash_floor": (round(nash_floor, 5) if nash_floor else None),
+           "nashconv_gadget": (round(nc_gadget, 5) if nc_gadget is not None else None),
+           "nash_floor": (round(nash_floor, 5) if nash_floor else None),
            "curve_beliefs_vs_exploit": curve,
            "curve_decreasing": bool(len(curve) >= 2 and curve[-1][1] < curve[0][1] - 1e-3),
            # timing: inner-resolve (the accelerated term) vs train (unaccelerated, identical across arms) vs total loop wall
@@ -203,7 +211,8 @@ def main(argv=None):
     print(f"\n  B0 curve (Goofspiel-{args.num_cards}, V*-targets) on-policy exploit vs # resolved beliefs:")
     for nb, ex in curve:
         print(f"    {nb:>5d} beliefs -> {ex:.4f}")
-    print(f"  final: on-policy {nc_onpolicy:.4f} | gadget {nc_gadget:.4f}"
+    print(f"  final: on-policy {nc_onpolicy:.4f} | gadget "
+          + (f"{nc_gadget:.4f}" if nc_gadget is not None else "skipped")
           + (f" | Nash floor {nash_floor:.4f}" if nash_floor else "")
           + (f"  [vs fixed-continuation-target gadget 0.21 on G5]" if args.num_cards == 5 else ""))
     if args.output_json:
