@@ -100,3 +100,21 @@ DREAM 2006.10410 (Steinberger/Lerer/Brown).
 - Slumbot held-out everywhere; uses_slumbot_data=false.
 - Hardware framing: consumer-GPU is table-stakes (LAMIR), 4xA100 near-Nash is non-novel (TurboReBeL);
   the lever is per-FLOP / hardware-independent; multi-GPU EXTENDS it (population shards trivially).
+
+
+## Corrections and additions (r4 editorial audit, 2026-06-10)
+
+1. **The "12 ms/iter at G5 in-loop" figure (item 5 above) is STALE and superseded.** It predates the
+   in-loop instrumentation and contradicts the released artifacts. Artifact-derived value:
+   ~6.2 ms per CFR+ iteration in-loop INCLUDING leaf reconstruction —
+   `b0_e2e_g5q_fused_seed{0..2}.json` `inner_resolve_wall_s_per_round` 74.81–74.98 s per
+   40-belief round at 300 iters/solve => 6.23–6.25 ms/iter; `b0_perbelief_g5_curve_seed2.json`
+   rounds 74.71–75.05 s => 6.23–6.25 ms/iter; pure-solve microbenchmark
+   `costpersolve_bakeoff.json` rows[2] 1866.7/300 = 6.22 ms/iter. The paper (r4) states
+   ~6.2 ms in-loop, indistinguishable from the microbenchmark; the in-loop figure is therefore
+   artifact-backed and no longer rests on this pack.
+2. **Float32-ablation drift (~0.75 L1 in average strategy at repeated imperfect-information
+   infosets), quoted in paper §3.2, is added to this notes file** as a documented-but-not-yet-
+   artifact-backed number (now the fifth entry of the paper's §7 list). The originating run
+   record (game, run count) is still to be attached; treat as a single-configuration ablation
+   note until a standalone artifact is re-derived at camera-ready.

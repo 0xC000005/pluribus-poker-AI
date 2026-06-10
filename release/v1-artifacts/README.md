@@ -29,7 +29,13 @@ stability. The `b0_cpucheck_g4_*.json` determinism-gate runs use the reduced 4-r
 | `b0_e2e_g5_{fused,sequential}_seed{0,1}.json` | §4.4 per-seed G5 original pair (SUPERSEDED): clean seed 0, contaminated seed 1 — the §4.4 contamination-disclosure evidence |
 | `b0_cpucheck_g4_{fused,sequential}.json` | §3.4 CPU determinism gate; §3.3 per-belief CPU/GPU 2x2 cells |
 | `hunl_topology_census_probe.json` | §5 HUNL census + Stage-2 GPU probe (forward pointer; H=1081) |
-| `ed_writeup_evidence_pack.md` | documented source of the four numbers pending standalone artifacts (7e-6 parity upper end; RPG/QPG 1.4334; multi-level 0.0506->0.0145; G6 build >280 s) plus the ~12 ms-in-loop G5 figure — to be re-derived at camera-ready. NOTE (historical document): the pack predates revision r1 and retains v1-era prose the revision withdrew ("~10x ... with exact equilibrium parity", "NO systematic bias", TurboReBeL "4xA100", VRPO "beats Slumbot"); the manuscript supersedes it. The pack does NOT contain the G5 topology census — see the derivation note below. |
+| `supplementary_measurement_notes.md` | documented source of the four numbers pending standalone artifacts (7e-6 parity upper end; RPG/QPG 1.4334; multi-level 0.0506->0.0145; G6 build >280 s) plus the ~12 ms-in-loop G5 figure — to be re-derived at camera-ready. Renamed 2026-06-10 from `ed_writeup_evidence_pack.md` (content byte-identical; same SHA-256). NOTE (historical document): the notes predate revision r1 and retain v1-era prose the revision withdrew ("~10x ... with exact equilibrium parity", "NO systematic bias", TurboReBeL "4xA100", VRPO "beats Slumbot"); the manuscript supersedes them. The notes do NOT contain the G5 topology census — see the derivation note below. |
+
+Filename prefixes are historical run identifiers: `b0_` = the per-belief-target
+experiment series; `g5q` = the quiet-host Goofspiel-5 re-run. In
+`hunl_topology_census_probe.json`, the probe's `B` field counts co-solved trees — the
+manuscript's across-tree ($K$-like) axis for the probe — while the within-tree range
+dimension is the 1,081-hand river set (`H=1081`).
 
 ## Derivation note: G5 topology census (manuscript §3.4, §7)
 
@@ -97,7 +103,7 @@ fb40d245d96f5dcfe7a843bf23c879cd247132d1f522e6d69e9a63335883b5cc  b0_perbelief_g
 2fa2804f6f6042f1631e6349e59624bb7e1b3d1706270572ff8a8adb13211b79  e2e_band_summary_g4.json
 43285dff5c81954ff4746f5cd2cf0a15672fd62e1e712d4a1fe9db9af237473a  e2e_band_summary_g5.json
 07e02dea586a7eeccbaa28317a2af918cf01e389a89756008dcb170251cc66bc  e2e_band_summary_g5q.json
-7c1b6b00a1a472a77377e2964a4ed3b649bc7dec9ede50e945671360d2ad067b  ed_writeup_evidence_pack.md
+7c1b6b00a1a472a77377e2964a4ed3b649bc7dec9ede50e945671360d2ad067b  supplementary_measurement_notes.md
 f96607054b60de1856515c94e35657d1d6db986d79a19bb25183249eff551e46  hunl_topology_census_probe.json
 146b0619c05ea8ede2c5d5b7c6bd00909dcf13df253cc4706ce248a2207e09eb  searchfree_nfsp_g4_seed0.json
 ccb7fa85d8c769d58cc1771b38d911f9dbbf14102acdf78c01201830caaa9952  searchfree_nfsp_g4_seed1.json
