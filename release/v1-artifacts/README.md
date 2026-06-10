@@ -6,8 +6,10 @@ manuscript `autoresearch-session/rebel/ed_v1_draft/00_v1_r1.md`. The working dir
 `autoresearch-session/` is gitignored; **these copies are the citable artifacts** and are
 the payload for the release/DOI deposit at submission (roadmap item R10).
 
-Copies verified byte-identical to the working originals on 2026-06-10 (`cmp` over all 35
-files; the 7 quiet-host G5 re-run files added 2026-06-10 after the re-run landed).
+Copies verified byte-identical to the working originals on 2026-06-10 (`cmp` over all 36
+files; the 7 quiet-host G5 re-run files added 2026-06-10 after the re-run landed;
+`cuda_graphs_ablation.json` added 2026-06-10 after the six-arm launch-amortization
+ablation landed).
 Field-naming note for auditors: in `e2e_band_summary_g{4,5,5q}.json` the
 `reach_{fused,sequential}_s_median` fields are **time-to-band medians at tau = the pooled
 band ceiling** (manuscript §4.2), *not* protocol totals; names retained for artifact
@@ -29,6 +31,7 @@ stability. The `b0_cpucheck_g4_*.json` determinism-gate runs use the reduced 4-r
 | `b0_e2e_g5_{fused,sequential}_seed{0,1}.json` | §4.4 per-seed G5 original pair (SUPERSEDED): clean seed 0, contaminated seed 1 — the §4.4 contamination-disclosure evidence |
 | `b0_cpucheck_g4_{fused,sequential}.json` | §3.4 CPU determinism gate; §3.3 per-belief CPU/GPU 2x2 cells |
 | `hunl_topology_census_probe.json` | §5 HUNL census + Stage-2 GPU probe (forward pointer; H=1081) |
+| `cuda_graphs_ablation.json` | §6.5 six-arm launch-amortization ablation: original per-key arms (`rows`/`keysweeps`/`parity`/`derived`) + the `amortized_fused` completion (six-arm cross-game 7.96x/12.06x/1.82x; G4 amortized sweep speedup~=N; G5 saturation slopes 129.6/68.0 ms/tree; fused-granularity parity gates incl. the floor-limited G5 gate; setup walls; drift anchors 0.969–0.998) |
 | `supplementary_measurement_notes.md` | documented source of the four numbers pending standalone artifacts (7e-6 parity upper end; RPG/QPG 1.4334; multi-level 0.0506->0.0145; G6 build >280 s) plus the ~12 ms-in-loop G5 figure — to be re-derived at camera-ready. Renamed 2026-06-10 from `ed_writeup_evidence_pack.md` (content byte-identical; same SHA-256). NOTE (historical document): the notes predate revision r1 and retain v1-era prose the revision withdrew ("~10x ... with exact equilibrium parity", "NO systematic bias", TurboReBeL "4xA100", VRPO "beats Slumbot"); the manuscript supersedes them. The notes do NOT contain the G5 topology census — see the derivation note below. |
 
 Filename prefixes are historical run identifiers: `b0_` = the per-belief-target
@@ -69,6 +72,11 @@ Field-note for auditors: `e2e_band_summary_g{4,5q}.json` embed a frozen note str
 sign test at this n cannot exclude moderate bias)" — the JSON prose is historical,
 the per-seed numbers are authoritative.
 
+Hash-refresh note (2026-06-10): the `supplementary_measurement_notes.md` hash below was
+refreshed after the r4 editorial pass appended the N1-r4 ~6.2 ms/iter correction to the
+notes file (checklist §5 item 8) without updating the manifest; the pre-r4 hash was
+`7c1b6b00a1a472a77377e2964a4ed3b649bc7dec9ede50e945671360d2ad067b`.
+
 ## SHA-256
 
 ```
@@ -100,10 +108,11 @@ deb0c04b0e48d7815a9cae342d26947b301d7bf06470dd335a59e5c8f631f897  b0_e2e_g5q_seq
 c8f2b88d651571dde7ee4100680d95ac6183c02c7a55b5731c41eed571dd8ded  b0_perbelief_g5_curve_seed3.json
 fb40d245d96f5dcfe7a843bf23c879cd247132d1f522e6d69e9a63335883b5cc  b0_perbelief_g5_curve_seed4.json
 64fad78ed755dfd7d7df10594b5e75111de07f25f61c306f29662e2c5476bb1d  costpersolve_bakeoff.json
+2fc68188152bf9a5f901946fbdfa5568845959329423f39fa30ebd4ae79b6ec4  cuda_graphs_ablation.json
 2fa2804f6f6042f1631e6349e59624bb7e1b3d1706270572ff8a8adb13211b79  e2e_band_summary_g4.json
 43285dff5c81954ff4746f5cd2cf0a15672fd62e1e712d4a1fe9db9af237473a  e2e_band_summary_g5.json
 07e02dea586a7eeccbaa28317a2af918cf01e389a89756008dcb170251cc66bc  e2e_band_summary_g5q.json
-7c1b6b00a1a472a77377e2964a4ed3b649bc7dec9ede50e945671360d2ad067b  supplementary_measurement_notes.md
+9507d1961a0ec89ea260c93e2d0c8c812066eaecb2f0caee1eebd250b258f887  supplementary_measurement_notes.md
 f96607054b60de1856515c94e35657d1d6db986d79a19bb25183249eff551e46  hunl_topology_census_probe.json
 146b0619c05ea8ede2c5d5b7c6bd00909dcf13df253cc4706ce248a2207e09eb  searchfree_nfsp_g4_seed0.json
 ccb7fa85d8c769d58cc1771b38d911f9dbbf14102acdf78c01201830caaa9952  searchfree_nfsp_g4_seed1.json

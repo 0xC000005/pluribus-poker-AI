@@ -48,9 +48,13 @@ training wall-clock improves 9.99$\times$ against a 10.09$\times$ Amdahl ceiling
 both arms finishing in the same exploitability band; on saturated Goofspiel-5 (3 matched
 seeds) fusion still returns 2.40$\times$ inner and 2.00$\times$ total --- the saturated
 bound is part of the contribution, not a caveat. Headline comparisons are same-substrate,
-against the same kernel run per-tree under eager dispatch; a launch-amortized sequential
-arm is a planned ablation, and our artifacts put the cross-substrate best-vs-best floor at
-$\sim$2.7$\times$. All claims are equal-band-faster, never lower exploitability.
+against the same kernel run per-tree under eager dispatch; a measured six-arm
+launch-amortization ablation --- \{fused, sequential\} $\times$ \{eager,
+\texttt{torch.compile}, CUDA Graphs\} --- shows the per-solve advantage survives tool
+symmetry: amortized-fused over amortized-sequential retains $\text{speedup} \approx N$
+in the launch-bound regime (12.06$\times$ at Goofspiel-4, $N{=}12$) and
+$\sim$1.8$\times$ at saturation. All claims are equal-band-faster, never lower
+exploitability.
 \end{abstract}
 
 \section{Introduction}
@@ -140,9 +144,10 @@ uniform after 600 s --- a budget roughly eight times the fused loop's entire run
 \emph{equal-band-faster} --- the same final exploitability band in less wall-clock ---
 never lower exploitability, and never strength against poker bots. The headline
 comparisons are same-substrate, against the same kernel run per-tree under eager
-dispatch; our own artifacts put the cross-substrate best-vs-best floor at
-$\sim$2.7$\times$ (\S3, \S4.6), and a launch-amortized (CUDA Graphs /
-\texttt{torch.compile}) sequential arm is a planned ablation (\S4.6). The demonstrated
+dispatch; the measured launch-amortization ablation shows that under tool symmetry ---
+CUDA Graphs / \texttt{torch.compile} applied to \emph{both} arms --- fusion retains
+$\text{speedup} \approx N$ in the launch-bound regime (12.06$\times$ at G4, $N{=}12$)
+and $\sim$1.8$\times$ at saturation, all per-solve numbers (\S4.6, \S6.5). The demonstrated
 loop is a 2-level, single-cut instance, on one game family and one device; \S8 states
 every limitation in full.
 
@@ -633,8 +638,10 @@ Between solves only the entry reaches change: the two $[B]$ entry-reach vectors 
 rewritten and the compiled topology is reused for the whole training run. Compilation is
 one-time infrastructure and is excluded from all solve timings symmetrically in both
 arms --- conservatively for the fused claim, since the sequential arm requires $K$
-per-key compiles plus the shared one (quantified compile walls remain a planned
-instrumentation artifact, alongside the \S4.6 ablations). After the final iteration, a
+per-key compiles plus the shared one (the \S6.5 ablation artifact now records the
+analogous setup walls --- topology compile 0.09--9.4 s per game,
+\texttt{torch.compile} $\le$9.3 s, CUDA-Graph capture $\le$0.15 s --- all excluded
+symmetrically). After the final iteration, a
 value-only backward pass under the average strategy returns the per-instance
 continuation EV $\text{cont} \in \mathbb{R}^{B \times 2}$, from which normalized
 per-private leaf values (\S2.2) are reconstructed in $O(B)$ --- so target generation and
@@ -732,19 +739,27 @@ substrate at this scale}. At G5 no CPU timings exist; with 236,450 infosets the
 arithmetic-dominated comparison is expected to invert, but that is untested and we do
 not claim it.
 
-\emph{(ii) A launch-amortized sequential arm (CUDA Graphs / \texttt{torch.compile}).}
-The launch overhead that fusion amortizes is also the target of CUDA-Graphs capture and
-\texttt{torch.compile(mode="reduce-overhead")}, and we have audited our own kernel
-against capturability rather than asserting either way: every tensor shape in the
-iteration body is static and the loop has no synchronizing host reads, so there is
-\textbf{no structural barrier to capture} --- the obstacles are engineering-level (two
+\emph{(ii) A launch-amortized sequential arm (CUDA Graphs / \texttt{torch.compile})
+--- now measured.} The launch overhead that fusion amortizes is also the target of
+CUDA-Graphs capture and \texttt{torch.compile(mode="reduce-overhead")}. We first
+audited our own kernel against capturability: every tensor shape in the iteration body
+is static and the loop has no synchronizing host reads, so there is \textbf{no
+structural barrier to capture} --- the obstacles are engineering-level (two
 iteration-indexed Python scalars and out-of-place state rebinding, both with standard
-remedies; the full audit is in Appendix~C). Our prediction, stated for the record:
-capture can recover the launch-gap component but not the short-kernel occupancy
-component, so it should close part --- not all --- of the launch-bound gap. The measured
-ablation is planned alongside the full-protocol Goofspiel-5 run; until it is complete,
-the launch-bound speedups of \S6 are measured against an eager-dispatch single-stream
-sequential arm, and we say so wherever they are claimed.
+remedies; the full audit, and the confirmation that those remedies are exactly what the
+implementation needed, are in Appendix~C). Our prediction, stated for the record before
+measuring: capture can recover the launch-gap component but not the short-kernel
+occupancy component, so it should close part --- not all --- of the launch-bound gap.
+The ablation is now measured, in both directions --- a six-arm matrix \{fused,
+sequential\} $\times$ \{eager, compiled, graph-captured\}, parity-gated, cross-game,
+with sweeps (\S6.5). The outcome in one sentence: the prediction holds for pure capture
+(graphs close 73--80\% of the per-tree launch gap at G3/G4 but the amortized sequential
+arm remains linear in the population size), \texttt{torch.compile}'s kernel re-codegen
+additionally reaches eager-fused parity at G5, and under tool symmetry --- the same
+tooling applied to the fused arm --- fusion retains $\text{speedup} \approx N$
+launch-bound and $\sim$1.9$\times$ marginal at saturation. The launch-bound speedups of
+\S6.1--\S6.4 are measured against an eager-dispatch single-stream sequential arm, and
+we say so wherever they are claimed; \S6.5 is the tool-symmetric restatement.
 
 A skeptic has, by now, formed the objection: \emph{is this just batching embarrassingly
 parallel work?} The short answer is that no single ingredient is claimed novel in
@@ -907,12 +922,15 @@ asymmetry's direction), and a multi-device replication is deferred to future wor
 
 \section{Results}
 
-We present four results, in the order of the argument: the cost-per-solve microbenchmark
+We present five results, in the order of the argument: the cost-per-solve microbenchmark
 and the two-regime model it induces (\S6.1); the end-to-end training win at Goofspiel-4,
 where the model's launch-bound prediction is tested against a real training loop
-(\S6.2); a directional search-free calibration (\S6.3); and the Goofspiel-5 scale
+(\S6.2); a directional search-free calibration (\S6.3); the Goofspiel-5 scale
 results --- the 5-seed exploitability band that the fused solver makes affordable, and
-the paired end-to-end point at the \emph{saturated} end of the regime model (\S6.4).
+the paired end-to-end point at the \emph{saturated} end of the regime model (\S6.4);
+and the launch-amortization ablation, which re-runs the cost-per-solve comparison with
+CUDA-Graphs/\texttt{torch.compile} tooling on each arm --- first asymmetric, then
+tool-symmetric (\S6.5).
 Every speedup follows the \S5 aggregation convention; every exploitability number is
 exact NashConv; \textbf{every fused-vs-sequential claim is equal-band-faster} --- at G4
 the band equivalence is tested on the CUDA runs themselves (\S6.2), while at G5 the
@@ -962,7 +980,7 @@ speedup tracks $N$ nearly exactly: 1.0/2.0/3.96/7.9/11.7$\times$ (the key sweep 
 separate run from the microbenchmark table row; their values agree within 0.4\%). This
 is the \emph{launch-bound} regime: the device is paying per-launch overhead, not
 arithmetic, and fusion amortizes the launches (against an eager-dispatch sequential arm;
-\S4.6). On G5, whose deeper trees individually saturate the device, fused time grows
+\S4.6 --- \S6.5 re-tests the comparison with launch-amortized tooling on both arms). On G5, whose deeper trees individually saturate the device, fused time grows
 with $N$ (291 $\to$ 1,870 ms at $N = 1 \to 15$) and the speedup saturates:
 1.0/1.59/2.08/2.24/2.39$\times$ at $N = 1, 2, 4, 8, 15$ --- residual launch-overhead
 recovery on top of an already-busy GPU (the sweep endpoint 2.39$\times$ and the
@@ -1103,8 +1121,9 @@ fused-vs-sequential comparison that isolates the mechanism (\S4.6). Against the
 strongest \emph{non-fused} cell in our own artifacts --- the same kernel sequential on
 the host CPU --- the per-belief 2$\times$2 of \S4.6 puts the G4 best-vs-best win at
 $\sim$2.7$\times$ (GPU-fused 0.201 s/belief vs CPU-sequential 0.547 s/belief), pending
-matched full-configuration CPU timings and the CUDA-Graphs/\texttt{torch.compile}
-sequential ablation, both planned (single-run CPU cells; \S4.6, Appendix~C). In these
+matched full-configuration CPU timings, still planned (single-run CPU cells; \S4.6,
+Appendix~C); the same-substrate tooling question --- the
+CUDA-Graphs/\texttt{torch.compile} sequential arm --- is measured in \S6.5. In these
 runs, in the launch-bound regime, fusion is what made the GPU the faster substrate at
 all.
 \item \textbf{Gates.} CPU exact parity $<10^{-9}$; CPU determinism --- fused and
@@ -1304,6 +1323,121 @@ per-belief equilibrium targets affordable at 236k infosets (the band above), and
 the regime where fusion pays \emph{least}, it still pays the predicted $\sim$2.4$\times$
 on this device --- with the prediction made by a model fit on microbenchmarks alone.
 
+\subsection{Launch-amortization ablation: the headline comparison under tool symmetry}
+
+\S4.6 identified CUDA-Graphs capture and \texttt{torch.compile(mode="reduce-overhead")}
+as the rival lever and promised the measured ablation; here it is, in both directions.
+Six arms --- \{fused, sequential\} $\times$ \{eager dispatch, compiled, graph-captured\}
+--- on the \S6.1 protocol (300 CFR+ iterations, median of 7 repeats after 3 discarded
+warmups, float64, precompiled topologies; compile/capture setup walls excluded
+symmetrically and reported in the artifact: \texttt{torch.compile} $\le$9.3 s per game,
+graph capture $\le$0.15 s). The graph-captured arms replay an even/odd CUDA-Graph pair
+executing the \emph{same} kernel sequence as eager --- pure launch amortization ---
+while the compiled arms additionally re-codegen (fuse) the per-iteration kernels; the
+two tools therefore separate launch overhead from eager-ATen kernel inefficiency
+(capture engineering in Appendix~C.1). Parity is gated as everywhere: at per-tree
+granularity the tooled sequential arms match the eager reference to
+$\le 3.3\times10^{-11}$ at G3/G4 (gate $10^{-9}$); at fused granularity G3/G4 pass with
+over 2.5 orders of margin (compile $3.0\times10^{-12}$, graphs $5.4\times10^{-14}$ at
+G4, against an eager-rerun atomics floor of $1.4\times10^{-12}$); at G5 the gate is
+\textbf{floor-limited}: the eager fused reference differs from \emph{itself} by
+$\sim$$2\times10^{-8}$ between reruns (CUDA \texttt{index\_add\_} atomics over $B{=}125$
+cut nodes $\times$ 236k infosets compounded through the 200-iteration parity run;
+reproduced at $5.7\times10^{-9}$--$1.7\times10^{-8}$ across independent rerun pairs),
+and the tooled arms sit at 1.00--1.05$\times$ that floor --- indistinguishable from an
+eager rerun, with no evidence of a numerics change, but not certifiable to $10^{-9}$. G5
+rows below carry this caveat.
+
+\textbf{Step 1 --- the asymmetric comparison (the one a skeptic would run first).}
+Amortize the \emph{sequential} arm only, and compare it against the eager-dispatched
+fused solver. Launch amortization is real: it lowers the sequential per-tree floor by
+72\%/66\% (compile/graphs) at G4 and 63\%/32\% at G5. But the amortized sequential arm
+\emph{remains linear in $N$} (G4 compile slope 56.82 ms/tree, vs 201.09 eager) while the
+eager fused arm stays flat, so the fused advantage is rescaled, not removed: the
+surviving best-vs-best speedups are \textbf{2.59$\times$ (G3), 3.28$\times$ (G4),
+1.03$\times$ (G5)}, with the G4 crossover moving from $N^*\!\approx\!1$ to
+$N^*\!\approx\!3.63$ and the retained advantage still growing as $\sim N/3.63$. The G5
+reading decomposes exactly as \S4.6 predicted for capture --- pure graphs recover only
+1.31$\times$ of the sequential arm's cost and the eager fused arm retains 1.85$\times$
+over them --- but \texttt{torch.compile} goes further: its within-tree kernel re-codegen
+brings the compiled \emph{sequential} arm to parity with the eager-ATen \emph{fused} arm
+(1.03$\times$). Taken alone, this table understates the mechanism, because it grants
+amortization tooling to one arm and not the other; we report it because it is the
+comparison a skeptic would produce first, and because the asymmetry is exactly what
+motivates step 2.
+
+\textbf{Step 2 --- the symmetric comparison (best tool per arm).} The identical tooling
+applies to the fused topology unchanged --- the same even/odd-pair and compiled-step
+machinery at population granularity --- and the arms then coincide at $N{=}1$ by
+construction (G4: 55.2 vs 56.6 ms; G5: 109.6 vs 111.1 ms), so everything beyond $N{=}1$
+is the fusion mechanism itself (Table~\ref{tab:sixarm}).
+
+\begin{table}[t]
+\centering
+\caption{Six-arm launch-amortization ablation (full cut population, 300 CFR+
+iterations; ms, GPU-event medians; best amortized arm per side in bold). Provenance:
+the sequential arms and the eager-vs-eager reference come from the per-key session; the
+amortized fused arms were measured in a completion session with the fused-eager arm
+re-measured as the cross-session drift anchor (ratios 0.969--0.998 --- the completion
+session is $\le$3\% faster, so the best-vs-best ratios carry $\le$3\% cross-session
+uncertainty in fusion's favor; no conclusion is within that margin except the $N{=}1$
+coincidence, which holds by construction). The ablation's own eager-vs-eager column
+(8.82/11.64/2.42$\times$) reproduces Table~\ref{tab:bakeoff}
+(8.77/11.69/2.37$\times$) within $\sim$2\%. Source:
+\texttt{cuda\_graphs\_ablation.json} (original arms + \texttt{amortized\_fused}).}
+\label{tab:sixarm}
+\begin{tabular}{lccccccc}
+\toprule
+ & \multicolumn{3}{c}{fused} & \multicolumn{3}{c}{sequential} & amortized \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+game & eager & compile & graphs & eager & compile & graphs & best-vs-best \\
+\midrule
+G3 ($N{=}9$) & 117.1 & \textbf{39.1} & 40.0 & 1,059.4 & 355.5 & \textbf{311.7} & \textbf{7.96$\times$} \\
+G4 ($N{=}12$) & 202.1 & \textbf{56.6} & 85.5 & 2,426.7 & \textbf{683.0} & 810.2 & \textbf{12.06$\times$} \\
+G5 ($N{=}15$) & 1,871.0 & \textbf{1,060.3} & 1,817.4 & 4,536.2 & \textbf{1,929.2} & 3,465.6 & \textbf{1.82$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+\item \textbf{Launch-bound regime (G4): the fusion advantage is $\text{speedup} \approx
+N$, with or without tooling.} The amortized G4 key sweep gives amortized-fused over
+amortized-sequential \textbf{1.02/1.97/3.97/7.84/11.62$\times$ at $N = 1/2/4/8/12$} ---
+speedup $\approx N$ at every point, the same shape as the eager-vs-eager sweep of
+\S6.1. The amortized fused arm is flat (55.2 $\to$ 58.7 ms for $N{:}\,1{\to}12$ ---
+slope 0.31 ms/tree on a 55.2 ms floor, +6.2\% for 12$\times$ the population) while the
+amortized sequential arm stays linear, and step 1's $N^*\!\approx\!3.63$ crossover
+collapses back to $\approx$1. The two levers compose multiplicatively: compile is worth
+3.57$\times$ on the fused arm at G4, on top of fusion's $\approx N$ over sequential.
+\item \textbf{Saturated regime (G5): step 1's parity verdict reverses to 1.82$\times$.}
+Pure capture buys essentially nothing on the fused arm (fused-graphs 1.03$\times$ over
+fused-eager): the fused G5 solve is genuinely compute/occupancy-bound, confirming the
+\S6.1 saturation story. Compile's kernel re-codegen still buys 1.76$\times$, and under
+compile-vs-compile the \emph{marginal} cost per additional tree is 68.0 ms/tree fused
+vs 129.6 ms/tree sequential --- so the amortized-vs-amortized speedup rises
+monotonically (1.01/1.34/1.60/1.71/1.81$\times$ at $N = 1/2/4/8/15$; 1.82$\times$ on
+the cross-game row) toward the marginal-slope ratio $\approx$1.9, with no crossover:
+dominance from $N{=}1$. Step 1's G5 parity was an artifact of comparing eager-ATen
+fused kernels against compiled sequential ones.
+\item \textbf{Regime-model upgrade.} With per-arm floors and slopes, the \S6.1 envelope
+refines to $\text{speedup}(N) \approx \big(\text{floor} +
+\text{slope}_{\text{seq}}(N{-}1)\big) / \big(\text{floor} +
+\text{slope}_{\text{fused}}(N{-}1)\big)$, with $\text{floor}_{\text{fused}} \approx
+\text{floor}_{\text{seq}}$ under the same tooling: $\to N$ when
+$\text{slope}_{\text{fused}} \approx 0$ (launch-bound; measured 11.62$\times$ at
+$N{=}12$), $\to \text{slope}_{\text{seq}}/\text{slope}_{\text{fused}} = 129.6/68.0
+\approx 1.9$ at saturation (measured 1.81$\times$ at $N{=}15$). Launch amortization
+rescales both arms' floors equally; it cannot touch the cross-tree occupancy term. The
+fusion advantage \emph{is} the marginal-cost ratio, and it survives.
+\item \textbf{What this does not restate.} These are per-solve numbers under the
+equal-band discipline of \S5 (parity-gated, timing-only). The end-to-end training
+results of \S6.2 and \S6.4 (11.79$\times$/9.99$\times$ at G4; 2.40$\times$/2.00$\times$
+at G5) remain eager-vs-eager in-kind comparisons and are deliberately not restated
+under tooling; the amortized microbenchmark implies both e2e arms would speed up under
+the same tooling, and the amortized-fused vs amortized-sequential \emph{end-to-end
+training} comparison is future work (\S8).
+\end{itemize}
+
 \section{Related Work}
 
 We position the lever inside the cost identity of Eq.~(\ref{eq:cost}), then delimit it
@@ -1465,19 +1599,21 @@ certified (Goofspiel-4: exploitability decreases 0.0506 $\to$ 0.0145 with traini
 recorded in the supplementary measurement notes, Appendix~F; a standalone artifact is
 planned); only the multi-level timing comparison is outstanding.
 
-\textbf{Baseline tooling and substrate.} The launch-bound speedups are measured against
-an eager-dispatch, single-stream sequential arm. Per \S4.6, a CUDA-Graphs-captured or
-\texttt{torch.compile(reduce-overhead)} sequential arm is plausibly buildable for this
-kernel (static shapes per topology; the obstacles are iteration-indexed scalars and
-out-of-place state updates, both engineering-level; Appendix~C), and our own CPU-gate
-artifacts imply that at G4 scale the GPU-sequential arm is $\sim$4.3$\times$ slower per
-belief than the same kernel on the host CPU --- making the cross-substrate best-vs-best
-G4 win $\sim$2.7$\times$ as currently measurable (single-run CPU cells, no timing
-discipline; \S4.6, Appendix~C). Both the graphs/compile ablation and matched
-full-configuration CPU timings (G4 and G5) are planned; until they are complete, the
-$\sim$10$\times$ figure is a same-substrate, eager-tooling-class comparison, and we
-state it as such everywhere it appears. Multi-stream per-tree dispatch and
-fp32-with-compensated-accumulation are further untested alternatives in the same family.
+\textbf{Baseline tooling and substrate.} The \S6.2/\S6.4 end-to-end speedups are
+measured against an eager-dispatch, single-stream sequential arm. The
+CUDA-Graphs/\texttt{torch.compile} tooling question is now measured at the
+cost-per-solve level, in both directions (\S6.5, Appendix~C.1): under tool symmetry
+fusion retains $\text{speedup} \approx N$ launch-bound (12.06$\times$ at G4) and
+$\sim$1.8$\times$ at saturation --- so the eager-tooling-class qualifier on the
+$\sim$10$\times$ end-to-end figure is resolved at the per-solve level, and the
+remaining item on this axis is the amortized-fused vs amortized-sequential
+\emph{end-to-end training} run. Our own CPU-gate artifacts imply that at G4 scale the
+GPU-sequential arm is $\sim$4.3$\times$ slower per belief than the same kernel on the
+host CPU --- making the cross-substrate best-vs-best G4 win $\sim$2.7$\times$ as
+currently measurable (single-run CPU cells, no timing discipline; \S4.6, Appendix~C);
+matched full-configuration CPU timings (G4 and G5) remain planned. Multi-stream
+per-tree dispatch and fp32-with-compensated-accumulation are further untested
+alternatives in the same family.
 
 \textbf{One game family, one device.} All end-to-end timing is on the Goofspiel ladder;
 Leduc and liar's-dice are parity-tested for the fused solver but not end-to-end timed.
@@ -1539,8 +1675,10 @@ game that can be solved'': population fusion likewise raises throughput, not max
 instance size.
 
 \textbf{Future work.} (1) The $\geq$3-level fused-vs-sequential timing demonstration.
-(2) The planned baseline ablations: CUDA-Graphs/\texttt{torch.compile} sequential arm
-and matched CPU timings; the quiet-host G5 timing re-run is complete ($n{=}3$, \S6.4),
+(2) The remaining baseline items: matched CPU timings, and the amortized-fused vs
+amortized-sequential \emph{end-to-end training} comparison (the
+CUDA-Graphs/\texttt{torch.compile} cost-per-solve ablation is complete, both
+directions, \S6.5); the quiet-host G5 timing re-run is complete ($n{=}3$, \S6.4),
 and what remains on that axis is the full-protocol (8-round) $n \ge 5$ paired run with a
 pre-registered band margin for a CUDA band-equivalence test. (3) A second game family
 timed end-to-end. (4) A100 replication and multi-GPU sharding --- the population axis
@@ -1589,10 +1727,14 @@ while solves are launch-bound (Goofspiel-4: inner 11.79$\times$ predicted ex ant
 11.7$\times$; total wall 9.99$\times$ against a 10.09$\times$ Amdahl ceiling, 5 matched
 seeds), saturating at $\sim$2.4$\times$ when one subgame fills the device (Goofspiel-5:
 2.37$\times$ predicted, 2.40$\times$ measured, 3 matched quiet-host seeds; equal-band
-certified on CPU, the CUDA band test pending). We claim no exploitability improvement,
+certified on CPU, the CUDA band test pending). The measured launch-amortization
+ablation shows the per-solve advantage survives CUDA-Graphs/\texttt{torch.compile} tool
+symmetry --- $\text{speedup} \approx N$ launch-bound (12.06$\times$ at G4) and
+1.82$\times$ at saturation (\S6.5). We claim no exploitability improvement,
 no cross-substrate superiority beyond the $\sim$2.7$\times$ best-vs-best our artifacts
 currently support at G4 (single-run CPU cells; \S4.6), and no generality beyond one game
-family and one device until the planned ablations and replications are complete. What we
+family and one device until the remaining planned runs --- matched CPU timings, the
+amortized end-to-end arms, and multi-device replication --- are complete. What we
 believe travels regardless: the population-fusion lever and its regime model, the
 matched-seed paired-arm + CPU-exactness-gate evaluation template, and the warning that
 compounding CUDA atomics make naive per-seed equivalence checks of batched GPU CFR
@@ -1607,7 +1749,8 @@ cost-per-solve microbenchmark and controlled key sweep (produces
 and the NFSP search-free boundary; \texttt{1ff6a8e} --- the G5 per-belief $V^*$ band,
 seeds 0--1; and the final-data runs (post \texttt{dd3d148}; release commit pinned at
 submission) --- the G5 band seeds 2--4, the original and quiet-host G5 paired end-to-end
-runs, and the HUNL topology census probe. Every JSON cited in this paper is copied into
+runs, the HUNL topology census probe, and the six-arm launch-amortization ablation of
+\S6.5 (produces \texttt{cuda\_graphs\_ablation.json}). Every JSON cited in this paper is copied into
 the tracked directory \textbf{\texttt{release/v1-artifacts/}} with a \texttt{README.md}
 manifest and per-file SHA-256 sums; the copies there are the citable artifacts and
 accompany the release/DOI deposit (the raw run outputs under
@@ -1967,30 +2110,48 @@ mechanism above.
 
 \section{Baseline Engineering Detail}
 
-\subsection{CUDA Graphs / \texttt{torch.compile} capturability audit}
+\subsection{CUDA Graphs / \texttt{torch.compile} capturability audit --- confirmed by
+the measured ablation}
 
-We have read our own kernel against capturability rather than asserting either way. Per
+We read our own kernel against capturability before measuring. Per
 compiled topology, every tensor shape in the solver's iteration body is static across
 iterations and across re-solves (the level-shape groups, the $[n_I, A_{\max}]$ tables,
 the $[n_{\text{nodes}}, B]$ reach tensors; re-solves rewrite entry-reach values only),
 and the loop contains no host-side convergence checks or synchronizing \texttt{.item()}
-reads --- so there is \textbf{no structural barrier to capture}. The real obstacles are
-engineering-level: (a) two Python scalars depend on the iteration index --- the
-alternating-player update parity ($t \bmod 2$) and the linear-averaging weight $w =
-t{+}1$ --- which a capture would bake in (standard remedy: a pair of parity-alternating
-graphs plus a device-resident weight); (b) the regret/strategy-sum updates are
-out-of-place tensor rebindings with fresh per-iteration intermediates, which
-capture/replay requires rewriting into static in-place buffers (or delegating to the
-compile-mode graph pool). We therefore do \textbf{not} claim inapplicability: a
-graph-captured or compiled per-tree sequential arm is plausibly buildable, and the
-measured ablation --- how much of the launch-bound gap graphs recover, versus how much
-is short-kernel occupancy that only fusion's larger per-kernel work addresses --- is
-planned alongside the full-protocol ($n \ge 5$) G5 band run. The prediction of \S4.6,
-stated for the record: capture can recover the launch-gap component but not the
-short-kernel occupancy component, so it should close part --- not all --- of the
-launch-bound gap. Until that ablation is complete, the launch-bound speedups of \S6 are
-measured against an eager-dispatch single-stream sequential arm, and we say so wherever
-they are claimed.
+reads --- so there is \textbf{no structural barrier to capture}. The audit's two
+predicted engineering obstacles are exactly the ones the implementation hit, and both
+resolved with the predicted remedies: (a) the two iteration-indexed Python scalars ---
+the alternating-player update parity ($t \bmod 2$) and the linear-averaging weight $w =
+t{+}1$ --- became a pair of parity-alternating (even/odd) CUDA Graphs sharing one
+memory pool, with $w$ a 0-dim float64 device tensor advanced \emph{in-graph}; (b) the
+out-of-place regret/strategy-sum rebindings became a functional step writing through
+\texttt{copy\_} into static pre-allocated buffers (manual-capture arm) or were
+delegated to the cudagraph-trees-managed pool (compile arm). One additional contract
+surfaced and resolved on the compile arm:
+\texttt{torch.compile(mode="reduce-overhead", fullgraph=True, dynamic=False)} compiles
+the step cleanly at float64 --- no graph breaks, no skipped-cudagraphs warnings --- but
+requires the documented cudagraph-trees feedback-loop discipline,
+\texttt{torch.compiler.cudagraph\_mark\_step\_begin()} before each iteration plus
+cloning the three state outputs before reuse as inputs (without it, recording fails
+with the overwritten-output error); the three clone kernels per iteration stay inside
+the timed region as honest tooling overhead. The manual-capture arm replays the
+\emph{same} kernel sequence as eager --- launch amortization only --- which is what
+makes the \S6.5 graphs-vs-compile split interpretable: graphs isolate launch overhead,
+compile adds within-tree kernel re-codegen. The measured outcome (\S6.5) confirms the
+\S4.6 prediction for pure capture: graphs close 73--80\% of the eager
+fused-vs-sequential gap at G3/G4 but only 40\% at G5 --- the launch-gap component, not
+the occupancy component --- and the amortized sequential arm remains linear in the
+population size; compile, which also re-codegens kernels, closes 98\% at G5 and reaches
+eager-fused parity there, which is why the tool-symmetric comparison of \S6.5 is the
+decisive one. Implementation: \texttt{poker\_ai/rebel/iig\_batched\_graphed.py} (the
+compiled-step and graph-captured solvers), with runners
+\texttt{scripts/run\_rebel\_cuda\_graphs\_ablation.py} (per-key sequential arms) and
+\texttt{scripts/run\_rebel\_cuda\_graphs\_ablation\_fused.py} (population-granularity
+fused arms); the gated kernel \texttt{iig\_batched.py} is untouched, dynamo's
+cache-size limit is raised to 64 in the runner (several distinct shapes per sweep;
+tooling configuration only), and every arm is parity-gated per \S6.5 --- with the G5
+fused-granularity gate floor-limited at $\sim$$2\times10^{-8}$ by the eager reference's
+own atomics rerun noise (the tooled arms are indistinguishable from an eager rerun).
 
 \subsection{CPU 2$\times$2 provenance and protocol}
 
@@ -2177,6 +2338,19 @@ python scripts/analyze_rebel_e2e_band.py \
     --glob 'autoresearch-session/rebel/b0_e2e_g5q_*_seed*.json' \
     --output-json autoresearch-session/rebel/e2e_band_summary_g5q.json
 
+# 6.5 launch-amortization ablation: sequential arms (per-key tooling) first,
+# then the fused-arm completion (population-granularity tooling; merges the
+# 'amortized_fused' key into the same JSON). One game per process for
+# dynamo/VRAM hygiene.
+for g in 3 4 5; do
+  python scripts/run_rebel_cuda_graphs_ablation.py --games $g \
+      --output-json autoresearch-session/rebel/cuda_graphs_ablation.json
+done
+for g in 3 4 5; do
+  python scripts/run_rebel_cuda_graphs_ablation_fused.py --games $g \
+      --output-json autoresearch-session/rebel/cuda_graphs_ablation.json
+done
+
 # Sec. 8 HUNL topology census + GPU timing probe (forward pointer; out of scope)
 python scripts/estimate_hunl_topology_buckets.py --gpu-probe \
     --output autoresearch-session/rebel/hunl_topology_census_probe.json
@@ -2224,7 +2398,9 @@ the Appendix~C 2$\times$2.
 G5 end-to-end: quiet-host re-run seeds 0--2, matched pairs (the headline); the original
 seeds 0--1 pair is superseded (seed 1's sequential arm contaminated by host load) and
 retained as the \S6.4 diagnostic. NFSP: seeds 0--1. G5 band: seeds 0--4. HUNL GPU probe:
-seed 0. No other seeds were run; no configuration sweeps were performed (single
+seed 0. The \S6.5 launch-amortization ablation has no seed axis (median-of-7-repeat
+timings, like the \S6.1 microbenchmark; parity gates at 200 iterations). No other seeds
+were run; no configuration sweeps were performed (single
 configuration fixed in advance; \S5; the G5 end-to-end budget shortening is disclosed
 there and in \S6.4).
 
@@ -2244,7 +2420,8 @@ runs CPU-only (\S5). Total compute: the artifact-recorded GPU runs of this paper
 both arms, all seeds, including the superseded contaminated G5 pair and the G5 band
 seeds 2--4 --- sum to $\approx$4.3 GPU-hours on the single device; the two earliest G5
 band runs (seeds 0--1) predate the wall-clock field and are of comparable scale to the
-later band seeds, and the \S6.1 microbenchmark plus the HUNL probe add minutes.
+later band seeds, and the \S6.1 microbenchmark, the \S6.5 launch-amortization ablation
+arms, and the HUNL probe add minutes.
 Exploitability is exact NashConv via OpenSpiel's best response~\citep{Lanctot2019} ---
 no sampled exploitability anywhere.
 
