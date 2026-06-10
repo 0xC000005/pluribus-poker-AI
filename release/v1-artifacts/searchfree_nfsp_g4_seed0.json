@@ -1,0 +1,56 @@
+{
+  "game": "goofspiel4",
+  "method": "search_free_nfsp",
+  "policy_evaluated": "average",
+  "seed": 0,
+  "n_iset": 3608,
+  "config": {
+    "hidden_layers_sizes": [
+      128
+    ],
+    "reservoir_buffer_capacity": 200000,
+    "anticipatory_param": 0.1,
+    "batch_size": 128,
+    "rl_learning_rate": 0.01,
+    "sl_learning_rate": 0.01,
+    "min_buffer_size_to_learn": 1000,
+    "learn_every": 64,
+    "optimizer_str": "sgd"
+  },
+  "band_ceiling": 0.05,
+  "curve_seconds_vs_nashconv": [
+    [
+      10.0,
+      1.42434
+    ],
+    [
+      30.0,
+      1.42266
+    ],
+    [
+      60.0,
+      1.42241
+    ],
+    [
+      120.0,
+      1.42117
+    ],
+    [
+      240.001,
+      1.41725
+    ],
+    [
+      400.0,
+      1.41006
+    ],
+    [
+      600.004,
+      1.39678
+    ]
+  ],
+  "time_to_band_s": null,
+  "sustained_in_band": false,
+  "n_episodes": 639763,
+  "removal_criterion": "Retire this boundary iff, after a compute budget equal to the resolving arm's total wall-to-final-round at G4, NFSP average-policy nash_conv > 5x the band ceiling AND a second search-free family confirms it -- a falsification of 'search-free is a meaningful boundary', NOT a tuning knob.",
+  "uses_slumbot_data": false
+}

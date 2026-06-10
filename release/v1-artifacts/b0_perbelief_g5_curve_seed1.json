@@ -1,0 +1,82 @@
+{
+  "game": "goofspiel5",
+  "n_iset": 236450,
+  "target_type": "per_belief_resolved_Vstar",
+  "final_val_mae": 0.0613,
+  "nashconv_on_policy": 0.11326,
+  "nashconv_gadget": 0.12284,
+  "nash_floor": null,
+  "curve_beliefs_vs_exploit": [
+    [
+      80,
+      0.0751
+    ],
+    [
+      160,
+      0.11265
+    ],
+    [
+      240,
+      0.0941
+    ],
+    [
+      320,
+      0.11326
+    ]
+  ],
+  "curve_decreasing": false,
+  "history": [
+    {
+      "round": 0,
+      "val_mae_frac": 0.1466,
+      "n": 600,
+      "n_beliefs_cumulative": 40
+    },
+    {
+      "round": 1,
+      "val_mae_frac": 0.1001,
+      "n": 1200,
+      "n_beliefs_cumulative": 80,
+      "exploit_onpolicy": 0.0751
+    },
+    {
+      "round": 2,
+      "val_mae_frac": 0.0792,
+      "n": 1800,
+      "n_beliefs_cumulative": 120
+    },
+    {
+      "round": 3,
+      "val_mae_frac": 0.0759,
+      "n": 2400,
+      "n_beliefs_cumulative": 160,
+      "exploit_onpolicy": 0.11265
+    },
+    {
+      "round": 4,
+      "val_mae_frac": 0.071,
+      "n": 3000,
+      "n_beliefs_cumulative": 200
+    },
+    {
+      "round": 5,
+      "val_mae_frac": 0.0645,
+      "n": 3600,
+      "n_beliefs_cumulative": 240,
+      "exploit_onpolicy": 0.0941
+    },
+    {
+      "round": 6,
+      "val_mae_frac": 0.0619,
+      "n": 4200,
+      "n_beliefs_cumulative": 280
+    },
+    {
+      "round": 7,
+      "val_mae_frac": 0.0613,
+      "n": 4800,
+      "n_beliefs_cumulative": 320,
+      "exploit_onpolicy": 0.11326
+    }
+  ]
+}

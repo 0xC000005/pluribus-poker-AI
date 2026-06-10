@@ -1,0 +1,116 @@
+{
+  "experiment": "costpersolve_bakeoff_fused_vs_sequential",
+  "device": "cuda",
+  "iters": 300,
+  "repeats": 7,
+  "rows": [
+    {
+      "n_keys": 9,
+      "B_cut_nodes": 27,
+      "iters": 300,
+      "fused_gpu_ms": 119.221,
+      "seq_gpu_ms": 1045.557,
+      "fused_wall_ms": 119.241,
+      "seq_wall_ms": 1045.578,
+      "speedup_gpu": 8.77,
+      "speedup_wall": 8.77,
+      "parity_max_strategy_diff": 0.0,
+      "game": "goofspiel3",
+      "n_iset": 90
+    },
+    {
+      "n_keys": 12,
+      "B_cut_nodes": 64,
+      "iters": 300,
+      "fused_gpu_ms": 203.114,
+      "seq_gpu_ms": 2374.293,
+      "fused_wall_ms": 203.137,
+      "seq_wall_ms": 2374.318,
+      "speedup_gpu": 11.69,
+      "speedup_wall": 11.69,
+      "parity_max_strategy_diff": 0.0,
+      "game": "goofspiel4",
+      "n_iset": 3608
+    },
+    {
+      "n_keys": 15,
+      "B_cut_nodes": 125,
+      "iters": 300,
+      "fused_gpu_ms": 1866.744,
+      "seq_gpu_ms": 4427.404,
+      "fused_wall_ms": 1866.779,
+      "seq_wall_ms": 4427.47,
+      "speedup_gpu": 2.37,
+      "speedup_wall": 2.37,
+      "parity_max_strategy_diff": 4e-06,
+      "game": "goofspiel5",
+      "n_iset": 236450
+    }
+  ],
+  "keysweeps": {
+    "goofspiel4": [
+      {
+        "n_subgames": 1,
+        "fused_gpu_ms": 197.602,
+        "seq_gpu_ms": 197.984,
+        "speedup_gpu": 1.0
+      },
+      {
+        "n_subgames": 2,
+        "fused_gpu_ms": 199.485,
+        "seq_gpu_ms": 399.095,
+        "speedup_gpu": 2.0
+      },
+      {
+        "n_subgames": 4,
+        "fused_gpu_ms": 200.055,
+        "seq_gpu_ms": 792.126,
+        "speedup_gpu": 3.96
+      },
+      {
+        "n_subgames": 8,
+        "fused_gpu_ms": 201.385,
+        "seq_gpu_ms": 1591.592,
+        "speedup_gpu": 7.9
+      },
+      {
+        "n_subgames": 12,
+        "fused_gpu_ms": 202.388,
+        "seq_gpu_ms": 2368.244,
+        "speedup_gpu": 11.7
+      }
+    ],
+    "goofspiel5": [
+      {
+        "n_subgames": 1,
+        "fused_gpu_ms": 291.18,
+        "seq_gpu_ms": 291.176,
+        "speedup_gpu": 1.0
+      },
+      {
+        "n_subgames": 2,
+        "fused_gpu_ms": 371.779,
+        "seq_gpu_ms": 591.868,
+        "speedup_gpu": 1.59
+      },
+      {
+        "n_subgames": 4,
+        "fused_gpu_ms": 567.351,
+        "seq_gpu_ms": 1181.869,
+        "speedup_gpu": 2.08
+      },
+      {
+        "n_subgames": 8,
+        "fused_gpu_ms": 1057.395,
+        "seq_gpu_ms": 2365.157,
+        "speedup_gpu": 2.24
+      },
+      {
+        "n_subgames": 15,
+        "fused_gpu_ms": 1869.554,
+        "seq_gpu_ms": 4459.022,
+        "speedup_gpu": 2.39
+      }
+    ]
+  }
+}

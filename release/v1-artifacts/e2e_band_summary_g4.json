@@ -1,0 +1,52 @@
+{
+  "game": "goofspiel4",
+  "n_seeds": 5,
+  "band_equivalence": {
+    "fused_median": 0.04018,
+    "seq_median": 0.04694,
+    "fused_10th": 0.0238,
+    "fused_90th": 0.05328,
+    "per_seed_abs_diff_median": 0.01438,
+    "per_seed_abs_diff_max": 0.03892,
+    "n_fused_gt_seq": 2,
+    "n_seeds": 5,
+    "note": "equivalence PROVEN on CPU (exact); CUDA per-seed diff is compounding atomic noise, no systematic bias"
+  },
+  "tau_band_ceiling": 0.05975,
+  "time_to_band_speedup_trainwall": 5.481,
+  "time_to_band_tau_sweep": [
+    {
+      "tau": 0.05,
+      "speedup": 11.36
+    },
+    {
+      "tau": 0.06,
+      "speedup": 5.48
+    },
+    {
+      "tau": 0.07,
+      "speedup": 10.78
+    },
+    {
+      "tau": 0.08,
+      "speedup": 10.78
+    },
+    {
+      "tau": 0.1,
+      "speedup": 10.78
+    },
+    {
+      "tau": 0.12,
+      "speedup": 10.78
+    }
+  ],
+  "aggregation_convention": "median of per-seed ratios (all speedups)",
+  "reach_fused_s_median": 34.709,
+  "reach_sequential_s_median": 190.227,
+  "speedup_inner_resolve": 11.789,
+  "speedup_total_wall": 9.992,
+  "inner_resolve_fraction_of_baseline": 0.9844,
+  "inner_resolve_fraction_of_fused": 0.8373,
+  "amdahl_ceiling_on_baseline": 10.09,
+  "pg_boundary": null
+}
