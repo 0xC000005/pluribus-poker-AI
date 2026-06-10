@@ -29,7 +29,39 @@ stability. The `b0_cpucheck_g4_*.json` determinism-gate runs use the reduced 4-r
 | `b0_e2e_g5_{fused,sequential}_seed{0,1}.json` | §4.4 per-seed G5 original pair (SUPERSEDED): clean seed 0, contaminated seed 1 — the §4.4 contamination-disclosure evidence |
 | `b0_cpucheck_g4_{fused,sequential}.json` | §3.4 CPU determinism gate; §3.3 per-belief CPU/GPU 2x2 cells |
 | `hunl_topology_census_probe.json` | §5 HUNL census + Stage-2 GPU probe (forward pointer; H=1081) |
-| `ed_writeup_evidence_pack.md` | documented source of the five numbers pending standalone artifacts (7e-6 parity upper end; RPG/QPG 1.4334; multi-level 0.0506->0.0145; G6 build >280 s; 26,773 nodes / ~12 ms in-loop) — to be re-derived at camera-ready |
+| `ed_writeup_evidence_pack.md` | documented source of the four numbers pending standalone artifacts (7e-6 parity upper end; RPG/QPG 1.4334; multi-level 0.0506->0.0145; G6 build >280 s) plus the ~12 ms-in-loop G5 figure — to be re-derived at camera-ready. NOTE (historical document): the pack predates revision r1 and retains v1-era prose the revision withdrew ("~10x ... with exact equilibrium parity", "NO systematic bias", TurboReBeL "4xA100", VRPO "beats Slumbot"); the manuscript supersedes it. The pack does NOT contain the G5 topology census — see the derivation note below. |
+
+## Derivation note: G5 topology census (manuscript §3.4, §7)
+
+The "26,773 nodes / 10 level groups" census is re-derived directly from the compiled
+topology (verified 2026-06-10 on CPU; no artifact JSON needed — one command):
+
+```bash
+CUDA_VISIBLE_DEVICES="" python - <<'EOF'
+from poker_ai.rebel.iig_solve import DepthLimitedGame
+from poker_ai.rebel.iig_pbs import load_goofspiel, goofspiel_is_cut, goofspiel_public_key
+from poker_ai.rebel.iig_batched import _compile_topology
+import numpy as np
+dlg = DepthLimitedGame(load_goofspiel(5), goofspiel_is_cut, public_key_fn=goofspiel_public_key)
+keys = sorted({n[1] for n in dlg.cut_nodes})
+ranges = {k: (np.ones(dlg.n_priv(k,0))/dlg.n_priv(k,0), np.ones(dlg.n_priv(k,1))/dlg.n_priv(k,1)) for k in keys}
+c = _compile_topology(dlg, ranges, "cpu")
+levels = sorted({r["level"] for r in c.recs})
+print({"n_nodes": c.n_nodes, "n_level_groups": len(levels), "max_level_index": max(levels),
+       "K_keys": len(keys), "B_cut_nodes": c.B, "n_batched_infosets": c.n_iids})
+EOF
+# -> {'n_nodes': 26773, 'n_level_groups': 10, 'max_level_index': 9,
+#     'K_keys': 15, 'B_cut_nodes': 125, 'n_batched_infosets': 236440}
+```
+
+(26,773 topology nodes across 10 level groups, levels 0-9; K=15 keys, B=125 cut
+instances, 236,440 batched below-cut infoset rows. The full-game infoset count in the
+ladder table, 236,450, is `dlg.n_iset` and includes the 10 above-cut trunk infosets.)
+
+Field-note for auditors: `e2e_band_summary_g{4,5q}.json` embed a frozen note string
+"no systematic bias"; the manuscript's current wording is "no detectable bias (n=5; a
+sign test at this n cannot exclude moderate bias)" — the JSON prose is historical,
+the per-seed numbers are authoritative.
 
 ## SHA-256
 
