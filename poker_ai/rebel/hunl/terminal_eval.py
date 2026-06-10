@@ -157,6 +157,7 @@ def exact_river_cfv_population(
     """
     import torch
 
+    from poker_ai.rebel.hunl import lazy_subgames as _lzs
     from poker_ai.rebel.hunl import population_solver as _pop
 
     key = sgs.board_key(turn_board)
@@ -172,22 +173,12 @@ def exact_river_cfv_population(
             f"reaches must have shape ({n_turn},), got "
             f"{hero_reach.shape} / {villain_reach.shape}")
 
-    r0_global = sgs.scatter_global(key, hero_reach)
-    r1_global = sgs.scatter_global(key, villain_reach)
-    river_cards = [c for c in range(sgs.N_CARDS) if c not in key]
-    specs = [
-        sgs.SubgameSpec(
-            street="river",
-            board=key + (river,),
-            pot=pot,
-            stack0=stack0,
-            stack1=stack1,
-            first_to_act=first_to_act,
-            r0=r0_global,
-            r1=r1_global,
-        )
-        for river in river_cards
-    ]
+    # The runout expansion + card-removal masking is SHARED with
+    # SubgameFactory.expand_to_river (lazy_subgames.river_runout_specs).
+    specs = _lzs.river_runout_specs(
+        key, pot, stack0, stack1, first_to_act,
+        sgs.scatter_global(key, hero_reach),
+        sgs.scatter_global(key, villain_reach))
     results = _pop.solve_population(
         specs, n_iterations=n_iterations, dtype=dtype, device=device, b_max=b_max)
 
