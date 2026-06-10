@@ -1,0 +1,84 @@
+{
+  "game": "goofspiel5",
+  "n_iset": 236450,
+  "target_type": "per_belief_resolved_Vstar",
+  "inner_mode": "fused",
+  "device": "cuda",
+  "seed": 1,
+  "final_val_mae": 0.0762,
+  "nashconv_on_policy": 0.09744,
+  "nashconv_gadget": null,
+  "nash_floor": null,
+  "curve_beliefs_vs_exploit": [
+    [
+      160,
+      0.09744
+    ]
+  ],
+  "curve_decreasing": false,
+  "inner_resolve_gpu_ms_total": 299498.4,
+  "inner_resolve_wall_s_total": 299.506,
+  "train_wall_s_total": 2.613,
+  "total_wall_s": 416.833,
+  "inner_resolve_wall_s_per_round": [
+    74.8593,
+    74.8176,
+    74.9054,
+    74.9236
+  ],
+  "train_wall_s_per_round": [
+    1.0057,
+    0.4657,
+    0.3951,
+    0.7466
+  ],
+  "measure_wall_s_per_round": [
+    0.0,
+    0.0,
+    0.0,
+    114.6426
+  ],
+  "history": [
+    {
+      "round": 0,
+      "val_mae_frac": 0.1438,
+      "n": 600,
+      "n_beliefs_cumulative": 40,
+      "inner_resolve_gpu_ms": 74857.436,
+      "inner_resolve_wall_ms": 74859.274,
+      "train_wall_ms": 1005.7,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 1,
+      "val_mae_frac": 0.1004,
+      "n": 1200,
+      "n_beliefs_cumulative": 80,
+      "inner_resolve_gpu_ms": 74815.661,
+      "inner_resolve_wall_ms": 74817.576,
+      "train_wall_ms": 465.7,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 2,
+      "val_mae_frac": 0.0798,
+      "n": 1800,
+      "n_beliefs_cumulative": 120,
+      "inner_resolve_gpu_ms": 74903.531,
+      "inner_resolve_wall_ms": 74905.445,
+      "train_wall_ms": 395.1,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 3,
+      "val_mae_frac": 0.0762,
+      "n": 2400,
+      "n_beliefs_cumulative": 160,
+      "inner_resolve_gpu_ms": 74921.755,
+      "inner_resolve_wall_ms": 74923.648,
+      "train_wall_ms": 746.6,
+      "measure_wall_ms": 114642.6,
+      "exploit_onpolicy": 0.09744
+    }
+  ]
+}
