@@ -1,0 +1,154 @@
+{
+  "game": "goofspiel4",
+  "n_iset": 3608,
+  "target_type": "per_belief_resolved_Vstar",
+  "inner_mode": "sequential-compile",
+  "device": "cuda",
+  "seed": 0,
+  "inner_batching": "sequential",
+  "inner_tool": "compile",
+  "amortized_setup_wall_s_excluded": 7.005,
+  "final_val_mae": 0.0453,
+  "nashconv_on_policy": 0.03,
+  "nashconv_gadget": null,
+  "nash_floor": 0.00152,
+  "curve_beliefs_vs_exploit": [
+    [
+      80,
+      0.05386
+    ],
+    [
+      160,
+      0.03729
+    ],
+    [
+      240,
+      0.04347
+    ],
+    [
+      320,
+      0.03
+    ]
+  ],
+  "curve_decreasing": true,
+  "inner_resolve_gpu_ms_total": 221424.1,
+  "inner_resolve_wall_s_total": 221.437,
+  "train_wall_s_total": 4.599,
+  "total_wall_s": 233.376,
+  "inner_resolve_wall_s_per_round": [
+    27.1452,
+    27.8895,
+    28.1604,
+    27.8827,
+    27.934,
+    27.577,
+    27.3818,
+    27.4665
+  ],
+  "train_wall_s_per_round": [
+    0.2445,
+    0.3668,
+    0.3666,
+    0.6878,
+    0.7016,
+    0.6264,
+    0.8432,
+    0.7623
+  ],
+  "measure_wall_s_per_round": [
+    0.0,
+    1.9035,
+    0.0,
+    1.7986,
+    0.0,
+    1.7405,
+    0.0,
+    1.7869
+  ],
+  "history": [
+    {
+      "round": 0,
+      "val_mae_frac": 0.1073,
+      "n": 480,
+      "n_beliefs_cumulative": 40,
+      "inner_resolve_gpu_ms": 27143.651,
+      "inner_resolve_wall_ms": 27145.191,
+      "train_wall_ms": 244.5,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 1,
+      "val_mae_frac": 0.0815,
+      "n": 960,
+      "n_beliefs_cumulative": 80,
+      "inner_resolve_gpu_ms": 27887.857,
+      "inner_resolve_wall_ms": 27889.476,
+      "train_wall_ms": 366.8,
+      "measure_wall_ms": 1903.5,
+      "exploit_onpolicy": 0.05386
+    },
+    {
+      "round": 2,
+      "val_mae_frac": 0.0707,
+      "n": 1440,
+      "n_beliefs_cumulative": 120,
+      "inner_resolve_gpu_ms": 28158.714,
+      "inner_resolve_wall_ms": 28160.366,
+      "train_wall_ms": 366.6,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 3,
+      "val_mae_frac": 0.0561,
+      "n": 1920,
+      "n_beliefs_cumulative": 160,
+      "inner_resolve_gpu_ms": 27881.078,
+      "inner_resolve_wall_ms": 27882.714,
+      "train_wall_ms": 687.8,
+      "measure_wall_ms": 1798.6,
+      "exploit_onpolicy": 0.03729
+    },
+    {
+      "round": 4,
+      "val_mae_frac": 0.0584,
+      "n": 2400,
+      "n_beliefs_cumulative": 200,
+      "inner_resolve_gpu_ms": 27932.318,
+      "inner_resolve_wall_ms": 27933.971,
+      "train_wall_ms": 701.6,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 5,
+      "val_mae_frac": 0.0497,
+      "n": 2880,
+      "n_beliefs_cumulative": 240,
+      "inner_resolve_gpu_ms": 27575.365,
+      "inner_resolve_wall_ms": 27576.993,
+      "train_wall_ms": 626.4,
+      "measure_wall_ms": 1740.5,
+      "exploit_onpolicy": 0.04347
+    },
+    {
+      "round": 6,
+      "val_mae_frac": 0.0426,
+      "n": 3360,
+      "n_beliefs_cumulative": 280,
+      "inner_resolve_gpu_ms": 27380.182,
+      "inner_resolve_wall_ms": 27381.776,
+      "train_wall_ms": 843.2,
+      "measure_wall_ms": 0.0
+    },
+    {
+      "round": 7,
+      "val_mae_frac": 0.0453,
+      "n": 3840,
+      "n_beliefs_cumulative": 320,
+      "inner_resolve_gpu_ms": 27464.909,
+      "inner_resolve_wall_ms": 27466.534,
+      "train_wall_ms": 762.3,
+      "measure_wall_ms": 1786.9,
+      "exploit_onpolicy": 0.03
+    }
+  ]
+}

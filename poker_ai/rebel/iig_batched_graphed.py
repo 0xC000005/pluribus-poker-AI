@@ -28,7 +28,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from poker_ai.rebel.iig_batched import _DT, _regret_match
+from poker_ai.rebel.iig_batched import _DT, _ev_pass, _regret_match
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -116,10 +116,11 @@ def _entry_arrays(c, ranges_by_key):
     return r0, r1
 
 
-def _finalize(c, dlg, stratsum):
-    """Average-strategy extraction + per-key dict assembly (mirror of solve_all_keys_soa's tail)."""
+def _finalize(c, dlg, stratsum, return_cont=False):
+    """Average-strategy extraction + optional continuation EV, mirroring solve_all_keys_soa's tail."""
     ss = stratsum.sum(-1, keepdim=True)
     avg_t = torch.where(ss > 1e-12, stratsum / ss, c.mask / c.mask.sum(-1, keepdim=True).clamp_min(1.0))
+    cont = _ev_pass(c, avg_t).cpu().numpy() if return_cont else None
     avg = avg_t.cpu().numpy()
     out = {key: {} for key in c.keys}
     by_iid_key = {}
@@ -128,7 +129,7 @@ def _finalize(c, dlg, stratsum):
             by_iid_key[iid] = key
     for iid in c.iids:
         out[by_iid_key[iid]][iid] = avg[c.loc[iid]][:c.alen[c.loc[iid]]].copy()
-    return out
+    return (out, cont) if return_cont else out
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -152,7 +153,7 @@ class CompiledStepSolver:
         self.r0e.copy_(torch.from_numpy(r0))
         self.r1e.copy_(torch.from_numpy(r1))
 
-    def solve(self, ranges_by_key, iters):
+    def solve(self, ranges_by_key, iters, return_cont=False):
         c = self.c
         if ranges_by_key is not None:
             self.set_entries(ranges_by_key)
@@ -167,7 +168,7 @@ class CompiledStepSolver:
             torch.compiler.cudagraph_mark_step_begin()
             nr, ns, nw = self.step(regret, stratsum, w, self.is_upd[t & 1], self.r0e, self.r1e)
             regret, stratsum, w = nr.clone(), ns.clone(), nw.clone()
-        return _finalize(c, self.dlg, stratsum)
+        return _finalize(c, self.dlg, stratsum, return_cont=return_cont)
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -228,14 +229,14 @@ class GraphedSolver:
         self.r0e.copy_(torch.from_numpy(r0))
         self.r1e.copy_(torch.from_numpy(r1))
 
-    def solve(self, ranges_by_key, iters):
+    def solve(self, ranges_by_key, iters, return_cont=False):
         if ranges_by_key is not None:
             self.set_entries(ranges_by_key)
         self.reset()
         g = self._graphs
         for t in range(iters):
             g[t & 1].replay()
-        return _finalize(self.c, self.dlg, self.stratsum)
+        return _finalize(self.c, self.dlg, self.stratsum, return_cont=return_cont)
 
 
 # ----------------------------------------------------------------------------------------------------
@@ -254,7 +255,7 @@ class EagerStepSolver:
         self.r0e = c.r0_entry.clone()
         self.r1e = c.r1_entry.clone()
 
-    def solve(self, ranges_by_key, iters):
+    def solve(self, ranges_by_key, iters, return_cont=False):
         c = self.c
         if ranges_by_key is not None:
             r0, r1 = _entry_arrays(c, ranges_by_key)
@@ -266,4 +267,4 @@ class EagerStepSolver:
         for t in range(iters):
             regret, stratsum, w = self.step(regret, stratsum, w, self.is_upd[t & 1],
                                             self.r0e, self.r1e)
-        return _finalize(c, self.dlg, stratsum)
+        return _finalize(c, self.dlg, stratsum, return_cont=return_cont)

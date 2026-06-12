@@ -10,6 +10,7 @@ from poker_ai.rebel.iig_pbs import (leduc_is_cut, first_decision_is_cut, load_go
                                      goofspiel_is_cut, goofspiel_public_key)
 from poker_ai.rebel.iig_batched import (solve_all_keys, solve_all_keys_soa, trunk_solve_batched,
                                          _compile_topology, _leaf_values_from_cont)
+from poker_ai.rebel.iig_batched_graphed import EagerStepSolver
 
 ITERS = 60
 
@@ -76,6 +77,31 @@ def test_fused_vs_sequential_soa_parity():
 
     assert max_strat < 1e-9, f"fused vs sequential SoA strategy diff {max_strat:.2e} (must be exact on CPU)"
     assert max_leaf < 1e-9, f"fused vs sequential SoA leaf-value diff {max_leaf:.2e} (must be exact on CPU)"
+
+
+def test_step_solver_return_cont_matches_soa_reference():
+    """Launch-amortized wrappers share this finalization path; continuation EVs must stay valid because
+    the end-to-end target generator consumes leaf values, not only average strategies."""
+    dlg = DepthLimitedGame(load_goofspiel(4), goofspiel_is_cut, public_key_fn=goofspiel_public_key)
+    keys = sorted({n[1] for n in dlg.cut_nodes})
+    rng = np.random.default_rng(17)
+    ranges = {k: (rng.dirichlet(np.full(dlg.n_priv(k, 0), 0.8)),
+                  rng.dirichlet(np.full(dlg.n_priv(k, 1), 0.8))) for k in keys}
+    iters = 80
+    comp = _compile_topology(dlg, ranges, "cpu")
+
+    ref_eq, ref_cont = solve_all_keys_soa(dlg, ranges, iters, device="cpu", compiled=comp,
+                                          return_cont=True)
+    got_eq, got_cont = EagerStepSolver(dlg, comp).solve(ranges, iters, return_cont=True)
+
+    max_strat = max(
+        float(np.max(np.abs(ref_eq[k][iid] - got_eq[k][iid])))
+        for k in keys
+        for iid in ref_eq[k]
+    )
+    max_cont = float(np.max(np.abs(ref_cont - got_cont)))
+    assert max_strat < 1e-9
+    assert max_cont < 1e-9
 
 
 def test_trunk_solve_batched_matches_serial_resolve():

@@ -24,6 +24,7 @@ from poker_ai.rebel.iig_solve import DepthLimitedGame
 from poker_ai.rebel.iig_pbs import load_goofspiel, goofspiel_is_cut, goofspiel_public_key
 from poker_ai.rebel.iig_selfplay import PBSNet, build_public_index, make_net_leaf_fn, _train, _row
 from poker_ai.rebel.iig_batched import _compile_topology, solve_all_keys_soa, set_entries, _leaf_values_from_cont
+from poker_ai.rebel.iig_batched_graphed import CompiledStepSolver, GraphedSolver
 from poker_ai.rebel.iig_gadget import safe_continuation
 
 
@@ -42,27 +43,58 @@ def measure_onpolicy(dlg, net, pub_index, P, keys, compiled, subgame_iters, trun
     return nc, sig1, cont_pol
 
 
-def _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device):
+def _inner_batching(inner_mode):
+    return "sequential" if inner_mode.startswith("sequential") else "fused"
+
+
+def _inner_tool(inner_mode):
+    if inner_mode.endswith("-compile"):
+        return "compile"
+    if inner_mode.endswith("-graphs"):
+        return "graphs"
+    return "eager"
+
+
+def _build_amortized_solver(dlg, comp, tool, ranges):
+    if tool == "compile":
+        solver = CompiledStepSolver(dlg, comp)
+        solver.solve(ranges, 2)
+        return solver
+    if tool == "graphs":
+        return GraphedSolver(dlg, comp)
+    return None
+
+
+def _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device,
+                        solver_all=None, solver_key=None):
     """The inner re-solve at one sampled belief -> {key: (v0*, v1*)}. The ONLY behavioral difference
     between the two timing arms; both call the SAME GPU SoA kernel solve_all_keys_soa (float64), differing
     only in batching granularity. FUSED = one level-grouped GEMM over the whole population of cut subgames;
     SEQUENTIAL = the SAME kernel per-key (the fair within-tree-GPU-CFR baseline -- NOT solve_all_keys, the
     Python reference walk, which would strawman the speedup with interpreter overhead)."""
-    if inner_mode == "fused":
-        _eq, cont = solve_all_keys_soa(dlg, ranges, subgame_iters, device=device, compiled=comp_all,
-                                       return_cont=True)
+    batching = _inner_batching(inner_mode)
+    tool = _inner_tool(inner_mode)
+    if batching == "fused":
+        if tool == "eager":
+            _eq, cont = solve_all_keys_soa(dlg, ranges, subgame_iters, device=device, compiled=comp_all,
+                                           return_cont=True)
+        else:
+            _eq, cont = solver_all.solve(ranges, subgame_iters, return_cont=True)
         return _leaf_values_from_cont(dlg, comp_all, cont, ranges, keys)
     assert solve_all_keys_soa.__name__ == "solve_all_keys_soa"  # guard: sequential is the SoA kernel per-key
     leaf = {}
     for k in keys:
-        _eqk, contk = solve_all_keys_soa(dlg, {k: ranges[k]}, subgame_iters, device=device,
-                                         compiled=comp_key[k], return_cont=True)
+        if tool == "eager":
+            _eqk, contk = solve_all_keys_soa(dlg, {k: ranges[k]}, subgame_iters, device=device,
+                                             compiled=comp_key[k], return_cont=True)
+        else:
+            _eqk, contk = solver_key[k].solve({k: ranges[k]}, subgame_iters, return_cont=True)
         leaf[k] = _leaf_values_from_cont(dlg, comp_key[k], contk, {k: ranges[k]}, [k])[k]
     return leaf
 
 
 def perbelief_targets(dlg, pub_index, P, keys, n_samples, subgame_iters, device, rng,
-                      inner_mode, comp_all, comp_key, torch):
+                      inner_mode, comp_all, comp_key, torch, solver_all=None, solver_key=None):
     """Training rows whose targets are V*(belief): for each sampled belief, RE-SOLVE all subgames to eq via
     the batched solver (fused or sequential, see _resolve_one_belief) and read the normalized equilibrium
     continuation value. Times ONLY the inner re-solve (+ leaf reconstruction) -- the quantity the mechanism
@@ -81,12 +113,14 @@ def perbelief_targets(dlg, pub_index, P, keys, n_samples, subgame_iters, device,
             torch.cuda.synchronize()
             ev0 = torch.cuda.Event(enable_timing=True); ev1 = torch.cuda.Event(enable_timing=True)
             t0 = time.perf_counter(); ev0.record()
-            leaf = _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device)
+            leaf = _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device,
+                                       solver_all=solver_all, solver_key=solver_key)
             ev1.record(); torch.cuda.synchronize(); t1 = time.perf_counter()
             inner_gpu_ms += ev0.elapsed_time(ev1); inner_wall_ms += (t1 - t0) * 1e3
         else:
             t0 = time.perf_counter()
-            leaf = _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device)
+            leaf = _resolve_one_belief(dlg, ranges, keys, inner_mode, comp_all, comp_key, subgame_iters, device,
+                                       solver_all=solver_all, solver_key=solver_key)
             dt = (time.perf_counter() - t0) * 1e3
             inner_gpu_ms += dt; inner_wall_ms += dt
         for k in keys:
@@ -114,9 +148,12 @@ def main(argv=None):
                     help="seeds numpy + torch (+cuda) -- net INIT is otherwise unseeded, the dominant "
                          "source of absolute-exploitability run-to-run variance at G5 (the within-run "
                          "decreasing-with-compute TREND is robust; absolute values need seeded multi-runs)")
-    ap.add_argument("--inner-mode", choices=("fused", "sequential"), default="fused",
-                    help="inner re-solve batching: fused = one GEMM over all cut subgames (the mechanism); "
-                         "sequential = same SoA kernel per-key (fair within-tree-GPU-CFR baseline)")
+    ap.add_argument("--inner-mode", choices=("fused", "sequential", "fused-compile",
+                                             "sequential-compile", "fused-graphs",
+                                             "sequential-graphs"), default="fused",
+                    help="inner re-solve execution: fused/sequential keep the original eager arms; "
+                         "*-compile uses torch.compile(reduce-overhead); *-graphs uses CUDA Graphs. "
+                         "The batching axis remains fused vs sequential.")
     ap.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
                     help="cpu forces exact-parity mode (no atomics) for the determinism gate; "
                          "cuda for the timing comparison")
@@ -139,10 +176,20 @@ def main(argv=None):
     init = {k: (np.ones(dlg.n_priv(k, 0)) / dlg.n_priv(k, 0), np.ones(dlg.n_priv(k, 1)) / dlg.n_priv(k, 1)) for k in keys}
     # compile ONCE before the loop (one-time infra, excluded from the inner-resolve timer): comp_all for the
     # fused arm (+ the always-fused metrology), comp_key for the sequential arm.
+    batching = _inner_batching(args.inner_mode)
+    tool = _inner_tool(args.inner_mode)
     comp_all = _compile_topology(dlg, init, device)
-    comp_key = {k: _compile_topology(dlg, {k: init[k]}, device) for k in keys} if args.inner_mode == "sequential" else None
+    comp_key = {k: _compile_topology(dlg, {k: init[k]}, device) for k in keys} if batching == "sequential" else None
+    setup_t0 = time.perf_counter()
+    if tool == "graphs" and device != "cuda":
+        raise RuntimeError("--inner-mode *-graphs requires CUDA")
+    solver_all = _build_amortized_solver(dlg, comp_all, tool, init) if batching == "fused" else None
+    solver_key = None
+    if batching == "sequential" and tool != "eager":
+        solver_key = {k: _build_amortized_solver(dlg, comp_key[k], tool, {k: init[k]}) for k in keys}
+    amortized_setup_wall_s = time.perf_counter() - setup_t0
     print(f"B0 per-belief V* targets: Goofspiel-{args.num_cards} (n_iset={dlg.n_iset}, device={device}, "
-          f"inner_mode={args.inner_mode})", flush=True)
+          f"inner_mode={args.inner_mode}, batching={batching}, tool={tool})", flush=True)
 
     net = PBSNet(len(pub_index), P, args.hidden)
     X = Y = W = None
@@ -152,7 +199,8 @@ def main(argv=None):
     for it in range(args.n_target_rounds):
         xi, yi, wi, ig, iw = perbelief_targets(dlg, pub_index, P, keys, args.samples_per_round,
                                                args.subgame_iters, device, rng,
-                                               args.inner_mode, comp_all, comp_key, torch)
+                                               args.inner_mode, comp_all, comp_key, torch,
+                                               solver_all=solver_all, solver_key=solver_key)
         X, Y, W = (xi, yi, wi) if X is None else (np.concatenate([X, xi]), np.concatenate([Y, yi]), np.concatenate([W, wi]))
         if X.shape[0] > args.buffer_cap:
             idx = rng.choice(X.shape[0], args.buffer_cap, replace=False); X, Y, W = X[idx], Y[idx], W[idx]
@@ -194,6 +242,8 @@ def main(argv=None):
     train_wall_total = sum(h["train_wall_ms"] for h in history)
     out = {"game": f"goofspiel{args.num_cards}", "n_iset": dlg.n_iset, "target_type": "per_belief_resolved_Vstar",
            "inner_mode": args.inner_mode, "device": device, "seed": args.seed,
+           "inner_batching": batching, "inner_tool": tool,
+           "amortized_setup_wall_s_excluded": round(amortized_setup_wall_s, 3),
            "final_val_mae": history[-1]["val_mae_frac"], "nashconv_on_policy": round(nc_onpolicy, 5),
            "nashconv_gadget": (round(nc_gadget, 5) if nc_gadget is not None else None),
            "nash_floor": (round(nash_floor, 5) if nash_floor else None),

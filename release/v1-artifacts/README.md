@@ -1,20 +1,21 @@
-# v1-artifacts — claim-ledger artifacts for "One GEMM, Many Subgames" (ED v1 r1)
+# v1-artifacts - reproducibility bundle for "One GEMM, Many Subgames"
 
-Tracked copies of every artifact cited in the reproducibility ledger
-(`autoresearch-session/rebel/ed_v1_draft/SUBMISSION_CHECKLIST_r1.md`) of the revised
-manuscript `autoresearch-session/rebel/ed_v1_draft/00_v1_r1.md`. The working directory
-`autoresearch-session/` is gitignored; **these copies are the citable artifacts** and are
-the payload for the release/DOI deposit at submission (roadmap item R10).
+This directory contains the machine-readable artifacts cited by the manuscript. The
+working outputs under `autoresearch-session/` are local run products; these tracked
+copies are the stable reproducibility bundle that accompanies the paper.
 
-Copies verified byte-identical to the working originals on 2026-06-10 (`cmp` over all 36
-files; the 7 quiet-host G5 re-run files added 2026-06-10 after the re-run landed;
-`cuda_graphs_ablation.json` added 2026-06-10 after the six-arm launch-amortization
-ablation landed).
-Field-naming note for auditors: in `e2e_band_summary_g{4,5,5q}.json` the
+Copies were verified byte-identical to the working originals on 2026-06-10 (`cmp` over
+all 36 files). The quiet-host G5 re-run files, `cuda_graphs_ablation.json`, and the G4
+tool-symmetric end-to-end artifacts were added after their corresponding runs completed.
+
+Field naming convention: in `e2e_band_summary_g{4,5,5q}.json` the
 `reach_{fused,sequential}_s_median` fields are **time-to-band medians at tau = the pooled
 band ceiling** (manuscript §4.2), *not* protocol totals; names retained for artifact
 stability. The `b0_cpucheck_g4_*.json` determinism-gate runs use the reduced 4-rounds x
 10-beliefs budget on `--device cpu` (manuscript §3.4, §3.3 2x2 caveats).
+Several JSON files use the historical `target_type` value
+`per_belief_resolved_Vstar`; the manuscript interprets those targets as finite-budget
+CFR+ continuation values `V_T`, not exact optimal values `V*`.
 
 ## Manifest
 
@@ -32,7 +33,9 @@ stability. The `b0_cpucheck_g4_*.json` determinism-gate runs use the reduced 4-r
 | `b0_cpucheck_g4_{fused,sequential}.json` | §3.4 CPU determinism gate; §3.3 per-belief CPU/GPU 2x2 cells |
 | `hunl_topology_census_probe.json` | §5 HUNL census + Stage-2 GPU probe (forward pointer; H=1081) |
 | `cuda_graphs_ablation.json` | §6.5 six-arm launch-amortization ablation: original per-key arms (`rows`/`keysweeps`/`parity`/`derived`) + the `amortized_fused` completion (six-arm cross-game 7.96x/12.06x/1.82x; G4 amortized sweep speedup~=N; G5 saturation slopes 129.6/68.0 ms/tree; fused-granularity parity gates incl. the floor-limited G5 gate; setup walls; drift anchors 0.969–0.998) |
-| `supplementary_measurement_notes.md` | documented source of the four numbers pending standalone artifacts (7e-6 parity upper end; RPG/QPG 1.4334; multi-level 0.0506->0.0145; G6 build >280 s) plus the ~12 ms-in-loop G5 figure — to be re-derived at camera-ready. Renamed 2026-06-10 from `ed_writeup_evidence_pack.md` (content byte-identical; same SHA-256). NOTE (historical document): the notes predate revision r1 and retain v1-era prose the revision withdrew ("~10x ... with exact equilibrium parity", "NO systematic bias", TurboReBeL "4xA100", VRPO "beats Slumbot"); the manuscript supersedes them. The notes do NOT contain the G5 topology census — see the derivation note below. |
+| `e2e_amortized_g4_compile_summary.json` | §6.5 G4 tool-symmetric end-to-end aggregate: compile-vs-compile pooled-ceiling descriptive check (inner 11.36x / total-wall 7.38x / time-to-band 9.99x / Amdahl ceiling 7.39x) |
+| `e2e_amortized_g4_{fused,sequential}_compile_seed{0..4}.json` | §6.5 per-seed G4 tool-symmetric paired arms (5 matched seeds, --skip-gadget, fused-compile vs sequential-compile) |
+| `supplementary_measurement_notes.md` | source notes for secondary, non-claim-bearing measurements that are either cited with explicit caveats or reserved for standalone machine-readable reporting. Renamed 2026-06-10 from `ed_writeup_evidence_pack.md` (content byte-identical; same SHA-256). The manuscript supersedes any older prose in this note; the per-file numbers, not the note's historical wording, are authoritative when cited. The notes do not contain the G5 topology census; see the derivation note below. |
 
 Filename prefixes are historical run identifiers: `b0_` = the per-belief-target
 experiment series; `g5q` = the quiet-host Goofspiel-5 re-run. In
@@ -67,14 +70,14 @@ EOF
 instances, 236,440 batched below-cut infoset rows. The full-game infoset count in the
 ladder table, 236,450, is `dlg.n_iset` and includes the 10 above-cut trunk infosets.)
 
-Field-note for auditors: `e2e_band_summary_g{4,5q}.json` embed a frozen note string
+Embedded note-string convention: `e2e_band_summary_g{4,5q}.json` embed a frozen note string
 "no systematic bias"; the manuscript's current wording is "no detectable bias (n=5; a
 sign test at this n cannot exclude moderate bias)" — the JSON prose is historical,
 the per-seed numbers are authoritative.
 
-Hash-refresh note (2026-06-10): the `supplementary_measurement_notes.md` hash below was
-refreshed after the r4 editorial pass appended the N1-r4 ~6.2 ms/iter correction to the
-notes file (checklist §5 item 8) without updating the manifest; the pre-r4 hash was
+Hash note (2026-06-10): the `supplementary_measurement_notes.md` hash below was
+refreshed after a correction appended the N1-r4 ~6.2 ms/iter note to the notes file; the
+previous hash was
 `7c1b6b00a1a472a77377e2964a4ed3b649bc7dec9ede50e945671360d2ad067b`.
 
 ## SHA-256
@@ -109,6 +112,17 @@ c8f2b88d651571dde7ee4100680d95ac6183c02c7a55b5731c41eed571dd8ded  b0_perbelief_g
 fb40d245d96f5dcfe7a843bf23c879cd247132d1f522e6d69e9a63335883b5cc  b0_perbelief_g5_curve_seed4.json
 64fad78ed755dfd7d7df10594b5e75111de07f25f61c306f29662e2c5476bb1d  costpersolve_bakeoff.json
 2fc68188152bf9a5f901946fbdfa5568845959329423f39fa30ebd4ae79b6ec4  cuda_graphs_ablation.json
+5ff136f2ff2a01ac48ae6ece7a9b83851aa52d365d3ef5498c33d9a45c1447f4  e2e_amortized_g4_compile_summary.json
+9d0e9d70ed19dbfdc90b979e0b4cbbb8d7025bccdc863d594a4e17f03572d04e  e2e_amortized_g4_fused_compile_seed0.json
+64b76d726408598ef665ac4b3c371fe9dffb8cef53e94b50e76e217d7658317d  e2e_amortized_g4_fused_compile_seed1.json
+46f8f97adba41ac4d33c46861ea178eeb60fc8348b510fed7ebcc5e14617d604  e2e_amortized_g4_fused_compile_seed2.json
+b543a82e2b74c9c156b418c7aee36e8a3e314f51494e8ced3d55cada99a82ec5  e2e_amortized_g4_fused_compile_seed3.json
+c459727cfc602aa019a552744ada224c047fa3a02dbc2a46fe555464cacddef9  e2e_amortized_g4_fused_compile_seed4.json
+e87510437a645b8f089820d9203c324cf678dc50e020bf64868d66e5a29c310c  e2e_amortized_g4_sequential_compile_seed0.json
+9e747d46c2e3015690e5d008c89671a55c654de530a2ff341e5b6e3c01b3b239  e2e_amortized_g4_sequential_compile_seed1.json
+07da1ffe57240373d26c0331bbe3116b961d9e186a6ddad6f680693f82c86af1  e2e_amortized_g4_sequential_compile_seed2.json
+d0e98704cbbec28bdaa45bc5d28606e85c8f910518bff94c4ce0394387ed0558  e2e_amortized_g4_sequential_compile_seed3.json
+92c7cad3c0e5c9843759f510658086f71850b00f76c8bb25ca2f924e727a7630  e2e_amortized_g4_sequential_compile_seed4.json
 2fa2804f6f6042f1631e6349e59624bb7e1b3d1706270572ff8a8adb13211b79  e2e_band_summary_g4.json
 43285dff5c81954ff4746f5cd2cf0a15672fd62e1e712d4a1fe9db9af237473a  e2e_band_summary_g5.json
 07e02dea586a7eeccbaa28317a2af918cf01e389a89756008dcb170251cc66bc  e2e_band_summary_g5q.json
