@@ -75,26 +75,19 @@ Iterated Resolving; Public-Belief Search; GPU Acceleration; Batched Solvers
 \end{center}
 
 \begin{abstract}
-Depth-limited search with learned value functions in imperfect-information games
-repeatedly solves many public-belief subgames. This work isolates a systems lever in
-that loop: at a fixed public cut, resolving generates same-topology subgames that differ
-only in entry beliefs and solver state. \textbf{Population fusion} compiles that shared
-topology once into a level-grouped structure-of-arrays and runs each finite-iteration
-CFR+ update across the whole population as batched tensor operations. The formal timing
-model is a floor/slope model,
-$C_{\rm seq}(N)=a_s+b_s(N-1)$ and
-$C_{\rm fus}(N)=a_f+b_f(N-1)$; the familiar
-$\min(N,1/\varphi)$ expression is the launch-bound envelope, not a universal plateau
-predictor. On launch-bound Goofspiel-4, the tool-symmetric \texttt{torch.compile}
-comparison gives 11.36$\times$ inner and 7.38$\times$ total-wall speedup over 5 matched
-CUDA seeds, against a 7.39$\times$ Amdahl ceiling and with no gross divergence under the
-paper's predeclared descriptive band check. The eager-dispatch isolate gives
-11.79$\times$ inner and 9.99$\times$ total-wall speedup. On saturated Goofspiel-5, a
-quiet-host paired run gives 2.40$\times$ inner and 2.00$\times$ total timing speedup;
-this is saturated-regime timing-transfer evidence, with the full statistical CUDA
-non-divergence run still pending. The contribution is validated population-level
-cost-per-solve amortization for iterated resolving, not lower exploitability or
-poker-bot strength.
+Depth-limited resolving with learned value functions repeatedly solves populations of
+public-belief subgames. At a fixed public cut, those subgames share continuation
+topology and differ mainly in entry beliefs and solver state. This paper exploits that
+structure with \textbf{population fusion}: compile the shared topology once and execute
+each finite-budget CFR+ iteration for all subgames as batched tensor operations. A
+floor/slope timing model predicts when fusion amortizes launch and short-kernel overhead
+and when it becomes slope-ratio-limited. In Goofspiel-4, a tool-symmetric
+\texttt{torch.compile} comparison gives 11.36$\times$ inner and 7.38$\times$ total-wall
+speedup over 5 matched CUDA seeds, matching a 7.39$\times$ Amdahl ceiling and staying
+within the predeclared descriptive band check. In saturated Goofspiel-5, a quiet-host
+paired run gives 2.40$\times$ inner and 2.00$\times$ total timing speedup. The claim is
+population-level cost-per-solve amortization for iterated resolving, not lower
+exploitability or poker-bot strength.
 \end{abstract}
 
 \section{Introduction}
@@ -297,7 +290,7 @@ CFR+ iteration, predictive regime model, and end-to-end timing validation. \\
 
 \section{Background}
 
-This section teaches the three prerequisites the rest of the paper assumes: how CFR+
+This section reviews the three prerequisites the rest of the paper assumes: how CFR+
 solves an imperfect-information game (\S2.1), what depth-limited resolving and public
 belief states are and where the population of subgames arises (\S2.2), and why many
 small GPU workloads are slow (\S2.3). It closes with the paper's notation and project
@@ -404,7 +397,9 @@ distinct values at G4 (9 at G3, 15 at G5). Each of these $K$ \emph{public keys} 
 identically shaped continuation subgame, because the remaining structure of the game
 depends only on how many cards remain, not which. Each key's subgame carries the hidden
 bid pairs consistent with its outcome as private-deal instances; summed over keys these
-give $B = 64$ \emph{cut instances} at G4 (27 at G3, 125 at G5).
+give $B = 64$ \emph{cut instances} at G4 (27 at G3, 125 at G5). Thus $K$ counts public
+outcomes, while $B$ counts the compatible private-deal rows carried through the shared
+topology.
 
 \textbf{Why naive depth limits are unsound.} Truncating the lookahead and valuing cut
 nodes with belief-blind numbers fails in imperfect-information games: the value of a cut
@@ -412,7 +407,8 @@ node depends on what both players believe about the hidden information --- a pok
 is worth more when your range is credibly strong --- so a leaf must be valued
 conditional on the belief pair. Value the cut with belief-blind numbers and the solver
 above the cut learns strategies a real opponent exploits~\citep{BrownSandholm2018}. The
-sound instantiations --- DeepStack's continual re-solving~\citep{Moravcik2017},
+sound or sound-motivated instantiations --- DeepStack's continual
+re-solving~\citep{Moravcik2017},
 ReBeL~\citep{Brown2020}, Student of Games~\citep{Schmid2023} --- train a value network
 $\hat V(\beta)$ over PBSs and re-solve subgames at play time and, critically for this
 paper, at \emph{train} time; value-function error propagates to exploitability with
@@ -524,6 +520,8 @@ $f$ & inner-resolve fraction of the baseline loop's wall-clock \\
 $S_{\text{inner}}$ & fused-vs-sequential inner-resolve speedup \\
 $T$ & CFR+ iterations per solve \\
 $c_{\text{solve}}$ & wall-clock per solve-iteration \\
+$N_{\text{solves}}$ & total subgame solves over a training run \\
+$L$ & number of level-shape groups in the compiled solver \\
 $n_I$ & below-cut infosets (rows of the regret table) \\
 $A_{\max}$ & maximum actions per infoset (padded) \\
 $R,\ S,\ \sigma$ & cumulative-regret table, strategy-sum table, current strategy \\
@@ -531,7 +529,7 @@ $R,\ S,\ \sigma$ & cumulative-regret table, strategy-sum table, current strategy
 \end{tabular}
 \end{table}
 
-Three project terms used from the abstract on: a \textbf{gate} is a hard pass/fail check
+Three project terms used throughout: a \textbf{gate} is a hard pass/fail check
 run as part of the experiment pipeline (``verified/gated at $x$'' = certified to $x$ by
 such a check); the two \textbf{arms} of an experiment are the two runs sharing one seed
 --- fused and sequential --- in the clinical-trial sense; \textbf{equal-band-faster} is
@@ -546,7 +544,8 @@ varies the number of co-solved public-key subgames as $N$.
 \section{The Cost of Iterated Resolving}
 
 Before describing the mechanism, we quantify the problem it solves. The three facts
-below are measured in the experiments of \S6 (artifacts in \S10); this section states
+below are measured in the experiments of \S6 (artifacts described in the
+Reproducibility Statement and Appendix~F); this section states
 each once, in its motivating role.
 
 \textbf{Fact 1 --- the loop \emph{is} the inner solve.} In our instrumented training
@@ -573,7 +572,7 @@ essentially \textbf{flat in the number of co-solved public-key subgames} --- 197
 $\to$ 202.4 ms as the Goofspiel-4 sweep size goes $1 \to 12$ --- while sequential per-tree time
 grows linearly (\S6.1). Added subgames ride along nearly free until the device fills.
 
-\textbf{The lever taxonomy, compressed.} Prior work claims every factor of
+\textbf{The lever taxonomy, compressed.} Prior work attacks or reduces every factor of
 Eq.~(\ref{eq:cost}) except the one Facts 2 and 3 point at. $N_{\text{solves}}$ is
 reduced by TurboReBeL's single-sample multi-iteration data
 generation~\citep{TurboReBeL}; $T$ by regret-minimizer design --- DCFR/PCFR+ and the
@@ -582,8 +581,10 @@ sequentially~\citep{BrownSandholm2019,Farina2021,Sychrovsky2024,NPCFR}; sampling
 variance by the MCCFR
 family~\citep{Lanctot2009,Schmid2019,McAleer2023,Steinberger2020}; subgame size by
 learned abstractions~\citep{LAMIR}. The remaining factor, $c_{\text{solve}}$, has been
-attacked only \emph{within} a single tree, by the GPU-CFR
-line~\citep{Kim2024,KimSandholm2026}. The cost-per-solve-across-the-population axis ---
+attacked mainly \emph{within} a single tree, by the GPU-CFR
+line~\citep{Kim2024,KimSandholm2026}; distributed systems have also solved independent
+subgames on separate workers, which is task-level parallelism rather than a
+single-device fused CFR iteration. The cost-per-solve-across-the-population axis ---
 making each CFR+ iteration cheaper by amortizing it over many subgames at once, exactly
 --- is not isolated in prior published work as an end-to-end population-level lever;
 \S7 gives the lever-by-lever discussion and the
@@ -593,7 +594,7 @@ related-work delimitation.
 
 \subsection{Mechanism overview}
 
-The whole mechanism is three sentences. (1) All $K$ cut subgames share one topology,
+The mechanism has three parts. (1) All $K$ cut subgames share one topology,
 differing only in data --- entry reaches, payoffs, infoset identities (\S2.2). (2) We
 compile that topology \emph{once} into a flat structure-of-arrays layout whose nodes are
 grouped by level and shape (\S4.2). (3) Each CFR+ iteration of \emph{all} subgames then
@@ -603,7 +604,7 @@ tensor dimension of every op, so the per-iteration launch count is
 $O(\#\text{level-shape groups})$, independent of the co-solved public-key count.
 Figure~\ref{fig:walkthrough} walks the mechanism through a tiny two-subgame example, and
 Algorithms~\ref{alg:seq} and~\ref{alg:fused} state the two timing arms side by side:
-identical four steps, identical kernels, differing in exactly one line. (Shape
+identical four update steps and update semantics, differing in exactly one line. (Shape
 annotations in Algorithm~\ref{alg:fused}: $G$ is the node count of the level-shape group
 an op ranges over, $A$ the group's per-infoset action count, and $B$ the flattened
 cut-instance dimension of \S2.2; full notation in \S4.3.)
@@ -664,8 +665,9 @@ flat as the population grows (197.6 $\to$ 202.4 ms for $N{:}\,1{\to}12$; \S6.1).
 \end{algorithmic}
 \end{algorithm}
 
-The two algorithms run the same kernels on the same data; they differ in exactly one
-visible line --- the host loop over keys versus the population tensor dimension. This is
+The two algorithms use the same kernel family and update semantics on the same per-key
+data; they differ in exactly one visible line --- the host loop over keys versus the
+population tensor dimension. This is
 also the baseline-fairness claim of \S4.6 in pictorial form: the sequential arm is not a
 weak baseline but the identical kernel at a different batching granularity.
 
@@ -706,6 +708,11 @@ Step 4 is the CFR+ update: clamp cumulative regrets at zero, alternate the updat
 player, and accumulate the own-reach-weighted average strategy --- the quantity whose
 time average converges to equilibrium. Fused, each step becomes one batched operation
 per level-shape group.
+
+\emph{Invariant:} restricted to any one public key, the fused tensors are the solo CFR+
+tensors. Fusion forms a direct sum over public keys: disjoint regret/strategy rows and
+shared topology groups, with the key population carried as data. No update for one key
+reads another key's rows.
 
 \emph{Notation:} $B$ cut instances and $K$ public keys as in \S2.2; $n_I$ below-cut
 infosets in the population union with at most $A_{\max}$ actions each; $R, S \in
@@ -798,8 +805,11 @@ into the same infoset rows --- this is range-vector
 CFR~\citep{Johanson2011,Johanson2012}, present identically in both arms, and not what
 fusion adds. Second, \emph{across} keys the below-cut infoset rows are disjoint
 (post-cut infosets condition on the public outcome), so across-key fusion changes only
-floating-point accumulation order and op scheduling --- which is exactly why parity is
-mathematically expected:
+floating-point accumulation order and op scheduling. In linear-algebra terms this is a
+direct sum over public keys. The only non-additive scatter is the own-reach assignment
+into an infoset row; perfect recall makes that assignment single-valued within an
+infoset, with the full argument in Appendix~A. This is why parity is mathematically
+expected:
 
 \begin{framed}\small
 \noindent\textbf{Definition (well-formed compiled population).} A fused population is
@@ -847,7 +857,10 @@ same-algorithm, same-precision, and matched-seed --- meeting the fairness standa
 choose to match OpenSpiel. We explicitly \emph{reject} the Python
 reference tree-walk solver as a timing baseline: it is the correctness reference, but
 timing against it would inflate the speedup with interpreter overhead and make the
-comparison a weak baseline. Any reported fused-vs-sequential speedup is thus attributable to
+comparison a weak baseline. The baseline hierarchy is: primary comparator = same-kernel
+per-tree GPU arm; boundary comparators = host CPU and launch-amortized sequential arms;
+rejected timing comparator = Python tree walk, used only for correctness. Any reported
+fused-vs-sequential speedup is thus attributable to
 population fusion alone, not to GPU-vs-CPU or compiled-vs-interpreted effects.
 
 \textbf{What the baseline is not.} Two stronger non-fused baselines exist and bound the
@@ -987,7 +1000,7 @@ path).
 of per-seed ratios; the \S6.1 microbenchmark speedups are ratios of median-of-7-repeat
 timings (no seed axis); and the secondary time-to-band speedups are ratios of the
 per-arm median reach times. Where $n \le 2$ we report the per-seed values themselves and
-do not dress the midpoint as a robust statistic. Rounding conventions and the rationale
+do not report the midpoint as a robust statistic. Rounding conventions and the rationale
 for each rule are in Appendix~B.1.
 
 \textbf{Descriptive band check.} Two arms pass the descriptive band check when each arm's
@@ -1035,9 +1048,9 @@ accumulation order is non-deterministic; across 8 rounds $\times$ 40 beliefs $\t
 300 iterations these perturbations \emph{compound through training}, producing per-seed
 fused-vs-sequential final-NashConv differences of median 0.0144 (max 0.0389) at G4. The
 CPU determinism gate proves algorithmic equivalence, not unbiased CUDA drift. On CUDA we
-have no evidence of systematic bias: the G4 seed signs (fused higher on 2/5, lower on
-3/5) are descriptive and underpowered --- \textbf{no detectable bias ($n{=}5$; a sign
-test at this $n$ cannot exclude moderate bias)} --- and pooling the quiet-host G5 pairs
+have no evidence of systematic bias at this seed count: the G4 seed signs (fused higher
+on 2/5, lower on 3/5) are descriptive and underpowered --- \textbf{a sign test at this
+$n$ cannot exclude moderate bias} --- and pooling the quiet-host G5 pairs
 gives fused-higher on 4/8 (\S6.4). We therefore gate algorithmic equivalence on CPU,
 where it is exact, and use CUDA runs for timing and \emph{distributional} (band-level)
 comparison only. We flag this
@@ -1110,8 +1123,8 @@ G5 ($K{=}15$) & 1,866.7 & 4,427.4 & \textbf{2.37$\times$} \\
 Finite-iteration output parity is exact in the gated sense: maximum average-strategy
 difference between the fused and sequential solves is $0$ at G3/G4 and
 $4\times10^{-6}$ at G5 (float64; the range across all parity-tested games, including
-Leduc and liar's dice, is $0$--$7\times10^{-6}$). The speedup costs nothing in the
-measured solver outputs.
+Leduc and liar's dice, is $0$--$7\times10^{-6}$). The measured single-solve outputs
+match under the parity gate.
 
 The non-monotone speedup column (8.77 $\to$ 11.69 $\to$ 2.37) is not noise --- it is the
 regime structure, and the median speedups are ceilinged by $K$, the across-key fusion
@@ -1276,12 +1289,14 @@ all.
 sequential training trajectories identical to all recorded digits (reduced 4$\times$10
 budget; \S5); on CUDA, compounding \texttt{index\_add\_} atomics produce per-seed
 fused-vs-sequential final-NashConv differences of median 0.0144 (max 0.0389) with no
-detectable bias at this seed count (fused higher on 2/5, lower on 3/5; $n{=}5$ is
+evidence of systematic bias at this seed count (fused higher on 2/5, lower on 3/5; $n{=}5$ is
 underpowered to exclude moderate bias, and pooled with the quiet-host G5 pairs the tally
 is fused-higher on 4/8) --- the \S5 finding that per-seed equivalence checks of batched
 GPU CFR through a training loop will spuriously fail. Mild host sensitivity is visible
 even in these clean G4 runs, at much smaller scale than the G5 event (Appendix~B.3).
 \end{itemize}
+
+Figures~\ref{fig:e2ewall} and~\ref{fig:band} show the phase split and final band check.
 
 \begin{figure}[t]
 \centering
@@ -1298,7 +1313,7 @@ survive as a 9.99$\times$ total-wall speedup (dotted line: fused median).}
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.7\linewidth]{figs/f3_band.pdf}
-\caption{\textbf{Descriptive band check; no detectable bias ($n{=}5$).} Final exact NashConv
+\caption{\textbf{Descriptive band check; underpowered sign tally ($n{=}5$).} Final exact NashConv
 (on-policy continuation) of both arms at Goofspiel-4, per seed, with paired per-seed
 lines and medians (black bars): fused 0.0402 vs sequential 0.0469. The per-seed scatter
 (median $|$diff$|$ 0.0144, max 0.0389; fused higher on 2/5, lower on 3/5) is the
@@ -1326,8 +1341,9 @@ NFSP's exact NashConv is \textbf{1.3968 / 1.3966}, barely below the uniform poli
 $10^6$--$10^7$ episodes, and we report it to locate the resolving loop on the compute
 axis, not to rank methods. The accompanying methodology point (detail in Appendix~D.2):
 RPG/QPG current-policy NashConv oscillates at $\approx$1.4334 --- \emph{above} uniform
---- so reporting it as the search-free boundary would artificially inflate our
-advantage, and we reject it; VRPO is cited as the strongest search-free boundary we are
+--- so reporting it as the search-free boundary would overstate the resolving loop's
+relative position; we therefore do not use it. VRPO is cited as the strongest
+search-free boundary we are
 aware of and deliberately not reimplemented.
 
 \begin{figure}[t]
@@ -1342,7 +1358,7 @@ only).}
 \label{fig:exploitwall}
 \end{figure}
 
-\subsection{Goofspiel-5 at scale: the 5-seed band and the saturated-regime end-to-end point}
+\subsection{Goofspiel-5: fused-only target band and separate paired timing point}
 
 \textbf{(a) The 5-seed exploitability band --- a target-construction result.} Scope
 first: this result is about what fusion makes \emph{affordable} --- per-belief
@@ -1367,7 +1383,8 @@ assembled policy), the five seeds give:
 
 \begin{table}[t]
 \centering
-\caption{Goofspiel-5 per-belief finite-budget target band (full 8-round protocol, fused path).}
+\caption{Goofspiel-5 per-belief finite-budget target band (full 8-round protocol,
+fused path only; not a fused-vs-sequential comparison).}
 \label{tab:g5band}
 \begin{tabular}{cccc}
 \toprule
@@ -1640,19 +1657,15 @@ CPU implementations --- and the authors' NoRegret library
 (v0.0.0.dev15, released 2026-06-04) makes this an actively developed, still per-tree
 line; a GPU-CFR implementation for the card game Pasur~\citep{Pasur-GPU} and the
 open-source gpucfr code (CTU Prague)~\citep{gpucfr} are further per-tree/per-game data
-points. Li and Huang's Real-Time Parallel CFR~\citep{RealTimeParallelCFR} is the newest
-adjacent HUNL systems result we found: it parallelizes a single depth-limited CFR solve
-through CPU/GPU pipeline stages, pruning, abstraction, and GPU leaf evaluation. That is
-orthogonal to the lever isolated here, which fuses a population of same-topology solves
-generated by one resolving sweep into shared kernel launches. As of 2026-06-11 we find
-no public work claiming population-level fusion on this line. We note plainly that in the linear-algebra
-formulation of~\citep{KimSandholm2026}, a \emph{mechanical} multi-tree batch dimension
-is an anticipatable engineering extension --- a block-diagonal arrangement NoRegret
-could ship in a point release. What this paper claims is therefore the conjunction, not
-the batch dimension: the identification that \emph{iterated resolving structurally
-generates} the population, the parity-gated loop integration with shared range-vector
-state, and the predictive regime model with its end-to-end validation. Those survive
-even if per-tree libraries add batching.
+points. Recent GPU-CFR work, including Real-Time Parallel CFR~\citep{RealTimeParallelCFR},
+parallelizes the iteration within a single game tree or depth-limited solve through
+linear algebra, CPU/GPU pipeline stages, pruning, abstraction, and GPU leaf evaluation.
+The linear-algebra formulation naturally suggests additional batching dimensions; our
+claim is not that batching is unavailable to such systems. Rather, we isolate the
+population generated by train-time resolving, integrate it into a parity-checked CFR+
+loop with shared range-vector state, and validate a regime model end to end. We are not
+aware of prior published work that evaluates this population-level fusion in an
+iterated-resolving training loop.
 
 \textbf{Batched solving and adjacent claims in game solving.} Six nearby claims are
 distinct from ours. (i) Marris et al.~\citep{Marris2022} batch equilibrium solving, but
@@ -1715,40 +1728,20 @@ sharing the same kernel, the same seeds, and gated parity.
 
 \section{Limitations, Scope, and Future Work}
 
-\textbf{Scope of the demonstrated loop.} Our end-to-end demonstration is a
+\textbf{Scope of the demonstrated loop.} The end-to-end demonstration is a
 \textbf{2-level, single-cut} iterated-resolving loop: the trunk is re-solved against
-value targets obtained by re-solving each cut subgame at sampled beliefs, and these
-per-belief targets are \emph{independent given the belief}. This independence is exactly
-what makes the population of subgames fusable, so the obvious objection --- surfaced at
-the end of \S4 --- must be answered plainly: \emph{is this just batching embarrassingly
-parallel work?} Our rebuttal is a conjunction, and we do not claim any single ingredient
-is novel in isolation: (a) identifying that train-time iterated resolving
-\emph{structurally generates} a population of same-topology depth-limited PBS subgames
---- a common and important target-generation workload in this lineage (DeepStack's
-$10^7$ independently re-solved subgames, \S2.2); (b) a fused CFR+
-whose nontrivial content is the level-grouped compilation of irregular structure,
-float64 discipline through compounding fixed-point iterations, and live-loop
-integration, with parity to the sequential solver gated rather than assumed (\S4.5 ---
-the within-key coupled state is classical~\citep{Johanson2011,Johanson2012} and not the
-novelty); (c) a predictive floor/slope regime model,
-$C_{\rm seq}=a_s+b_s(N-1)$ and $C_{\rm fus}=a_f+b_f(N-1)$, with the
-$\min(N,1/\varphi)$ expression retained as the launch-bound envelope and with an
-operationalized two-point marginal-cost probe (\S6.1); and (d) an Amdahl-surviving
-end-to-end result (the ex-ante inner
-prediction 11.7$\times$ realized at 11.79$\times$; total-wall accounting closing to
-within 1\% of the 10.09$\times$ ceiling). A relevant structural distinction for what
-lies beyond: DeepStack-style \emph{independent target generation} is fully fusable,
-while ReBeL-style \emph{episodic} resolving is serially coupled along an episode
-(fusable across parallel episodes and keys, not along the chain); and the belief axis is
-a second fusion dimension --- our loop already solves 40 sampled beliefs per round as 40
-separate fused solves over a belief-independent topology, so beliefs can be folded into
-the population to restore the fused width when level-coupling shrinks $K$. The strongest
-form of the claim --- fused-vs-sequential \textbf{timing under $\geq$3-level nested
-resolving}, where targets become serially coupled across levels --- is deferred to
-future work. Multi-level self-play \emph{correctness} on this implementation is already
-certified (Goofspiel-4: exploitability decreases 0.0506 $\to$ 0.0145 with training;
-recorded in the supplementary measurement notes, Appendix~F; a standalone artifact is
-planned); only the multi-level timing comparison is outstanding.
+value targets obtained by independently re-solving each cut subgame at sampled beliefs.
+This is the setting where the same-topology population is explicit and fully fusable.
+The contribution is the conjunction of this structural identification, a parity-gated
+level-grouped CFR+ implementation, the floor/slope regime model, and an
+Amdahl-surviving end-to-end timing result. We do not claim that batching itself is new,
+nor that the result already covers serially coupled multi-level resolving. DeepStack-style
+independent target generation is fully fusable; ReBeL-style episodic resolving is
+serially coupled along an episode, though still fusable across parallel episodes, keys,
+or beliefs. The strongest form of the claim --- fused-vs-sequential \textbf{timing
+under $\geq$3-level nested resolving} --- is deferred to future work. A supplementary
+Goofspiel-4 multi-level self-play measurement shows decreasing exploitability
+(0.0506 $\to$ 0.0145), but it is not headline timing evidence.
 
 \textbf{Baseline tooling and substrate.} The \S6.2/\S6.4 end-to-end speedups are
 measured against an eager-dispatch, single-stream sequential arm. The
@@ -1773,13 +1766,12 @@ All measurements use a single consumer GPU (RTX 3070 Ti, 8 GB) whose FP64 throug
 1:64 of FP32 --- an extreme placement for a float64 workload. The regime model is
 likewise subject to memory capacity (\S6.1): the 8 GB card bounds the fusable population
 ($B_{\max}$ unmeasured; every population in this paper fits), and peak VRAM per arm is
-not yet instrumented. The direction of this asymmetry is \emph{favorable} to the lever:
-on a data-center
-part with 1:2 FP64 (A100) and $\sim$10$\times$ the FP64 throughput, both the effective
-launch floor and the saturation point would change; the model predicts the outcome only
-after measuring the regime probe on that device. On this device, the both-ends
-validation and the HUNL-mass argument below hold as measured; their numeric values are
-device-conditional, and A100 replication is future work.
+not yet instrumented. On a data-center part with 1:2 FP64 (A100) and $\sim$10$\times$
+the FP64 throughput, both the effective launch floor and the saturation point would
+change; the model predicts the outcome only after measuring the regime probe on that
+device. On this device, the both-ends validation and the HUNL-mass argument below hold
+as measured; their numeric values are device-conditional, and A100 replication is
+future work.
 
 \textbf{Exploitability is a band, not a curve.} On the largest instance (Goofspiel-5,
 236,450 infosets) final exploitability sits in a 0.07--0.13 band where initialization
@@ -1831,9 +1823,9 @@ G5/production-scale amortized-fused vs amortized-sequential end-to-end compariso
 quiet-host G5 timing re-run is complete ($n{=}3$, \S6.4), and what remains on that axis
 is the full-protocol (8-round) $n \ge 5$ paired run with a pre-registered band margin
 for a CUDA non-divergence test. (3) A second game family timed end-to-end. (4) A100
-replication and multi-GPU sharding --- the population axis shards trivially across
-devices (unlike a single tree), so multi-GPU \emph{extends} the lever rather than
-competing with it. (5) A HUNL-scale instance built on lazy subgame construction, where
+replication and multi-GPU sharding --- the population axis provides a natural sharding
+dimension, though communication, scheduling, and memory costs remain to be measured.
+(5) A HUNL-scale instance built on lazy subgame construction, where
 held-out Slumbot~\citep{Jackson2013} becomes the transfer validation; consistent with
 our protocol, Slumbot supplies no training data, targets, or selection signal at any
 point. A preliminary HUNL topology census suggests many same-topology river classes,
@@ -1849,57 +1841,32 @@ per-tree~\citep{Kim2024} --- remains the primary baseline in every experiment.
 
 \section{Conclusion}
 
-Train-time iterated resolving structurally generates populations of same-topology
-depth-limited PBS subgames, and \textbf{population fusion} --- compiling each population
-into one level-grouped SoA CFR+ --- isolates across-solve amortization of
-the cost-per-solve factor of its cost identity --- wall-clock per solve-iteration,
-hence, at the common iteration budget $T$, per-solve wall-clock --- with parity to
-per-tree solving verified in float64 and, on CPU, trajectory-identical to all recorded
-digits. The claim is deliberately narrow: \emph{equal-band-faster} at G4 under a broad
-descriptive band check, same-substrate
-against the same kernel run per tree, in a regime the cost model identifies and a
-two-point marginal-cost probe classifies --- near-linear in the number of co-solved subgames
-while solves are launch-bound (Goofspiel-4: inner 11.79$\times$ predicted ex ante at
-11.7$\times$; total wall 9.99$\times$ against a 10.09$\times$ Amdahl ceiling, 5 matched
-seeds; under tool symmetry, 11.36$\times$ inner and 7.38$\times$ total wall against a
-7.39$\times$ Amdahl ceiling), saturating at $\sim$2.4$\times$ when one subgame fills the device (Goofspiel-5:
-2.37$\times$ predicted, 2.40$\times$ measured, 3 matched quiet-host seeds; the
-statistical CUDA non-divergence test remains pending). The measured launch-amortization
-ablation shows the per-solve advantage survives CUDA-Graphs/\texttt{torch.compile} tool
-symmetry --- $\text{speedup} \approx N$ launch-bound (12.06$\times$ at G4) and
-1.82$\times$ at saturation (\S6.5). We claim no exploitability improvement,
-no cross-substrate superiority beyond the $\sim$2.7$\times$ best-vs-best our artifacts
-currently support at G4 (single-run CPU cells; \S4.6), and no generality beyond one game
-family and one device until the remaining planned runs --- matched CPU timings, the
-G5/production-scale amortized paired run, and multi-device replication --- are complete.
-What we
-believe travels regardless: the population-fusion lever and its regime model, the
-matched-seed paired-arm + CPU-exactness-gate evaluation template, and the warning that
-compounding CUDA atomics make naive per-seed equivalence checks of batched GPU CFR
-spuriously fail.
+Train-time iterated resolving structurally generates same-topology public-belief
+subgame populations. \textbf{Population fusion} turns that population into one
+level-grouped CFR+ tensor workload, reducing the cost per finite-budget solve while
+preserving per-tree CFR+ outputs under the paper's parity gates. The floor/slope model
+explains the two observed regimes: near-linear speedup when the per-tree GPU workload is
+launch-bound, and a smaller slope-ratio win once one subgame already fills the device.
+The end-to-end Goofspiel-4 and Goofspiel-5 measurements support that model under matched
+seeds and explicit Amdahl accounting.
+
+The claim is deliberately narrow. This is not a stronger game-playing policy, a lower
+exploitability result, or a universal speedup claim. It is a measured cost-per-solve
+reduction for same-topology PBS subgames in iterated resolving. The pieces intended to
+generalize are the abstraction, the floor/slope regime model, and the evaluation
+template: parity-gate the solver on CPU, compare matched same-kernel arms, account for
+non-resolve phases, and treat compounding CUDA atomics as a distributional timing
+evaluation problem rather than a per-seed equality test.
 
 \section*{Reproducibility Statement}
 
 \textbf{Code, commits, and artifacts.} All experiments live in one repository (release
-accompanies the preprint). The evidence-bearing commits: \texttt{c47cc19} --- the
-cost-per-solve microbenchmark and controlled key sweep (produces
-\texttt{costpersolve\_bakeoff.json}); \texttt{8def574} --- the G4 end-to-end paired arms
-and the NFSP search-free boundary; \texttt{1ff6a8e} --- the G5 per-belief target band,
-seeds 0--1; and the final-data runs (post \texttt{dd3d148}; release commit pinned at
-submission) --- the G5 band seeds 2--4, the original and quiet-host G5 paired end-to-end
-runs, the HUNL topology census probe, and the six-arm launch-amortization ablation of
-\S6.5 (produces \texttt{cuda\_graphs\_ablation.json}), plus the G4 tool-symmetric
-end-to-end check (produces \texttt{e2e\_amortized\_g4\_compile\_summary.json}). Every
-JSON cited in this paper is copied into
-the tracked directory \textbf{\texttt{release/v1-artifacts/}} with a \texttt{README.md}
-manifest and per-file SHA-256 sums; those files are the reproducibility bundle that
-accompanies the paper. One-command reproduction lines for
-every experiment, the seeds inventory and no-sweep statement, the aggregation
-restatement, the artifact field-naming notes, the supplementary-measurement-notes
-inventory, and the hardware/software stack with total-compute accounting are in
-Appendix~F. The play-time evaluation harness under development for the HUNL-scale
-instance of \S8 --- outside this paper's claims --- uses PokerKit~\citep{PokerKit} as
-its game-state engine.
+accompanies the preprint). Appendix~F lists the evidence-bearing commits, one-command
+reproduction lines, seeds, fixed configurations, aggregation rules, hardware/software
+stack, and total-compute accounting. Every artifact cited in the paper is copied into
+the tracked directory \textbf{\texttt{release/v1-artifacts/}} with a
+\texttt{README.md} manifest and per-file SHA-256 sums; those files are the
+reproducibility bundle that accompanies the paper.
 
 \textbf{Held-out integrity.} No Slumbot (or any external-agent) data, targets, priors,
 or selection signals are used anywhere in this paper
@@ -1909,7 +1876,7 @@ payoff matrices for timing --- no Slumbot interaction of any kind.
 
 \section*{Author Declarations}
 
-\paragraph{Views disclaimer.}
+\paragraph{Affiliation disclaimer.}
 The views and opinions expressed in this paper are solely those of the author and do not
 necessarily reflect the views, policies, positions, investment opinions, or
 risk-management practices of Ontario Teachers' Pension Plan, its affiliates, or any
@@ -2220,7 +2187,7 @@ The \S6.1 microbenchmark speedups are ratios of median-of-7-repeat timings --- t
 no seed axis in the microbenchmark. The secondary time-to-band speedups (\S6.2, \S6.4)
 are ratios of the per-arm median reach times, because per-seed time-to-band ratios are
 quantized by the every-2-rounds measurement cadence (Appendix~D.1). Where $n \le 2$ we
-report the per-seed values themselves and do not dress the midpoint as a robust
+report the per-seed values themselves and do not report the midpoint as a robust
 statistic. Ranges such as ``5.5--11.4$\times$'' round the underlying values
 (5.48--11.36) to one decimal; all underlying values are in the artifacts. Unless stated
 otherwise, 10th/90th intervals are NumPy percentile intervals using the default linear
@@ -2285,7 +2252,7 @@ mechanism above.
 \subsection{CUDA Graphs / \texttt{torch.compile} capturability audit --- confirmed by
 the measured ablation}
 
-We read our own kernel against capturability before measuring. Per
+We audited the solver for CUDA-Graph capturability before measuring. Per
 compiled topology, every tensor shape in the solver's iteration body is static across
 iterations and across re-solves (the level-shape groups, the $[n_I, A_{\max}]$ tables,
 the $[n_{\text{nodes}}, B]$ reach tensors; re-solves rewrite entry-reach values only),
@@ -2303,7 +2270,7 @@ surfaced and resolved on the compile arm:
 \texttt{torch.compile(mode="reduce-overhead", fullgraph=True, dynamic=False)} compiles
 the step cleanly at float64 --- no graph breaks, no skipped-cudagraphs warnings --- but
 requires the documented cudagraph-trees feedback-loop discipline,
-\texttt{torch.compiler.cudagraph\_mark\_step\_begin()} before each iteration plus
+\texttt{torch.compiler.\allowbreak cudagraph\_mark\_step\_begin()} before each iteration plus
 cloning the three state outputs before reuse as inputs (without it, recording fails
 with the overwritten-output error); the three clone kernels per iteration stay inside
 the timed region as measured tooling overhead. The manual-capture arm replays the
@@ -2413,8 +2380,8 @@ timings and conservative with respect to the fused arm.
 
 \section{Extended Related Work}
 
-None of the material here is claim-bearing; the claim-bearing delimitations are all in
-\S7.
+Appendix~E provides additional context for adjacent work; the claim-bearing
+delimitations are in \S7.
 
 \textbf{Iterations-per-solve, expanded.} DCFR~\citep{BrownSandholm2019} and
 PCFR+~\citep{Farina2021} accelerate the convergence of a single solve by discounting and
