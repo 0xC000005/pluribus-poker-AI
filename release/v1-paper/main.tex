@@ -99,25 +99,33 @@ poker-bot strength.
 
 \section{Introduction}
 
-Sound depth-limited search with learned value functions is a major template for
-two-player zero-sum imperfect-information games. DeepStack~\citep{Moravcik2017} uses
-continual re-solving with learned counterfactual values; ReBeL~\citep{Brown2020} brings
-public-belief search into reinforcement learning and decision-time play; Student of
-Games~\citep{Schmid2023} unifies search-based agents across perfect- and
-imperfect-information games. The train-time target-generation loop studied here is the
-iterated-resolving pattern in this lineage: repeatedly re-solve small depth-limited
-lookahead games (``subgames'') to generate value-network training targets. The depth
-limit is what makes each solve affordable, but it cannot be naive: in an
-imperfect-information game the value of a position depends on what both players
-\emph{believe} about the hidden information, so a search leaf must be valued
-conditional on those beliefs --- the public state together with the two players' belief
-distributions is the \emph{public belief state} (PBS) --- and truncating the lookahead
-without belief-conditioned leaf values yields exploitable
-strategies~\citep{BrownSandholm2018}. The inner solver throughout is
-CFR+~\citep{Tammelin2014,Tammelin2015,Bowling2015}, an iterative no-regret algorithm
-whose time-averaged strategy converges to a Nash equilibrium (primer in \S2.1),
-descended from CFR~\citep{Zinkevich2007}. The wall-clock cost of the resolving phase
-factors as
+Depth-limited resolving makes search usable in large imperfect-information games: solve
+a small lookahead game, use a value function at the depth limit, and repeat. This is the
+template behind DeepStack's continual re-solving with learned counterfactual
+values~\citep{Moravcik2017}, ReBeL's public-belief search and reinforcement
+learning~\citep{Brown2020}, and Student of Games' search-learning-game-theoretic
+unification~\citep{Schmid2023}. In training, however, the template creates a hidden
+systems cost. The agent repeatedly asks a solver to produce value targets for many
+public-belief subgames: small continuation games rooted at the same public history but
+conditioned on different beliefs over hidden information. Those beliefs matter because,
+unlike in chess or Go, an imperfect-information position does not have a single value
+unless it is tied to what both players might privately hold and believe. The public
+history plus those belief distributions is the \emph{public belief state} (PBS), and
+naively truncating search without belief-conditioned leaf values yields exploitable
+strategies~\citep{BrownSandholm2018}.
+
+The important systems fact is that one resolving sweep does not produce one arbitrary
+subgame at a time. It produces a \emph{subgame population}. At a fixed public cut, each
+public outcome, or key, roots a continuation subgame. In the loop studied here these
+continuation trees share topology; what changes from key to key is the data flowing
+through the tree: the two players' entry beliefs, or \emph{ranges}, and the solver's
+per-subgame state. Running the same GPU solver separately for every key therefore
+repeats the same short-kernel launch sequence many times. For small subgames this is
+launch-bound: the GPU can be underfilled even though the training loop spends almost all
+of its time resolving.
+
+This paper studies that repeated target-generation step as a cost-per-solve problem. The
+wall-clock cost of the resolving phase factors as
 \begin{equation}
 C \;=\; \underbrace{N_{\text{solves}}}_{\text{how many subgames}} \;\times\;
 \underbrace{T}_{\text{CFR iterations per solve}} \;\times\;
@@ -125,44 +133,38 @@ C \;=\; \underbrace{N_{\text{solves}}}_{\text{how many subgames}} \;\times\;
 \label{eq:cost}
 \end{equation}
 an accounting identity in which $N_{\text{solves}}$ counts subgame solves over the run,
-$T$ is the per-solve CFR+ iteration budget, and $c_{\text{solve}}$ is the average
-wall-clock per solve-iteration (the loop's remaining phases --- network training,
-measurement --- sit outside it and are handled by the Amdahl analysis of \S6.2). The
-inner re-solve dominates the loop: in our instrumented training runs it accounts for
-98.4\% of baseline loop wall-clock at our Goofspiel-4 (G4) operating point (\S3).
+$T$ is the per-solve CFR+ iteration budget, and $c_{\text{solve}}$ is wall-clock per
+solve-iteration. The loop's remaining phases --- network training and measurement ---
+sit outside this factor and are handled by the Amdahl analysis of \S6.2. In our
+Goofspiel-4 (G4) operating point, the inner re-solve accounts for 98.4\% of baseline
+loop wall-clock (\S3).
 
-\textbf{One factor of Eq.~(\ref{eq:cost}) is under-isolated.} Prior work actively
-attacks the number of solves, the iterations each solve needs, the variance of sampled
-traversals, and the size of each subgame (\S3 compresses the taxonomy; \S7 gives it in
-full). The cost per solve-iteration, $c_{\text{solve}}$, has been attacked only
-\emph{within} a single tree, by parallelizing one solve's tree walk on the
-GPU~\citep{Kim2024,KimSandholm2026}. Amortizing $c_{\text{solve}}$ \emph{across the
-population of subgames that one resolving sweep generates} is, to our knowledge, not
-isolated and validated as an end-to-end population-level lever in published work (the
-related-work delimitation and the structural distinctions from the nearest neighbors
-are in \S7).
+\textbf{One factor of Eq.~(\ref{eq:cost}) is under-isolated.} Existing work makes
+resolving practical by changing how many subgames are solved, how deep or large each
+subgame is, how many iterations are needed, or how one tree's CFR computation is
+parallelized (\S3, \S7). Recent GPU-CFR work, including NoRegret-style linear-algebra
+CFR~\citep{Kim2024,KimSandholm2026} and real-time HUNL-oriented parallel
+CFR~\citep{RealTimeParallelCFR}, is primarily a within-tree or single-solve systems
+story. The missing systems unit here is the resolving sweep: amortize
+$c_{\text{solve}}$ across the same-topology subgame population generated by one sweep,
+not only inside one member of that population.
 
-\textbf{The structural observation, and the mechanism.} Iterated resolving does not
-produce one subgame at a time; it produces a \emph{population}. At a fixed depth cut,
-every public outcome on the cut frontier roots its own depth-limited subgame, and within
-a game these continuation trees share their topology: they differ only in the data
-flowing through them --- each player's entry beliefs, or \emph{ranges} (a range is a
-probability vector over a player's possible private states), and per-subgame solver
-state. Many same-shaped small problems differing only in data is exactly the workload
-that batched BLAS~\citep{Abdelfattah2016} and FlashAttention-style kernel
-engineering~\citep{Dao2022} --- whose mechanism + cost-model + end-to-end-win template
-this paper follows --- taught the systems community to exploit: fuse them, so the device
-does the same arithmetic under far fewer kernel launches. We call the resulting
-mechanism \textbf{population fusion}: compile the shared topology once into a
-level-grouped structure-of-arrays (SoA), and execute each CFR+ iteration of \emph{all}
-subgames as one fixed sequence of batched tensor ops (Figure~\ref{fig:hero}; \S4). The
-``GEMM'' in the title names this systems pattern --- many same-shaped small solves
-turned into one batched tensor workload --- not literal matrix multiplication at every
-step. The
-fusion axis is $K$, the number of distinct public outcomes at the cut; the
-within-outcome private-hand dimension is classical range-vector CFR and is present in
-both of our timing arms (\S2.2). The fused solver is verified to match the per-tree
-finite-iteration CFR+ outputs under the gates of \S4.5.
+\textbf{The mechanism is across-key population fusion.} Many same-shaped small problems
+differing only in data are the workload that batched BLAS~\citep{Abdelfattah2016,
+Abdelfattah2021} and FlashAttention-style kernel engineering~\citep{Dao2022} teach us
+to exploit: fuse them, so the device performs the same arithmetic under far fewer kernel
+launches. We call the resulting mechanism \textbf{population fusion}: compile the shared
+subgame topology once into a level-grouped structure-of-arrays (SoA), fold the public-key
+population into the tensor dimensions, and execute each finite-budget CFR+ iteration for
+all keys as one fixed sequence of batched tensor ops (Figure~\ref{fig:hero}; \S4). The
+inner solver is CFR+~\citep{Tammelin2014,Tammelin2015,Bowling2015}, descended from
+CFR~\citep{Zinkevich2007}. The ``GEMM'' in the title names the systems pattern --- many
+same-shaped solves turned into one batched tensor workload --- not literal matrix
+multiplication at every step. The fusion axis is $K$, the number of public keys at the
+cut; the within-key private-hand/range dimension is classical range-vector
+CFR~\citep{Johanson2011,Johanson2012} and is present in both timing arms. The fused
+solver is verified to match the per-tree finite-iteration CFR+ outputs under the gates
+of \S4.5.
 
 \textbf{A predictive cost model.} When does fusion pay? A controlled sweep gives a
 floor/slope answer,
@@ -174,15 +176,18 @@ and regime intuition, while a two-point marginal-cost probe classifies which
 regime a workload is in before committing to fusion.
 
 \textbf{The win survives a real training loop.} Microbenchmark speedups routinely
-evaporate inside end-to-end systems; this one does not, because the loop is dominated by
-exactly the phase we fused. On Goofspiel-4 --- small subgames, the launch-bound regime
---- the fused inner re-solve is 11.79$\times$ faster than the same kernel applied
-per-tree, against the 11.7$\times$ the microbenchmark sweep predicted ex ante, and total
-training wall-clock improves 9.99$\times$ against the 10.09$\times$ Amdahl ceiling
-implied by the measured inner fraction (5 matched seeds; derivation in \S6.2). The
+evaporate inside end-to-end systems; this one survives because the loop is dominated by
+the phase we fused. On Goofspiel-4 --- small subgames, the launch-bound regime --- the
+fused inner re-solve is 11.79$\times$ faster than the same kernel applied per tree,
+against the 11.7$\times$ the microbenchmark sweep predicted ex ante, and total training
+wall-clock improves 9.99$\times$ against the 10.09$\times$ Amdahl ceiling implied by the
+measured inner fraction (5 matched seeds; \S6.2). A tool-symmetric
+\texttt{torch.compile} comparison gives 11.36$\times$ inner and 7.38$\times$ total-wall
+speedup (\S6.5), so the result is not merely an eager-dispatch artifact; CUDA Graphs are
+the rival launch-amortization lever considered in that analysis~\citep{CUDAGraphs}. The
 speedup buys no lower-exploitability claim: the arms pass the paper's broad descriptive
-band check --- fused median 0.0402, sequential 0.0469, where for scale uniform random play
-scores $\approx$1.42 on this game and 0 is exact Nash. On Goofspiel-5, where a single
+band check --- fused median 0.0402, sequential 0.0469, where for scale uniform random
+play scores $\approx$1.42 on this game and 0 is exact Nash. On Goofspiel-5, where one
 subgame already fills the device, the loop realizes the predicted saturated speedups:
 2.40$\times$ inner and 2.00$\times$ total (3 matched seeds; \S6.4). As a directional
 calibration only, a search-free NFSP baseline trained on the same game remains near
