@@ -8,26 +8,71 @@
 \usepackage{amsmath,amssymb}
 \usepackage{amsthm}
 \newtheorem{proposition}{Proposition}
+\usepackage{mathtools}
+\usepackage{bm}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage{tabularx}
+\usepackage{makecell}
+\usepackage{threeparttable}
+\usepackage{adjustbox}
+\usepackage{siunitx}
 \usepackage{graphicx}
 \usepackage{framed}
+\usepackage{float}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{xurl}
 \usepackage{authblk}
 \usepackage[numbers]{natbib}
-\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{subcaption}
+\usepackage[section]{placeins}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage[capitalise,nameinlink]{cleveref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+
+\sisetup{
+  detect-weight=true,
+  detect-family=true,
+  table-number-alignment=center
+}
+
+\makeatletter
+\providecommand*{\theHALG@line}{}
+\renewcommand*{\theHALG@line}{\thealgorithm.\arabic{ALG@line}}
+\makeatother
+
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.25em,topsep=0.35em}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=0.25em,topsep=0.35em}
+\graphicspath{{figs/}{./}}
 
 \title{One GEMM, Many Subgames: A Predictive Cost Model and an End-to-End
 Wall-Clock Win for Iterated Resolving in Imperfect-Information Games}
 
-\author{Max Zhang}
-\affil{Independent Researcher}
+\author[1,2]{Max Jingwei Zhang\thanks{Correspondence: \texttt{maxjingwei.zhang@mail.utoronto.ca}.}\thanks{Work performed in Ontario Teachers' Pension Plan, Quantitative Modeling and Programming.}\thanks{The views expressed in this paper are solely those of the author and do not necessarily reflect the views, policies, positions, investment opinions, or risk-management practices of Ontario Teachers' Pension Plan or its affiliates.}}
+\affil[1]{Ontario Teachers' Pension Plan}
+\affil[2]{University of Toronto, Faculty of Applied Science and Engineering}
 \date{June 10, 2026}
 
 \begin{document}
 
 \maketitle
+
+\begin{center}
+\small
+\textbf{Keywords:} Imperfect-Information Games; Counterfactual Regret Minimization;
+Iterated Resolving; Public-Belief Search; GPU Acceleration; Batched Solvers
+\end{center}
 
 \begin{abstract}
 Depth-limited search with learned value functions in imperfect-information games
@@ -1192,8 +1237,8 @@ $f$ measured from the loop itself and is an accounting-consistency closure --- t
 residual 1\% reflects the non-inner phases together with the across-seed median
 aggregation. The same decomposition, run in reverse, is the contamination diagnostic of
 \S6.4.
-\item \textbf{Descriptive band check, not improvement.} Fused final NashConv median
-\textbf{0.0402} [10th/90th: 0.0238, 0.0533]; sequential median \textbf{0.0469}
+\item \textbf{Descriptive band check.} This is not an improvement claim. Fused final
+NashConv median \textbf{0.0402} [10th/90th: 0.0238, 0.0533]; sequential median \textbf{0.0469}
 [10th/90th: 0.0313, 0.0604, derived from the released per-seed artifacts]. The arms
 satisfy the \S5 descriptive band criterion --- each arm's median lies within the other
 arm's per-seed 10th/90th interval --- and we make no lower-exploitability claim. The
@@ -1828,7 +1873,7 @@ matched-seed paired-arm + CPU-exactness-gate evaluation template, and the warnin
 compounding CUDA atomics make naive per-seed equivalence checks of batched GPU CFR
 spuriously fail.
 
-\section{Reproducibility Statement}
+\section*{Reproducibility Statement}
 
 \textbf{Code, commits, and artifacts.} All experiments live in one repository (release
 accompanies the preprint). The evidence-bearing commits: \texttt{c47cc19} --- the
@@ -1856,6 +1901,26 @@ or selection signals are used anywhere in this paper
 (\texttt{uses\_slumbot\_data=false}). The HUNL topology census probe (\S8) uses only the
 public betting-tree structure under our own abstraction and synthetic shape-faithful
 payoff matrices for timing --- no Slumbot interaction of any kind.
+
+\section*{Author Declarations}
+
+\paragraph{Views disclaimer.}
+The views and opinions expressed in this paper are solely those of the author and do not
+necessarily reflect the views, policies, positions, investment opinions, or
+risk-management practices of Ontario Teachers' Pension Plan, its affiliates, or any
+other institution with which the author is associated. This paper is for research
+purposes only and does not constitute investment advice, risk advice, an offer, or a
+solicitation to buy or sell any financial instrument.
+
+\paragraph{Competing interests.}
+The author declares no competing interests.
+
+\paragraph{Generative AI usage declaration.}
+Generative AI tools, including OpenAI ChatGPT and Codex, were used to assist with
+manuscript drafting, editing, code navigation, formatting, and verification workflows.
+The author reviewed, edited, and verified the manuscript, experiments, figures,
+citations, and code outputs, and remains solely responsible for the paper's content,
+scientific claims, experimental results, and interpretation.
 \begin{thebibliography}{99}
 
 \bibitem{Abdelfattah2016} A. Abdelfattah, A. Haidar, S. Tomov, J. Dongarra. Performance,
